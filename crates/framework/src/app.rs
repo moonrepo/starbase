@@ -1,7 +1,13 @@
-pub struct App {}
+use crate::context::Context;
+
+pub struct App {
+    context: Context,
+}
 
 impl App {
     pub fn new() -> Self {
-        App {}
+        App {
+            context: Context::new(),
+        }
     }
 }

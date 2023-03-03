@@ -1,10 +1,19 @@
 use crate::instance::InstanceRegistry;
 use async_trait::async_trait;
-use std::{convert::Infallible, sync::Arc};
+use std::convert::Infallible;
 
 pub struct Context {
-    state: Arc<InstanceRegistry>,
-    resources: Arc<InstanceRegistry>,
+    state: InstanceRegistry,
+    resources: InstanceRegistry,
+}
+
+impl Context {
+    pub fn new() -> Self {
+        Context {
+            state: InstanceRegistry::new(),
+            resources: InstanceRegistry::new(),
+        }
+    }
 }
 
 #[async_trait]
