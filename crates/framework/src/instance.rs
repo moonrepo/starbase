@@ -5,6 +5,7 @@ use tokio::sync::RwLock;
 
 pub type Instance = Box<dyn Any + Sync + Send>;
 
+#[derive(Debug)]
 pub struct InstanceRegistry {
     instances: FxHashMap<TypeId, RwLock<Instance>>,
 }

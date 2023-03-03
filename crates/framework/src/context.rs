@@ -2,6 +2,7 @@ use crate::instance::InstanceRegistry;
 use async_trait::async_trait;
 use std::convert::Infallible;
 
+#[derive(Debug)]
 pub struct Context {
     state: InstanceRegistry,
     resources: InstanceRegistry,
