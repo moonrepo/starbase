@@ -18,34 +18,34 @@ impl Context {
 }
 
 #[async_trait]
-pub trait FromContext<S>: Sized {
-    type Error;
+pub trait FromContext: Send + Sync + Sized {
+    type Value: Send + Sync;
 
-    async fn from_context(context: &mut Context) -> Result<Self, Self::Error>;
+    async fn from_context(context: &mut Context) -> anyhow::Result<Self::Value>;
 }
 
-#[async_trait]
-impl<S, T> FromContext<S> for Option<T>
-where
-    T: FromContext<S>,
-    S: Send + Sync,
-{
-    type Error = Infallible;
+// #[async_trait]
+// impl<S, T> FromContext<S> for Option<T>
+// where
+//     T: FromContext<S>,
+//     S: Send + Sync,
+// {
+//     type Error = Infallible;
 
-    async fn from_context(context: &mut Context) -> Result<Option<T>, Self::Error> {
-        Ok(T::from_context(context).await.ok())
-    }
-}
+//     async fn from_context(context: &mut Context) -> Result<Option<T>, Self::Error> {
+//         Ok(T::from_context(context).await.ok())
+//     }
+// }
 
-#[async_trait]
-impl<S, T> FromContext<S> for Result<T, T::Error>
-where
-    T: FromContext<S>,
-    S: Send + Sync,
-{
-    type Error = Infallible;
+// #[async_trait]
+// impl<S, T> FromContext<S> for Result<T, T::Error>
+// where
+//     T: FromContext<S>,
+//     S: Send + Sync,
+// {
+//     type Error = Infallible;
 
-    async fn from_context(context: &mut Context) -> Result<Self, Self::Error> {
-        Ok(T::from_context(context).await)
-    }
-}
+//     async fn from_context(context: &mut Context) -> Result<Self, Self::Error> {
+//         Ok(T::from_context(context).await)
+//     }
+// }

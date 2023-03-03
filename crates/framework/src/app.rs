@@ -25,7 +25,7 @@ impl App {
         // dbg!(&self);
 
         for s in self.initializers.drain(..) {
-            s.execute().await.unwrap();
+            // s.execute().await.unwrap();
         }
 
         Ok(())
@@ -33,15 +33,15 @@ impl App {
 
     // Private
 
-    async fn execute_system<'app, S, X>(
-        &'app mut self,
-        system: S,
-    ) -> BoxFuture<'app, Result<S, S::Error>>
-    where
-        S: FromContext<X>,
-    {
-        let ctx = &mut self.context;
+    // async fn execute_system<'app, S, X>(
+    //     &'app mut self,
+    //     system: S,
+    // ) -> BoxFuture<'app, Result<S, S::Error>>
+    // where
+    //     S: FromContext<X>,
+    // {
+    //     let ctx = &mut self.context;
 
-        Box::pin(async move { S::from_context(ctx).await })
-    }
+    //     Box::pin(async move { S::from_context(ctx).await })
+    // }
 }
