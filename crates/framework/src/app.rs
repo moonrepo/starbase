@@ -1,5 +1,3 @@
-use std::vec::Drain;
-
 use crate::context::Context;
 use crate::system::{IntoSystemExecutor, System, SystemExecutor};
 
@@ -26,8 +24,6 @@ impl App {
         let initializers = self.initializers.drain(..).collect::<Vec<_>>();
 
         self.execute_systems(&mut context, initializers).await?;
-
-        self.context = context;
 
         Ok(())
     }
