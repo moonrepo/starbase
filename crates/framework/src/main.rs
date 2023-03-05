@@ -1,7 +1,8 @@
-use starship::App;
+use starship::{App, Context};
 
-fn test_system() -> anyhow::Result<()> {
+fn test_system(ctx: &mut Context) -> anyhow::Result<()> {
     println!("SYSTEM");
+    dbg!(ctx);
 
     Ok(())
 }
@@ -9,7 +10,7 @@ fn test_system() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() {
     let mut app = App::new();
-    // app.add_initializer(test_system);
+    app.add_initializer(test_system);
 
     app.run().await.unwrap();
 }

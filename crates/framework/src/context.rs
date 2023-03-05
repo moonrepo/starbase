@@ -1,19 +1,10 @@
 use crate::instance::InstanceRegistry;
 use async_trait::async_trait;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Context {
     pub state: InstanceRegistry,
     pub resources: InstanceRegistry,
-}
-
-impl Context {
-    pub fn new() -> Self {
-        Context {
-            state: InstanceRegistry::new(),
-            resources: InstanceRegistry::new(),
-        }
-    }
 }
 
 #[async_trait]

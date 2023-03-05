@@ -1,47 +1,37 @@
-use crate::context::{Context, FromContext};
+use crate::context::Context;
 use async_trait::async_trait;
-use std::marker::PhantomData;
+
+pub type FunctionSystem = dyn FnOnce(&mut Context) -> anyhow::Result<()> + Send + Sync + 'static;
 
 #[async_trait]
-pub trait System<Params> {
+pub trait System: Send + Sync {
     async fn execute(self, context: &mut Context) -> anyhow::Result<()>;
 }
 
+pub struct SystemExecutor {
+    func: Box<FunctionSystem>,
+}
+
+pub trait IntoSystemExecutor {
+    fn into_system(self) -> SystemExecutor;
+}
+
 #[async_trait]
-impl<F> System<()> for F
-where
-    F: Fn() + Send + Sync,
-{
-    async fn execute(self, _context: &mut Context) -> anyhow::Result<()> {
-        (self)();
+impl System for SystemExecutor {
+    async fn execute(self, context: &mut Context) -> anyhow::Result<()> {
+        (self.func)(context)?;
         Ok(())
     }
 }
 
 #[async_trait]
-impl<F, T> System<(T,)> for F
+impl<F> IntoSystemExecutor for F
 where
-    F: Fn(T) + Send + Sync,
-    T: FromContext,
+    F: FnOnce(&mut Context) -> anyhow::Result<()> + Send + Sync + 'static,
 {
-    async fn execute(self, context: &mut Context) -> anyhow::Result<()> {
-        (self)(T::from_context(context).await?);
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl<F, T1, T2> System<(T1, T2)> for F
-where
-    F: Fn(T1, T2) + Send + Sync,
-    T1: FromContext,
-    T2: FromContext,
-{
-    async fn execute(self, context: &mut Context) -> anyhow::Result<()> {
-        (self)(
-            T1::from_context(context).await?,
-            T2::from_context(context).await?,
-        );
-        Ok(())
+    fn into_system(self) -> SystemExecutor {
+        SystemExecutor {
+            func: Box::new(self),
+        }
     }
 }
