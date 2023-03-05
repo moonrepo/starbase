@@ -1,38 +1,33 @@
 use crate::context::{Context, FromContext};
 use async_trait::async_trait;
-use std::{
-    convert::Infallible,
-    ops::{Deref, DerefMut},
-};
+// use std::ops::{Deref, DerefMut};
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct State<S> {
-    pub value: S,
+#[derive(Debug, Clone, Copy)]
+pub struct State {
+    // pub value: &'sys S,
 }
 
 #[async_trait]
-impl<OuterState, InnerState> FromContext<OuterState> for State<InnerState>
-where
-    OuterState: Send + Sync,
-{
-    type Error = Infallible;
+impl FromContext for State {
+    async fn from_context(_context: &mut Context) -> anyhow::Result<Self> {
+        // let value = context.state.get::<S>().await?.read().await;
 
-    async fn from_context(_context: &mut Context) -> Result<Self, Self::Error> {
-        // let inner_state = InnerState::from_ref(state);
-        Ok(Self { value })
+        // let value = value.downcast_ref::<S>().unwrap();
+
+        Ok(Self {})
     }
 }
 
-impl<S> Deref for State<S> {
-    type Target = S;
+// impl<S> Deref for State<S> {
+//     type Target = S;
 
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
+//     fn deref(&self) -> &Self::Target {
+//         &self.value
+//     }
+// }
 
-impl<S> DerefMut for State<S> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
-    }
-}
+// impl<S> DerefMut for State<S> {
+//     fn deref_mut(&mut self) -> &mut Self::Target {
+//         &mut self.value
+//     }
+// }

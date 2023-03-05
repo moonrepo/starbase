@@ -1,11 +1,10 @@
 use crate::instance::InstanceRegistry;
 use async_trait::async_trait;
-use std::convert::Infallible;
 
 #[derive(Debug)]
 pub struct Context {
-    state: InstanceRegistry,
-    resources: InstanceRegistry,
+    pub state: InstanceRegistry,
+    pub resources: InstanceRegistry,
 }
 
 impl Context {
@@ -19,9 +18,7 @@ impl Context {
 
 #[async_trait]
 pub trait FromContext: Send + Sync + Sized {
-    type Value: Send + Sync;
-
-    async fn from_context(context: &mut Context) -> anyhow::Result<Self::Value>;
+    async fn from_context(context: &mut Context) -> anyhow::Result<Self>;
 }
 
 // #[async_trait]
