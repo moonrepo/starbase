@@ -4,25 +4,25 @@ struct One;
 struct Two;
 struct Three;
 
-fn test1(ctx: &mut Context) -> anyhow::Result<()> {
+async fn test1(ctx: &mut Context) -> anyhow::Result<()> {
     println!("1");
     ctx.state.set(One);
     Ok(())
 }
 
-fn test2(ctx: &mut Context) -> anyhow::Result<()> {
+async fn test2(ctx: &mut Context) -> anyhow::Result<()> {
     println!("2");
     ctx.state.set(Two);
     Ok(())
 }
 
-fn test3(ctx: &mut Context) -> anyhow::Result<()> {
+async fn test3(ctx: &mut Context) -> anyhow::Result<()> {
     println!("3");
     ctx.state.set(Three);
     Ok(())
 }
 
-fn test_system(ctx: &mut Context) -> anyhow::Result<()> {
+async fn test_system(ctx: &mut Context) -> anyhow::Result<()> {
     println!("SYSTEM");
     dbg!(ctx);
 
