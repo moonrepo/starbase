@@ -1,7 +1,9 @@
 use crate::context::Context;
 use async_trait::async_trait;
+use core::future::Future;
+use futures::future::BoxFuture;
 
-pub type FunctionSystem = dyn FnOnce(&mut Context) -> anyhow::Result<()> + Send + Sync + 'static;
+pub type FunctionSystem = dyn FnOnce(&mut Context) -> BoxFuture<'static, anyhow::Result<()>>;
 
 #[async_trait]
 pub trait System: Send + Sync {
@@ -25,9 +27,10 @@ impl System for SystemExecutor {
 }
 
 #[async_trait]
-impl<F> IntoSystemExecutor for F
+impl<F, Fut> IntoSystemExecutor for F
 where
-    F: FnOnce(&mut Context) -> anyhow::Result<()> + Send + Sync + 'static,
+    F: FnOnce(&mut Context) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = anyhow::Result<()>>,
 {
     fn into_system(self) -> SystemExecutor {
         SystemExecutor {
