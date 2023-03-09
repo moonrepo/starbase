@@ -1,9 +1,12 @@
 use crate::context::Context;
 use async_trait::async_trait;
 use core::future::Future;
-use futures::future::BoxFuture;
+use futures::{future::BoxFuture, task::FutureObj};
 
-pub type FunctionSystem = dyn FnOnce(&mut Context) -> BoxFuture<'static, anyhow::Result<()>>;
+// pub type FunctionSystem = dyn FnOnce(&mut Context) -> BoxFuture<'static, anyhow::Result<()>>;
+
+pub type FunctionSystem =
+    dyn FnOnce(&mut Context) -> (dyn Future<Output = anyhow::Result<()>> + Send + Sync + 'static);
 
 #[async_trait]
 pub trait System: Send + Sync {
@@ -18,10 +21,9 @@ pub trait IntoSystemExecutor {
     fn into_system(self) -> SystemExecutor;
 }
 
-#[async_trait]
-impl System for SystemExecutor {
-    async fn execute(self, context: &mut Context) -> anyhow::Result<()> {
-        (self.func)(context)?;
+impl SystemExecutor {
+    pub async fn execute(self, context: &mut Context) -> anyhow::Result<()> {
+        //(self.func)(context)?;
         Ok(())
     }
 }
@@ -29,8 +31,8 @@ impl System for SystemExecutor {
 #[async_trait]
 impl<F, Fut> IntoSystemExecutor for F
 where
-    F: FnOnce(&mut Context) -> Fut + Send + Sync + 'static,
-    Fut: Future<Output = anyhow::Result<()>>,
+    F: FnOnce(&mut Context) -> Fut,
+    Fut: Future<Output = anyhow::Result<()>> + Send + Sync + 'static,
 {
     fn into_system(self) -> SystemExecutor {
         SystemExecutor {

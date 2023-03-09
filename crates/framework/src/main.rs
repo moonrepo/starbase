@@ -1,3 +1,4 @@
+use core::future::Future;
 use starship::{App, Context};
 
 struct One;
@@ -33,9 +34,9 @@ async fn test_system(ctx: &mut Context) -> anyhow::Result<()> {
 async fn main() {
     let mut app = App::new();
     app.add_initializer(test1);
-    app.add_initializer(test2);
-    app.add_initializer(test3);
-    app.add_initializer(test_system);
+    // app.add_initializer(test2);
+    // app.add_initializer(test3);
+    // app.add_initializer(test_system);
 
     app.run().await.unwrap();
 }
