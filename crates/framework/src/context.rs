@@ -1,17 +1,47 @@
-use crate::instance::InstanceRegistry;
+use anyhow::anyhow;
 use async_trait::async_trait;
-use std::any::Any;
-use std::sync::Arc;
+use rustc_hash::FxHashMap;
+use std::any::{type_name, Any, TypeId};
+use std::sync::{Arc, RwLock};
+
+pub type Instance = Box<dyn Any + Sync + Send>;
 
 #[derive(Debug, Default)]
 pub struct ContextManager {
-    state: Arc<InstanceRegistry>,
-    pub resources: Arc<InstanceRegistry>,
+    resources: RwLock<FxHashMap<TypeId, Arc<Instance>>>,
+    state: RwLock<FxHashMap<TypeId, Arc<Instance>>>,
 }
 
 impl ContextManager {
-    pub async fn state<T: Any + Send + Sync>(&self) -> anyhow::Result<&T> {
-        Ok(self.state.get::<T>()?.downcast_ref::<T>().unwrap())
+    pub fn resource<C: Any + Send + Sync>(&self) -> anyhow::Result<Arc<C>> {
+        let data = self.resources.read().expect("Resources lock is poisoned!");
+
+        let value = data
+            .get(&TypeId::of::<C>())
+            .ok_or_else(|| anyhow!("No resource found for type {:?}", type_name::<C>()))?;
+
+        let value = value.downcast_ref::<Arc<C>>().unwrap();
+
+        Ok(Arc::clone(value))
+    }
+
+    pub fn state<C: Any + Send + Sync>(&self) -> anyhow::Result<Arc<C>> {
+        let data = self.state.read().expect("State lock is poisoned!");
+
+        let value = data
+            .get(&TypeId::of::<C>())
+            .ok_or_else(|| anyhow!("No state found for type {:?}", type_name::<C>()))?;
+
+        let value = value.downcast_ref::<Arc<C>>().unwrap();
+
+        Ok(Arc::clone(value))
+    }
+
+    pub fn set_state<C: Any + Send + Sync>(&mut self, instance: C) {
+        self.state
+            .write()
+            .expect("State lock is poisoned!")
+            .insert(TypeId::of::<C>(), Arc::new(Box::new(instance)));
     }
 }
 

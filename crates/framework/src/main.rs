@@ -8,7 +8,7 @@ struct Three;
 
 async fn test1(context: Context) -> anyhow::Result<()> {
     println!("1");
-    // context.write().await.state.set(One);
+    context.state::<One>()?;
     Ok(())
 }
 
