@@ -1,7 +1,9 @@
-use tokio::task;
-
 use crate::context::Context;
 use crate::system::{BoxedSystem, System, SystemFutureResult};
+use crate::ActiveContext;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tokio::task;
 
 pub struct App {
     context: Context,
@@ -22,10 +24,11 @@ impl App {
     }
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
-        let mut context = std::mem::take(&mut self.context);
+        let context = Arc::new(RwLock::new(std::mem::take(&mut self.context)));
         let initializers = self.initializers.drain(..).collect::<Vec<_>>();
 
-        self.execute_systems(&mut context, initializers).await?;
+        self.execute_systems(Arc::clone(&context), initializers, false)
+            .await?;
 
         Ok(())
     }
@@ -34,17 +37,24 @@ impl App {
 
     fn execute_systems(
         &mut self,
-        context: &mut Context,
+        context: ActiveContext,
         systems: Vec<BoxedSystem>,
+        parallel: bool,
     ) -> SystemFutureResult {
         Box::pin(async move {
-            let mut futures = vec![];
+            if parallel {
+                let mut futures = vec![];
 
-            for system in systems {
-                futures.push(task::spawn(system.execute()));
+                for system in systems {
+                    futures.push(task::spawn(system.execute(Arc::clone(&context))));
+                }
+
+                futures::future::try_join_all(futures).await?;
+            } else {
+                for system in systems {
+                    system.execute(Arc::clone(&context)).await?;
+                }
             }
-
-            futures::future::try_join_all(futures).await?;
 
             Ok(())
         })

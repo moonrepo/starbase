@@ -10,7 +10,7 @@ pub struct InstanceRegistry {
 }
 
 impl InstanceRegistry {
-    pub async fn get<C: Any + Send + Sync>(&self) -> anyhow::Result<&Instance> {
+    pub fn get<C: Any + Send + Sync>(&self) -> anyhow::Result<&Instance> {
         self.instances
             .get(&TypeId::of::<C>())
             .ok_or_else(|| anyhow!("No instance found for type {:?}", type_name::<C>()))

@@ -1,22 +1,24 @@
-use crate::context::{Context, FromContext};
+use crate::context::{ActiveContext, ContextGuard, FromContext};
 use async_trait::async_trait;
 // use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone, Copy)]
-pub struct State {
-    // pub value: &'sys S,
+pub struct State<'sys, T: Send + Sync> {
+    pub value: &'sys T,
 }
 
-#[async_trait]
-impl FromContext for State {
-    async fn from_context(_context: &mut Context) -> anyhow::Result<Self> {
-        // let value = context.state.get::<S>().await?.read().await;
+// #[async_trait]
+// impl<'sys, S: Send + Sync> FromContext<'static> for State<'sys, S> {
+//     async fn from_context(context: ActiveContext) -> anyhow::Result<ContextGuard<'sys, Self>> {
+//         let context = context.read().await;
 
-        // let value = value.downcast_ref::<S>().unwrap();
+//         let value = context.state.get::<S>()?;
+//         let value = value.downcast_ref::<S>().unwrap();
+//         let state = State { value };
 
-        Ok(Self {})
-    }
-}
+//         Ok(ContextGuard { inner: &state })
+//     }
+// }
 
 // impl<S> Deref for State<S> {
 //     type Target = S;

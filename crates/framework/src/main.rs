@@ -1,33 +1,32 @@
 use core::future::Future;
-use starship::{App, Context};
+use starship::{ActiveContext, App, Context};
 use std::{thread::sleep, time::Duration};
 
 struct One;
 struct Two;
 struct Three;
 
-async fn test1() -> anyhow::Result<()> {
-    sleep(Duration::from_secs(1));
+async fn test1(context: ActiveContext) -> anyhow::Result<()> {
     println!("1");
-    // ctx.state.set(One);
+    context.write().await.state.set(One);
     Ok(())
 }
 
-async fn test2() -> anyhow::Result<()> {
+async fn test2(context: ActiveContext) -> anyhow::Result<()> {
     println!("2");
-    // ctx.state.set(Two);
+    context.write().await.state.set(Two);
     Ok(())
 }
 
-async fn test3() -> anyhow::Result<()> {
+async fn test3(context: ActiveContext) -> anyhow::Result<()> {
     println!("3");
-    // ctx.state.set(Three);
+    context.write().await.state.set(Three);
     Ok(())
 }
 
-async fn test_system(ctx: &mut Context) -> anyhow::Result<()> {
+async fn test_system(context: ActiveContext) -> anyhow::Result<()> {
     println!("SYSTEM");
-    dbg!(ctx);
+    dbg!(context.read().await);
 
     Ok(())
 }
@@ -38,7 +37,7 @@ async fn main() {
     app.add_initializer(test1);
     app.add_initializer(test2);
     app.add_initializer(test3);
-    // app.add_initializer(test_system);
+    app.add_initializer(test_system);
 
     app.run().await.unwrap();
 }
