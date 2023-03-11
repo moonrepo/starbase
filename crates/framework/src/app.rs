@@ -1,9 +1,11 @@
+use tokio::task;
+
 use crate::context::Context;
-use crate::system::{IntoSystemExecutor, System, SystemExecutor};
+use crate::system::{BoxedSystem, System, SystemFutureResult};
 
 pub struct App {
     context: Context,
-    initializers: Vec<SystemExecutor>,
+    initializers: Vec<BoxedSystem>,
 }
 
 impl App {
@@ -14,8 +16,8 @@ impl App {
         }
     }
 
-    pub fn add_initializer(&mut self, system: impl IntoSystemExecutor) -> &mut Self {
-        self.initializers.push(system.into_system());
+    pub fn add_initializer(&mut self, system: impl System + 'static) -> &mut Self {
+        self.initializers.push(Box::new(system));
         self
     }
 
@@ -30,15 +32,21 @@ impl App {
 
     // Private
 
-    async fn execute_systems(
+    fn execute_systems(
         &mut self,
         context: &mut Context,
-        systems: Vec<SystemExecutor>,
-    ) -> anyhow::Result<()> {
-        for system in systems {
-            system.execute(context).await?;
-        }
+        systems: Vec<BoxedSystem>,
+    ) -> SystemFutureResult {
+        Box::pin(async move {
+            let mut futures = vec![];
 
-        Ok(())
+            for system in systems {
+                futures.push(task::spawn(system.execute()));
+            }
+
+            futures::future::try_join_all(futures).await?;
+
+            Ok(())
+        })
     }
 }
