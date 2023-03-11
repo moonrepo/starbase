@@ -1,19 +1,17 @@
-use crate::context::Context;
+use crate::context::{Context, ContextManager};
 use crate::system::{BoxedSystem, System, SystemFutureResult};
-use crate::ActiveContext;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::task;
 
 pub struct App {
-    context: Context,
+    context: ContextManager,
     initializers: Vec<BoxedSystem>,
 }
 
 impl App {
     pub fn new() -> Self {
         App {
-            context: Context::default(),
+            context: ContextManager::default(),
             initializers: Vec::new(),
         }
     }
@@ -24,7 +22,7 @@ impl App {
     }
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
-        let context = Arc::new(RwLock::new(std::mem::take(&mut self.context)));
+        let context = Arc::new(std::mem::take(&mut self.context));
         let initializers = self.initializers.drain(..).collect::<Vec<_>>();
 
         self.execute_systems(Arc::clone(&context), initializers, false)
@@ -37,7 +35,7 @@ impl App {
 
     fn execute_systems(
         &mut self,
-        context: ActiveContext,
+        context: Context,
         systems: Vec<BoxedSystem>,
         parallel: bool,
     ) -> SystemFutureResult {

@@ -1,23 +1,25 @@
 use crate::instance::InstanceRegistry;
 use async_trait::async_trait;
+use std::any::Any;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 #[derive(Debug, Default)]
-pub struct Context {
-    pub state: InstanceRegistry,
-    pub resources: InstanceRegistry,
+pub struct ContextManager {
+    state: Arc<InstanceRegistry>,
+    pub resources: Arc<InstanceRegistry>,
 }
 
-pub struct ContextGuard<'outer, T: Send + Sync> {
-    inner: &'outer T,
+impl ContextManager {
+    pub async fn state<T: Any + Send + Sync>(&self) -> anyhow::Result<&T> {
+        Ok(self.state.get::<T>()?.downcast_ref::<T>().unwrap())
+    }
 }
 
-pub type ActiveContext = Arc<RwLock<Context>>;
+pub type Context = Arc<ContextManager>;
 
 #[async_trait]
 pub trait FromContext: Send + Sync + Sized {
-    async fn from_context(context: ActiveContext) -> anyhow::Result<Self>;
+    async fn from_context(context: Context) -> anyhow::Result<Self>;
 }
 
 // #[async_trait]
@@ -50,3 +52,7 @@ pub trait FromContext: Send + Sync + Sized {
 //         Ok(T::from_context(context).await)
 //     }
 // }
+
+pub struct ContextGuard<'a, T> {
+    inner: &'a T,
+}

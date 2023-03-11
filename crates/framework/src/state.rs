@@ -1,11 +1,11 @@
-use crate::context::{ActiveContext, ContextGuard, FromContext};
-use async_trait::async_trait;
-// use std::ops::{Deref, DerefMut};
+// use crate::context::{ContextGuard, FromContext, SystemContext};
+// use async_trait::async_trait;
+// // use std::ops::{Deref, DerefMut};
 
-#[derive(Debug, Clone, Copy)]
-pub struct State<'sys, T: Send + Sync> {
-    pub value: &'sys T,
-}
+// #[derive(Debug, Clone, Copy)]
+// pub struct State<'sys, T: Send + Sync> {
+//     pub value: &'sys T,
+// }
 
 // #[async_trait]
 // impl<'sys, S: Send + Sync> FromContext<'static> for State<'sys, S> {
