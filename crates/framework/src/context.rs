@@ -1,20 +1,22 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
+use atomic_refcell::AtomicRefCell;
 use rustc_hash::FxHashMap;
 use std::any::{type_name, Any, TypeId};
-use std::sync::{Arc, RwLock};
+use std::ops::{Deref, DerefMut};
+use std::sync::Arc;
 
 pub type Instance = Box<dyn Any + Sync + Send>;
 
 #[derive(Debug, Default)]
 pub struct ContextManager {
-    resources: RwLock<FxHashMap<TypeId, Arc<Instance>>>,
-    state: RwLock<FxHashMap<TypeId, Arc<Instance>>>,
+    resources: AtomicRefCell<FxHashMap<TypeId, Arc<Instance>>>,
+    state: AtomicRefCell<FxHashMap<TypeId, Arc<Instance>>>,
 }
 
 impl ContextManager {
     pub fn resource<C: Any + Send + Sync>(&self) -> anyhow::Result<Arc<C>> {
-        let data = self.resources.read().expect("Resources lock is poisoned!");
+        let data = self.resources.borrow();
 
         let value = data
             .get(&TypeId::of::<C>())
@@ -26,7 +28,7 @@ impl ContextManager {
     }
 
     pub fn state<C: Any + Send + Sync>(&self) -> anyhow::Result<Arc<C>> {
-        let data = self.state.read().expect("State lock is poisoned!");
+        let data = self.state.borrow();
 
         let value = data
             .get(&TypeId::of::<C>())
@@ -39,11 +41,63 @@ impl ContextManager {
 
     pub fn set_state<C: Any + Send + Sync>(&mut self, instance: C) {
         self.state
-            .write()
-            .expect("State lock is poisoned!")
+            .borrow_mut()
             .insert(TypeId::of::<C>(), Arc::new(Box::new(instance)));
     }
 }
+
+impl Deref for ContextManager {
+    type Target = Self;
+
+    fn deref(&self) -> &Self::Target {
+        self
+    }
+}
+
+impl DerefMut for ContextManager {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self
+    }
+}
+
+// #[derive(Debug, Default)]
+// pub struct ContextManager {
+//     resources: RwLock<FxHashMap<TypeId, Arc<Instance>>>,
+//     state: RwLock<FxHashMap<TypeId, Arc<Instance>>>,
+// }
+
+// impl ContextManager {
+//     pub fn resource<C: Any + Send + Sync>(&self) -> anyhow::Result<Arc<C>> {
+//         let data = self.resources.read().expect("Resources lock is poisoned!");
+
+//         let value = data
+//             .get(&TypeId::of::<C>())
+//             .ok_or_else(|| anyhow!("No resource found for type {:?}", type_name::<C>()))?;
+
+//         let value = value.downcast_ref::<Arc<C>>().unwrap();
+
+//         Ok(Arc::clone(value))
+//     }
+
+//     pub fn state<C: Any + Send + Sync>(&self) -> anyhow::Result<Arc<C>> {
+//         let data = self.state.read().expect("State lock is poisoned!");
+
+//         let value = data
+//             .get(&TypeId::of::<C>())
+//             .ok_or_else(|| anyhow!("No state found for type {:?}", type_name::<C>()))?;
+
+//         let value = value.downcast_ref::<Arc<C>>().unwrap();
+
+//         Ok(Arc::clone(value))
+//     }
+
+//     pub fn set_state<C: Any + Send + Sync>(&mut self, instance: C) {
+//         self.state
+//             .write()
+//             .expect("State lock is poisoned!")
+//             .insert(TypeId::of::<C>(), Arc::new(Box::new(instance)));
+//     }
+// }
 
 pub type Context = Arc<ContextManager>;
 

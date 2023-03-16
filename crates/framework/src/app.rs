@@ -17,7 +17,7 @@ impl App {
         }
     }
 
-    pub fn add_initializer(&mut self, system: impl System + 'static) -> &mut Self {
+    pub fn add_initializer<S: System + 'static>(&mut self, system: S) -> &mut Self {
         self.initializers.push(Box::new(system));
         self
     }

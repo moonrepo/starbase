@@ -6,9 +6,10 @@ struct One;
 struct Two;
 struct Three;
 
-async fn test1(context: Context) -> anyhow::Result<()> {
+async fn test1(mut context: Context) -> anyhow::Result<()> {
     println!("1");
-    context.state::<One>()?;
+    // context.state::<One>()?;
+    context.set_state(One);
     Ok(())
 }
 
