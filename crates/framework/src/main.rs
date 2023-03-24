@@ -10,7 +10,7 @@ async fn test1(ctx: Context) -> anyhow::Result<()> {
     let mut ctx = ctx.write().await;
     println!("init 1");
     // context.state::<One>()?;
-    ctx.set_state(One);
+    ctx.add_state(One);
     Ok(())
 }
 

@@ -20,9 +20,7 @@ impl ContextManager {
             .get(&TypeId::of::<C>())
             .ok_or_else(|| anyhow!("No resource found for type {:?}", type_name::<C>()))?;
 
-        let value = value.downcast_ref::<C>().unwrap();
-
-        Ok(value)
+        Ok(value.downcast_ref::<C>().unwrap())
     }
 
     pub fn resource_mut<C: Any + Send + Sync>(&mut self) -> anyhow::Result<&mut C> {
@@ -31,9 +29,7 @@ impl ContextManager {
             .get_mut(&TypeId::of::<C>())
             .ok_or_else(|| anyhow!("No resource found for type {:?}", type_name::<C>()))?;
 
-        let value = value.downcast_mut::<C>().unwrap();
-
-        Ok(value)
+        Ok(value.downcast_mut::<C>().unwrap())
     }
 
     pub fn state<C: Any + Send + Sync>(&self) -> anyhow::Result<&C> {
@@ -42,9 +38,7 @@ impl ContextManager {
             .get(&TypeId::of::<C>())
             .ok_or_else(|| anyhow!("No state found for type {:?}", type_name::<C>()))?;
 
-        let value = value.downcast_ref::<C>().unwrap();
-
-        Ok(value)
+        Ok(value.downcast_ref::<C>().unwrap())
     }
 
     pub fn state_mut<C: Any + Send + Sync>(&mut self) -> anyhow::Result<&mut C> {
@@ -53,17 +47,15 @@ impl ContextManager {
             .get_mut(&TypeId::of::<C>())
             .ok_or_else(|| anyhow!("No state found for type {:?}", type_name::<C>()))?;
 
-        let value = value.downcast_mut::<C>().unwrap();
-
-        Ok(value)
+        Ok(value.downcast_mut::<C>().unwrap())
     }
 
-    pub fn set_resource<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
+    pub fn add_resource<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
         self.resources.insert(TypeId::of::<C>(), Box::new(instance));
         self
     }
 
-    pub fn set_state<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
+    pub fn add_state<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
         self.state.insert(TypeId::of::<C>(), Box::new(instance));
         self
     }
