@@ -35,7 +35,7 @@ async fn test_system(ctx: Context) -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() {
-    let mut app = App::new();
+    let mut app = App::default();
     app.add_finalizer(test_system);
     app.add_analyzer(test3);
     app.add_initializer(test1);

@@ -7,19 +7,19 @@ pub type SystemResult = anyhow::Result<()>;
 pub type SystemFutureResult = BoxFuture<'static, SystemResult>;
 
 pub trait System: Debug + Send + Sync {
-    fn initialize(&self, _context: Context) -> SystemFutureResult {
+    fn initialize(&mut self, _context: Context) -> SystemFutureResult {
         Box::pin(async { Ok(()) })
     }
 
-    fn analyze(&self, _context: Context) -> SystemFutureResult {
+    fn analyze(&mut self, _context: Context) -> SystemFutureResult {
         Box::pin(async { Ok(()) })
     }
 
-    fn execute(&self, _context: Context) -> SystemFutureResult {
+    fn execute(&mut self, _context: Context) -> SystemFutureResult {
         Box::pin(async { Ok(()) })
     }
 
-    fn finalize(&self, _context: Context) -> SystemFutureResult {
+    fn finalize(&mut self, _context: Context) -> SystemFutureResult {
         Box::pin(async { Ok(()) })
     }
 }
@@ -27,15 +27,15 @@ pub trait System: Debug + Send + Sync {
 pub type BoxedSystem = Box<dyn System>;
 
 pub trait SystemFunc: Send + Sync {
-    fn call(&self, context: Context) -> SystemFutureResult;
+    fn call(self: Box<Self>, context: Context) -> SystemFutureResult;
 }
 
 impl<T: Send + Sync, F> SystemFunc for T
 where
-    T: Fn(Context) -> F,
+    T: FnOnce(Context) -> F,
     F: Future<Output = SystemResult> + Send + 'static,
 {
-    fn call(&self, context: Context) -> SystemFutureResult {
+    fn call(self: Box<Self>, context: Context) -> SystemFutureResult {
         Box::pin(self(context))
     }
 }
@@ -43,20 +43,21 @@ where
 macro_rules! system_variant_impl {
     ($variant:ident, $func:ident) => {
         pub struct $variant {
-            pub func: Box<dyn SystemFunc>,
+            pub func: Option<Box<dyn SystemFunc>>,
         }
 
         impl $variant {
             pub fn new<F: SystemFunc + 'static>(func: F) -> Self {
                 Self {
-                    func: Box::new(func),
+                    func: Some(Box::new(func)),
                 }
             }
         }
 
         impl System for $variant {
-            fn $func(&self, context: Context) -> SystemFutureResult {
-                self.func.call(context)
+            fn $func(&mut self, context: Context) -> SystemFutureResult {
+                let func = self.func.take().unwrap();
+                func.call(context)
             }
         }
 
