@@ -6,28 +6,29 @@ struct One;
 struct Two;
 struct Three;
 
-async fn test1(mut context: Context) -> anyhow::Result<()> {
+async fn test1(ctx: Context) -> anyhow::Result<()> {
+    let mut ctx = ctx.write().await;
     println!("1");
     // context.state::<One>()?;
-    context.set_state(One);
+    ctx.set_state(One);
     Ok(())
 }
 
-async fn test2(context: Context) -> anyhow::Result<()> {
+async fn test2(ctx: Context) -> anyhow::Result<()> {
     println!("2");
     // context.write().await.state.set(Two);
     Ok(())
 }
 
-async fn test3(context: Context) -> anyhow::Result<()> {
+async fn test3(ctx: Context) -> anyhow::Result<()> {
     println!("3");
     // context.write().await.state.set(Three);
     Ok(())
 }
 
-async fn test_system(context: Context) -> anyhow::Result<()> {
+async fn test_system(ctx: Context) -> anyhow::Result<()> {
     println!("SYSTEM");
-    // dbg!(context.read().await);
+    dbg!(ctx.read().await);
 
     Ok(())
 }

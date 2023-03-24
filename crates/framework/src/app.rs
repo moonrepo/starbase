@@ -1,7 +1,7 @@
 use crate::context::{Context, ContextManager};
 use crate::system::{BoxedSystem, System, SystemFutureResult};
 use std::sync::Arc;
-use std::sync::RwLock;
+use tokio::sync::RwLock;
 use tokio::task;
 
 pub struct App {
@@ -23,7 +23,7 @@ impl App {
     }
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
-        let context = Arc::new(std::mem::take(&mut self.context));
+        let context = Arc::new(RwLock::new(std::mem::take(&mut self.context)));
         let initializers = self.initializers.drain(..).collect::<Vec<_>>();
 
         self.execute_systems(Arc::clone(&context), initializers, false)
