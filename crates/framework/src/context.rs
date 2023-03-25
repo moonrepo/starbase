@@ -9,11 +9,21 @@ pub type Instance = Box<dyn Any + Sync + Send>;
 
 #[derive(Debug, Default)]
 pub struct ContextManager {
+    emitters: FxHashMap<TypeId, Instance>,
     resources: FxHashMap<TypeId, Instance>,
     state: FxHashMap<TypeId, Instance>,
 }
 
 impl ContextManager {
+    pub fn emitter_mut<C: Any + Send + Sync>(&mut self) -> anyhow::Result<&mut C> {
+        let value = self
+            .emitters
+            .get_mut(&TypeId::of::<C>())
+            .ok_or_else(|| anyhow!("No emitter found for type {:?}", type_name::<C>()))?;
+
+        Ok(value.downcast_mut::<C>().unwrap())
+    }
+
     pub fn resource<C: Any + Send + Sync>(&self) -> anyhow::Result<&C> {
         let value = self
             .resources
@@ -48,6 +58,11 @@ impl ContextManager {
             .ok_or_else(|| anyhow!("No state found for type {:?}", type_name::<C>()))?;
 
         Ok(value.downcast_mut::<C>().unwrap())
+    }
+
+    pub fn add_emitter<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
+        self.emitters.insert(TypeId::of::<C>(), Box::new(instance));
+        self
     }
 
     pub fn add_resource<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
