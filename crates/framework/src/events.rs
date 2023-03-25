@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use core::future::Future;
 use futures::future::BoxFuture;
 
@@ -28,13 +29,19 @@ where
     }
 }
 
-pub struct Listener<E: Event> {
+#[async_trait]
+pub trait Listener<E: Event>: Send + Sync {
+    async fn on_emit(&mut self, event: &mut E) -> EventResult<E::ReturnValue>;
+}
+
+pub struct CallbackListener<E: Event> {
     callback: Option<Box<dyn ListenerFunc<E>>>,
     once: bool,
 }
 
-impl<E: Event> Listener<E> {
-    pub async fn run(&mut self, event: &mut E) -> EventResult<E::ReturnValue> {
+#[async_trait]
+impl<E: Event> Listener<E> for CallbackListener<E> {
+    async fn on_emit(&mut self, event: &mut E) -> EventResult<E::ReturnValue> {
         if self.callback.is_none() {
             return Ok(EventState::Continue);
         }
@@ -52,31 +59,36 @@ impl<E: Event> Listener<E> {
 
 #[derive(Default)]
 pub struct Emitter<E: Event> {
-    pub listeners: Vec<Listener<E>>,
+    pub listeners: Vec<Box<dyn Listener<E>>>,
 }
 
-impl<E: Event> Emitter<E> {
+impl<E: Event + 'static> Emitter<E> {
+    pub fn listen<L: Listener<E> + 'static>(&mut self, listener: L) -> &mut Self {
+        self.listeners.push(Box::new(listener));
+        self
+    }
+
     pub fn on<L: ListenerFunc<E> + 'static>(&mut self, callback: L) -> &mut Self {
-        self.listeners.push(Listener {
+        self.listeners.push(Box::new(CallbackListener {
             callback: Some(Box::new(callback)),
             once: false,
-        });
+        }));
 
         self
     }
 
     pub fn once<L: ListenerFunc<E> + 'static>(&mut self, callback: L) -> &mut Self {
-        self.listeners.push(Listener {
+        self.listeners.push(Box::new(CallbackListener {
             callback: Some(Box::new(callback)),
             once: true,
-        });
+        }));
 
         self
     }
 
     pub async fn emit(&mut self, mut event: E) -> anyhow::Result<()> {
         for listener in &mut self.listeners {
-            listener.run(&mut event).await?;
+            listener.on_emit(&mut event).await?;
         }
 
         Ok(())
