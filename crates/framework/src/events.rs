@@ -104,11 +104,17 @@ impl<E: Event + 'static> Emitter<E> {
         self
     }
 
-    pub async fn emit(&mut self, mut event: E) -> anyhow::Result<()> {
+    pub async fn emit(&mut self, mut event: E) -> anyhow::Result<Option<E::ReturnValue>> {
         for listener in &mut self.listeners {
-            listener.on_emit(&mut event).await?;
+            match listener.on_emit(&mut event).await? {
+                EventState::Continue => {}
+                EventState::Stop => break,
+                EventState::Return(value) => {
+                    return Ok(Some(value));
+                }
+            }
         }
 
-        Ok(())
+        Ok(None)
     }
 }
