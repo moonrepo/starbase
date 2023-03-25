@@ -3,8 +3,8 @@ use core::future::Future;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
 
-pub type EventResult<R> = anyhow::Result<EventState<R>>;
-pub type EventFutureResult<R> = BoxFuture<'static, EventResult<R>>;
+pub type EventResult<E> = anyhow::Result<EventState<<E as Event>::ReturnValue>>;
+pub type EventFutureResult<E> = BoxFuture<'static, EventResult<E>>;
 
 pub trait Event: Send + Sync {
     type ReturnValue;
@@ -17,22 +17,22 @@ pub enum EventState<R> {
 }
 
 pub trait ListenerFunc<E: Event>: Send + Sync {
-    fn call(&self, event: &mut E) -> EventFutureResult<E::ReturnValue>;
+    fn call(&self, event: &mut E) -> EventFutureResult<E>;
 }
 
 impl<T: Send + Sync, F, E: Event> ListenerFunc<E> for T
 where
     T: Fn(&mut E) -> F,
-    F: Future<Output = EventResult<E::ReturnValue>> + Send + 'static,
+    F: Future<Output = EventResult<E>> + Send + 'static,
 {
-    fn call(&self, event: &mut E) -> EventFutureResult<E::ReturnValue> {
+    fn call(&self, event: &mut E) -> EventFutureResult<E> {
         Box::pin(self(event))
     }
 }
 
 #[async_trait]
 pub trait Listener<E: Event>: Debug + Send + Sync {
-    async fn on_emit(&mut self, event: &mut E) -> EventResult<E::ReturnValue>;
+    async fn on_emit(&mut self, event: &mut E) -> EventResult<E>;
 }
 
 pub struct CallbackListener<E: Event> {
@@ -42,7 +42,7 @@ pub struct CallbackListener<E: Event> {
 
 #[async_trait]
 impl<E: Event> Listener<E> for CallbackListener<E> {
-    async fn on_emit(&mut self, event: &mut E) -> EventResult<E::ReturnValue> {
+    async fn on_emit(&mut self, event: &mut E) -> EventResult<E> {
         if self.callback.is_none() {
             return Ok(EventState::Continue);
         }
