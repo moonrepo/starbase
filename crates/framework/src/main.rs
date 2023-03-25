@@ -6,7 +6,7 @@ use std::{thread::sleep, time::Duration};
 struct CountEvent(usize);
 
 impl Event for CountEvent {
-    type ReturnValue = ();
+    type Value = ();
 }
 
 struct One;

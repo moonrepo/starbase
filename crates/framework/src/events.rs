@@ -3,17 +3,17 @@ use core::future::Future;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
 
-pub type EventResult<E> = anyhow::Result<EventState<<E as Event>::ReturnValue>>;
+pub type EventResult<E> = anyhow::Result<EventState<<E as Event>::Value>>;
 pub type EventFutureResult<E> = BoxFuture<'static, EventResult<E>>;
 
 pub trait Event: Send + Sync {
-    type ReturnValue;
+    type Value;
 }
 
-pub enum EventState<R> {
+pub enum EventState<V> {
     Continue,
     Stop,
-    Return(R),
+    Return(V),
 }
 
 pub trait ListenerFunc<E: Event>: Send + Sync {
@@ -104,7 +104,7 @@ impl<E: Event + 'static> Emitter<E> {
         self
     }
 
-    pub async fn emit(&mut self, mut event: E) -> anyhow::Result<Option<E::ReturnValue>> {
+    pub async fn emit(&mut self, mut event: E) -> anyhow::Result<Option<E::Value>> {
         for listener in &mut self.listeners {
             match listener.on_emit(&mut event).await? {
                 EventState::Continue => {}
