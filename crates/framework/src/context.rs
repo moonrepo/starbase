@@ -1,3 +1,4 @@
+use crate::events::{Emitter, Event};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use rustc_hash::FxHashMap;
@@ -15,13 +16,13 @@ pub struct ContextManager {
 }
 
 impl ContextManager {
-    pub fn emitter_mut<C: Any + Send + Sync>(&mut self) -> anyhow::Result<&mut C> {
+    pub fn emitter_mut<E: Event + 'static>(&mut self) -> anyhow::Result<&mut Emitter<E>> {
         let value = self
             .emitters
-            .get_mut(&TypeId::of::<C>())
-            .ok_or_else(|| anyhow!("No emitter found for type {:?}", type_name::<C>()))?;
+            .get_mut(&TypeId::of::<Emitter<E>>())
+            .ok_or_else(|| anyhow!("No emitter found for type {:?}", type_name::<Emitter<E>>()))?;
 
-        Ok(value.downcast_mut::<C>().unwrap())
+        Ok(value.downcast_mut::<Emitter<E>>().unwrap())
     }
 
     pub fn resource<C: Any + Send + Sync>(&self) -> anyhow::Result<&C> {

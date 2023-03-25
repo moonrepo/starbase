@@ -1,6 +1,12 @@
 use core::future::Future;
-use starship::{App, Context, ContextManager};
+use starship::{App, Context, ContextManager, Emitter, Event, EventState};
 use std::{thread::sleep, time::Duration};
+
+struct CountEvent(usize);
+
+impl Event for CountEvent {
+    type ReturnValue = ();
+}
 
 struct One;
 struct Two;
@@ -11,12 +17,25 @@ async fn test1(ctx: Context) -> anyhow::Result<()> {
     println!("init 1");
     // context.state::<One>()?;
     ctx.add_state(One);
+    ctx.add_emitter(Emitter::<CountEvent>::new());
     Ok(())
+}
+
+async fn e1(
+    event: &mut CountEvent,
+) -> anyhow::Result<EventState<<CountEvent as Event>::ReturnValue>> {
+    println!("emit 1");
+    Ok(EventState::Continue)
 }
 
 async fn test2(ctx: Context) -> anyhow::Result<()> {
     println!("init 2");
     // context.write().await.state.set(Two);
+
+    let mut ctx = ctx.write().await;
+    let em = ctx.emitter_mut::<CountEvent>()?;
+    em.on(e1);
+
     Ok(())
 }
 

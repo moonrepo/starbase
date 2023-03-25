@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use core::future::Future;
 use futures::future::BoxFuture;
+use std::fmt::Debug;
 
 pub type EventResult<R> = anyhow::Result<EventState<R>>;
 pub type EventFutureResult<R> = BoxFuture<'static, EventResult<R>>;
@@ -30,7 +31,7 @@ where
 }
 
 #[async_trait]
-pub trait Listener<E: Event>: Send + Sync {
+pub trait Listener<E: Event>: Debug + Send + Sync {
     async fn on_emit(&mut self, event: &mut E) -> EventResult<E::ReturnValue>;
 }
 
@@ -57,12 +58,29 @@ impl<E: Event> Listener<E> for CallbackListener<E> {
     }
 }
 
-#[derive(Default)]
+impl<E: Event> Debug for CallbackListener<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct(if self.once {
+            "CallbackListener(once)"
+        } else {
+            "CallbackListener"
+        })
+        .finish()
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct Emitter<E: Event> {
-    pub listeners: Vec<Box<dyn Listener<E>>>,
+    listeners: Vec<Box<dyn Listener<E>>>,
 }
 
 impl<E: Event + 'static> Emitter<E> {
+    pub fn new() -> Self {
+        Emitter {
+            listeners: Vec::new(),
+        }
+    }
+
     pub fn listen<L: Listener<E> + 'static>(&mut self, listener: L) -> &mut Self {
         self.listeners.push(Box::new(listener));
         self
