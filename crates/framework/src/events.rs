@@ -124,6 +124,7 @@ impl<E: Event + 'static> Emitter<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starship_macros::listener;
 
     #[derive(Debug)]
     struct TestEvent(pub i32);
@@ -207,16 +208,19 @@ mod tests {
         assert_eq!(result, None);
     }
 
+    #[listener(local)]
     async fn callback_one(event: &mut TestEvent) -> EventResult<TestEvent> {
         event.0 += 1;
         Ok(EventState::Continue)
     }
 
+    #[listener(local)]
     async fn callback_two(event: &mut TestEvent) -> EventResult<TestEvent> {
         event.0 += 2;
         Ok(EventState::Continue)
     }
 
+    #[listener(local)]
     async fn callback_three(event: &mut TestEvent) -> EventResult<TestEvent> {
         event.0 += 3;
         Ok(EventState::Continue)
@@ -225,9 +229,12 @@ mod tests {
     #[tokio::test]
     async fn callback() {
         let mut emitter = Emitter::<TestEvent>::new();
-        emitter.on(callback_one);
-        emitter.on(callback_two);
-        emitter.on(callback_three);
+        emitter.listen(CallbackOneListener);
+        emitter.listen(CallbackTwoListener);
+        emitter.listen(CallbackThreeListener);
+        // emitter.on(callback_one);
+        // emitter.on(callback_two);
+        // emitter.on(callback_three);
 
         let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
