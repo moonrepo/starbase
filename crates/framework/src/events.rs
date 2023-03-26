@@ -16,17 +16,19 @@ pub enum EventState<V> {
     Return(V),
 }
 
+#[async_trait]
 pub trait ListenerFunc<E: Event>: Send + Sync {
-    fn call(&self, event: &mut E) -> EventFutureResult<E>;
+    async fn call(&self, event: &mut E) -> EventResult<E>;
 }
 
+#[async_trait]
 impl<T: Send + Sync, F, E: Event> ListenerFunc<E> for T
 where
     T: Fn(&mut E) -> F,
     F: Future<Output = EventResult<E>> + Send + 'static,
 {
-    fn call(&self, event: &mut E) -> EventFutureResult<E> {
-        Box::pin(self(event))
+    async fn call(&self, event: &mut E) -> EventResult<E> {
+        Ok(self(event).await?)
     }
 }
 
@@ -132,65 +134,104 @@ mod tests {
 
     #[derive(Debug)]
     struct TestListener {
-        value: i32,
+        inc: i32,
     }
 
     #[async_trait]
     impl Listener<TestEvent> for TestListener {
         async fn on_emit(&mut self, event: &mut TestEvent) -> EventResult<TestEvent> {
-            event.0 += self.value;
+            event.0 += self.inc;
             Ok(EventState::Continue)
         }
     }
 
-    #[tokio::test]
-    async fn test_event() {
-        let mut emitter = Emitter::<TestEvent>::new();
-        emitter.listen(TestListener { value: 1 });
-        emitter.listen(TestListener { value: 2 });
-        emitter.listen(TestListener { value: 3 });
-
-        let (event, _) = emitter.emit(TestEvent(0)).await.unwrap();
-
-        assert_eq!(event.0, 6);
+    #[derive(Debug)]
+    struct TestStopListener {
+        inc: i32,
     }
 
-    // #[tokio::test]
-    // async fn test_event_return() {
-    //     let mut emitter = Emitter::<TestEvent>::new();
-    //     emitter.listen(TestListener { value: 1 });
-    //     emitter.listen(TestListener { value: 2 });
-    //     emitter.listen(TestListener { value: 3 });
+    #[async_trait]
+    impl Listener<TestEvent> for TestStopListener {
+        async fn on_emit(&mut self, event: &mut TestEvent) -> EventResult<TestEvent> {
+            event.0 += self.inc;
+            Ok(EventState::Stop)
+        }
+    }
 
-    //     let mut event = TestEvent { value: 0 };
-    //     let value = emitter.emit(event).await.unwrap().unwrap();
+    #[derive(Debug)]
+    struct TestReturnListener;
 
-    //     assert_eq!(value, 6);
-    // }
+    #[async_trait]
+    impl Listener<TestEvent> for TestReturnListener {
+        async fn on_emit(&mut self, _event: &mut TestEvent) -> EventResult<TestEvent> {
+            Ok(EventState::Return(0))
+        }
+    }
 
-    // #[tokio::test]
-    // async fn test_event_stop() {
-    //     let mut emitter = Emitter::<TestEvent>::new();
-    //     emitter.listen(TestListener { value: 1 });
-    //     emitter.listen(TestListener { value: 2 });
-    //     emitter.listen(TestListener { value: 3 });
+    #[tokio::test]
+    async fn listener() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.listen(TestListener { inc: 1 });
+        emitter.listen(TestListener { inc: 2 });
+        emitter.listen(TestListener { inc: 3 });
 
-    //     let mut event = TestEvent { value: 0 };
-    //     emitter.emit(event).await.unwrap();
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
-    //     assert_eq!(event.value, 6);
-    // }
+        assert_eq!(event.0, 6);
+        assert_eq!(result, None);
+    }
 
-    // #[tokio::test]
-    // async fn test_event_callback() {
-    //     let mut emitter = Emitter::<TestEvent>::new();
-    //     emitter.on(|event: &mut TestEvent| async move {
-    //         event.value += 1;
-    //         Ok(EventState::Continue)
-    //     });
-    //     emitter.on(|event: &mut TestEvent| async move {
-    //         event.value += 2;
-    //         Ok(EventState::Continue)
-    //     });
-    // }
+    #[tokio::test]
+    async fn listener_return() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.listen(TestListener { inc: 1 });
+        emitter.listen(TestListener { inc: 2 });
+        emitter.listen(TestReturnListener);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 3);
+        assert_eq!(result, Some(0));
+    }
+
+    #[tokio::test]
+    async fn listener_stop() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.listen(TestListener { inc: 1 });
+        emitter.listen(TestStopListener { inc: 2 });
+        emitter.listen(TestListener { inc: 3 });
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 3);
+        assert_eq!(result, None);
+    }
+
+    async fn callback_one(event: &mut TestEvent) -> EventResult<TestEvent> {
+        event.0 += 1;
+        Ok(EventState::Continue)
+    }
+
+    async fn callback_two(event: &mut TestEvent) -> EventResult<TestEvent> {
+        event.0 += 2;
+        Ok(EventState::Continue)
+    }
+
+    async fn callback_three(event: &mut TestEvent) -> EventResult<TestEvent> {
+        event.0 += 3;
+        Ok(EventState::Continue)
+    }
+
+    #[tokio::test]
+    async fn callback() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.on(callback_one);
+        emitter.on(callback_two);
+        emitter.on(callback_three);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 6);
+        assert_eq!(result, None);
+    }
 }
