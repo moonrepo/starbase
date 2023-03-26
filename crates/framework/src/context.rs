@@ -16,7 +16,10 @@ pub struct ContextManager {
 }
 
 impl ContextManager {
-    pub async fn emit<E: Event + 'static>(&mut self, event: E) -> anyhow::Result<Option<E::Value>> {
+    pub async fn emit<E: Event + 'static>(
+        &mut self,
+        event: E,
+    ) -> anyhow::Result<(E, Option<E::Value>)> {
         Ok(self.emitter_mut::<E>()?.emit(event).await?)
     }
 
