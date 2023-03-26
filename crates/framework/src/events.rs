@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use core::future::Future;
 use futures::future::BoxFuture;
+use rustc_hash::FxHashSet;
 use std::fmt::Debug;
 
 pub type EventResult<E> = anyhow::Result<EventState<<E as Event>::Value>>;
@@ -34,29 +35,23 @@ where
 
 #[async_trait]
 pub trait Listener<E: Event>: Debug + Send + Sync {
+    fn is_once(&self) -> bool;
     async fn on_emit(&mut self, event: &mut E) -> EventResult<E>;
 }
 
 pub struct CallbackListener<E: Event> {
-    callback: Option<Box<dyn ListenerFunc<E>>>,
+    callback: Box<dyn ListenerFunc<E>>,
     once: bool,
 }
 
 #[async_trait]
 impl<E: Event> Listener<E> for CallbackListener<E> {
+    fn is_once(&self) -> bool {
+        self.once
+    }
+
     async fn on_emit(&mut self, event: &mut E) -> EventResult<E> {
-        if self.callback.is_none() {
-            return Ok(EventState::Continue);
-        }
-
-        let callback = self.callback.take().unwrap();
-        let state = callback.call(event).await?;
-
-        if !self.once {
-            self.callback = Some(callback);
-        }
-
-        Ok(state)
+        Ok(self.callback.call(event).await?)
     }
 }
 
@@ -73,7 +68,7 @@ impl<E: Event> Debug for CallbackListener<E> {
 
 #[derive(Debug, Default)]
 pub struct Emitter<E: Event> {
-    listeners: Vec<Box<dyn Listener<E>>>,
+    pub listeners: Vec<Box<dyn Listener<E>>>,
 }
 
 impl<E: Event + 'static> Emitter<E> {
@@ -90,7 +85,7 @@ impl<E: Event + 'static> Emitter<E> {
 
     pub fn on<L: ListenerFunc<E> + 'static>(&mut self, callback: L) -> &mut Self {
         self.listeners.push(Box::new(CallbackListener {
-            callback: Some(Box::new(callback)),
+            callback: Box::new(callback),
             once: false,
         }));
 
@@ -99,7 +94,7 @@ impl<E: Event + 'static> Emitter<E> {
 
     pub fn once<L: ListenerFunc<E> + 'static>(&mut self, callback: L) -> &mut Self {
         self.listeners.push(Box::new(CallbackListener {
-            callback: Some(Box::new(callback)),
+            callback: Box::new(callback),
             once: true,
         }));
 
@@ -107,17 +102,34 @@ impl<E: Event + 'static> Emitter<E> {
     }
 
     pub async fn emit(&mut self, mut event: E) -> anyhow::Result<(E, Option<E::Value>)> {
-        for listener in &mut self.listeners {
+        let mut result = None;
+        let mut remove_indices = FxHashSet::default();
+
+        for (index, listener) in self.listeners.iter_mut().enumerate() {
+            if listener.is_once() {
+                remove_indices.insert(index);
+            }
+
             match listener.on_emit(&mut event).await? {
-                EventState::Continue => {}
+                EventState::Continue => continue,
                 EventState::Stop => break,
                 EventState::Return(value) => {
-                    return Ok((event, Some(value)));
+                    result = Some(value);
+                    break;
                 }
             }
         }
 
-        Ok((event, None))
+        // Remove only once listeners that were called
+        let mut i = 0;
+
+        self.listeners.retain(|_| {
+            let remove = remove_indices.contains(&i);
+            i += 1;
+            !remove
+        });
+
+        Ok((event, result))
     }
 }
 
@@ -140,8 +152,27 @@ mod tests {
 
     #[async_trait]
     impl Listener<TestEvent> for TestListener {
+        fn is_once(&self) -> bool {
+            false
+        }
+
         async fn on_emit(&mut self, event: &mut TestEvent) -> EventResult<TestEvent> {
             event.0 += self.inc;
+            Ok(EventState::Continue)
+        }
+    }
+
+    #[derive(Debug)]
+    struct TestOnceListener;
+
+    #[async_trait]
+    impl Listener<TestEvent> for TestOnceListener {
+        fn is_once(&self) -> bool {
+            true
+        }
+
+        async fn on_emit(&mut self, event: &mut TestEvent) -> EventResult<TestEvent> {
+            event.0 += 3;
             Ok(EventState::Continue)
         }
     }
@@ -153,6 +184,10 @@ mod tests {
 
     #[async_trait]
     impl Listener<TestEvent> for TestStopListener {
+        fn is_once(&self) -> bool {
+            false
+        }
+
         async fn on_emit(&mut self, event: &mut TestEvent) -> EventResult<TestEvent> {
             event.0 += self.inc;
             Ok(EventState::Stop)
@@ -164,6 +199,10 @@ mod tests {
 
     #[async_trait]
     impl Listener<TestEvent> for TestReturnListener {
+        fn is_once(&self) -> bool {
+            false
+        }
+
         async fn on_emit(&mut self, _event: &mut TestEvent) -> EventResult<TestEvent> {
             Ok(EventState::Return(0))
         }
@@ -208,6 +247,28 @@ mod tests {
         assert_eq!(result, None);
     }
 
+    #[tokio::test]
+    async fn listener_once() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.listen(TestOnceListener);
+        emitter.listen(TestOnceListener);
+        emitter.listen(TestOnceListener);
+
+        assert_eq!(emitter.listeners.len(), 3);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 9);
+        assert_eq!(result, None);
+        assert_eq!(emitter.listeners.len(), 0);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 0);
+        assert_eq!(result, None);
+        assert_eq!(emitter.listeners.len(), 0);
+    }
+
     #[listener(local)]
     async fn callback_one(event: &mut TestEvent) -> EventResult<TestEvent> {
         event.0 += 1;
@@ -226,6 +287,23 @@ mod tests {
         Ok(EventState::Continue)
     }
 
+    #[listener(local)]
+    async fn callback_return(event: &mut TestEvent) -> EventResult<TestEvent> {
+        Ok(EventState::Return(0))
+    }
+
+    #[listener(local)]
+    async fn callback_stop(event: &mut TestEvent) -> EventResult<TestEvent> {
+        event.0 += 2;
+        Ok(EventState::Stop)
+    }
+
+    #[listener(local, once)]
+    async fn callback_once(event: &mut TestEvent) -> EventResult<TestEvent> {
+        event.0 += 3;
+        Ok(EventState::Continue)
+    }
+
     #[tokio::test]
     async fn callback() {
         let mut emitter = Emitter::<TestEvent>::new();
@@ -240,5 +318,78 @@ mod tests {
 
         assert_eq!(event.0, 6);
         assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn callback_return() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.listen(CallbackOneListener);
+        emitter.listen(CallbackTwoListener);
+        emitter.listen(CallbackReturnListener);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 3);
+        assert_eq!(result, Some(0));
+    }
+
+    #[tokio::test]
+    async fn callback_stop() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.listen(CallbackOneListener);
+        emitter.listen(CallbackStopListener);
+        emitter.listen(CallbackThreeListener);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 3);
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn callback_once() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.listen(CallbackOnceListener);
+        emitter.listen(CallbackOnceListener);
+        emitter.listen(CallbackOnceListener);
+
+        assert_eq!(emitter.listeners.len(), 3);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 9);
+        assert_eq!(result, None);
+        assert_eq!(emitter.listeners.len(), 0);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 0);
+        assert_eq!(result, None);
+        assert_eq!(emitter.listeners.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn preserves_onces_that_didnt_run() {
+        let mut emitter = Emitter::<TestEvent>::new();
+        emitter.listen(CallbackOnceListener);
+        emitter.listen(CallbackOnceListener);
+        emitter.listen(CallbackStopListener);
+        emitter.listen(CallbackOnceListener);
+        emitter.listen(CallbackOnceListener);
+
+        assert_eq!(emitter.listeners.len(), 5);
+
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 8);
+        assert_eq!(result, None);
+        assert_eq!(emitter.listeners.len(), 3);
+
+        // Will stop immediately
+        let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
+
+        assert_eq!(event.0, 2);
+        assert_eq!(result, None);
+        assert_eq!(emitter.listeners.len(), 3);
     }
 }

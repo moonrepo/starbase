@@ -7,14 +7,18 @@ use syn::{parse_macro_input, FnArg, Ident, Token, Type};
 
 struct ListenerArgs {
     local: bool,
+    once: bool,
 }
 
 impl Parse for ListenerArgs {
     fn parse(input: ParseStream) -> Result<Self> {
-        let vars = Punctuated::<Ident, Token![,]>::parse_terminated(input)?;
+        let vars = Punctuated::<Ident, Token![,]>::parse_terminated(input)?
+            .into_iter()
+            .collect::<Vec<Ident>>();
 
         Ok(ListenerArgs {
-            local: !vars.is_empty() && vars[0].to_string() == "local",
+            local: vars.iter().any(|v| v == "local"),
+            once: vars.iter().any(|v| v == "once"),
         })
     }
 }
@@ -27,6 +31,7 @@ pub fn macro_impl(args: TokenStream, item: TokenStream) -> TokenStream {
     let func_body = func.block;
     let listener_name = format_ident!("{}Listener", func_name.to_case(Case::Pascal));
     let crate_scope = format_ident!("{}", if args.local { "crate" } else { "::starship" });
+    let is_once = format_ident!("{}", if args.once { "true" } else { "false" });
 
     // Extract event name
     let event_name = match func
@@ -53,6 +58,10 @@ pub fn macro_impl(args: TokenStream, item: TokenStream) -> TokenStream {
         #[async_trait::async_trait]
         #[automatically_derived]
         impl #crate_scope::Listener<#event_name> for #listener_name {
+            fn is_once(&self) -> bool {
+                #is_once
+            }
+
             async fn on_emit(&mut self, event: &mut #event_name) -> #crate_scope::EventResult<#event_name> {
                 #func_body
             }
