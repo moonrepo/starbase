@@ -1,13 +1,10 @@
 use async_trait::async_trait;
-use starship::{Emitter, Event, EventResult, EventState, Listener};
+use starship::{Emitter, EventResult, EventState, Listener};
 use starship_macros::*;
 
-#[derive(Debug)]
+#[derive(Event)]
+#[event(value = "i32")]
 struct TestEvent(pub i32);
-
-impl Event for TestEvent {
-    type Value = i32;
-}
 
 #[derive(Debug)]
 struct TestListener {
