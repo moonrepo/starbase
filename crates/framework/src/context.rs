@@ -1,6 +1,5 @@
 use crate::events::{Emitter, Event};
 use anyhow::anyhow;
-use async_trait::async_trait;
 use rustc_hash::FxHashMap;
 use std::any::{type_name, Any, TypeId};
 use std::sync::Arc;
@@ -16,6 +15,7 @@ pub struct ContextManager {
 }
 
 impl ContextManager {
+    /// Convenience method for emitting the provided event with a registered emitter.
     pub async fn emit<E: Event + 'static>(
         &mut self,
         event: E,
@@ -85,8 +85,3 @@ impl ContextManager {
 }
 
 pub type Context = Arc<RwLock<ContextManager>>;
-
-#[async_trait]
-pub trait FromContext: Send + Sync + Sized {
-    async fn from_context(context: Context) -> anyhow::Result<Self>;
-}
