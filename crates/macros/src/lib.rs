@@ -1,6 +1,12 @@
+// mod event;
 mod listener;
 
 use proc_macro::TokenStream;
+
+// #[proc_macro_derive(Event, attributes(event))]
+// pub fn event(item: TokenStream) -> TokenStream {
+//     event::macro_impl(item)
+// }
 
 #[proc_macro_attribute]
 pub fn listener(args: TokenStream, item: TokenStream) -> TokenStream {

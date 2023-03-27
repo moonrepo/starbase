@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use starship::{Emitter, Event, EventResult, EventState, Listener};
-use starship_macros::listener;
+use starship_macros::*;
 
 #[derive(Debug)]
 struct TestEvent(pub i32);

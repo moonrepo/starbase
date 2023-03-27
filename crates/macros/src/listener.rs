@@ -1,29 +1,19 @@
 use convert_case::{Case, Casing};
+use darling::FromMeta;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse::{Parse, ParseStream, Result};
-use syn::punctuated::Punctuated;
-use syn::{parse_macro_input, FnArg, Ident, Token, Type};
+use syn::{parse_macro_input, AttributeArgs, FnArg, Type};
 
+#[derive(Debug, FromMeta)]
 struct ListenerArgs {
+    #[darling(default)]
     once: bool,
 }
 
-impl Parse for ListenerArgs {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let vars = Punctuated::<Ident, Token![,]>::parse_terminated(input)?
-            .into_iter()
-            .collect::<Vec<Ident>>();
-
-        Ok(ListenerArgs {
-            once: vars.iter().any(|v| v == "once"),
-        })
-    }
-}
-
 pub fn macro_impl(args: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as ListenerArgs);
     let func = parse_macro_input!(item as syn::ItemFn);
+    let args = parse_macro_input!(args as AttributeArgs);
+    let args = ListenerArgs::from_list(&args).expect("Failed to parse #[listener] arguments.");
 
     let func_name = func.sig.ident.to_string();
     let func_body = func.block;
