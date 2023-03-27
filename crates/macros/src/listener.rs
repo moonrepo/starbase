@@ -6,7 +6,6 @@ use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, FnArg, Ident, Token, Type};
 
 struct ListenerArgs {
-    local: bool,
     once: bool,
 }
 
@@ -17,7 +16,6 @@ impl Parse for ListenerArgs {
             .collect::<Vec<Ident>>();
 
         Ok(ListenerArgs {
-            local: vars.iter().any(|v| v == "local"),
             once: vars.iter().any(|v| v == "once"),
         })
     }
@@ -30,7 +28,6 @@ pub fn macro_impl(args: TokenStream, item: TokenStream) -> TokenStream {
     let func_name = func.sig.ident.to_string();
     let func_body = func.block;
     let listener_name = format_ident!("{}Listener", func_name.to_case(Case::Pascal));
-    let crate_scope = format_ident!("{}", if args.local { "crate" } else { "::starship" });
     let is_once = format_ident!("{}", if args.once { "true" } else { "false" });
 
     // Extract event name
@@ -57,12 +54,12 @@ pub fn macro_impl(args: TokenStream, item: TokenStream) -> TokenStream {
 
         #[async_trait::async_trait]
         #[automatically_derived]
-        impl #crate_scope::Listener<#event_name> for #listener_name {
+        impl starship::Listener<#event_name> for #listener_name {
             fn is_once(&self) -> bool {
                 #is_once
             }
 
-            async fn on_emit(&mut self, event: &mut #event_name) -> #crate_scope::EventResult<#event_name> {
+            async fn on_emit(&mut self, event: &mut #event_name) -> starship::EventResult<#event_name> {
                 #func_body
             }
         }
