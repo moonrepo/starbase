@@ -1,4 +1,6 @@
 use crate::events::{Emitter, Event};
+use crate::resource::Resource;
+use crate::state::State;
 use anyhow::anyhow;
 use rustc_hash::FxHashMap;
 use std::any::{type_name, Any, TypeId};
@@ -32,7 +34,7 @@ impl ContextManager {
         Ok(value.downcast_mut::<Emitter<E>>().unwrap())
     }
 
-    pub fn resource<C: Any + Send + Sync>(&self) -> anyhow::Result<&C> {
+    pub fn resource<C: Any + Send + Sync + Resource>(&self) -> anyhow::Result<&C> {
         let value = self
             .resources
             .get(&TypeId::of::<C>())
@@ -41,7 +43,7 @@ impl ContextManager {
         Ok(value.downcast_ref::<C>().unwrap())
     }
 
-    pub fn resource_mut<C: Any + Send + Sync>(&mut self) -> anyhow::Result<&mut C> {
+    pub fn resource_mut<C: Any + Send + Sync + Resource>(&mut self) -> anyhow::Result<&mut C> {
         let value = self
             .resources
             .get_mut(&TypeId::of::<C>())
@@ -50,7 +52,7 @@ impl ContextManager {
         Ok(value.downcast_mut::<C>().unwrap())
     }
 
-    pub fn state<C: Any + Send + Sync>(&self) -> anyhow::Result<&C> {
+    pub fn state<C: Any + Send + Sync + State>(&self) -> anyhow::Result<&C> {
         let value = self
             .state
             .get(&TypeId::of::<C>())
@@ -59,7 +61,7 @@ impl ContextManager {
         Ok(value.downcast_ref::<C>().unwrap())
     }
 
-    pub fn state_mut<C: Any + Send + Sync>(&mut self) -> anyhow::Result<&mut C> {
+    pub fn state_mut<C: Any + Send + Sync + State>(&mut self) -> anyhow::Result<&mut C> {
         let value = self
             .state
             .get_mut(&TypeId::of::<C>())
@@ -73,12 +75,12 @@ impl ContextManager {
         self
     }
 
-    pub fn add_resource<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
+    pub fn add_resource<C: Any + Send + Sync + Resource>(&mut self, instance: C) -> &mut Self {
         self.resources.insert(TypeId::of::<C>(), Box::new(instance));
         self
     }
 
-    pub fn add_state<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
+    pub fn add_state<C: Any + Send + Sync + State>(&mut self, instance: C) -> &mut Self {
         self.state.insert(TypeId::of::<C>(), Box::new(instance));
         self
     }

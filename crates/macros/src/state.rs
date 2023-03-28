@@ -4,16 +4,21 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 
 pub fn macro_impl(item: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(item);
-
-    let empty_impl: TokenStream = quote! {}.into();
     let struct_name = input.ident;
+
+    let shared_impl = quote! {
+        impl starship::State for #struct_name {
+        }
+    };
 
     match input.data {
         Data::Struct(data) => {
             match data.fields {
                 // Struct { field }
                 Fields::Named(_) => quote! {
-                     impl AsRef<#struct_name> for #struct_name {
+                    #shared_impl
+
+                    impl AsRef<#struct_name> for #struct_name {
                         fn as_ref(&self) -> &#struct_name {
                             self
                         }
@@ -55,6 +60,8 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                     };
 
                     quote! {
+                        #shared_impl
+
                         impl std::ops::Deref for #struct_name {
                             type Target = #inner_type;
 
@@ -81,10 +88,10 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                 }
 
                 // Struct
-                Fields::Unit => empty_impl,
+                Fields::Unit => shared_impl.into(),
             }
         }
-        Data::Enum(_) => empty_impl,
+        Data::Enum(_) => shared_impl.into(),
         Data::Union(_) => panic!("#[derive(State)] is not supported for unions."),
     }
 }
