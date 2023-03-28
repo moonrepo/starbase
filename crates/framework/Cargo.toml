@@ -1,0 +1,12 @@
+[package]
+name = "starship"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+starship_macros = { path = "../macros" }
+anyhow = "1.0.69"
+async-trait = "0.1.61"
+futures = "0.3.25"
+rustc-hash = "1.1.0"
+tokio = { version = "1.25.0", features = ["full", "tracing"] }
