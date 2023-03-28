@@ -1,0 +1,8 @@
+[package]
+name = "test-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+starship = { path = "../framework" }
+tokio = { version = "1.25.0", features = ["full", "tracing"] }

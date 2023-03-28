@@ -405,6 +405,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-app"
+version = "0.1.0"
+dependencies = [
+ "starship",
+ "tokio",
+]
+
+[[package]]
 name = "tokio"
 version = "1.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

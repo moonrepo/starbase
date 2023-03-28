@@ -1,17 +1,16 @@
-use starship::{App, Context};
-use starship_macros::*;
+use starship::{App, Context, Result, State};
 
 #[derive(Debug, State)]
 struct Test(String);
 
-async fn init1(ctx: Context) -> anyhow::Result<()> {
+async fn init1(ctx: Context) -> Result<()> {
     let mut ctx = ctx.write().await;
     println!("initialize 1");
     ctx.add_state(Test("original".into()));
     Ok(())
 }
 
-async fn init2(ctx: Context) -> anyhow::Result<()> {
+async fn init2(ctx: Context) -> Result<()> {
     tokio::spawn(async move {
         let ctx = ctx.read().await;
         println!("initialize 2");
@@ -23,7 +22,7 @@ async fn init2(ctx: Context) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn anal1(ctx: Context) -> anyhow::Result<()> {
+async fn anal1(ctx: Context) -> Result<()> {
     let mut ctx = ctx.write().await;
     println!("analyze");
     let state = ctx.state_mut::<Test>()?;
@@ -31,12 +30,11 @@ async fn anal1(ctx: Context) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn fin(ctx: Context) -> anyhow::Result<()> {
+async fn fin(ctx: Context) -> Result<()> {
     let ctx = ctx.read().await;
     println!("finalize");
     let state = ctx.state::<Test>()?;
     dbg!(state);
-    dbg!(ctx);
 
     Ok(())
 }
@@ -48,5 +46,7 @@ async fn main() {
     app.add_analyzer(anal1);
     app.add_initializer(init1);
     app.add_initializer(init2);
-    app.run().await.unwrap();
+
+    let ctx = app.run().await.unwrap();
+    dbg!(ctx);
 }

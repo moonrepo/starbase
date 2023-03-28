@@ -55,7 +55,7 @@ impl App {
     }
 
     /// Start the application and run all registered systems grouped into phases.
-    pub async fn run(&mut self) -> anyhow::Result<()> {
+    pub async fn run(&mut self) -> anyhow::Result<ContextManager> {
         let context = Arc::new(RwLock::new(std::mem::take(&mut self.context)));
 
         self.run_initializers(Arc::clone(&context)).await?;
@@ -63,7 +63,9 @@ impl App {
         self.run_executors(Arc::clone(&context)).await?;
         self.run_finalizers(Arc::clone(&context)).await?;
 
-        Ok(())
+        let context = Arc::try_unwrap(context).unwrap().into_inner();
+
+        Ok(context)
     }
 
     // Private
