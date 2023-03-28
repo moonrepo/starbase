@@ -20,7 +20,7 @@ impl ContextManager {
         &mut self,
         event: E,
     ) -> anyhow::Result<(E, Option<E::Value>)> {
-        Ok(self.emitter_mut::<E>()?.emit(event).await?)
+        self.emitter_mut::<E>()?.emit(event).await
     }
 
     pub fn emitter_mut<E: Event + 'static>(&mut self) -> anyhow::Result<&mut Emitter<E>> {

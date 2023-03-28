@@ -1,33 +1,39 @@
 use starship::{App, Context};
+use starship_macros::*;
 
-struct One;
-struct Two;
-struct Three;
+#[derive(Debug, State)]
+struct Test(String);
 
-async fn test1(ctx: Context) -> anyhow::Result<()> {
+async fn init1(ctx: Context) -> anyhow::Result<()> {
     let mut ctx = ctx.write().await;
-    println!("init 1");
-    // context.state::<One>()?;
-    ctx.add_state(One);
+    println!("initialize 1");
+    ctx.add_state(Test("original".into()));
     Ok(())
 }
 
-async fn test2(ctx: Context) -> anyhow::Result<()> {
-    println!("init 2");
-    // context.write().await.state.set(Two);
+async fn init2(ctx: Context) -> anyhow::Result<()> {
+    let ctx = ctx.read().await;
+    println!("initialize 2");
+    let state = ctx.state::<Test>()?;
+    dbg!(state);
 
     Ok(())
 }
 
-async fn test3(ctx: Context) -> anyhow::Result<()> {
-    println!("analyze 1");
-    // context.write().await.state.set(Three);
+async fn anal1(ctx: Context) -> anyhow::Result<()> {
+    let mut ctx = ctx.write().await;
+    println!("analyze");
+    let state = ctx.state_mut::<Test>()?;
+    **state = "mutated".to_string();
     Ok(())
 }
 
-async fn test_system(ctx: Context) -> anyhow::Result<()> {
-    println!("SYSTEM");
-    dbg!(ctx.read().await);
+async fn fin(ctx: Context) -> anyhow::Result<()> {
+    let ctx = ctx.read().await;
+    println!("finalize");
+    let state = ctx.state::<Test>()?;
+    dbg!(state);
+    dbg!(ctx);
 
     Ok(())
 }
@@ -35,10 +41,9 @@ async fn test_system(ctx: Context) -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() {
     let mut app = App::default();
-    app.add_finalizer(test_system);
-    app.add_analyzer(test3);
-    app.add_initializer(test1);
-    app.add_initializer(test2);
-
+    app.add_finalizer(fin);
+    app.add_analyzer(anal1);
+    app.add_initializer(init1);
+    app.add_initializer(init2);
     app.run().await.unwrap();
 }
