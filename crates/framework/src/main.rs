@@ -12,10 +12,13 @@ async fn init1(ctx: Context) -> anyhow::Result<()> {
 }
 
 async fn init2(ctx: Context) -> anyhow::Result<()> {
-    let ctx = ctx.read().await;
-    println!("initialize 2");
-    let state = ctx.state::<Test>()?;
-    dbg!(state);
+    tokio::spawn(async move {
+        let ctx = ctx.read().await;
+        println!("initialize 2");
+        let state = ctx.state::<Test>().unwrap();
+        dbg!(state);
+    })
+    .await?;
 
     Ok(())
 }

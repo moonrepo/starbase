@@ -5,71 +5,86 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 pub fn macro_impl(item: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(item);
 
+    let empty_impl: TokenStream = quote! {}.into();
     let struct_name = input.ident;
 
     match input.data {
         Data::Struct(data) => {
-            let Fields::Unnamed(fields) = data.fields else {
-                panic!("#[derive(State)] on a struct requires unnamed fields.");
-            };
+            match data.fields {
+                // Struct { field }
+                Fields::Named(_) => quote! {
+                     impl AsRef<#struct_name> for #struct_name {
+                        fn as_ref(&self) -> &#struct_name {
+                            self
+                        }
+                    }
+                }
+                .into(),
 
-            let inner = fields
-                .unnamed
-                .first()
-                .expect("#[derive(State)] on a struct require a single unnamed field.");
-            let inner_type = &inner.ty;
+                // Struct(inner)
+                Fields::Unnamed(fields) => {
+                    let inner = fields
+                        .unnamed
+                        .first()
+                        .expect("#[derive(State)] on a struct requires a single unnamed field.");
+                    let inner_type = &inner.ty;
 
-            let as_ref_extra = match inner_type {
-                Type::Path(path) => {
-                    let is_pathbuf = path
-                        .path
-                        .get_ident()
-                        .map(|i| i == "PathBuf")
-                        .unwrap_or_default();
+                    let as_ref_extra = match inner_type {
+                        Type::Path(path) => {
+                            let is_pathbuf = path
+                                .path
+                                .get_ident()
+                                .map(|i| i == "PathBuf")
+                                .unwrap_or_default();
 
-                    // When the inner type is a `PathBuf`, we must also implement
-                    // `AsRef<Path>` for references to work correctly.
-                    if is_pathbuf {
-                        Some(quote! {
-                            impl AsRef<std::path::Path> for #struct_name {
-                                fn as_ref(&self) -> &std::path::Path {
-                                    &self.0
-                                }
+                            // When the inner type is a `PathBuf`, we must also implement
+                            // `AsRef<Path>` for references to work correctly.
+                            if is_pathbuf {
+                                Some(quote! {
+                                    impl AsRef<std::path::Path> for #struct_name {
+                                        fn as_ref(&self) -> &std::path::Path {
+                                            &self.0
+                                        }
+                                    }
+                                })
+                            } else {
+                                None
                             }
-                        })
-                    } else {
-                        None
+                        }
+                        _ => None,
+                    };
+
+                    quote! {
+                        impl std::ops::Deref for #struct_name {
+                            type Target = #inner_type;
+
+                            fn deref(&self) -> &Self::Target {
+                                &self.0
+                            }
+                        }
+
+                        impl std::ops::DerefMut for #struct_name {
+                            fn deref_mut(&mut self) -> &mut Self::Target {
+                                &mut self.0
+                            }
+                        }
+
+                        impl AsRef<#inner_type> for #struct_name {
+                            fn as_ref(&self) -> &#inner_type {
+                                &self.0
+                            }
+                        }
+
+                        #as_ref_extra
                     }
-                }
-                _ => None,
-            };
-
-            quote! {
-                impl std::ops::Deref for #struct_name {
-                    type Target = #inner_type;
-
-                    fn deref(&self) -> &Self::Target {
-                        &self.0
-                    }
+                    .into()
                 }
 
-                impl std::ops::DerefMut for #struct_name {
-                    fn deref_mut(&mut self) -> &mut Self::Target {
-                        &mut self.0
-                    }
-                }
-
-                impl AsRef<#inner_type> for #struct_name {
-                    fn as_ref(&self) -> &#inner_type {
-                        &self.0
-                    }
-                }
-
-                #as_ref_extra
+                // Struct
+                Fields::Unit => empty_impl,
             }
-            .into()
         }
-        Data::Enum(_) => quote! {}.into(),
+        Data::Enum(_) => empty_impl,
         Data::Union(_) => panic!("#[derive(State)] is not supported for unions."),
     }
 }
