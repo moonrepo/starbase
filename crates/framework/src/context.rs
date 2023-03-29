@@ -1,7 +1,6 @@
 use crate::events::{Emitter, Event};
 use crate::resource::Resource;
 use crate::state::State;
-use anyhow::anyhow;
 use rustc_hash::FxHashMap;
 use std::any::{type_name, Any, TypeId};
 use std::sync::Arc;
@@ -22,52 +21,47 @@ impl ContextManager {
         &mut self,
         event: E,
     ) -> anyhow::Result<(E, Option<E::Value>)> {
-        self.emitter_mut::<E>()?.emit(event).await
+        self.emitter_mut::<E>().emit(event).await
     }
 
-    pub fn emitter_mut<E: Event + 'static>(&mut self) -> anyhow::Result<&mut Emitter<E>> {
-        let value = self
-            .emitters
-            .get_mut(&TypeId::of::<Emitter<E>>())
-            .ok_or_else(|| anyhow!("No emitter found for type {:?}", type_name::<Emitter<E>>()))?;
+    pub fn emitter_mut<E: Event + 'static>(&mut self) -> &mut Emitter<E> {
+        if let Some(value) = self.emitters.get_mut(&TypeId::of::<Emitter<E>>()) {
+            return value.downcast_mut::<Emitter<E>>().unwrap();
+        }
 
-        Ok(value.downcast_mut::<Emitter<E>>().unwrap())
+        panic!("No emitter found for type {:?}", type_name::<Emitter<E>>())
     }
 
-    pub fn resource<C: Any + Send + Sync + Resource>(&self) -> anyhow::Result<&C> {
-        let value = self
-            .resources
-            .get(&TypeId::of::<C>())
-            .ok_or_else(|| anyhow!("No resource found for type {:?}", type_name::<C>()))?;
+    pub fn resource<C: Any + Send + Sync + Resource>(&self) -> &C {
+        if let Some(value) = self.resources.get(&TypeId::of::<C>()) {
+            return value.downcast_ref::<C>().unwrap();
+        }
 
-        Ok(value.downcast_ref::<C>().unwrap())
+        panic!("No resource found for type {:?}", type_name::<C>())
     }
 
-    pub fn resource_mut<C: Any + Send + Sync + Resource>(&mut self) -> anyhow::Result<&mut C> {
-        let value = self
-            .resources
-            .get_mut(&TypeId::of::<C>())
-            .ok_or_else(|| anyhow!("No resource found for type {:?}", type_name::<C>()))?;
+    pub fn resource_mut<C: Any + Send + Sync + Resource>(&mut self) -> &mut C {
+        if let Some(value) = self.resources.get_mut(&TypeId::of::<C>()) {
+            return value.downcast_mut::<C>().unwrap();
+        }
 
-        Ok(value.downcast_mut::<C>().unwrap())
+        panic!("No resource found for type {:?}", type_name::<C>())
     }
 
-    pub fn state<C: Any + Send + Sync + State>(&self) -> anyhow::Result<&C> {
-        let value = self
-            .state
-            .get(&TypeId::of::<C>())
-            .ok_or_else(|| anyhow!("No state found for type {:?}", type_name::<C>()))?;
+    pub fn state<C: Any + Send + Sync + State>(&self) -> &C {
+        if let Some(value) = self.state.get(&TypeId::of::<C>()) {
+            return value.downcast_ref::<C>().unwrap();
+        }
 
-        Ok(value.downcast_ref::<C>().unwrap())
+        panic!("No state found for type {:?}", type_name::<C>())
     }
 
-    pub fn state_mut<C: Any + Send + Sync + State>(&mut self) -> anyhow::Result<&mut C> {
-        let value = self
-            .state
-            .get_mut(&TypeId::of::<C>())
-            .ok_or_else(|| anyhow!("No state found for type {:?}", type_name::<C>()))?;
+    pub fn state_mut<C: Any + Send + Sync + State>(&mut self) -> &mut C {
+        if let Some(value) = self.state.get_mut(&TypeId::of::<C>()) {
+            return value.downcast_mut::<C>().unwrap();
+        }
 
-        Ok(value.downcast_mut::<C>().unwrap())
+        panic!("No state found for type {:?}", type_name::<C>())
     }
 
     pub fn add_emitter<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {

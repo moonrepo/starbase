@@ -9,7 +9,7 @@ use tokio::task;
 
 #[derive(Debug, Default)]
 pub struct App {
-    context: ContextManager,
+    pub context: ContextManager,
 
     // Systems for all phases
     systems: Vec<BoxedSystem>,
@@ -63,7 +63,7 @@ impl App {
         self.run_executors(Arc::clone(&context)).await?;
         self.run_finalizers(Arc::clone(&context)).await?;
 
-        let context = Arc::try_unwrap(context).unwrap().into_inner();
+        let context = Arc::try_unwrap(context).expect("Failed to gather context before closing the application. This typically means that threads are still running that have not been awaited.").into_inner();
 
         Ok(context)
     }

@@ -14,7 +14,7 @@ async fn init2(ctx: Context) -> Result<()> {
     tokio::spawn(async move {
         let ctx = ctx.read().await;
         println!("initialize 2");
-        let state = ctx.state::<Test>().unwrap();
+        let state = ctx.state::<Test>();
         dbg!(state);
     })
     .await?;
@@ -25,7 +25,7 @@ async fn init2(ctx: Context) -> Result<()> {
 async fn anal1(ctx: Context) -> Result<()> {
     let mut ctx = ctx.write().await;
     println!("analyze");
-    let state = ctx.state_mut::<Test>()?;
+    let state = ctx.state_mut::<Test>();
     **state = "mutated".to_string();
     Ok(())
 }
@@ -33,7 +33,7 @@ async fn anal1(ctx: Context) -> Result<()> {
 async fn fin(ctx: Context) -> Result<()> {
     let ctx = ctx.read().await;
     println!("finalize");
-    let state = ctx.state::<Test>()?;
+    let state = ctx.state::<Test>();
     dbg!(state);
 
     Ok(())
