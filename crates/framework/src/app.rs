@@ -1,8 +1,9 @@
 use crate::context::{Context, ContextManager};
 use crate::system::{
     AnalyzeSystem, BoxedSystem, ExecuteSystem, FinalizeSystem, InitializeSystem, System,
-    SystemFunc, SystemFutureResult,
+    SystemFunc, SystemResult,
 };
+use core::future::Future;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::task;
@@ -46,7 +47,7 @@ impl App {
     }
 
     /// Start the application and run all registered systems grouped into phases.
-    pub async fn run(&mut self) -> anyhow::Result<ContextManager> {
+    pub async fn run(mut self) -> anyhow::Result<ContextManager> {
         let context = Arc::new(RwLock::new(std::mem::take(&mut self.context)));
 
         // Initialize
@@ -75,13 +76,14 @@ impl App {
 
     // Private
 
-    async fn run_systems_in_parallel<F>(
-        &mut self,
+    async fn run_systems_in_parallel<'app, F, Fut>(
+        &'app mut self,
         context: Context,
         handler: F,
     ) -> anyhow::Result<()>
     where
-        F: Fn(&mut BoxedSystem, Context) -> SystemFutureResult,
+        F: Fn(&'app mut BoxedSystem, Context) -> Fut,
+        Fut: Future<Output = SystemResult> + Send + 'app,
     {
         let mut futures = vec![];
 
@@ -96,9 +98,14 @@ impl App {
         Ok(())
     }
 
-    async fn run_systems_in_serial<F>(&mut self, context: Context, handler: F) -> anyhow::Result<()>
+    async fn run_systems_in_serial<'app, F, Fut>(
+        &'app mut self,
+        context: Context,
+        handler: F,
+    ) -> anyhow::Result<()>
     where
-        F: Fn(&mut BoxedSystem, Context) -> SystemFutureResult,
+        F: Fn(&'app mut BoxedSystem, Context) -> Fut,
+        Fut: Future<Output = SystemResult> + Send + 'app,
     {
         for system in &mut self.systems {
             handler(system, Arc::clone(&context)).await?;

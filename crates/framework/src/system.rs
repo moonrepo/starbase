@@ -1,4 +1,5 @@
 use crate::context::Context;
+use async_trait::async_trait;
 use core::future::Future;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
@@ -6,37 +7,40 @@ use std::fmt::Debug;
 pub type SystemResult = anyhow::Result<()>;
 pub type SystemFutureResult = BoxFuture<'static, SystemResult>;
 
+#[async_trait]
 pub trait System: Debug + Send + Sync {
-    fn initialize(&mut self, _context: Context) -> SystemFutureResult {
-        Box::pin(async { Ok(()) })
+    async fn initialize(&self, _context: Context) -> SystemResult {
+        Ok(())
     }
 
-    fn analyze(&mut self, _context: Context) -> SystemFutureResult {
-        Box::pin(async { Ok(()) })
+    async fn analyze(&self, _context: Context) -> SystemResult {
+        Ok(())
     }
 
-    fn execute(&mut self, _context: Context) -> SystemFutureResult {
-        Box::pin(async { Ok(()) })
+    async fn execute(&self, _context: Context) -> SystemResult {
+        Ok(())
     }
 
-    fn finalize(&mut self, _context: Context) -> SystemFutureResult {
-        Box::pin(async { Ok(()) })
+    async fn finalize(&self, _context: Context) -> SystemResult {
+        Ok(())
     }
 }
 
 pub type BoxedSystem = Box<dyn System>;
 
+#[async_trait]
 pub trait SystemFunc: Send + Sync {
-    fn call(self: Box<Self>, context: Context) -> SystemFutureResult;
+    async fn call(self: Box<Self>, context: Context) -> SystemResult;
 }
 
+#[async_trait]
 impl<T: Send + Sync, F> SystemFunc for T
 where
     T: FnOnce(Context) -> F,
     F: Future<Output = SystemResult> + Send + 'static,
 {
-    fn call(self: Box<Self>, context: Context) -> SystemFutureResult {
-        Box::pin(self(context))
+    async fn call(self: Box<Self>, context: Context) -> SystemResult {
+        self(context).await
     }
 }
 
@@ -54,10 +58,11 @@ macro_rules! system_variant_impl {
             }
         }
 
+        #[async_trait]
         impl System for $variant {
-            fn $func(&mut self, context: Context) -> SystemFutureResult {
+            async fn $func(&self, context: Context) -> SystemResult {
                 let func = self.func.take().unwrap();
-                func.call(context)
+                func.call(context).await
             }
         }
 
