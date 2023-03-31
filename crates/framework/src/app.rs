@@ -1,8 +1,8 @@
 use crate::context::{Context, ContextManager};
 use crate::system::{
-    AnalyzeSystem, BoxedSystem, ExecuteSystem, FinalizeSystem, InitializeSystem, System, SystemFunc,
+    AnalyzeSystem, BoxedSystem, ExecuteSystem, FinalizeSystem, InitializeSystem, System,
+    SystemFunc, SystemFutureResult,
 };
-use futures::future::try_join_all;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::task;
@@ -49,58 +49,60 @@ impl App {
     pub async fn run(&mut self) -> anyhow::Result<ContextManager> {
         let context = Arc::new(RwLock::new(std::mem::take(&mut self.context)));
 
-        self.run_initializers(Arc::clone(&context)).await?;
-        self.run_analyzers(Arc::clone(&context)).await?;
-        self.run_executors(Arc::clone(&context)).await?;
-        self.run_finalizers(Arc::clone(&context)).await?;
+        // Initialize
+        self.run_systems_in_serial(Arc::clone(&context), |system, ctx| system.initialize(ctx))
+            .await?;
 
-        let context = Arc::try_unwrap(context).expect("Failed to gather context before closing the application. This typically means that threads are still running that have not been awaited.").into_inner();
+        // Analyze
+        self.run_systems_in_parallel(Arc::clone(&context), |system, ctx| system.analyze(ctx))
+            .await?;
+
+        // Execute
+        self.run_systems_in_parallel(Arc::clone(&context), |system, ctx| system.execute(ctx))
+            .await?;
+
+        // Finalize
+        self.run_systems_in_parallel(Arc::clone(&context), |system, ctx| system.finalize(ctx))
+            .await?;
+        self.systems.clear();
+
+        let context = Arc::try_unwrap(context)
+            .expect("Failed to gather context before closing the application. This typically means that threads are still running that have not been awaited.")
+            .into_inner();
 
         Ok(context)
     }
 
     // Private
 
-    async fn run_initializers(&mut self, context: Context) -> anyhow::Result<()> {
+    async fn run_systems_in_parallel<F>(
+        &mut self,
+        context: Context,
+        handler: F,
+    ) -> anyhow::Result<()>
+    where
+        F: Fn(&mut BoxedSystem, Context) -> SystemFutureResult,
+    {
+        let mut futures = vec![];
+
         for system in &mut self.systems {
-            system.initialize(Arc::clone(&context)).await?;
+            futures.push(task::spawn(handler(system, Arc::clone(&context))));
+        }
+
+        for future in futures {
+            future.await??;
         }
 
         Ok(())
     }
 
-    async fn run_analyzers(&mut self, context: Context) -> anyhow::Result<()> {
-        let mut futures = vec![];
-
+    async fn run_systems_in_serial<F>(&mut self, context: Context, handler: F) -> anyhow::Result<()>
+    where
+        F: Fn(&mut BoxedSystem, Context) -> SystemFutureResult,
+    {
         for system in &mut self.systems {
-            futures.push(task::spawn(system.analyze(Arc::clone(&context))));
+            handler(system, Arc::clone(&context)).await?;
         }
-
-        try_join_all(futures).await?;
-
-        Ok(())
-    }
-
-    async fn run_executors(&mut self, context: Context) -> anyhow::Result<()> {
-        let mut futures = vec![];
-
-        for system in &mut self.systems {
-            futures.push(task::spawn(system.execute(Arc::clone(&context))));
-        }
-
-        try_join_all(futures).await?;
-
-        Ok(())
-    }
-
-    async fn run_finalizers(&mut self, context: Context) -> anyhow::Result<()> {
-        let mut futures = vec![];
-
-        for system in &mut self.systems {
-            futures.push(task::spawn(system.finalize(Arc::clone(&context))));
-        }
-
-        try_join_all(futures).await?;
 
         Ok(())
     }
