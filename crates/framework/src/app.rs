@@ -10,40 +10,31 @@ use tokio::task;
 #[derive(Debug, Default)]
 pub struct App {
     pub context: ContextManager,
-
-    // Systems for all phases
     systems: Vec<BoxedSystem>,
-
-    // Systems by phase
-    initializers: Vec<BoxedSystem>,
-    analyzers: Vec<BoxedSystem>,
-    executors: Vec<BoxedSystem>,
-    finalizers: Vec<BoxedSystem>,
 }
 
 impl App {
     /// Add a system function that runs during the initialization phase.
     pub fn add_initializer<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
-        self.initializers
-            .push(Box::new(InitializeSystem::new(system)));
+        self.systems.push(Box::new(InitializeSystem::new(system)));
         self
     }
 
     /// Add a system function that runs during the analysis phase.
     pub fn add_analyzer<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
-        self.analyzers.push(Box::new(AnalyzeSystem::new(system)));
+        self.systems.push(Box::new(AnalyzeSystem::new(system)));
         self
     }
 
     /// Add a system function that runs during the execution phase.
     pub fn add_executor<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
-        self.executors.push(Box::new(ExecuteSystem::new(system)));
+        self.systems.push(Box::new(ExecuteSystem::new(system)));
         self
     }
 
     /// Add a system function that runs during the finalization phase.
     pub fn add_finalizer<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
-        self.finalizers.push(Box::new(FinalizeSystem::new(system)));
+        self.systems.push(Box::new(FinalizeSystem::new(system)));
         self
     }
 
@@ -71,10 +62,6 @@ impl App {
     // Private
 
     async fn run_initializers(&mut self, context: Context) -> anyhow::Result<()> {
-        for mut system in self.initializers.drain(..) {
-            system.initialize(Arc::clone(&context)).await?;
-        }
-
         for system in &mut self.systems {
             system.initialize(Arc::clone(&context)).await?;
         }
@@ -84,10 +71,6 @@ impl App {
 
     async fn run_analyzers(&mut self, context: Context) -> anyhow::Result<()> {
         let mut futures = vec![];
-
-        for mut system in self.analyzers.drain(..) {
-            futures.push(task::spawn(system.analyze(Arc::clone(&context))));
-        }
 
         for system in &mut self.systems {
             futures.push(task::spawn(system.analyze(Arc::clone(&context))));
@@ -101,10 +84,6 @@ impl App {
     async fn run_executors(&mut self, context: Context) -> anyhow::Result<()> {
         let mut futures = vec![];
 
-        for mut system in self.executors.drain(..) {
-            futures.push(task::spawn(system.execute(Arc::clone(&context))));
-        }
-
         for system in &mut self.systems {
             futures.push(task::spawn(system.execute(Arc::clone(&context))));
         }
@@ -116,10 +95,6 @@ impl App {
 
     async fn run_finalizers(&mut self, context: Context) -> anyhow::Result<()> {
         let mut futures = vec![];
-
-        for mut system in self.finalizers.drain(..) {
-            futures.push(task::spawn(system.finalize(Arc::clone(&context))));
-        }
 
         for system in &mut self.systems {
             futures.push(task::spawn(system.finalize(Arc::clone(&context))));
