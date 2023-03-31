@@ -3,6 +3,7 @@ use crate::system::{
     AnalyzeSystem, BoxedSystem, ExecuteSystem, FinalizeSystem, InitializeSystem, System,
     SystemFunc, SystemResult,
 };
+use crate::SystemFutureResult;
 use core::future::Future;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -47,24 +48,34 @@ impl App {
     }
 
     /// Start the application and run all registered systems grouped into phases.
-    pub async fn run(mut self) -> anyhow::Result<ContextManager> {
+    pub async fn run(&mut self) -> anyhow::Result<ContextManager> {
         let context = Arc::new(RwLock::new(std::mem::take(&mut self.context)));
+        let systems = std::mem::take(&mut self.systems);
 
         // Initialize
-        self.run_systems_in_serial(Arc::clone(&context), |system, ctx| system.initialize(ctx))
-            .await?;
+        self.run_systems_in_serial(&systems, Arc::clone(&context), |system, ctx| {
+            system.initialize(ctx)
+        })
+        .await?;
 
         // Analyze
-        self.run_systems_in_parallel(Arc::clone(&context), |system, ctx| system.analyze(ctx))
-            .await?;
+        self.run_systems_in_parallel(&systems, Arc::clone(&context), |system, ctx| {
+            system.analyze(ctx)
+        })
+        .await?;
 
         // Execute
-        self.run_systems_in_parallel(Arc::clone(&context), |system, ctx| system.execute(ctx))
-            .await?;
+        self.run_systems_in_parallel(&systems, Arc::clone(&context), |system, ctx| {
+            system.execute(ctx)
+        })
+        .await?;
 
         // Finalize
-        self.run_systems_in_parallel(Arc::clone(&context), |system, ctx| system.finalize(ctx))
-            .await?;
+        self.run_systems_in_parallel(&systems, Arc::clone(&context), |system, ctx| {
+            system.finalize(ctx)
+        })
+        .await?;
+
         self.systems.clear();
 
         let context = Arc::try_unwrap(context)
@@ -76,18 +87,18 @@ impl App {
 
     // Private
 
-    async fn run_systems_in_parallel<'app, F, Fut>(
-        &'app mut self,
+    async fn run_systems_in_parallel<'app, F>(
+        &self,
+        systems: &'app [BoxedSystem],
         context: Context,
         handler: F,
     ) -> anyhow::Result<()>
     where
-        F: Fn(&'app mut BoxedSystem, Context) -> Fut,
-        Fut: Future<Output = SystemResult> + Send + 'app,
+        F: Fn(&'app BoxedSystem, Context) -> SystemFutureResult,
     {
         let mut futures = vec![];
 
-        for system in &mut self.systems {
+        for system in systems {
             futures.push(task::spawn(handler(system, Arc::clone(&context))));
         }
 
@@ -99,15 +110,16 @@ impl App {
     }
 
     async fn run_systems_in_serial<'app, F, Fut>(
-        &'app mut self,
+        &self,
+        systems: &'app [BoxedSystem],
         context: Context,
         handler: F,
     ) -> anyhow::Result<()>
     where
-        F: Fn(&'app mut BoxedSystem, Context) -> Fut,
-        Fut: Future<Output = SystemResult> + Send + 'app,
+        F: Fn(&'app BoxedSystem, Context) -> Fut,
+        Fut: Future<Output = SystemResult>,
     {
-        for system in &mut self.systems {
+        for system in systems {
             handler(system, Arc::clone(&context)).await?;
         }
 
