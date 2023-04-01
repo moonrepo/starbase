@@ -1,7 +1,10 @@
 #![allow(dead_code, unused_must_use)]
 
-use starship::{App, Resource, State};
+use starship::App;
 use starship_macros::*;
+
+#[derive(Debug, Event)]
+struct Event1(String);
 
 #[derive(Debug, State)]
 struct State1(usize);
@@ -77,18 +80,22 @@ async fn write_context_renamed(other: ContextMut) {
     dbg!(other);
 }
 
-// #[system]
-// async fn write_arg(arg: StateMut<State1>) {
-//     **arg = 2;
-//     dbg!(arg);
-// }
+#[system]
+async fn write_emitter(em: EmitterMut<Event1>) {
+    em.emit(Event1("test".into())).await?;
+}
 
-// #[system]
-// async fn read_write_arg(arg1: StateRef<State1>, arg2: StateMut<State2>) {
-//     dbg!(arg1);
-//     **arg2 = 2;
-//     dbg!(arg2);
-// }
+#[system]
+async fn write_state(arg: StateMut<State1>) {
+    **arg = 2;
+    dbg!(arg);
+}
+
+#[system]
+async fn write_resource(arg: ResourceMut<Resource1>) {
+    arg.field += 2;
+    dbg!(arg);
+}
 
 // MISC
 
@@ -140,6 +147,18 @@ fn non_async(ctx: ContextRef) {
 //     other.add_state(State1(123));
 // }
 
+// #[system]
+// async fn fail_emitter_with_other_args(em: EmitterMut<Event1>, arg: StateRef<State1>) {
+//     em.emit(Event1("test".into())).await?;
+// }
+
+// #[system]
+// async fn fail_read_write_arg(arg1: StateRef<State1>, arg2: StateMut<State2>) {
+//     dbg!(arg1);
+//     **arg2 = 2;
+//     dbg!(arg2);
+// }
+
 #[tokio::test]
 async fn test_app() {
     let mut app = App::default();
@@ -153,6 +172,9 @@ async fn test_app() {
     app.add_initializer(read_resource_same_arg);
     app.add_initializer(write_context);
     app.add_initializer(write_context_renamed);
+    app.add_initializer(write_emitter);
+    app.add_initializer(write_state);
+    app.add_initializer(write_resource);
     app.add_initializer(non_async);
     app.add_initializer(no_args);
 }

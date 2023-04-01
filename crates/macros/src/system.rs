@@ -8,27 +8,24 @@ use syn::{parse_macro_input, FnArg, GenericArgument, Pat, PathArguments, Type};
 enum SystemParam<'a> {
     ContextMut,
     ContextRef,
+    EmitterMut(&'a Type),
+    ResourceMut(&'a Type),
     ResourceRef(&'a Type),
+    StateMut(&'a Type),
     StateRef(&'a Type),
 }
 
 impl<'a> SystemParam<'a> {
     pub fn is_mutable(&self) -> bool {
-        matches!(&self, SystemParam::ContextMut)
+        matches!(
+            &self,
+            SystemParam::ContextMut
+                | SystemParam::EmitterMut(_)
+                | SystemParam::ResourceMut(_)
+                | SystemParam::StateMut(_)
+        )
     }
 }
-
-// if is_var_mut {
-//                 is_ctx_mut = true;
-
-//                 quote! {
-//                     let mut #var_name = #var_value;
-//                 }
-//             } else {
-//                 quote! {
-//                     let #var_name = #var_value;
-//                 }
-//             }
 
 pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let func = parse_macro_input!(item as syn::ItemFn);
@@ -83,7 +80,10 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
                         };
 
                         match type_wrapper.as_ref() {
+                            "EmitterMut" => SystemParam::EmitterMut(inner_type),
+                            "ResourceMut" => SystemParam::ResourceMut(inner_type),
                             "ResourceRef" => SystemParam::ResourceRef(inner_type),
+                            "StateMut" => SystemParam::StateMut(inner_type),
                             "StateRef" => SystemParam::StateRef(inner_type),
                             wrapper => {
                                 panic!("Unknown parameter type {} for {}.", wrapper, var_name);
@@ -117,6 +117,11 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
         {
             panic!("No additional parameters are allowed when using ContextMut or ContextRef.");
         }
+
+        // Cannot mix immutable and mutable params because of borrow rules
+        if mut_call_count > 0 {
+            panic!("Only 1 mutable parameter OR many immutable parameters are allowed per system function. Use ContextMut or ContextRef for better scoping.");
+        }
     }
 
     // Convert system params to context calls
@@ -128,8 +133,17 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
                 ctx_var_name = (*k).to_owned();
                 quote! {}
             }
+            SystemParam::EmitterMut(inner) => quote! {
+                let #k = ctx.emitter_mut::<#inner>();
+            },
+            SystemParam::ResourceMut(inner) => quote! {
+                let #k = ctx.resource_mut::<#inner>();
+            },
             SystemParam::ResourceRef(inner) => quote! {
                 let #k = ctx.resource::<#inner>();
+            },
+            SystemParam::StateMut(inner) => quote! {
+                let #k = ctx.state_mut::<#inner>();
             },
             SystemParam::StateRef(inner) => quote! {
                 let #k = ctx.state::<#inner>();
