@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+use std::collections::HashMap;
 use syn::{parse_macro_input, FnArg, GenericArgument, Pat, PathArguments, Type};
 
 // var name -> inner type

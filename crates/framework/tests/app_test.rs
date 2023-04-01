@@ -5,7 +5,7 @@ use tokio::task;
 use tokio::time::sleep;
 
 #[derive(State)]
-struct RunOrder(pub Vec<String>);
+struct RunOrder(Vec<String>);
 
 #[system]
 async fn setup_state(ctx: ContextMut) {
