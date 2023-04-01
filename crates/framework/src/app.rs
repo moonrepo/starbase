@@ -1,6 +1,7 @@
 use crate::context::{Context, ContextManager};
 use crate::system::{BoxedSystem, CallbackSystem, SystemFunc};
 use futures::future::try_join_all;
+use std::mem;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::task;
@@ -44,28 +45,28 @@ impl App {
 
     /// Start the application and run all registered systems grouped into phases.
     pub async fn run(&mut self) -> anyhow::Result<ContextManager> {
-        let context = Arc::new(RwLock::new(std::mem::take(&mut self.context)));
+        let context = Arc::new(RwLock::new(mem::take(&mut self.context)));
 
         // Initialize
-        let initializers = std::mem::take(&mut self.initializers);
+        let initializers = mem::take(&mut self.initializers);
 
         self.run_systems_in_serial(initializers, Arc::clone(&context))
             .await?;
 
         // Analyze
-        let analyzers = std::mem::take(&mut self.analyzers);
+        let analyzers = mem::take(&mut self.analyzers);
 
         self.run_systems_in_parallel(analyzers, Arc::clone(&context))
             .await?;
 
         // Execute
-        let executors = std::mem::take(&mut self.initializers);
+        let executors = mem::take(&mut self.executors);
 
         self.run_systems_in_parallel(executors, Arc::clone(&context))
             .await?;
 
         // Finalize
-        let finalizers = std::mem::take(&mut self.initializers);
+        let finalizers = mem::take(&mut self.finalizers);
 
         self.run_systems_in_parallel(finalizers, Arc::clone(&context))
             .await?;
