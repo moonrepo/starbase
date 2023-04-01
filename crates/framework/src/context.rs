@@ -64,8 +64,9 @@ impl ContextManager {
         panic!("No state found for type {:?}", type_name::<C>())
     }
 
-    pub fn add_emitter<C: Any + Send + Sync>(&mut self, instance: C) -> &mut Self {
-        self.emitters.insert(TypeId::of::<C>(), Box::new(instance));
+    pub fn add_emitter<E: Event + 'static>(&mut self, instance: Emitter<E>) -> &mut Self {
+        self.emitters
+            .insert(TypeId::of::<Emitter<E>>(), Box::new(instance));
         self
     }
 
