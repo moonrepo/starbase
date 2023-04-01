@@ -10,10 +10,12 @@ struct ListenerArgs {
     once: bool,
 }
 
+// #[listener]
+// #[listener(once)]
 pub fn macro_impl(args: TokenStream, item: TokenStream) -> TokenStream {
     let func = parse_macro_input!(item as syn::ItemFn);
     let args = parse_macro_input!(args as AttributeArgs);
-    let args = ListenerArgs::from_list(&args).expect("Failed to parse #[listener] arguments.");
+    let args = ListenerArgs::from_list(&args).expect("Failed to parse arguments.");
 
     let func_name = func.sig.ident.to_string();
     let func_body = func.block;
@@ -25,7 +27,7 @@ pub fn macro_impl(args: TokenStream, item: TokenStream) -> TokenStream {
         .sig
         .inputs
         .first()
-        .expect("Macro #[listener] requires an event as the only argument.")
+        .expect("Requires an event as the only argument.")
     {
         FnArg::Receiver(_) => panic!("Cannot use &self as an event."),
         FnArg::Typed(arg) => match &*arg.ty {

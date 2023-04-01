@@ -32,36 +32,36 @@ impl ContextManager {
         panic!("No emitter found for type {:?}", type_name::<Emitter<E>>())
     }
 
-    pub fn resource<C: Any + Send + Sync + Resource>(&self) -> &C {
-        if let Some(value) = self.resources.get(&TypeId::of::<C>()) {
-            return value.downcast_ref::<C>().unwrap();
+    pub fn resource<R: Any + Send + Sync + Resource>(&self) -> &R {
+        if let Some(value) = self.resources.get(&TypeId::of::<R>()) {
+            return value.downcast_ref::<R>().unwrap();
         }
 
-        panic!("No resource found for type {:?}", type_name::<C>())
+        panic!("No resource found for type {:?}", type_name::<R>())
     }
 
-    pub fn resource_mut<C: Any + Send + Sync + Resource>(&mut self) -> &mut C {
-        if let Some(value) = self.resources.get_mut(&TypeId::of::<C>()) {
-            return value.downcast_mut::<C>().unwrap();
+    pub fn resource_mut<R: Any + Send + Sync + Resource>(&mut self) -> &mut R {
+        if let Some(value) = self.resources.get_mut(&TypeId::of::<R>()) {
+            return value.downcast_mut::<R>().unwrap();
         }
 
-        panic!("No resource found for type {:?}", type_name::<C>())
+        panic!("No resource found for type {:?}", type_name::<R>())
     }
 
-    pub fn state<C: Any + Send + Sync + State>(&self) -> &C {
-        if let Some(value) = self.state.get(&TypeId::of::<C>()) {
-            return value.downcast_ref::<C>().unwrap();
+    pub fn state<S: Any + Send + Sync + State>(&self) -> &S {
+        if let Some(value) = self.state.get(&TypeId::of::<S>()) {
+            return value.downcast_ref::<S>().unwrap();
         }
 
-        panic!("No state found for type {:?}", type_name::<C>())
+        panic!("No state found for type {:?}", type_name::<S>())
     }
 
-    pub fn state_mut<C: Any + Send + Sync + State>(&mut self) -> &mut C {
-        if let Some(value) = self.state.get_mut(&TypeId::of::<C>()) {
-            return value.downcast_mut::<C>().unwrap();
+    pub fn state_mut<S: Any + Send + Sync + State>(&mut self) -> &mut S {
+        if let Some(value) = self.state.get_mut(&TypeId::of::<S>()) {
+            return value.downcast_mut::<S>().unwrap();
         }
 
-        panic!("No state found for type {:?}", type_name::<C>())
+        panic!("No state found for type {:?}", type_name::<S>())
     }
 
     pub fn add_emitter<E: Event + 'static>(&mut self, instance: Emitter<E>) -> &mut Self {

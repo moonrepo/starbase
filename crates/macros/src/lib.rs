@@ -2,6 +2,7 @@ mod event;
 mod listener;
 mod resource;
 mod state;
+mod system;
 
 use proc_macro::TokenStream;
 
@@ -23,4 +24,9 @@ pub fn resource(item: TokenStream) -> TokenStream {
 #[proc_macro_derive(State)]
 pub fn state(item: TokenStream) -> TokenStream {
     state::macro_impl(item)
+}
+
+#[proc_macro_attribute]
+pub fn system(args: TokenStream, item: TokenStream) -> TokenStream {
+    system::macro_impl(args, item)
 }
