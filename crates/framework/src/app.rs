@@ -1,7 +1,10 @@
 use crate::context::{Context, ContextManager};
-use crate::system::{BoxedSystem, CallbackSystem, SystemFunc};
-use crate::System;
+use crate::events::EmitterInstance;
+use crate::resource::ResourceInstance;
+use crate::state::StateInstance;
+use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};
 use futures::future::try_join_all;
+use std::any::Any;
 use std::mem;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -19,7 +22,7 @@ pub enum Phase {
 #[derive(Debug, Default)]
 pub struct App {
     pub context: ContextManager,
-    pub current_phase: Phase,
+    pub current_phase: Option<Phase>,
 
     // Systems
     initializers: Vec<BoxedSystem>,
@@ -49,6 +52,7 @@ impl App {
         self.add_system(Phase::Finalize, CallbackSystem::new(system))
     }
 
+    /// Add a system that runs during the specified phase.
     pub fn add_system<S: System + 'static>(&mut self, phase: Phase, system: S) -> &mut Self {
         match phase {
             Phase::Initialize => {
@@ -68,6 +72,30 @@ impl App {
         self
     }
 
+    /// Add an event emitter instance to the application context.
+    pub fn add_emitter<M: Any + Send + Sync + EmitterInstance>(
+        &mut self,
+        instance: M,
+    ) -> &mut Self {
+        self.context.add_emitter(instance);
+        self
+    }
+
+    /// Add a resource instance to the application context.
+    pub fn add_resource<R: Any + Send + Sync + ResourceInstance>(
+        &mut self,
+        instance: R,
+    ) -> &mut Self {
+        self.context.add_resource(instance);
+        self
+    }
+
+    /// Add a state instance to the application context.
+    pub fn add_state<S: Any + Send + Sync + StateInstance>(&mut self, instance: S) -> &mut Self {
+        self.context.add_state(instance);
+        self
+    }
+
     /// Start the application and run all registered systems grouped into phases.
     pub async fn run(&mut self) -> anyhow::Result<ContextManager> {
         let context = Arc::new(RwLock::new(mem::take(&mut self.context)));
@@ -75,33 +103,33 @@ impl App {
         // Initialize
         let initializers = mem::take(&mut self.initializers);
 
-        self.current_phase = Phase::Initialize;
+        self.current_phase = Some(Phase::Initialize);
         self.run_systems_in_serial(initializers, Arc::clone(&context))
             .await?;
 
         // Analyze
         let analyzers = mem::take(&mut self.analyzers);
 
-        self.current_phase = Phase::Analyze;
+        self.current_phase = Some(Phase::Analyze);
         self.run_systems_in_parallel(analyzers, Arc::clone(&context))
             .await?;
 
         // Execute
         let executors = mem::take(&mut self.executors);
 
-        self.current_phase = Phase::Execute;
+        self.current_phase = Some(Phase::Execute);
         self.run_systems_in_parallel(executors, Arc::clone(&context))
             .await?;
 
         // Finalize
         let finalizers = mem::take(&mut self.finalizers);
 
-        self.current_phase = Phase::Finalize;
+        self.current_phase = Some(Phase::Finalize);
         self.run_systems_in_parallel(finalizers, Arc::clone(&context))
             .await?;
 
         let context = Arc::try_unwrap(context)
-            .expect("Failed to gather context before closing the application. This typically means that threads are still running that have not been awaited.")
+            .expect("Failed to acquire context before closing the application. This typically means that threads are still running that have not been awaited.")
             .into_inner();
 
         Ok(context)
