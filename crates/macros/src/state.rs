@@ -8,7 +8,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
     let struct_name = input.ident;
 
     let shared_impl = quote! {
-        impl starship::State for #struct_name {
+        impl starship::StateInstance for #struct_name {
         }
     };
 

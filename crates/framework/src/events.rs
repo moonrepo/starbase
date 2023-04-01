@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use core::future::Future;
 use rustc_hash::FxHashSet;
+use std::any::Any;
 use std::fmt::Debug;
 
 pub type EventResult<E> = anyhow::Result<EventState<<E as Event>::Value>>;
@@ -132,3 +133,8 @@ impl<E: Event + 'static> Emitter<E> {
         Ok((event, result))
     }
 }
+
+impl<E: Event + 'static> EmitterInstance for Emitter<E> {}
+
+// Does nothing at the moment besides type guarding `ContextManager` methods.
+pub trait EmitterInstance: Any {}
