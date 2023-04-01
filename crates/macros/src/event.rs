@@ -9,9 +9,12 @@ struct EventArgs {
     value: Option<Ident>,
 }
 
+// #[derive(Event)]
+// #[event]
+// #[event(value = "String")]
 pub fn macro_impl(item: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(item);
-    let args = EventArgs::from_derive_input(&input).expect("Failed to parse #[event] arguments.");
+    let args = EventArgs::from_derive_input(&input).expect("Failed to parse arguments.");
 
     let struct_name = input.ident;
     let value_type = match args.value {

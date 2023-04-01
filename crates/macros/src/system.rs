@@ -27,6 +27,7 @@ impl<'a> SystemParam<'a> {
     }
 }
 
+// #[system]
 pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let func = parse_macro_input!(item as syn::ItemFn);
     let func_name = func.sig.ident;

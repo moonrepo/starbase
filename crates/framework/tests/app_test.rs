@@ -1,4 +1,5 @@
 use starship::{App, Context, Result, State};
+use starship_macros::*;
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -6,19 +7,14 @@ use tokio::time::sleep;
 #[derive(State)]
 struct RunOrder(pub Vec<String>);
 
-async fn setup_state(ctx: Context) -> Result<()> {
-    ctx.write().await.add_state(RunOrder(vec![]));
-
-    Ok(())
+#[system]
+async fn setup_state(ctx: ContextMut) {
+    ctx.add_state(RunOrder(vec![]));
 }
 
-async fn system(ctx: Context) -> Result<()> {
-    ctx.write()
-        .await
-        .state_mut::<RunOrder>()
-        .push("async-function".into());
-
-    Ok(())
+#[system]
+async fn system(order: StateMut<RunOrder>) {
+    order.push("async-function".into());
 }
 
 async fn system_with_thread(ctx: Context) -> Result<()> {
