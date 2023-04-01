@@ -1,4 +1,4 @@
-use starship::{App, Context, Result, State};
+use starship::{App, Context, Result};
 use starship_macros::*;
 use std::time::Duration;
 use tokio::task;
