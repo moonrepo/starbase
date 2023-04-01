@@ -65,6 +65,18 @@ async fn read_resource_same_arg(arg1: ResourceRef<Resource1>, arg2: ResourceRef<
     dbg!(arg2);
 }
 
+// WRITE
+
+#[system]
+async fn write_context(ctx: ContextMut) {
+    ctx.add_state(State1(123));
+}
+
+#[system]
+async fn write_context_renamed(other: ContextMut) {
+    dbg!(other);
+}
+
 // #[system]
 // async fn write_arg(arg: StateMut<State1>) {
 //     **arg = 2;
@@ -123,10 +135,14 @@ fn non_async(ctx: ContextRef) {
 //     dbg!(other);
 // }
 
+// #[system]
+// async fn fail_mut_context_with_other_args(other: ContextMut, arg: StateRef<State1>) {
+//     other.add_state(State1(123));
+// }
+
 #[tokio::test]
 async fn test_app() {
     let mut app = App::default();
-    app.add_initializer(read_context);
     app.add_initializer(read_context);
     app.add_initializer(read_context_renamed);
     app.add_initializer(read_state_arg);
@@ -135,6 +151,8 @@ async fn test_app() {
     app.add_initializer(read_resource_arg);
     app.add_initializer(read_resource_arg_multi);
     app.add_initializer(read_resource_same_arg);
+    app.add_initializer(write_context);
+    app.add_initializer(write_context_renamed);
     app.add_initializer(non_async);
     app.add_initializer(no_args);
 }

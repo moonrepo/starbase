@@ -14,8 +14,8 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
     match input.data {
         Data::Struct(data) => {
             match data.fields {
-                // Struct { field }
-                Fields::Named(_) => quote! {
+                // Struct, Struct { field }
+                Fields::Unit | Fields::Named(_) => quote! {
                     #shared_impl
 
                     impl AsRef<#struct_name> for #struct_name {
@@ -35,27 +35,28 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                     let inner_type = &inner.ty;
 
                     let as_ref_extra = match inner_type {
-                        Type::Path(path) => {
-                            let is_pathbuf = path
-                                .path
-                                .get_ident()
-                                .map(|i| i == "PathBuf")
-                                .unwrap_or_default();
-
-                            // When the inner type is a `PathBuf`, we must also implement
-                            // `AsRef<Path>` for references to work correctly.
-                            if is_pathbuf {
-                                Some(quote! {
+                        // When the inner type is a `PathBuf`, we must also implement
+                        // `AsRef<Path>` for references to work correctly.
+                        Type::Path(path) => match path.path.get_ident() {
+                            Some(ident) => match ident.to_string().as_str() {
+                                "PathBuf" => Some(quote! {
                                     impl AsRef<std::path::Path> for #struct_name {
                                         fn as_ref(&self) -> &std::path::Path {
                                             &self.0
                                         }
                                     }
-                                })
-                            } else {
-                                None
-                            }
-                        }
+                                }),
+                                "RelativePathBuf" => Some(quote! {
+                                    impl AsRef<starship::RelativePath> for #struct_name {
+                                        fn as_ref(&self) -> &starship::RelativePath {
+                                            &self.0
+                                        }
+                                    }
+                                }),
+                                _ => None,
+                            },
+                            None => None,
+                        },
                         _ => None,
                     };
 
@@ -86,9 +87,6 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                     }
                     .into()
                 }
-
-                // Struct
-                Fields::Unit => shared_impl.into(),
             }
         }
         Data::Enum(_) => shared_impl.into(),

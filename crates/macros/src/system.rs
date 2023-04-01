@@ -6,6 +6,7 @@ use syn::{parse_macro_input, FnArg, GenericArgument, Pat, PathArguments, Type};
 
 // var name -> inner type
 enum SystemParam<'a> {
+    ContextMut,
     ContextRef,
     ResourceRef(&'a Type),
     StateRef(&'a Type),
@@ -13,7 +14,7 @@ enum SystemParam<'a> {
 
 impl<'a> SystemParam<'a> {
     pub fn is_mutable(&self) -> bool {
-        false
+        matches!(&self, SystemParam::ContextMut)
     }
 }
 
@@ -64,6 +65,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
 
                     let param = if segment.arguments.is_empty() {
                         match type_wrapper.as_ref() {
+                            "ContextMut" => SystemParam::ContextMut,
                             "ContextRef" => SystemParam::ContextRef,
                             wrapper => {
                                 panic!("Unknown parameter type {} for {}.", wrapper, var_name);
@@ -108,12 +110,12 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     if params.len() > 1 {
-        // When using `ContextRef`, only 1 param is allowed as it takes precedence
+        // When using context directly, only 1 param is allowed as it takes precedence
         if params
             .iter()
-            .any(|(_, p)| matches!(p, SystemParam::ContextRef))
+            .any(|(_, p)| matches!(p, SystemParam::ContextMut | SystemParam::ContextRef))
         {
-            panic!("No additional parameters are allowed when using ContextRef.");
+            panic!("No additional parameters are allowed when using ContextMut or ContextRef.");
         }
     }
 
@@ -122,7 +124,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let ctx_calls = params
         .iter()
         .map(|(k, p)| match p {
-            SystemParam::ContextRef => {
+            SystemParam::ContextMut | SystemParam::ContextRef => {
                 ctx_var_name = (*k).to_owned();
                 quote! {}
             }
@@ -135,15 +137,17 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
 
-    let ctx_lock = if mut_call_count > 0 {
+    let ctx_acquire = if mut_call_count > 0 {
         quote! { let mut #ctx_var_name = ctx.write().await; }
-    } else {
+    } else if !ctx_calls.is_empty() {
         quote! { let #ctx_var_name = ctx.read().await; }
+    } else {
+        quote! {}
     };
 
     quote! {
         async fn #func_name(ctx: starship::Context) -> starship::SystemResult {
-            #ctx_lock
+            #ctx_acquire
             #(#ctx_calls)*
             #func_body
             Ok(())

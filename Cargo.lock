@@ -319,6 +319,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "relative-path"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bf2521270932c3c7bed1a59151222bd7643c79310f2916f01925e1e16255698"
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -371,6 +377,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "relative-path",
  "rustc-hash",
  "starship_macros",
  "tokio",
