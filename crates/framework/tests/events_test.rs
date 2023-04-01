@@ -130,6 +130,11 @@ async fn listener_once() {
     assert_eq!(emitter.listeners.len(), 0);
 }
 
+// async fn callback_func(event: &mut TestEvent) -> EventResult<TestEvent> {
+//     event.0 += 1;
+//     Ok(EventState::Continue)
+// }
+
 #[listener]
 async fn callback_one(event: &mut TestEvent) -> EventResult<TestEvent> {
     event.0 += 1;
@@ -171,9 +176,9 @@ async fn callback() {
     emitter.listen(CallbackOneListener);
     emitter.listen(CallbackTwoListener);
     emitter.listen(CallbackThreeListener);
-    // emitter.on(callback_one);
-    // emitter.on(callback_two);
-    // emitter.on(callback_three);
+    // emitter.on(callback_func);
+    // emitter.on(callback_func);
+    // emitter.on(callback_func);
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
