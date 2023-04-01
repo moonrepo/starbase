@@ -5,6 +5,8 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::any::{type_name, Any, TypeId};
 use std::fmt::Debug;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub type EventResult<E> = anyhow::Result<EventState<<E as Event>::Value>>;
 
@@ -148,3 +150,5 @@ impl EmitterManager {
 }
 
 impl<E: Event + 'static> EmitterInstance for Emitter<E> {}
+
+pub type Emitters = Arc<RwLock<EmitterManager>>;

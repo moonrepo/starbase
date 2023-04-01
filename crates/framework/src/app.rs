@@ -22,7 +22,6 @@ pub enum Phase {
 
 #[derive(Debug, Default)]
 pub struct App {
-    pub context: ContextManager,
     pub current_phase: Option<Phase>,
 
     // Data
@@ -83,7 +82,7 @@ impl App {
         &mut self,
         instance: M,
     ) -> &mut Self {
-        self.context.add_emitter(instance);
+        self.emitters.set(instance);
         self
     }
 
@@ -92,13 +91,13 @@ impl App {
         &mut self,
         instance: R,
     ) -> &mut Self {
-        self.context.add_resource(instance);
+        self.resources.set(instance);
         self
     }
 
     /// Add a state instance to the application context.
     pub fn add_state<S: Any + Send + Sync + StateInstance>(&mut self, instance: S) -> &mut Self {
-        self.context.add_state(instance);
+        self.states.set(instance);
         self
     }
 
