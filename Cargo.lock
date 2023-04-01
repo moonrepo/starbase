@@ -377,6 +377,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "futures",
+ "num_cpus",
  "relative-path",
  "rustc-hash",
  "starship_macros",

@@ -7,7 +7,7 @@ use futures::future::try_join_all;
 use std::any::Any;
 use std::mem;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use tokio::task;
 
 #[derive(Debug, Default)]
@@ -143,11 +143,17 @@ impl App {
         context: Context,
     ) -> anyhow::Result<()> {
         let mut futures = vec![];
+        let semaphore = Arc::new(Semaphore::new(num_cpus::get()));
 
         for system in systems {
             let ctx = Arc::clone(&context);
+            let permit = Arc::clone(&semaphore).acquire_owned().await?;
 
-            futures.push(task::spawn(async move { system.run(ctx).await }));
+            futures.push(task::spawn(async move {
+                let result = system.run(ctx).await;
+                drop(permit);
+                result
+            }));
         }
 
         try_join_all(futures).await?;
