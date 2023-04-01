@@ -1,7 +1,9 @@
+use crate::create_instance_manager;
 use async_trait::async_trait;
 use core::future::Future;
+use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::any::Any;
+use std::any::{type_name, Any, TypeId};
 use std::fmt::Debug;
 
 pub type EventResult<E> = anyhow::Result<EventState<<E as Event>::Value>>;
@@ -134,7 +136,15 @@ impl<E: Event + 'static> Emitter<E> {
     }
 }
 
-impl<E: Event + 'static> EmitterInstance for Emitter<E> {}
+create_instance_manager!(EmitterManager, EmitterInstance);
 
-// Does nothing at the moment besides type guarding `ContextManager` methods.
-pub trait EmitterInstance: Any {}
+impl EmitterManager {
+    pub async fn emit<E: Event + 'static>(
+        &mut self,
+        event: E,
+    ) -> anyhow::Result<(E, Option<E::Value>)> {
+        self.get_mut::<Emitter<E>>().emit(event).await
+    }
+}
+
+impl<E: Event + 'static> EmitterInstance for Emitter<E> {}

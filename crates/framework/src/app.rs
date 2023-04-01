@@ -3,6 +3,7 @@ use crate::events::EmitterInstance;
 use crate::resource::ResourceInstance;
 use crate::state::StateInstance;
 use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};
+use crate::{EmitterManager, ResourceManager, StateManager};
 use futures::future::try_join_all;
 use std::any::Any;
 use std::mem;
@@ -23,6 +24,11 @@ pub enum Phase {
 pub struct App {
     pub context: ContextManager,
     pub current_phase: Option<Phase>,
+
+    // Data
+    emitters: EmitterManager,
+    resources: ResourceManager,
+    states: StateManager,
 
     // Systems
     initializers: Vec<BoxedSystem>,

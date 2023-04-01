@@ -1,4 +1,5 @@
-use std::any::Any;
+use crate::create_instance_manager;
+use rustc_hash::FxHashMap;
+use std::any::{type_name, Any, TypeId};
 
-// Does nothing at the moment besides type guarding `ContextManager` methods.
-pub trait ResourceInstance: Any {}
+create_instance_manager!(ResourceManager, ResourceInstance);

@@ -1,6 +1,7 @@
 mod app;
 mod context;
 mod events;
+mod instance;
 mod resource;
 mod state;
 mod system;
