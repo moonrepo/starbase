@@ -56,24 +56,24 @@ impl ContextManager {
         panic!("No state found for type {:?}", type_name::<S>())
     }
 
-    pub fn add_emitter<E: Any + Send + Sync + EmitterInstance>(
+    pub fn add_emitter<M: Any + Send + Sync + EmitterInstance>(
         &mut self,
-        instance: E,
+        instance: M,
     ) -> &mut Self {
-        self.emitters.insert(TypeId::of::<E>(), Box::new(instance));
+        self.emitters.insert(TypeId::of::<M>(), Box::new(instance));
         self
     }
 
-    pub fn add_resource<C: Any + Send + Sync + ResourceInstance>(
+    pub fn add_resource<R: Any + Send + Sync + ResourceInstance>(
         &mut self,
-        instance: C,
+        instance: R,
     ) -> &mut Self {
-        self.resources.insert(TypeId::of::<C>(), Box::new(instance));
+        self.resources.insert(TypeId::of::<R>(), Box::new(instance));
         self
     }
 
-    pub fn add_state<C: Any + Send + Sync + StateInstance>(&mut self, instance: C) -> &mut Self {
-        self.state.insert(TypeId::of::<C>(), Box::new(instance));
+    pub fn add_state<S: Any + Send + Sync + StateInstance>(&mut self, instance: S) -> &mut Self {
+        self.state.insert(TypeId::of::<S>(), Box::new(instance));
         self
     }
 }
