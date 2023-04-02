@@ -1,5 +1,4 @@
 mod app;
-mod context;
 mod events;
 mod instance;
 mod resources;
@@ -7,7 +6,6 @@ mod states;
 mod system;
 
 pub use app::*;
-pub use context::*;
 pub use events::*;
 pub use resources::*;
 pub use starship_macros::*;

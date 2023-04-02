@@ -1,4 +1,4 @@
-use starship::{ContextManager, Emitter, EventState};
+use starship::{Emitter, EmitterManager, EventState, ResourceManager, StateManager};
 use starship_macros::*;
 
 mod events {
@@ -15,10 +15,10 @@ mod events {
 
     #[tokio::test]
     async fn register_and_emit() {
-        let mut ctx = ContextManager::default();
-        ctx.add_emitter(Emitter::<TestEvent>::new());
+        let mut ctx = EmitterManager::default();
+        ctx.set(Emitter::<TestEvent>::new());
 
-        let em = ctx.emitter_mut::<TestEvent>();
+        let em = ctx.get_mut::<Emitter<TestEvent>>();
         em.listen(CallbackOneListener);
 
         let (event, _) = em.emit(TestEvent(5)).await.unwrap();
@@ -37,20 +37,20 @@ mod resources {
 
     #[test]
     fn register_and_read() {
-        let mut ctx = ContextManager::default();
-        ctx.add_resource(TestResource { field: 5 });
+        let mut ctx = ResourceManager::default();
+        ctx.set(TestResource { field: 5 });
 
-        let resource = ctx.resource::<TestResource>();
+        let resource = ctx.get::<TestResource>();
 
         assert_eq!(resource.field, 5);
     }
 
     #[test]
     fn register_and_write() {
-        let mut ctx = ContextManager::default();
-        ctx.add_resource(TestResource { field: 5 });
+        let mut ctx = ResourceManager::default();
+        ctx.set(TestResource { field: 5 });
 
-        let resource = ctx.resource_mut::<TestResource>();
+        let resource = ctx.get_mut::<TestResource>();
         resource.field += 5;
 
         assert_eq!(resource.field, 10);
@@ -61,8 +61,8 @@ mod resources {
         expected = "No resource found for type \"context_test::resources::TestResource\""
     )]
     fn panics_missing_read() {
-        let ctx = ContextManager::default();
-        ctx.resource::<TestResource>();
+        let ctx = ResourceManager::default();
+        ctx.get::<TestResource>();
     }
 
     #[test]
@@ -70,8 +70,8 @@ mod resources {
         expected = "No resource found for type \"context_test::resources::TestResource\""
     )]
     fn panics_missing_write() {
-        let mut ctx = ContextManager::default();
-        ctx.resource_mut::<TestResource>();
+        let mut ctx = ResourceManager::default();
+        ctx.get_mut::<TestResource>();
     }
 }
 
@@ -83,20 +83,20 @@ mod state {
 
     #[test]
     fn register_and_read() {
-        let mut ctx = ContextManager::default();
-        ctx.add_state(TestState(5));
+        let mut ctx = StateManager::default();
+        ctx.set(TestState(5));
 
-        let state = ctx.state::<TestState>();
+        let state = ctx.get::<TestState>();
 
         assert_eq!(state.0, 5);
     }
 
     #[test]
     fn register_and_write() {
-        let mut ctx = ContextManager::default();
-        ctx.add_state(TestState(5));
+        let mut ctx = StateManager::default();
+        ctx.set(TestState(5));
 
-        let state = ctx.state_mut::<TestState>();
+        let state = ctx.get_mut::<TestState>();
         (**state) += 5;
 
         assert_eq!(state.0, 10);
@@ -105,14 +105,14 @@ mod state {
     #[test]
     #[should_panic(expected = "No state found for type \"context_test::state::TestState\"")]
     fn panics_missing_read() {
-        let ctx = ContextManager::default();
-        ctx.state::<TestState>();
+        let ctx = StateManager::default();
+        ctx.get::<TestState>();
     }
 
     #[test]
     #[should_panic(expected = "No state found for type \"context_test::state::TestState\"")]
     fn panics_missing_write() {
-        let mut ctx = ContextManager::default();
-        ctx.state_mut::<TestState>();
+        let mut ctx = StateManager::default();
+        ctx.get_mut::<TestState>();
     }
 }
