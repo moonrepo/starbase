@@ -57,18 +57,14 @@ mod resources {
     }
 
     #[test]
-    #[should_panic(
-        expected = "No resource found for type \"context_test::resources::TestResource\""
-    )]
+    #[should_panic(expected = "instances_test::resources::TestResource does not exist!")]
     fn panics_missing_read() {
         let ctx = ResourceManager::default();
         ctx.get::<TestResource>();
     }
 
     #[test]
-    #[should_panic(
-        expected = "No resource found for type \"context_test::resources::TestResource\""
-    )]
+    #[should_panic(expected = "instances_test::resources::TestResource does not exist!")]
     fn panics_missing_write() {
         let mut ctx = ResourceManager::default();
         ctx.get_mut::<TestResource>();
@@ -103,14 +99,14 @@ mod state {
     }
 
     #[test]
-    #[should_panic(expected = "No state found for type \"context_test::state::TestState\"")]
+    #[should_panic(expected = "instances_test::state::TestState does not exist!")]
     fn panics_missing_read() {
         let ctx = StateManager::default();
         ctx.get::<TestState>();
     }
 
     #[test]
-    #[should_panic(expected = "No state found for type \"context_test::state::TestState\"")]
+    #[should_panic(expected = "instances_test::state::TestState does not exist!")]
     fn panics_missing_write() {
         let mut ctx = StateManager::default();
         ctx.get_mut::<TestState>();

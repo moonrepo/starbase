@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_must_use)]
 
-use starship::App;
+use starship::{App, Emitter};
 use starship_macros::*;
 
 #[derive(Debug, Event)]
@@ -25,12 +25,12 @@ struct Resource2 {
 // READ
 
 #[system]
-async fn read_context(ctx: ContextRef) {
-    dbg!(ctx);
+async fn read_states(states: StatesRef) {
+    dbg!(states);
 }
 
 #[system]
-async fn read_context_renamed(other: ContextRef) {
+async fn read_states_renamed(other: StatesRef) {
     dbg!(other);
 }
 
@@ -52,6 +52,16 @@ async fn read_state_same_arg(arg1: StateRef<State1>, arg2: StateRef<State1>) {
 }
 
 #[system]
+async fn read_resources(resources: ResourcesRef) {
+    dbg!(resources);
+}
+
+#[system]
+async fn read_resources_renamed(other: ResourcesRef) {
+    dbg!(other);
+}
+
+#[system]
 async fn read_resource_arg(arg: ResourceRef<Resource1>) {
     dbg!(arg);
 }
@@ -68,21 +78,21 @@ async fn read_resource_same_arg(arg1: ResourceRef<Resource1>, arg2: ResourceRef<
     dbg!(arg2);
 }
 
+#[system]
+async fn read_all_managers(states: StatesRef, resources: ResourcesRef, emitters: EmittersMut) {
+    dbg!(states, resources, emitters);
+}
+
 // WRITE
 
 #[system]
-async fn write_context(ctx: ContextMut) {
-    ctx.add_state(State1(123));
+async fn write_states(states: StatesMut) {
+    states.set(State1(123));
 }
 
 #[system]
-async fn write_context_renamed(other: ContextMut) {
+async fn write_states_renamed(other: StatesMut) {
     dbg!(other);
-}
-
-#[system]
-async fn write_emitter(em: EmitterMut<Event1>) {
-    em.emit(Event1("test".into())).await?;
 }
 
 #[system]
@@ -92,9 +102,41 @@ async fn write_state(arg: StateMut<State1>) {
 }
 
 #[system]
+async fn write_resources(resources: ResourcesMut) {
+    resources.set(Resource1 { field: 123 });
+}
+
+#[system]
+async fn write_resources_renamed(other: ResourcesMut) {
+    dbg!(other);
+}
+
+#[system]
 async fn write_resource(arg: ResourceMut<Resource1>) {
     arg.field += 2;
     dbg!(arg);
+}
+
+#[system]
+async fn write_emitters(emitters: EmittersMut) {
+    emitters.set(Emitter::<Event1>::new());
+}
+
+#[system]
+async fn write_emitters_renamed(other: EmittersMut) {
+    dbg!(other);
+}
+
+#[system]
+async fn write_emitter(em: EmitterMut<Event1>) {
+    em.emit(Event1("test".into())).await?;
+}
+
+#[system]
+async fn write_all_managers(states: StatesMut, resources: ResourcesMut, emitters: EmittersMut) {
+    states.set(State1(123));
+    resources.set(Resource1 { field: 123 });
+    emitters.set(Emitter::<Event1>::new());
 }
 
 // MISC
@@ -105,8 +147,8 @@ fn no_args() {
 }
 
 #[system]
-fn non_async(ctx: ContextRef) {
-    dbg!(ctx);
+fn non_async() {
+    dbg!("none");
 }
 
 // INVALID
@@ -138,18 +180,13 @@ fn non_async(ctx: ContextRef) {
 // }
 
 // #[system]
-// async fn fail_context_with_other_args(other: ContextRef, arg: StateRef<State1>) {
-//     dbg!(other);
+// async fn fail_manager_with_other_args(manager: StatesRef, arg: StateRef<State1>) {
+//     dbg!(manager);
 // }
 
 // #[system]
-// async fn fail_mut_context_with_other_args(other: ContextMut, arg: StateRef<State1>) {
-//     other.add_state(State1(123));
-// }
-
-// #[system]
-// async fn fail_emitter_with_other_args(em: EmitterMut<Event1>, arg: StateRef<State1>) {
-//     em.emit(Event1("test".into())).await?;
+// async fn fail_mut_manager_with_other_args(manager: StatesMut, arg: StateRef<State1>) {
+//     manager.add_state(State1(123));
 // }
 
 // #[system]
@@ -159,22 +196,36 @@ fn non_async(ctx: ContextRef) {
 //     dbg!(arg2);
 // }
 
+// #[system]
+// async fn fail_multi_write_arg(arg1: StateMut<State1>, arg2: StateMut<State2>) {
+//     **arg1 = 2;
+//     **arg2 = 2;
+// }
+
 #[tokio::test]
 async fn test_app() {
     let mut app = App::default();
-    app.add_initializer(read_context);
-    app.add_initializer(read_context_renamed);
+    app.add_initializer(read_states);
+    app.add_initializer(read_states_renamed);
     app.add_initializer(read_state_arg);
     app.add_initializer(read_state_arg_multi);
     app.add_initializer(read_state_same_arg);
+    app.add_initializer(read_resources);
+    app.add_initializer(read_resources_renamed);
     app.add_initializer(read_resource_arg);
     app.add_initializer(read_resource_arg_multi);
     app.add_initializer(read_resource_same_arg);
-    app.add_initializer(write_context);
-    app.add_initializer(write_context_renamed);
-    app.add_initializer(write_emitter);
+    app.add_initializer(read_all_managers);
+    app.add_initializer(write_states);
+    app.add_initializer(write_states_renamed);
     app.add_initializer(write_state);
+    app.add_initializer(write_resources);
+    app.add_initializer(write_resources_renamed);
     app.add_initializer(write_resource);
+    app.add_initializer(write_emitters);
+    app.add_initializer(write_emitters_renamed);
+    app.add_initializer(write_emitter);
+    app.add_initializer(write_all_managers);
     app.add_initializer(non_async);
     app.add_initializer(no_args);
 }
