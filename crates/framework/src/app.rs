@@ -76,7 +76,7 @@ impl App {
     }
 
     /// Add an event emitter instance to the application context.
-    pub fn add_emitter<M: Any + Send + Sync + EmitterInstance>(
+    pub fn set_emitter<M: Any + Send + Sync + EmitterInstance>(
         &mut self,
         instance: M,
     ) -> &mut Self {
@@ -85,7 +85,7 @@ impl App {
     }
 
     /// Add a resource instance to the application context.
-    pub fn add_resource<R: Any + Send + Sync + ResourceInstance>(
+    pub fn set_resource<R: Any + Send + Sync + ResourceInstance>(
         &mut self,
         instance: R,
     ) -> &mut Self {
@@ -94,7 +94,7 @@ impl App {
     }
 
     /// Add a state instance to the application context.
-    pub fn add_state<S: Any + Send + Sync + StateInstance>(&mut self, instance: S) -> &mut Self {
+    pub fn set_state<S: Any + Send + Sync + StateInstance>(&mut self, instance: S) -> &mut Self {
         self.states.set(instance);
         self
     }
