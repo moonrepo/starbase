@@ -1,6 +1,6 @@
 use crate::events::{Emitter, EmitterInstance, Event};
-use crate::resource::ResourceInstance;
-use crate::state::StateInstance;
+use crate::resources::ResourceInstance;
+use crate::states::StateInstance;
 use rustc_hash::FxHashMap;
 use std::any::{type_name, Any, TypeId};
 use std::sync::Arc;
