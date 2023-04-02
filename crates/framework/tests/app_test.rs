@@ -1,4 +1,4 @@
-use starship::{App, Emitters, Resources, Result, States};
+use starship::{App, Emitters, Resources, States, SystemResult};
 use starship_macros::*;
 use std::time::Duration;
 use tokio::task;
@@ -21,7 +21,7 @@ async fn system_with_thread(
     states: States,
     _resources: Resources,
     _emitters: Emitters,
-) -> Result<()> {
+) -> SystemResult {
     task::spawn(async move {
         states
             .write()
