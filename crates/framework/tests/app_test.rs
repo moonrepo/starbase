@@ -1,4 +1,4 @@
-use starship::{App, Context, Result};
+use starship::{App, Emitters, Resources, Result, States};
 use starship_macros::*;
 use std::time::Duration;
 use tokio::task;
@@ -8,8 +8,8 @@ use tokio::time::sleep;
 struct RunOrder(Vec<String>);
 
 #[system]
-async fn setup_state(ctx: ContextMut) {
-    ctx.add_state(RunOrder(vec![]));
+async fn setup_state(states: StatesMut) {
+    states.set(RunOrder(vec![]));
 }
 
 #[system]
@@ -17,11 +17,16 @@ async fn system(order: StateMut<RunOrder>) {
     order.push("async-function".into());
 }
 
-async fn system_with_thread(ctx: Context) -> Result<()> {
+async fn system_with_thread(
+    states: States,
+    _resources: Resources,
+    _emitters: Emitters,
+) -> Result<()> {
     task::spawn(async move {
-        ctx.write()
+        states
+            .write()
             .await
-            .state_mut::<RunOrder>()
+            .get_mut::<RunOrder>()
             .push("async-function-thread".into());
     })
     .await?;
@@ -36,24 +41,35 @@ mod initializers {
     async fn runs_in_order() {
         let mut app = App::default();
         app.add_initializer(setup_state);
-        app.add_initializer(|ctx: Context| async move {
-            let mut ctx = ctx.write().await;
-            let order = ctx.state_mut::<RunOrder>();
-            order.push("1".into());
-            Ok(())
-        });
-        app.add_initializer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().push("2".into());
-            Ok(())
-        });
-        app.add_initializer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().0.push("3".into());
-            Ok(())
-        });
+        app.add_initializer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                let mut states = states.write().await;
+                let order = states.get_mut::<RunOrder>();
+                order.push("1".into());
+                Ok(())
+            },
+        );
+        app.add_initializer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states.write().await.get_mut::<RunOrder>().push("2".into());
+                Ok(())
+            },
+        );
+        app.add_initializer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .0
+                    .push("3".into());
+                Ok(())
+            },
+        );
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
-        assert_eq!(ctx.state::<RunOrder>().0, vec!["1", "2", "3"]);
+        assert_eq!(states.get::<RunOrder>().0, vec!["1", "2", "3"]);
     }
 
     #[tokio::test]
@@ -61,22 +77,24 @@ mod initializers {
         let mut app = App::default();
         app.add_initializer(setup_state);
         app.add_initializer(system_with_thread);
-        app.add_initializer(|ctx: Context| async move {
-            task::spawn(async move {
-                let mut ctx = ctx.write().await;
-                let order = ctx.state_mut::<RunOrder>();
-                order.push("async-closure-thread".into());
-            })
-            .await?;
+        app.add_initializer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                task::spawn(async move {
+                    let mut states = states.write().await;
+                    let order = states.get_mut::<RunOrder>();
+                    order.push("async-closure-thread".into());
+                })
+                .await?;
 
-            Ok(())
-        });
+                Ok(())
+            },
+        );
         app.add_initializer(system);
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
         assert_eq!(
-            ctx.state::<RunOrder>().0,
+            states.get::<RunOrder>().0,
             vec![
                 "async-function-thread",
                 "async-closure-thread",
@@ -93,32 +111,52 @@ mod analyzers {
     async fn runs_in_parallel() {
         let mut app = App::default();
         app.add_initializer(setup_state);
-        app.add_analyzer(|ctx: Context| async move {
-            let mut ctx = ctx.write().await;
-            let order = ctx.state_mut::<RunOrder>();
-            order.push("1".into());
-            Ok(())
-        });
-        app.add_analyzer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().push("2".into());
-            Ok(())
-        });
-        app.add_analyzer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().0.push("3".into());
-            Ok(())
-        });
-        app.add_analyzer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().push("4".into());
-            Ok(())
-        });
-        app.add_analyzer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().0.push("5".into());
-            Ok(())
-        });
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                let mut states = states.write().await;
+                let order = states.get_mut::<RunOrder>();
+                order.push("1".into());
+                Ok(())
+            },
+        );
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states.write().await.get_mut::<RunOrder>().push("2".into());
+                Ok(())
+            },
+        );
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .0
+                    .push("3".into());
+                Ok(())
+            },
+        );
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states.write().await.get_mut::<RunOrder>().push("4".into());
+                Ok(())
+            },
+        );
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .0
+                    .push("5".into());
+                Ok(())
+            },
+        );
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
-        assert_ne!(ctx.state::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
+        assert_ne!(states.get::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
     }
 
     #[tokio::test]
@@ -126,24 +164,26 @@ mod analyzers {
         let mut app = App::default();
         app.add_initializer(setup_state);
         app.add_analyzer(system_with_thread);
-        app.add_analyzer(|ctx: Context| async move {
-            task::spawn(async move {
-                sleep(Duration::from_millis(100)).await;
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                task::spawn(async move {
+                    sleep(Duration::from_millis(100)).await;
 
-                let mut ctx = ctx.write().await;
-                let order = ctx.state_mut::<RunOrder>();
-                order.push("async-closure-thread".into());
-            })
-            .await?;
+                    let mut states = states.write().await;
+                    let order = states.get_mut::<RunOrder>();
+                    order.push("async-closure-thread".into());
+                })
+                .await?;
 
-            Ok(())
-        });
+                Ok(())
+            },
+        );
         app.add_analyzer(system);
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
         assert_ne!(
-            ctx.state::<RunOrder>().0,
+            states.get::<RunOrder>().0,
             vec![
                 "async-function-thread",
                 "async-closure-thread",
@@ -156,24 +196,30 @@ mod analyzers {
     async fn runs_after_initializers() {
         let mut app = App::default();
         app.add_initializer(setup_state);
-        app.add_initializer(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("initializer".into());
-            Ok(())
-        });
-        app.add_analyzer(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("analyzer".into());
-            Ok(())
-        });
+        app.add_initializer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("initializer".into());
+                Ok(())
+            },
+        );
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("analyzer".into());
+                Ok(())
+            },
+        );
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
-        assert_eq!(ctx.state::<RunOrder>().0, vec!["initializer", "analyzer"]);
+        assert_eq!(states.get::<RunOrder>().0, vec!["initializer", "analyzer"]);
     }
 }
 
@@ -184,32 +230,52 @@ mod executors {
     async fn runs_in_parallel() {
         let mut app = App::default();
         app.add_initializer(setup_state);
-        app.add_executor(|ctx: Context| async move {
-            let mut ctx = ctx.write().await;
-            let order = ctx.state_mut::<RunOrder>();
-            order.push("1".into());
-            Ok(())
-        });
-        app.add_executor(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().push("2".into());
-            Ok(())
-        });
-        app.add_executor(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().0.push("3".into());
-            Ok(())
-        });
-        app.add_executor(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().push("4".into());
-            Ok(())
-        });
-        app.add_executor(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().0.push("5".into());
-            Ok(())
-        });
+        app.add_executor(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                let mut states = states.write().await;
+                let order = states.get_mut::<RunOrder>();
+                order.push("1".into());
+                Ok(())
+            },
+        );
+        app.add_executor(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states.write().await.get_mut::<RunOrder>().push("2".into());
+                Ok(())
+            },
+        );
+        app.add_executor(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .0
+                    .push("3".into());
+                Ok(())
+            },
+        );
+        app.add_executor(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states.write().await.get_mut::<RunOrder>().push("4".into());
+                Ok(())
+            },
+        );
+        app.add_executor(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .0
+                    .push("5".into());
+                Ok(())
+            },
+        );
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
-        assert_ne!(ctx.state::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
+        assert_ne!(states.get::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
     }
 
     #[tokio::test]
@@ -217,24 +283,26 @@ mod executors {
         let mut app = App::default();
         app.add_initializer(setup_state);
         app.add_executor(system_with_thread);
-        app.add_executor(|ctx: Context| async move {
-            task::spawn(async move {
-                sleep(Duration::from_millis(100)).await;
+        app.add_executor(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                task::spawn(async move {
+                    sleep(Duration::from_millis(100)).await;
 
-                let mut ctx = ctx.write().await;
-                let order = ctx.state_mut::<RunOrder>();
-                order.push("async-closure-thread".into());
-            })
-            .await?;
+                    let mut states = states.write().await;
+                    let order = states.get_mut::<RunOrder>();
+                    order.push("async-closure-thread".into());
+                })
+                .await?;
 
-            Ok(())
-        });
+                Ok(())
+            },
+        );
         app.add_executor(system);
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
         assert_ne!(
-            ctx.state::<RunOrder>().0,
+            states.get::<RunOrder>().0,
             vec![
                 "async-function-thread",
                 "async-closure-thread",
@@ -247,32 +315,41 @@ mod executors {
     async fn runs_after_analyzers() {
         let mut app = App::default();
         app.add_initializer(setup_state);
-        app.add_initializer(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("initializer".into());
-            Ok(())
-        });
-        app.add_analyzer(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("analyzer".into());
-            Ok(())
-        });
-        app.add_executor(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("executor".into());
-            Ok(())
-        });
+        app.add_initializer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("initializer".into());
+                Ok(())
+            },
+        );
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("analyzer".into());
+                Ok(())
+            },
+        );
+        app.add_executor(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("executor".into());
+                Ok(())
+            },
+        );
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
         assert_eq!(
-            ctx.state::<RunOrder>().0,
+            states.get::<RunOrder>().0,
             vec!["initializer", "analyzer", "executor"]
         );
     }
@@ -285,32 +362,52 @@ mod finalizers {
     async fn runs_in_parallel() {
         let mut app = App::default();
         app.add_initializer(setup_state);
-        app.add_finalizer(|ctx: Context| async move {
-            let mut ctx = ctx.write().await;
-            let order = ctx.state_mut::<RunOrder>();
-            order.push("1".into());
-            Ok(())
-        });
-        app.add_finalizer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().push("2".into());
-            Ok(())
-        });
-        app.add_finalizer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().0.push("3".into());
-            Ok(())
-        });
-        app.add_finalizer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().push("4".into());
-            Ok(())
-        });
-        app.add_finalizer(|ctx: Context| async move {
-            ctx.write().await.state_mut::<RunOrder>().0.push("5".into());
-            Ok(())
-        });
+        app.add_finalizer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                let mut states = states.write().await;
+                let order = states.get_mut::<RunOrder>();
+                order.push("1".into());
+                Ok(())
+            },
+        );
+        app.add_finalizer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states.write().await.get_mut::<RunOrder>().push("2".into());
+                Ok(())
+            },
+        );
+        app.add_finalizer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .0
+                    .push("3".into());
+                Ok(())
+            },
+        );
+        app.add_finalizer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states.write().await.get_mut::<RunOrder>().push("4".into());
+                Ok(())
+            },
+        );
+        app.add_finalizer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .0
+                    .push("5".into());
+                Ok(())
+            },
+        );
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
-        assert_ne!(ctx.state::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
+        assert_ne!(states.get::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
     }
 
     #[tokio::test]
@@ -318,24 +415,26 @@ mod finalizers {
         let mut app = App::default();
         app.add_initializer(setup_state);
         app.add_finalizer(system_with_thread);
-        app.add_finalizer(|ctx: Context| async move {
-            task::spawn(async move {
-                sleep(Duration::from_millis(100)).await;
+        app.add_finalizer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                task::spawn(async move {
+                    sleep(Duration::from_millis(100)).await;
 
-                let mut ctx = ctx.write().await;
-                let order = ctx.state_mut::<RunOrder>();
-                order.push("async-closure-thread".into());
-            })
-            .await?;
+                    let mut states = states.write().await;
+                    let order = states.get_mut::<RunOrder>();
+                    order.push("async-closure-thread".into());
+                })
+                .await?;
 
-            Ok(())
-        });
+                Ok(())
+            },
+        );
         app.add_finalizer(system);
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
         assert_ne!(
-            ctx.state::<RunOrder>().0,
+            states.get::<RunOrder>().0,
             vec![
                 "async-function-thread",
                 "async-closure-thread",
@@ -348,39 +447,51 @@ mod finalizers {
     async fn runs_after_analyzers() {
         let mut app = App::default();
         app.add_initializer(setup_state);
-        app.add_initializer(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("initializer".into());
-            Ok(())
-        });
-        app.add_analyzer(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("analyzer".into());
-            Ok(())
-        });
-        app.add_executor(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("executor".into());
-            Ok(())
-        });
-        app.add_finalizer(|ctx: Context| async move {
-            ctx.write()
-                .await
-                .state_mut::<RunOrder>()
-                .push("finalizer".into());
-            Ok(())
-        });
+        app.add_initializer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("initializer".into());
+                Ok(())
+            },
+        );
+        app.add_analyzer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("analyzer".into());
+                Ok(())
+            },
+        );
+        app.add_executor(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("executor".into());
+                Ok(())
+            },
+        );
+        app.add_finalizer(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push("finalizer".into());
+                Ok(())
+            },
+        );
 
-        let ctx = app.run().await.unwrap();
+        let states = app.run().await.unwrap();
 
         assert_eq!(
-            ctx.state::<RunOrder>().0,
+            states.get::<RunOrder>().0,
             vec!["initializer", "analyzer", "executor", "finalizer"]
         );
     }

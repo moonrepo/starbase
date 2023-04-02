@@ -1,7 +1,6 @@
-use crate::context::{Context, ContextManager};
-use crate::events::EmitterInstance;
-use crate::resource::ResourceInstance;
-use crate::state::StateInstance;
+use crate::events::{EmitterInstance, EmitterManager, Emitters};
+use crate::resources::{ResourceInstance, ResourceManager, Resources};
+use crate::states::{StateInstance, StateManager, States};
 use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};
 use futures::future::try_join_all;
 use std::any::Any;
@@ -21,8 +20,12 @@ pub enum Phase {
 
 #[derive(Debug, Default)]
 pub struct App {
-    pub context: ContextManager,
     pub current_phase: Option<Phase>,
+
+    // Data
+    emitters: EmitterManager,
+    resources: ResourceManager,
+    states: StateManager,
 
     // Systems
     initializers: Vec<BoxedSystem>,
@@ -73,66 +76,88 @@ impl App {
     }
 
     /// Add an event emitter instance to the application context.
-    pub fn add_emitter<M: Any + Send + Sync + EmitterInstance>(
+    pub fn set_emitter<M: Any + Send + Sync + EmitterInstance>(
         &mut self,
         instance: M,
     ) -> &mut Self {
-        self.context.add_emitter(instance);
+        self.emitters.set(instance);
         self
     }
 
     /// Add a resource instance to the application context.
-    pub fn add_resource<R: Any + Send + Sync + ResourceInstance>(
+    pub fn set_resource<R: Any + Send + Sync + ResourceInstance>(
         &mut self,
         instance: R,
     ) -> &mut Self {
-        self.context.add_resource(instance);
+        self.resources.set(instance);
         self
     }
 
     /// Add a state instance to the application context.
-    pub fn add_state<S: Any + Send + Sync + StateInstance>(&mut self, instance: S) -> &mut Self {
-        self.context.add_state(instance);
+    pub fn set_state<S: Any + Send + Sync + StateInstance>(&mut self, instance: S) -> &mut Self {
+        self.states.set(instance);
         self
     }
 
     /// Start the application and run all registered systems grouped into phases.
-    pub async fn run(&mut self) -> anyhow::Result<ContextManager> {
-        let context = Arc::new(RwLock::new(mem::take(&mut self.context)));
+    pub async fn run(&mut self) -> anyhow::Result<StateManager> {
+        let emitters = Arc::new(RwLock::new(mem::take(&mut self.emitters)));
+        let resources = Arc::new(RwLock::new(mem::take(&mut self.resources)));
+        let states = Arc::new(RwLock::new(mem::take(&mut self.states)));
 
         // Initialize
         let initializers = mem::take(&mut self.initializers);
 
         self.current_phase = Some(Phase::Initialize);
-        self.run_systems_in_serial(initializers, Arc::clone(&context))
-            .await?;
+        self.run_systems_in_serial(
+            initializers,
+            Arc::clone(&states),
+            Arc::clone(&resources),
+            Arc::clone(&emitters),
+        )
+        .await?;
 
         // Analyze
         let analyzers = mem::take(&mut self.analyzers);
 
         self.current_phase = Some(Phase::Analyze);
-        self.run_systems_in_parallel(analyzers, Arc::clone(&context))
-            .await?;
+        self.run_systems_in_parallel(
+            analyzers,
+            Arc::clone(&states),
+            Arc::clone(&resources),
+            Arc::clone(&emitters),
+        )
+        .await?;
 
         // Execute
         let executors = mem::take(&mut self.executors);
 
         self.current_phase = Some(Phase::Execute);
-        self.run_systems_in_parallel(executors, Arc::clone(&context))
-            .await?;
+        self.run_systems_in_parallel(
+            executors,
+            Arc::clone(&states),
+            Arc::clone(&resources),
+            Arc::clone(&emitters),
+        )
+        .await?;
 
         // Finalize
         let finalizers = mem::take(&mut self.finalizers);
 
         self.current_phase = Some(Phase::Finalize);
-        self.run_systems_in_parallel(finalizers, Arc::clone(&context))
-            .await?;
+        self.run_systems_in_parallel(
+            finalizers,
+            Arc::clone(&states),
+            Arc::clone(&resources),
+            Arc::clone(&emitters),
+        )
+        .await?;
 
-        let context = Arc::try_unwrap(context)
-            .expect("Failed to acquire context before closing the application. This typically means that threads are still running that have not been awaited.")
+        let states = Arc::try_unwrap(states)
+            .expect("Failed to acquire state before closing the application. This typically means that threads are still running that have not been awaited.")
             .into_inner();
 
-        Ok(context)
+        Ok(states)
     }
 
     // Private
@@ -140,17 +165,21 @@ impl App {
     async fn run_systems_in_parallel(
         &self,
         systems: Vec<BoxedSystem>,
-        context: Context,
+        states: States,
+        resources: Resources,
+        emitters: Emitters,
     ) -> anyhow::Result<()> {
         let mut futures = vec![];
         let semaphore = Arc::new(Semaphore::new(num_cpus::get()));
 
         for system in systems {
-            let ctx = Arc::clone(&context);
+            let states = Arc::clone(&states);
+            let resources = Arc::clone(&resources);
+            let emitters = Arc::clone(&emitters);
             let permit = Arc::clone(&semaphore).acquire_owned().await?;
 
             futures.push(task::spawn(async move {
-                let result = system.run(ctx).await;
+                let result = system.run(states, resources, emitters).await;
                 drop(permit);
                 result
             }));
@@ -164,10 +193,16 @@ impl App {
     async fn run_systems_in_serial(
         &self,
         systems: Vec<BoxedSystem>,
-        context: Context,
+        states: States,
+        resources: Resources,
+        emitters: Emitters,
     ) -> anyhow::Result<()> {
         for system in systems {
-            system.run(Arc::clone(&context)).await?;
+            let states = Arc::clone(&states);
+            let resources = Arc::clone(&resources);
+            let emitters = Arc::clone(&emitters);
+
+            system.run(states, resources, emitters).await?;
         }
 
         Ok(())

@@ -1,16 +1,15 @@
 mod app;
-mod context;
 mod events;
-mod resource;
-mod state;
+mod instance;
+mod resources;
+mod states;
 mod system;
 
 pub use app::*;
-pub use context::*;
 pub use events::*;
-pub use resource::*;
+pub use resources::*;
 pub use starship_macros::*;
-pub use state::*;
+pub use states::*;
 pub use system::*;
 
 pub use anyhow::Result;

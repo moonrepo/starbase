@@ -1,20 +1,20 @@
-use starship::{App, Context, Result, State};
+use starship::{App, Emitters, Resources, Result, State, States};
 
 #[derive(Debug, State)]
 struct Test(String);
 
-async fn init1(ctx: Context) -> Result<()> {
-    let mut ctx = ctx.write().await;
+async fn init1(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
+    let mut states = states.write().await;
     println!("initialize 1");
-    ctx.add_state(Test("original".into()));
+    states.set(Test("original".into()));
     Ok(())
 }
 
-async fn init2(ctx: Context) -> Result<()> {
+async fn init2(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
     tokio::spawn(async move {
-        let ctx = ctx.read().await;
+        let states = states.read().await;
         println!("initialize 2");
-        let state = ctx.state::<Test>();
+        let state = states.get::<Test>();
         dbg!(state);
     })
     .await?;
@@ -22,18 +22,18 @@ async fn init2(ctx: Context) -> Result<()> {
     Ok(())
 }
 
-async fn anal1(ctx: Context) -> Result<()> {
-    let mut ctx = ctx.write().await;
+async fn anal1(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
+    let mut states = states.write().await;
     println!("analyze");
-    let state = ctx.state_mut::<Test>();
+    let state = states.get_mut::<Test>();
     **state = "mutated".to_string();
     Ok(())
 }
 
-async fn fin(ctx: Context) -> Result<()> {
-    let ctx = ctx.read().await;
+async fn fin(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
+    let states = states.read().await;
     println!("finalize");
-    let state = ctx.state::<Test>();
+    let state = states.get::<Test>();
     dbg!(state);
 
     Ok(())

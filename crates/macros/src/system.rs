@@ -1,28 +1,178 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::HashMap;
-use syn::{parse_macro_input, FnArg, GenericArgument, Pat, PathArguments, Type};
+use std::collections::BTreeMap;
+use syn::{parse_macro_input, FnArg, GenericArgument, Ident, Pat, PathArguments, Type};
 
-// var name -> inner type
 enum SystemParam<'a> {
-    ContextMut,
-    ContextRef,
-    EmitterMut(&'a Type),
-    ResourceMut(&'a Type),
-    ResourceRef(&'a Type),
-    StateMut(&'a Type),
-    StateRef(&'a Type),
+    ManagerMut,
+    ManagerRef,
+    ParamMut(&'a Type),
+    ParamRef(&'a Type),
 }
 
-impl<'a> SystemParam<'a> {
-    pub fn is_mutable(&self) -> bool {
-        matches!(
-            &self,
-            SystemParam::ContextMut
-                | SystemParam::EmitterMut(_)
-                | SystemParam::ResourceMut(_)
-                | SystemParam::StateMut(_)
-        )
+enum InstanceType {
+    Emitter,
+    Resource,
+    State,
+}
+
+impl InstanceType {
+    pub fn manager_name(&self) -> &str {
+        match self {
+            InstanceType::Emitter => "Emitters",
+            InstanceType::Resource => "Resources",
+            InstanceType::State => "States",
+        }
+    }
+
+    pub fn param_name(&self) -> &str {
+        match self {
+            InstanceType::Emitter => "emitters",
+            InstanceType::Resource => "resources",
+            InstanceType::State => "states",
+        }
+    }
+}
+
+struct InstanceTracker<'l> {
+    acquire_as: Option<&'l Ident>,
+    manager_call: Option<SystemParam<'l>>,
+    mut_calls: BTreeMap<&'l Ident, SystemParam<'l>>,
+    ref_calls: BTreeMap<&'l Ident, SystemParam<'l>>,
+    type_of: InstanceType,
+}
+
+impl<'l> InstanceTracker<'l> {
+    pub fn new(type_of: InstanceType) -> Self {
+        Self {
+            acquire_as: None,
+            manager_call: None,
+            mut_calls: BTreeMap::new(),
+            ref_calls: BTreeMap::new(),
+            type_of,
+        }
+    }
+
+    pub fn set_manager(&mut self, name: &'l Ident, param: SystemParam<'l>) {
+        if self.manager_call.is_none() {
+            self.acquire_as = Some(name);
+            self.manager_call = Some(param);
+        } else {
+            let manager_name = self.type_of.manager_name();
+
+            panic!(
+                "Cannot use multiple managers or a mutable and immutable manager together. Use {}Mut or {}Ref distinctly.",
+                manager_name,
+                manager_name,
+            );
+        }
+    }
+
+    pub fn add_call(&mut self, name: &'l Ident, param: SystemParam<'l>) {
+        if self.manager_call.is_some() {
+            let manager_name = self.type_of.manager_name();
+
+            panic!(
+                "Cannot access values from a manager when also accessing the manager itself. Found {}Mut or {}Ref.",
+                manager_name,
+                manager_name,
+            );
+        }
+
+        match param {
+            SystemParam::ParamMut(_) => {
+                self.mut_calls.insert(name, param);
+            }
+            SystemParam::ParamRef(_) => {
+                self.ref_calls.insert(name, param);
+            }
+            _ => unimplemented!(),
+        };
+
+        if self.mut_calls.len() > 1 {
+            panic!(
+                "Only 1 mutable {} parameter is allowed per system function.",
+                self.type_of.param_name(),
+            );
+        }
+
+        if !self.ref_calls.is_empty() && !self.mut_calls.is_empty() {
+            panic!(
+                "Cannot mix mutable and immutable {} parameters in the same system function.",
+                self.type_of.param_name(),
+            );
+        }
+    }
+
+    pub fn generate_quotes(self) -> Vec<proc_macro2::TokenStream> {
+        let mut quotes = vec![];
+
+        if self.manager_call.is_none() && self.mut_calls.is_empty() && self.ref_calls.is_empty() {
+            return quotes;
+        }
+
+        let manager_param_name = format_ident!("{}", self.type_of.param_name());
+        let manager_var_name = self
+            .acquire_as
+            .map(|n| n.to_owned())
+            .unwrap_or_else(|| manager_param_name.clone());
+
+        // Read/write lock acquires for the manager
+        let manager_call = self.manager_call.unwrap_or(if self.mut_calls.is_empty() {
+            SystemParam::ManagerRef
+        } else {
+            SystemParam::ManagerMut
+        });
+
+        match manager_call {
+            SystemParam::ManagerMut => {
+                quotes.push(quote! {
+                    let mut #manager_var_name = #manager_param_name.write().await;
+                });
+            }
+            SystemParam::ManagerRef => {
+                quotes.push(quote! {
+                    let #manager_var_name = #manager_param_name.read().await;
+                });
+            }
+            _ => unimplemented!(),
+        };
+
+        // Get/set calls on the manager
+        let is_emitter = matches!(self.type_of, InstanceType::Emitter);
+        let mut calls = vec![];
+        calls.extend(&self.mut_calls);
+        calls.extend(&self.ref_calls);
+
+        for (name, param) in calls {
+            match param {
+                SystemParam::ParamMut(ty) => {
+                    if is_emitter {
+                        quotes.push(quote! {
+                            let #name = #manager_var_name.get_mut::<starship::Emitter<#ty>>();
+                        });
+                    } else {
+                        quotes.push(quote! {
+                            let #name = #manager_var_name.get_mut::<#ty>();
+                        });
+                    }
+                }
+                SystemParam::ParamRef(ty) => {
+                    if is_emitter {
+                        quotes.push(quote! {
+                            let #name = #manager_var_name.get::<starship::Emitter<#ty>>();
+                        });
+                    } else {
+                        quotes.push(quote! {
+                            let #name = #manager_var_name.get::<#ty>();
+                        });
+                    }
+                }
+                _ => unimplemented!(),
+            };
+        }
+
+        quotes
     }
 }
 
@@ -32,137 +182,105 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let func_name = func.sig.ident;
     let func_body = func.block;
 
+    // Types of instances
+    let mut states = InstanceTracker::new(InstanceType::State);
+    let mut resources = InstanceTracker::new(InstanceType::Resource);
+    let mut emitters = InstanceTracker::new(InstanceType::Emitter);
+
     // Convert inputs to system param enums
-    let mut mut_call_count = 0;
-    let params = func
-        .sig
-        .inputs
-        .iter()
-        .map(|i| {
-            let FnArg::Typed(input) = i else {
-                panic!("&self not permitted in system functions.");
-            };
+    for i in &func.sig.inputs {
+        let FnArg::Typed(input) = i else {
+            panic!("&self not permitted in system functions.");
+        };
 
-            let var_name = match input.pat.as_ref() {
-                Pat::Ident(ref pat) => &pat.ident,
-                _ => panic!("Unsupported parameter identifier pattern."),
-            };
+        let var_name = match input.pat.as_ref() {
+            Pat::Ident(ref pat) => &pat.ident,
+            _ => panic!("Unsupported parameter identifier pattern."),
+        };
 
-            let var_value = match input.ty.as_ref() {
-                Type::Path(ref path) => {
-                    // TypeWrapper<InnerType>
-                    let segment = path
-                        .path
-                        .segments
-                        .first()
-                        .unwrap_or_else(|| panic!("Required a parameter type for {}.", var_name));
+        match input.ty.as_ref() {
+            Type::Path(ref path) => {
+                // TypeWrapper<InnerType>
+                let segment = path
+                    .path
+                    .segments
+                    .first()
+                    .unwrap_or_else(|| panic!("Required a parameter type for {}.", var_name));
 
-                    // TypeWrapper
-                    let type_wrapper = segment.ident.to_string();
+                // TypeWrapper
+                let type_wrapper = segment.ident.to_string();
 
-                    let param = if segment.arguments.is_empty() {
-                        match type_wrapper.as_ref() {
-                            "ContextMut" => SystemParam::ContextMut,
-                            "ContextRef" => SystemParam::ContextRef,
-                            wrapper => {
-                                panic!("Unknown parameter type {} for {}.", wrapper, var_name);
-                            }
+                if segment.arguments.is_empty() {
+                    match type_wrapper.as_ref() {
+                        "EmittersMut" => {
+                            emitters.set_manager(var_name, SystemParam::ManagerMut);
                         }
-                    } else {
-                        // <InnerType>
-                        let PathArguments::AngleBracketed(segment_args) = &segment.arguments else {
-                            panic!("Required a generic parameter type for {}.", type_wrapper);
-                        };
-
-                        // InnerType
-                        let GenericArgument::Type(inner_type) = segment_args.args.first().unwrap() else {
-                            panic!("Required a generic parameter type for {}.", type_wrapper);
-                        };
-
-                        match type_wrapper.as_ref() {
-                            "EmitterMut" => SystemParam::EmitterMut(inner_type),
-                            "ResourceMut" => SystemParam::ResourceMut(inner_type),
-                            "ResourceRef" => SystemParam::ResourceRef(inner_type),
-                            "StateMut" => SystemParam::StateMut(inner_type),
-                            "StateRef" => SystemParam::StateRef(inner_type),
-                            wrapper => {
-                                panic!("Unknown parameter type {} for {}.", wrapper, var_name);
-                            }
+                        "ResourcesMut" => {
+                            resources.set_manager(var_name, SystemParam::ManagerMut);
+                        }
+                        "ResourcesRef" => {
+                            resources.set_manager(var_name, SystemParam::ManagerRef);
+                        }
+                        "StatesMut" => {
+                            states.set_manager(var_name, SystemParam::ManagerMut);
+                        }
+                        "StatesRef" => {
+                            states.set_manager(var_name, SystemParam::ManagerRef);
+                        }
+                        wrapper => {
+                            panic!("Unknown parameter type {} for {}.", wrapper, var_name);
                         }
                     };
+                } else {
+                    // <InnerType>
+                    let PathArguments::AngleBracketed(segment_args) = &segment.arguments else {
+                        panic!("Required a generic parameter type for {}.", type_wrapper);
+                    };
 
-                    if param.is_mutable() {
-                        mut_call_count += 1;
-                    }
+                    // InnerType
+                    let GenericArgument::Type(inner_type) = segment_args.args.first().unwrap() else {
+                        panic!("Required a generic parameter type for {}.", type_wrapper);
+                    };
 
-                    param
+                    match type_wrapper.as_ref() {
+                        "EmitterMut" => {
+                            emitters.add_call(var_name, SystemParam::ParamMut(inner_type));
+                        }
+                        "ResourceMut" => {
+                            resources.add_call(var_name, SystemParam::ParamMut(inner_type));
+                        }
+                        "ResourceRef" => {
+                            resources.add_call(var_name, SystemParam::ParamRef(inner_type));
+                        }
+                        "StateMut" => {
+                            states.add_call(var_name, SystemParam::ParamMut(inner_type));
+                        }
+                        "StateRef" => {
+                            states.add_call(var_name, SystemParam::ParamRef(inner_type));
+                        }
+                        wrapper => {
+                            panic!("Unknown parameter type {} for {}.", wrapper, var_name);
+                        }
+                    };
                 }
-                _ => panic!("Unsupported parameter type for {}.", var_name),
-            };
-
-            (var_name, var_value)
-        })
-        .collect::<HashMap<_, _>>();
-
-    // When using mutable params, only 1 is allowed because of borrow rules
-    if mut_call_count > 1 {
-        panic!("Only 1 mutable parameter is allowed per system function.");
-    }
-
-    if params.len() > 1 {
-        // When using context directly, only 1 param is allowed as it takes precedence
-        if params
-            .iter()
-            .any(|(_, p)| matches!(p, SystemParam::ContextMut | SystemParam::ContextRef))
-        {
-            panic!("No additional parameters are allowed when using ContextMut or ContextRef.");
-        }
-
-        // Cannot mix immutable and mutable params because of borrow rules
-        if mut_call_count > 0 {
-            panic!("Only 1 mutable parameter OR many immutable parameters are allowed per system function. Use ContextMut or ContextRef for better scoping.");
-        }
-    }
-
-    // Convert system params to context calls
-    let mut ctx_var_name = format_ident!("ctx");
-    let ctx_calls = params
-        .iter()
-        .map(|(k, p)| match p {
-            SystemParam::ContextMut | SystemParam::ContextRef => {
-                ctx_var_name = (*k).to_owned();
-                quote! {}
             }
-            SystemParam::EmitterMut(inner) => quote! {
-                let #k = ctx.emitter_mut::<#inner>();
-            },
-            SystemParam::ResourceMut(inner) => quote! {
-                let #k = ctx.resource_mut::<#inner>();
-            },
-            SystemParam::ResourceRef(inner) => quote! {
-                let #k = ctx.resource::<#inner>();
-            },
-            SystemParam::StateMut(inner) => quote! {
-                let #k = ctx.state_mut::<#inner>();
-            },
-            SystemParam::StateRef(inner) => quote! {
-                let #k = ctx.state::<#inner>();
-            },
-        })
-        .collect::<Vec<_>>();
+            _ => panic!("Unsupported parameter type for {}.", var_name),
+        };
+    }
 
-    let ctx_acquire = if mut_call_count > 0 {
-        quote! { let mut #ctx_var_name = ctx.write().await; }
-    } else if !ctx_calls.is_empty() {
-        quote! { let #ctx_var_name = ctx.read().await; }
-    } else {
-        quote! {}
-    };
+    let state_quotes = states.generate_quotes();
+    let resource_quotes = resources.generate_quotes();
+    let emitter_quotes = emitters.generate_quotes();
 
     quote! {
-        async fn #func_name(ctx: starship::Context) -> starship::SystemResult {
-            #ctx_acquire
-            #(#ctx_calls)*
+        async fn #func_name(
+            states: starship::States,
+            resources: starship::Resources,
+            emitters: starship::Emitters
+        ) -> starship::SystemResult {
+            #(#state_quotes)*
+            #(#resource_quotes)*
+            #(#emitter_quotes)*
             #func_body
             Ok(())
         }
