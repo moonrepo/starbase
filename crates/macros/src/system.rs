@@ -181,6 +181,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let func = parse_macro_input!(item as syn::ItemFn);
     let func_name = func.sig.ident;
     let func_body = func.block;
+    let func_vis = func.vis;
 
     // Types of instances
     let mut states = InstanceTracker::new(InstanceType::State);
@@ -273,7 +274,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let emitter_quotes = emitters.generate_quotes();
 
     quote! {
-        async fn #func_name(
+        #func_vis async fn #func_name(
             states: starship::States,
             resources: starship::Resources,
             emitters: starship::Emitters
