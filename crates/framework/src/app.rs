@@ -13,10 +13,10 @@ use tokio::task;
 #[derive(Debug, Default)]
 pub enum Phase {
     #[default]
-    Initialize,
+    Startup,
     Analyze,
     Execute,
-    Finalize,
+    Shutdown,
 }
 
 #[derive(Debug)]
@@ -27,10 +27,10 @@ pub struct App {
     states: StateManager,
 
     // Systems
-    initializers: Vec<BoxedSystem>,
+    startups: Vec<BoxedSystem>,
     analyzers: Vec<BoxedSystem>,
     executors: Vec<BoxedSystem>,
-    finalizers: Vec<BoxedSystem>,
+    shutdowns: Vec<BoxedSystem>,
 }
 
 impl App {
@@ -39,43 +39,43 @@ impl App {
             analyzers: vec![],
             emitters: EmitterManager::default(),
             executors: vec![],
-            finalizers: vec![],
-            initializers: vec![],
+            shutdowns: vec![],
+            startups: vec![],
             resources: ResourceManager::default(),
             states: StateManager::default(),
         };
-        app.add_initializer(start_initialize_phase);
-        app.add_analyzer(start_analyze_phase);
-        app.add_executor(start_execute_phase);
-        app.add_finalizer(start_finalize_phase);
+        app.startup(start_startup_phase);
+        app.analyze(start_analyze_phase);
+        app.execute(start_execute_phase);
+        app.shutdown(start_shutdown_phase);
         app
     }
 
-    /// Add a system function that runs during the initialization phase.
-    pub fn add_initializer<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
-        self.add_system(Phase::Initialize, CallbackSystem::new(system))
+    /// Add a system function that runs during the startup phase.
+    pub fn startup<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
+        self.add_system(Phase::Startup, CallbackSystem::new(system))
     }
 
-    /// Add a system function that runs during the analysis phase.
-    pub fn add_analyzer<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
+    /// Add a system function that runs during the analyze phase.
+    pub fn analyze<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
         self.add_system(Phase::Analyze, CallbackSystem::new(system))
     }
 
-    /// Add a system function that runs during the execution phase.
-    pub fn add_executor<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
+    /// Add a system function that runs during the execute phase.
+    pub fn execute<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
         self.add_system(Phase::Execute, CallbackSystem::new(system))
     }
 
-    /// Add a system function that runs during the finalization phase.
-    pub fn add_finalizer<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
-        self.add_system(Phase::Finalize, CallbackSystem::new(system))
+    /// Add a system function that runs during the shutdown phase.
+    pub fn shutdown<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
+        self.add_system(Phase::Shutdown, CallbackSystem::new(system))
     }
 
     /// Add a system that runs during the specified phase.
     pub fn add_system<S: System + 'static>(&mut self, phase: Phase, system: S) -> &mut Self {
         match phase {
-            Phase::Initialize => {
-                self.initializers.push(Box::new(system));
+            Phase::Startup => {
+                self.startups.push(Box::new(system));
             }
             Phase::Analyze => {
                 self.analyzers.push(Box::new(system));
@@ -83,8 +83,8 @@ impl App {
             Phase::Execute => {
                 self.executors.push(Box::new(system));
             }
-            Phase::Finalize => {
-                self.finalizers.push(Box::new(system));
+            Phase::Shutdown => {
+                self.shutdowns.push(Box::new(system));
             }
         };
 
@@ -121,12 +121,12 @@ impl App {
         let resources = Arc::new(RwLock::new(mem::take(&mut self.resources)));
         let states = Arc::new(RwLock::new(mem::take(&mut self.states)));
 
-        // Initialize
+        // Startup
         if let Err(error) = self
-            .run_initializers(states.clone(), resources.clone(), emitters.clone())
+            .run_startup(states.clone(), resources.clone(), emitters.clone())
             .await
         {
-            self.run_finalizers(states.clone(), resources.clone(), emitters.clone())
+            self.run_shutdown(states.clone(), resources.clone(), emitters.clone())
                 .await?;
 
             return Err(error);
@@ -134,10 +134,10 @@ impl App {
 
         // Analyze
         if let Err(error) = self
-            .run_analyzers(states.clone(), resources.clone(), emitters.clone())
+            .run_analyze(states.clone(), resources.clone(), emitters.clone())
             .await
         {
-            self.run_finalizers(states.clone(), resources.clone(), emitters.clone())
+            self.run_shutdown(states.clone(), resources.clone(), emitters.clone())
                 .await?;
 
             return Err(error);
@@ -145,17 +145,17 @@ impl App {
 
         // Execute
         if let Err(error) = self
-            .run_executors(states.clone(), resources.clone(), emitters.clone())
+            .run_execute(states.clone(), resources.clone(), emitters.clone())
             .await
         {
-            self.run_finalizers(states.clone(), resources.clone(), emitters.clone())
+            self.run_shutdown(states.clone(), resources.clone(), emitters.clone())
                 .await?;
 
             return Err(error);
         }
 
-        // Finalize
-        self.run_finalizers(states.clone(), resources.clone(), emitters.clone())
+        // Shutdown
+        self.run_shutdown(states.clone(), resources.clone(), emitters.clone())
             .await?;
 
         let states = Arc::try_unwrap(states)
@@ -167,13 +167,13 @@ impl App {
 
     // Private
 
-    async fn run_initializers(
+    async fn run_startup(
         &mut self,
         states: States,
         resources: Resources,
         emitters: Emitters,
     ) -> anyhow::Result<()> {
-        let systems = mem::take(&mut self.initializers);
+        let systems = mem::take(&mut self.startups);
 
         self.run_systems_in_serial(systems, states, resources, emitters)
             .await?;
@@ -181,7 +181,7 @@ impl App {
         Ok(())
     }
 
-    async fn run_analyzers(
+    async fn run_analyze(
         &mut self,
         states: States,
         resources: Resources,
@@ -195,7 +195,7 @@ impl App {
         Ok(())
     }
 
-    async fn run_executors(
+    async fn run_execute(
         &mut self,
         states: States,
         resources: Resources,
@@ -209,13 +209,13 @@ impl App {
         Ok(())
     }
 
-    async fn run_finalizers(
+    async fn run_shutdown(
         &mut self,
         states: States,
         resources: Resources,
         emitters: Emitters,
     ) -> anyhow::Result<()> {
-        let systems = mem::take(&mut self.finalizers);
+        let systems = mem::take(&mut self.shutdowns);
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;

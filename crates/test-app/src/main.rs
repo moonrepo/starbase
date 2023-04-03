@@ -42,10 +42,10 @@ async fn fin(states: States, _resources: Resources, _emitters: Emitters) -> Resu
 #[tokio::main]
 async fn main() {
     let mut app = App::new();
-    app.add_finalizer(fin);
-    app.add_analyzer(anal1);
-    app.add_initializer(init1);
-    app.add_initializer(init2);
+    app.shutdown(fin);
+    app.analyze(anal1);
+    app.startup(init1);
+    app.startup(init2);
 
     let ctx = app.run().await.unwrap();
     dbg!(ctx);

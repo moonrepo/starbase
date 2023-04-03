@@ -13,9 +13,9 @@ pub struct AppState {
 }
 
 #[system]
-pub async fn start_initialize_phase(states: StatesMut) {
+pub async fn start_startup_phase(states: StatesMut) {
     states.set(AppState {
-        phase: Phase::Initialize,
+        phase: Phase::Startup,
     });
 }
 
@@ -30,6 +30,6 @@ pub async fn start_execute_phase(app_state: StateMut<AppState>) {
 }
 
 #[system]
-pub async fn start_finalize_phase(app_state: StateMut<AppState>) {
-    app_state.phase = Phase::Finalize;
+pub async fn start_shutdown_phase(app_state: StateMut<AppState>) {
+    app_state.phase = Phase::Shutdown;
 }
