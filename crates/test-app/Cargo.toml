@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 starship = { path = "../framework" }
-tokio = { version = "1.26.0", features = ["full", "tracing"] }
+tokio = { version = "1.27.0", features = ["full", "tracing"] }

@@ -34,14 +34,14 @@ async fn system_with_thread(
     Ok(())
 }
 
-mod initializers {
+mod startup {
     use super::*;
 
     #[tokio::test]
     async fn runs_in_order() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_initializer(
+        app.startup(setup_state);
+        app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 let mut states = states.write().await;
                 let order = states.get_mut::<RunOrder>();
@@ -49,13 +49,13 @@ mod initializers {
                 Ok(())
             },
         );
-        app.add_initializer(
+        app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states.write().await.get_mut::<RunOrder>().push("2".into());
                 Ok(())
             },
         );
-        app.add_initializer(
+        app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
@@ -75,9 +75,9 @@ mod initializers {
     #[tokio::test]
     async fn supports_threads() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_initializer(system_with_thread);
-        app.add_initializer(
+        app.startup(setup_state);
+        app.startup(system_with_thread);
+        app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 task::spawn(async move {
                     let mut states = states.write().await;
@@ -89,7 +89,7 @@ mod initializers {
                 Ok(())
             },
         );
-        app.add_initializer(system);
+        app.startup(system);
 
         let states = app.run().await.unwrap();
 
@@ -104,14 +104,14 @@ mod initializers {
     }
 }
 
-mod analyzers {
+mod analyze {
     use super::*;
 
     #[tokio::test]
     async fn runs_in_parallel() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_analyzer(
+        app.startup(setup_state);
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 let mut states = states.write().await;
                 let order = states.get_mut::<RunOrder>();
@@ -119,13 +119,13 @@ mod analyzers {
                 Ok(())
             },
         );
-        app.add_analyzer(
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states.write().await.get_mut::<RunOrder>().push("2".into());
                 Ok(())
             },
         );
-        app.add_analyzer(
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
@@ -136,13 +136,13 @@ mod analyzers {
                 Ok(())
             },
         );
-        app.add_analyzer(
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states.write().await.get_mut::<RunOrder>().push("4".into());
                 Ok(())
             },
         );
-        app.add_analyzer(
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
@@ -162,9 +162,9 @@ mod analyzers {
     #[tokio::test]
     async fn supports_threads() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_analyzer(system_with_thread);
-        app.add_analyzer(
+        app.startup(setup_state);
+        app.analyze(system_with_thread);
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 task::spawn(async move {
                     sleep(Duration::from_millis(100)).await;
@@ -178,7 +178,7 @@ mod analyzers {
                 Ok(())
             },
         );
-        app.add_analyzer(system);
+        app.analyze(system);
 
         let states = app.run().await.unwrap();
 
@@ -193,44 +193,44 @@ mod analyzers {
     }
 
     #[tokio::test]
-    async fn runs_after_initializers() {
+    async fn runs_after_startup() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_initializer(
+        app.startup(setup_state);
+        app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("initializer".into());
+                    .push("startup".into());
                 Ok(())
             },
         );
-        app.add_analyzer(
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("analyzer".into());
+                    .push("analyze".into());
                 Ok(())
             },
         );
 
         let states = app.run().await.unwrap();
 
-        assert_eq!(states.get::<RunOrder>().0, vec!["initializer", "analyzer"]);
+        assert_eq!(states.get::<RunOrder>().0, vec!["startup", "analyze"]);
     }
 }
 
-mod executors {
+mod execute {
     use super::*;
 
     #[tokio::test]
     async fn runs_in_parallel() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_executor(
+        app.startup(setup_state);
+        app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 let mut states = states.write().await;
                 let order = states.get_mut::<RunOrder>();
@@ -238,13 +238,13 @@ mod executors {
                 Ok(())
             },
         );
-        app.add_executor(
+        app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states.write().await.get_mut::<RunOrder>().push("2".into());
                 Ok(())
             },
         );
-        app.add_executor(
+        app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
@@ -255,13 +255,13 @@ mod executors {
                 Ok(())
             },
         );
-        app.add_executor(
+        app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states.write().await.get_mut::<RunOrder>().push("4".into());
                 Ok(())
             },
         );
-        app.add_executor(
+        app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
@@ -281,9 +281,9 @@ mod executors {
     #[tokio::test]
     async fn supports_threads() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_executor(system_with_thread);
-        app.add_executor(
+        app.startup(setup_state);
+        app.execute(system_with_thread);
+        app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 task::spawn(async move {
                     sleep(Duration::from_millis(100)).await;
@@ -297,7 +297,7 @@ mod executors {
                 Ok(())
             },
         );
-        app.add_executor(system);
+        app.execute(system);
 
         let states = app.run().await.unwrap();
 
@@ -312,36 +312,36 @@ mod executors {
     }
 
     #[tokio::test]
-    async fn runs_after_analyzers() {
+    async fn runs_after_analyze() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_initializer(
+        app.startup(setup_state);
+        app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("initializer".into());
+                    .push("startup".into());
                 Ok(())
             },
         );
-        app.add_analyzer(
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("analyzer".into());
+                    .push("analyze".into());
                 Ok(())
             },
         );
-        app.add_executor(
+        app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("executor".into());
+                    .push("execute".into());
                 Ok(())
             },
         );
@@ -350,19 +350,19 @@ mod executors {
 
         assert_eq!(
             states.get::<RunOrder>().0,
-            vec!["initializer", "analyzer", "executor"]
+            vec!["startup", "analyze", "execute"]
         );
     }
 }
 
-mod finalizers {
+mod shutdown {
     use super::*;
 
     #[tokio::test]
     async fn runs_in_parallel() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_finalizer(
+        app.startup(setup_state);
+        app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 let mut states = states.write().await;
                 let order = states.get_mut::<RunOrder>();
@@ -370,13 +370,13 @@ mod finalizers {
                 Ok(())
             },
         );
-        app.add_finalizer(
+        app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states.write().await.get_mut::<RunOrder>().push("2".into());
                 Ok(())
             },
         );
-        app.add_finalizer(
+        app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
@@ -387,13 +387,13 @@ mod finalizers {
                 Ok(())
             },
         );
-        app.add_finalizer(
+        app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states.write().await.get_mut::<RunOrder>().push("4".into());
                 Ok(())
             },
         );
-        app.add_finalizer(
+        app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
@@ -413,9 +413,9 @@ mod finalizers {
     #[tokio::test]
     async fn supports_threads() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_finalizer(system_with_thread);
-        app.add_finalizer(
+        app.startup(setup_state);
+        app.shutdown(system_with_thread);
+        app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 task::spawn(async move {
                     sleep(Duration::from_millis(100)).await;
@@ -429,7 +429,7 @@ mod finalizers {
                 Ok(())
             },
         );
-        app.add_finalizer(system);
+        app.shutdown(system);
 
         let states = app.run().await.unwrap();
 
@@ -444,46 +444,46 @@ mod finalizers {
     }
 
     #[tokio::test]
-    async fn runs_after_analyzers() {
+    async fn runs_after_execute() {
         let mut app = App::new();
-        app.add_initializer(setup_state);
-        app.add_initializer(
+        app.startup(setup_state);
+        app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("initializer".into());
+                    .push("startup".into());
                 Ok(())
             },
         );
-        app.add_analyzer(
+        app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("analyzer".into());
+                    .push("analyze".into());
                 Ok(())
             },
         );
-        app.add_executor(
+        app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("executor".into());
+                    .push("execute".into());
                 Ok(())
             },
         );
-        app.add_finalizer(
+        app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 states
                     .write()
                     .await
                     .get_mut::<RunOrder>()
-                    .push("finalizer".into());
+                    .push("shutdown".into());
                 Ok(())
             },
         );
@@ -492,7 +492,7 @@ mod finalizers {
 
         assert_eq!(
             states.get::<RunOrder>().0,
-            vec!["initializer", "analyzer", "executor", "finalizer"]
+            vec!["startup", "analyze", "execute", "shutdown"]
         );
     }
 }
@@ -508,18 +508,18 @@ fn extract_app_state(states: StatesMut) {
 #[tokio::test]
 async fn tracks_app_state() {
     let mut app = App::new();
-    app.add_initializer(setup_state);
+    app.startup(setup_state);
 
     // This also tests the same system being used multiple times
-    app.add_initializer(extract_app_state);
-    app.add_analyzer(extract_app_state);
-    app.add_executor(extract_app_state);
-    app.add_finalizer(extract_app_state);
+    app.startup(extract_app_state);
+    app.analyze(extract_app_state);
+    app.execute(extract_app_state);
+    app.shutdown(extract_app_state);
 
     let states = app.run().await.unwrap();
 
     assert_eq!(
         states.get::<RunOrder>().0,
-        vec!["Initialize", "Analyze", "Execute", "Finalize"]
+        vec!["Startup", "Analyze", "Execute", "Shutdown"]
     );
 }
