@@ -2,11 +2,11 @@
 
 Starship is a framework for building performant command line applications or processing pipelines.
 It takes heavy inspiration from the popular
-[ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system), but works quite differently.
+[ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system) but works quite differently.
 
-- **Async-first** using Tokio's runtime.
+- **Async-first** powered by Tokio's runtime.
 - **Event-driven** architecture to decouple and isolate crates.
-- **Thread-safe** systems processing pipeline.
+- **Thread-safe** systems for easy processing.
 
 ### Roadmap
 
@@ -37,21 +37,21 @@ completed before moving onto the next phase. The following phases are available:
   - Example: cleanup temporary files
 
 The startup phase processes systems serially in the main thread, as the order of initializations
-must be deterministic, and running in parallel may cause race conditions or unwanted side effects.
+must be deterministic, and running in parallel may cause race conditions or unwanted side-effects.
 
 The other 3 phases process systems concurrently by spawning a new thread for each system. Active
 systems are constrained using a semaphore and available CPU count. If a system fails, the
-application will abort and subsequent systems will not run.
+application will abort and subsequent systems will not run (excluding shutdown systems).
 
 ## Systems
 
 Systems are async functions that implement the `System` trait, are added to an application phase,
-and are processed (only once) during the applications run cycle. Each system receives each
+and are processed (only once) during the applications run cycle. Systems receive each
 [component type](#components) as a distinct parameter.
 
-> Systems are heavily based on the S in ECS that Bevy and other game engines utilize. The major
-> difference is that our systems are async only, and do not require the entity (E) or component (C)
-> parts.
+> Systems are loosely based on the S in ECS that Bevy and other game engines utilize. The major
+> difference is that our systems are async only, run once, and do not require the entity (E) or
+> component (C) parts.
 
 ```rust
 use starship::{States, Resources, Emitters, SystemResult};
@@ -119,7 +119,7 @@ Jump to the [components](#components) section for a full list of supported syste
 
 ### Startup systems
 
-In this phase, component values are created and registered into their appropriate manager instance.
+In this phase, components are created and registered into their appropriate manager instance.
 
 ```rust
 app.startup(system_func);
@@ -128,7 +128,7 @@ app.add_system(Phase::Startup, system_instance);
 
 ### Analyze systems
 
-In this phase, registered component values are updated based on the results of an analysis.
+In this phase, registered components are optionally updated based on the results of an analysis.
 
 ```rust
 app.analyze(system_func);
@@ -137,7 +137,8 @@ app.add_system(Phase::Analyze, system_instance);
 
 ### Execute systems
 
-Ideally by this phase, all component values are accessed immutably, but not a hard requirement.
+In this phase, systems are processed using components to drive business logic. Ideally by this
+phase, all components are accessed immutably, but not a hard requirement.
 
 ```rust
 app.execute(system_func);
