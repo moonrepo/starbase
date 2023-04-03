@@ -9,27 +9,27 @@ mod starship {
 
 #[derive(Debug, State)]
 pub struct AppState {
-    pub current_phase: Phase,
+    pub phase: Phase,
 }
 
 #[system]
 pub async fn start_initialize_phase(states: StatesMut) {
     states.set(AppState {
-        current_phase: Phase::Initialize,
+        phase: Phase::Initialize,
     });
 }
 
 #[system]
 pub async fn start_analyze_phase(app_state: StateMut<AppState>) {
-    app_state.current_phase = Phase::Analyze;
+    app_state.phase = Phase::Analyze;
 }
 
 #[system]
 pub async fn start_execute_phase(app_state: StateMut<AppState>) {
-    app_state.current_phase = Phase::Analyze;
+    app_state.phase = Phase::Execute;
 }
 
 #[system]
 pub async fn start_finalize_phase(app_state: StateMut<AppState>) {
-    app_state.current_phase = Phase::Finalize;
+    app_state.phase = Phase::Finalize;
 }

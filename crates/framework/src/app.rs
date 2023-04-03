@@ -19,7 +19,7 @@ pub enum Phase {
     Finalize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct App {
     // Data
     emitters: EmitterManager,
@@ -35,11 +35,19 @@ pub struct App {
 
 impl App {
     pub fn new() -> App {
-        let mut app = App::default();
+        let mut app = App {
+            analyzers: vec![],
+            emitters: EmitterManager::default(),
+            executors: vec![],
+            finalizers: vec![],
+            initializers: vec![],
+            resources: ResourceManager::default(),
+            states: StateManager::default(),
+        };
         app.add_initializer(start_initialize_phase);
         app.add_analyzer(start_analyze_phase);
         app.add_executor(start_execute_phase);
-        app.add_initializer(start_finalize_phase);
+        app.add_finalizer(start_finalize_phase);
         app
     }
 
