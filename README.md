@@ -1,31 +1,57 @@
 # starship
 
-Starship is a framework for building performant async-first and thread-safe command line applications/pipelines.
+Starship is a framework for building performant command line applications or processing pipelines.
+It takes heavy inspiration from the popular
+[ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system), but works quite differently.
+
+- **Async-first** using Tokio's runtime.
+- **Event-driven** architecture to decouple and isolate crates.
+- **Thread-safe** systems processing pipeline.
+
+### Roadmap
+
+- [x] Async application layer built on `tokio`
+  - [x] Systems
+  - [x] States/resources
+  - [x] Event emitters
+- [ ] Logging + tracing via the `tracing` crate
+  - [ ] Include `metrics`?
+- [ ] Error handling + diagnostics via the `miette` crate
+  - [ ] Replace `anyhow`
 
 # Core
 
 ## Phases
 
-An application is divided into phases, where [systems](#systems) in each phase will be processed and completed before moving onto the next phase. The following phases are available:
+An application is divided into phases, where [systems](#systems) in each phase will be processed and
+completed before moving onto the next phase. The following phases are available:
 
 - **Initialize** - Register and or load [components](#components) into the application instance.
   - Example: load configuration, detect workspace root, load plugins
-- **Analyze** - Analyze the current application state and prepare for execution.
+- **Analyze** - Analyze the current application environment, update components, and prepare for
+  execution.
   - Example: generate project graph, load cache, signin to service
 - **Execute** - Execute primary business logic.
   - Example: process dependency graph, run generator, check for new version
-- **Finalize** - Finalize and clean up after an execution, whether a success or failure.
+- **Finalize** - Finalize whether a success or failure.
   - Example: cleanup temporary files
 
-The **Initialize** phase processes systems serially in the main thread, as the order of initializations must be deterministic, and running in parallel may cause race conditions or unwanted side effects.
+The initialize phase processes systems serially in the main thread, as the order of initializations
+must be deterministic, and running in parallel may cause race conditions or unwanted side effects.
 
-The other 3 phases process systems concurrently by spawning a new thread for each system. Active systems are constrained using a semaphore and available CPU count. If a system fails, the application will abort and subsequent systems will not run.
+The other 3 phases process systems concurrently by spawning a new thread for each system. Active
+systems are constrained using a semaphore and available CPU count. If a system fails, the
+application will abort and subsequent systems will not run.
 
 ## Systems
 
-Systems are async functions that implement the `System` trait, are added to an application phase, and are processed (only once) during the applications run cycle. Each system receives each [component type](#components) as a distinct parameter.
+Systems are async functions that implement the `System` trait, are added to an application phase,
+and are processed (only once) during the applications run cycle. Each system receives each
+[component type](#components) as a distinct parameter.
 
-> Systems are heavily based on the [ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system) that Bevy and other game engines utilize. The major difference is that our systems are async only, and do not require the entity (E) or component (C) parts (our components work differently).
+> Systems are heavily based on the S in ECS that Bevy and other game engines utilize. The major
+> difference is that our systems are async only, and do not require the entity (E) or component (C)
+> parts.
 
 ```rust
 use starship::{States, Resources, Emitters, SystemResult};
@@ -47,9 +73,13 @@ async fn main() {
 }
 ```
 
-Each system parameter type (`States`, `Resources`, `Emitters`) is a type alias that wraps the underlying component manager in a `Arc<RwLock<T>>`, allowing for distinct read/write locks per component type. Separating components across params simplifies borrow semantics.
+Each system parameter type (`States`, `Resources`, `Emitters`) is a type alias that wraps the
+underlying component manager in a `Arc<RwLock<T>>`, allowing for distinct read/write locks per
+component type. Separating components across params simplifies borrow semantics.
 
-Furthermore, for better ergonomics and developer experience, we provide a `#[system]` function attribute that provides "magic" parameters similar to Axum and Bevy, which we call system parameters. For example, the above system can be rewritten as:
+Furthermore, for better ergonomics and developer experience, we provide a `#[system]` function
+attribute that provides "magic" parameters similar to Axum and Bevy, which we call system
+parameters. For example, the above system can be rewritten as:
 
 ```rust
 #[system]
@@ -59,7 +89,8 @@ async fn load_config(states: StatesMut) {
 }
 ```
 
-Which compiles down to the following, while taking mutable and immutable borrowship rules into account. If a rule is broken, we panic during compilation.
+Which compiles down to the following, while taking mutable and immutable borrowship rules into
+account. If a rule is broken, we panic during compilation.
 
 ```rust
 async fn load_config(
@@ -88,7 +119,8 @@ Jump to the [components](#components) section for a full list of supported syste
 
 ### Initializers
 
-Initializers are systems that run serially in the initialize phase, and can be registered with the `add_initializer` method.
+Initializers are systems that run serially in the initialize phase, and can be registered with the
+`add_initializer` method.
 
 In this phase, components are created and registered into their appropriate manager instance.
 
@@ -99,7 +131,8 @@ app.add_system(Phase::Initialize, system_instance);
 
 ### Analyzers
 
-Analyzers are systems that run concurrently in the analyze phase, and can be registered with the `add_analyzer` method.
+Analyzers are systems that run concurrently in the analyze phase, and can be registered with the
+`add_analyzer` method.
 
 In this phase, registered component values are updated based on the results of an analysis.
 
@@ -110,7 +143,8 @@ app.add_system(Phase::Analyze, system_instance);
 
 ### Executors
 
-Executors are systems that run concurrently in the execute phase, and can be registered with the `add_executor` method.
+Executors are systems that run concurrently in the execute phase, and can be registered with the
+`add_executor` method.
 
 Ideally by this phase, all component values are accessed immutably, but not a hard requirement.
 
@@ -121,9 +155,11 @@ app.add_system(Phase::Execute, system_instance);
 
 ### Finalizers
 
-Finalizers are systems that run concurrently in the finalize phase, and can be registered with the `add_finalizer` method.
+Finalizers are systems that run concurrently in the finalize phase, and can be registered with the
+`add_finalizer` method.
 
-Finalizers run on successful execution, or on a failure from any phase, and can be used to clean or reset the current environment, dump error logs or reports, so on and so forth.
+Finalizers run on successful execution, or on a failure from any phase, and can be used to clean or
+reset the current environment, dump error logs or reports, so on and so forth.
 
 ```rust
 app.add_finalizer(system_func);
