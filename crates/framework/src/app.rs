@@ -106,52 +106,41 @@ impl App {
         let states = Arc::new(RwLock::new(mem::take(&mut self.states)));
 
         // Initialize
-        let initializers = mem::take(&mut self.initializers);
+        if let Err(error) = self
+            .run_initializers(states.clone(), resources.clone(), emitters.clone())
+            .await
+        {
+            self.run_finalizers(states.clone(), resources.clone(), emitters.clone())
+                .await?;
 
-        self.current_phase = Some(Phase::Initialize);
-        self.run_systems_in_serial(
-            initializers,
-            Arc::clone(&states),
-            Arc::clone(&resources),
-            Arc::clone(&emitters),
-        )
-        .await?;
+            return Err(error);
+        }
 
         // Analyze
-        let analyzers = mem::take(&mut self.analyzers);
+        if let Err(error) = self
+            .run_analyzers(states.clone(), resources.clone(), emitters.clone())
+            .await
+        {
+            self.run_finalizers(states.clone(), resources.clone(), emitters.clone())
+                .await?;
 
-        self.current_phase = Some(Phase::Analyze);
-        self.run_systems_in_parallel(
-            analyzers,
-            Arc::clone(&states),
-            Arc::clone(&resources),
-            Arc::clone(&emitters),
-        )
-        .await?;
+            return Err(error);
+        }
 
         // Execute
-        let executors = mem::take(&mut self.executors);
+        if let Err(error) = self
+            .run_executors(states.clone(), resources.clone(), emitters.clone())
+            .await
+        {
+            self.run_finalizers(states.clone(), resources.clone(), emitters.clone())
+                .await?;
 
-        self.current_phase = Some(Phase::Execute);
-        self.run_systems_in_parallel(
-            executors,
-            Arc::clone(&states),
-            Arc::clone(&resources),
-            Arc::clone(&emitters),
-        )
-        .await?;
+            return Err(error);
+        }
 
         // Finalize
-        let finalizers = mem::take(&mut self.finalizers);
-
-        self.current_phase = Some(Phase::Finalize);
-        self.run_systems_in_parallel(
-            finalizers,
-            Arc::clone(&states),
-            Arc::clone(&resources),
-            Arc::clone(&emitters),
-        )
-        .await?;
+        self.run_finalizers(states.clone(), resources.clone(), emitters.clone())
+            .await?;
 
         let states = Arc::try_unwrap(states)
             .expect("Failed to acquire state before closing the application. This typically means that threads are still running that have not been awaited.")
@@ -161,6 +150,70 @@ impl App {
     }
 
     // Private
+
+    async fn run_initializers(
+        &mut self,
+        states: States,
+        resources: Resources,
+        emitters: Emitters,
+    ) -> anyhow::Result<()> {
+        let systems = mem::take(&mut self.initializers);
+
+        self.current_phase = Some(Phase::Initialize);
+
+        self.run_systems_in_serial(systems, states, resources, emitters)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn run_analyzers(
+        &mut self,
+        states: States,
+        resources: Resources,
+        emitters: Emitters,
+    ) -> anyhow::Result<()> {
+        let systems = mem::take(&mut self.analyzers);
+
+        self.current_phase = Some(Phase::Analyze);
+
+        self.run_systems_in_parallel(systems, states, resources, emitters)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn run_executors(
+        &mut self,
+        states: States,
+        resources: Resources,
+        emitters: Emitters,
+    ) -> anyhow::Result<()> {
+        let systems = mem::take(&mut self.executors);
+
+        self.current_phase = Some(Phase::Execute);
+
+        self.run_systems_in_parallel(systems, states, resources, emitters)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn run_finalizers(
+        &mut self,
+        states: States,
+        resources: Resources,
+        emitters: Emitters,
+    ) -> anyhow::Result<()> {
+        let systems = mem::take(&mut self.finalizers);
+
+        self.current_phase = Some(Phase::Finalize);
+
+        self.run_systems_in_parallel(systems, states, resources, emitters)
+            .await?;
+
+        Ok(())
+    }
 
     async fn run_systems_in_parallel(
         &self,

@@ -25,7 +25,7 @@ The other 3 phases process systems concurrently by spawning a new thread for eac
 
 Systems are async functions that implement the `System` trait, are added to an application phase, and are processed (only once) during the applications run cycle. Each system receives each [component type](#components) as a distinct parameter.
 
-> Systems are heavily based on the [ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system) that Bevy and other game engines utilize. The major difference is that our systems are async only, and do not require the entity (E) or component (C) parts.
+> Systems are heavily based on the [ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system) that Bevy and other game engines utilize. The major difference is that our systems are async only, and do not require the entity (E) or component (C) parts (our components work differently).
 
 ```rust
 use starship::{States, Resources, Emitters, SystemResult};
