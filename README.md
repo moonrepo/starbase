@@ -67,7 +67,7 @@ async fn load_config(states: States, resources: Resources, emitters: Emitters) -
 
 #[tokio::main]
 async fn main() {
-	let mut app = App::default();
+	let mut app = App::new();
 	app.add_initializer(load_config);
 	app.run()?;
 }

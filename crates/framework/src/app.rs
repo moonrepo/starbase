@@ -1,3 +1,4 @@
+use crate::app_state::*;
 use crate::events::{EmitterInstance, EmitterManager, Emitters};
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
@@ -18,10 +19,8 @@ pub enum Phase {
     Finalize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct App {
-    pub current_phase: Option<Phase>,
-
     // Data
     emitters: EmitterManager,
     resources: ResourceManager,
@@ -35,6 +34,23 @@ pub struct App {
 }
 
 impl App {
+    pub fn new() -> App {
+        let mut app = App {
+            analyzers: vec![],
+            emitters: EmitterManager::default(),
+            executors: vec![],
+            finalizers: vec![],
+            initializers: vec![],
+            resources: ResourceManager::default(),
+            states: StateManager::default(),
+        };
+        app.add_initializer(start_initialize_phase);
+        app.add_analyzer(start_analyze_phase);
+        app.add_executor(start_execute_phase);
+        app.add_finalizer(start_finalize_phase);
+        app
+    }
+
     /// Add a system function that runs during the initialization phase.
     pub fn add_initializer<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
         self.add_system(Phase::Initialize, CallbackSystem::new(system))
@@ -159,8 +175,6 @@ impl App {
     ) -> anyhow::Result<()> {
         let systems = mem::take(&mut self.initializers);
 
-        self.current_phase = Some(Phase::Initialize);
-
         self.run_systems_in_serial(systems, states, resources, emitters)
             .await?;
 
@@ -174,8 +188,6 @@ impl App {
         emitters: Emitters,
     ) -> anyhow::Result<()> {
         let systems = mem::take(&mut self.analyzers);
-
-        self.current_phase = Some(Phase::Analyze);
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;
@@ -191,8 +203,6 @@ impl App {
     ) -> anyhow::Result<()> {
         let systems = mem::take(&mut self.executors);
 
-        self.current_phase = Some(Phase::Execute);
-
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;
 
@@ -206,8 +216,6 @@ impl App {
         emitters: Emitters,
     ) -> anyhow::Result<()> {
         let systems = mem::take(&mut self.finalizers);
-
-        self.current_phase = Some(Phase::Finalize);
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;

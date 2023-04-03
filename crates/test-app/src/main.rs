@@ -41,7 +41,7 @@ async fn fin(states: States, _resources: Resources, _emitters: Emitters) -> Resu
 
 #[tokio::main]
 async fn main() {
-    let mut app = App::default();
+    let mut app = App::new();
     app.add_finalizer(fin);
     app.add_analyzer(anal1);
     app.add_initializer(init1);

@@ -204,7 +204,7 @@ fn non_async() {
 
 #[tokio::test]
 async fn test_app() {
-    let mut app = App::default();
+    let mut app = App::new();
     app.add_initializer(read_states);
     app.add_initializer(read_states_renamed);
     app.add_initializer(read_state_arg);
