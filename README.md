@@ -26,17 +26,17 @@ It takes heavy inspiration from the popular
 An application is divided into phases, where [systems](#systems) in each phase will be processed and
 completed before moving onto the next phase. The following phases are available:
 
-- **Initialize** - Register and or load [components](#components) into the application instance.
+- **Startup** - Register and or load [components](#components) into the application instance.
   - Example: load configuration, detect workspace root, load plugins
 - **Analyze** - Analyze the current application environment, update components, and prepare for
   execution.
   - Example: generate project graph, load cache, signin to service
 - **Execute** - Execute primary business logic.
   - Example: process dependency graph, run generator, check for new version
-- **Finalize** - Finalize whether a success or failure.
+- **Shutdown** - Shutdown whether a success or failure.
   - Example: cleanup temporary files
 
-The initialize phase processes systems serially in the main thread, as the order of initializations
+The startup phase processes systems serially in the main thread, as the order of initializations
 must be deterministic, and running in parallel may cause race conditions or unwanted side effects.
 
 The other 3 phases process systems concurrently by spawning a new thread for each system. Active
@@ -68,7 +68,7 @@ async fn load_config(states: States, resources: Resources, emitters: Emitters) -
 #[tokio::main]
 async fn main() {
 	let mut app = App::new();
-	app.add_initializer(load_config);
+	app.startup(load_config);
 	app.run()?;
 }
 ```
@@ -117,53 +117,41 @@ Additional benefits of `#[system]` are:
 
 Jump to the [components](#components) section for a full list of supported system parameters.
 
-### Initializers
+### Startup systems
 
-Initializers are systems that run serially in the initialize phase, and can be registered with the
-`add_initializer` method.
-
-In this phase, components are created and registered into their appropriate manager instance.
+In this phase, component values are created and registered into their appropriate manager instance.
 
 ```rust
-app.add_initializer(system_func);
-app.add_system(Phase::Initialize, system_instance);
+app.startup(system_func);
+app.add_system(Phase::Startup, system_instance);
 ```
 
-### Analyzers
-
-Analyzers are systems that run concurrently in the analyze phase, and can be registered with the
-`add_analyzer` method.
+### Analyze systems
 
 In this phase, registered component values are updated based on the results of an analysis.
 
 ```rust
-app.add_analyzer(system_func);
+app.analyze(system_func);
 app.add_system(Phase::Analyze, system_instance);
 ```
 
-### Executors
-
-Executors are systems that run concurrently in the execute phase, and can be registered with the
-`add_executor` method.
+### Execute systems
 
 Ideally by this phase, all component values are accessed immutably, but not a hard requirement.
 
 ```rust
-app.add_executor(system_func);
+app.execute(system_func);
 app.add_system(Phase::Execute, system_instance);
 ```
 
-### Finalizers
+### Shutdown systems
 
-Finalizers are systems that run concurrently in the finalize phase, and can be registered with the
-`add_finalizer` method.
-
-Finalizers run on successful execution, or on a failure from any phase, and can be used to clean or
+Shutdown runs on successful execution, or on a failure from any phase, and can be used to clean or
 reset the current environment, dump error logs or reports, so on and so forth.
 
 ```rust
-app.add_finalizer(system_func);
-app.add_system(Phase::Finalize, system_instance);
+app.shutdown(system_func);
+app.add_system(Phase::Shutdown, system_instance);
 ```
 
 # Components

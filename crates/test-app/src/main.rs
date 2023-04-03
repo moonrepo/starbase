@@ -3,17 +3,17 @@ use starship::{App, Emitters, Resources, Result, State, States};
 #[derive(Debug, State)]
 struct Test(String);
 
-async fn init1(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
+async fn start1(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
     let mut states = states.write().await;
-    println!("initialize 1");
+    println!("startup 1");
     states.set(Test("original".into()));
     Ok(())
 }
 
-async fn init2(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
+async fn start2(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
     tokio::spawn(async move {
         let states = states.read().await;
-        println!("initialize 2");
+        println!("startup 2");
         let state = states.get::<Test>();
         dbg!(state);
     })
@@ -32,7 +32,7 @@ async fn anal1(states: States, _resources: Resources, _emitters: Emitters) -> Re
 
 async fn fin(states: States, _resources: Resources, _emitters: Emitters) -> Result<()> {
     let states = states.read().await;
-    println!("finalize");
+    println!("shutdown");
     let state = states.get::<Test>();
     dbg!(state);
 
@@ -44,8 +44,8 @@ async fn main() {
     let mut app = App::new();
     app.shutdown(fin);
     app.analyze(anal1);
-    app.startup(init1);
-    app.startup(init2);
+    app.startup(start1);
+    app.startup(start2);
 
     let ctx = app.run().await.unwrap();
     dbg!(ctx);
