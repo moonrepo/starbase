@@ -3,9 +3,11 @@ use starship::{App, Emitters, IntoDiagnostic, MainResult, Resources, State, Stat
 use thiserror::Error;
 
 #[derive(Debug, Diagnostic, Error)]
-#[error("this error")]
-#[diagnostic(code(oops::my::bad), help("miette error"))]
-struct TestError {}
+enum AppError {
+    #[error("this error")]
+    #[diagnostic(code(oops::my::bad), help("miette error"))]
+    Test,
+}
 
 #[derive(Debug, State)]
 struct Test(String);
@@ -48,8 +50,12 @@ async fn fin(states: States, _resources: Resources, _emitters: Emitters) -> Syst
 }
 
 async fn fail(_states: States, _resources: Resources, _emitters: Emitters) -> SystemResult {
-    println!("fail");
-    Err(TestError {})?
+    if std::env::var("FAIL").is_ok() {
+        println!("fail");
+        return Err(AppError::Test)?;
+    }
+
+    Ok(())
 }
 
 #[tokio::main]

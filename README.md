@@ -73,7 +73,7 @@ async fn load_config(states: States, resources: Resources, emitters: Emitters) -
 async fn main() -> MainResult {
   let mut app = App::new();
   app.startup(load_config);
-  app.run()?;
+  app.run().await?;
 
   Ok(())
 }
@@ -168,3 +168,62 @@ app.add_system(Phase::Shutdown, system_instance);
 ## Resources
 
 ## Emitters
+
+# How to
+
+## Error handling
+
+Errors and diagnostics are provided by the [`miette`](https://crates.io/crates/miette) crate. All
+layers of the application, from systems, to events, and the application itself, return the
+`miette::Result` type. This allows for errors to be easily converted to diagnostics, and for miette
+to automatically render to the terminal for errors and panics.
+
+To benefit from this, update your `main` function to return `MainResult`.
+
+```rust
+use starship::MainResult;
+
+#[tokio::main]
+async fn main() -> MainResult {
+  let mut app = App::new();
+  // ...
+  app.run().await?;
+
+  Ok(())
+}
+```
+
+To make the most out of errors, and in turn diagnostics, it's best (also suggested) to use the
+`thiserror` crate.
+
+```rust
+use starship::Diagnostic;
+use thiserror::Error;
+
+#[derive(Debug, Diagnostic, Error)]
+pub enum AppError {
+    #[error(transparent)]
+    #[diagnostic(code(app::io_error))]
+    IoError(#[from] std::io::Error),
+
+    #[error("Systems offline!")]
+    #[diagnostic(code(app::bad_code))]
+    SystemsOffline,
+}
+```
+
+### Caveats
+
+In systems, events, and other fallible layers, a returned `Err` must be converted to a diagnostic
+first. There are 2 approaches to achieve this:
+
+```rust
+#[system]
+async fn could_fail() {
+  // Convert error using into()
+  Err(AppError::SystemsOffline.into())
+
+  // OR use ? operator on Err()
+  Err(AppError::SystemsOffline)?
+}
+```

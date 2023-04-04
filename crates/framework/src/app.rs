@@ -37,6 +37,8 @@ pub struct App {
 impl App {
     #[allow(clippy::new_without_default)]
     pub fn new() -> App {
+        miette::set_panic_hook();
+
         let mut app = App {
             analyzers: vec![],
             emitters: EmitterManager::default(),
