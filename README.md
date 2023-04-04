@@ -4,9 +4,13 @@ Starship is a framework for building performant command line applications or pro
 It takes heavy inspiration from the popular
 [ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system) but works quite differently.
 
-- **Async-first** powered by Tokio's runtime.
-- **Event-driven** architecture to decouple and isolate crates.
-- **Thread-safe** systems for easy processing.
+A starship is built with the following modules:
+
+- **Reactor core** - Async-first powered by the `tokio` runtime.
+- **Warp drive** - Thread-safe concurrent systems for easy processing.
+- **Communication array** - Event-driven architecture to decouple and isolate crates.
+- **Shield generator** - Native diagnostics and reports with `miette`.
+- **Navigation sensors** -
 
 ### Roadmap
 
@@ -16,8 +20,8 @@ It takes heavy inspiration from the popular
   - [x] Event emitters
 - [ ] Logging + tracing via the `tracing` crate
   - [ ] Include `metrics`?
-- [ ] Error handling + diagnostics via the `miette` crate
-  - [ ] Replace `anyhow`
+- [x] Error handling + diagnostics via the `miette` crate
+  - [x] Replace `anyhow`
 
 # Core
 
@@ -54,22 +58,24 @@ and are processed (only once) during the applications run cycle. Systems receive
 > component (C) parts.
 
 ```rust
-use starship::{States, Resources, Emitters, SystemResult};
+use starship::{States, Resources, Emitters, MainResult, SystemResult};
 
 async fn load_config(states: States, resources: Resources, emitters: Emitters) -> SystemResult {
-	let states = states.write().await;
+  let states = states.write().await;
 
-	let config: AppConfig = do_load_config();
-	states.set::<AppConfig>(config);
+  let config: AppConfig = do_load_config();
+  states.set::<AppConfig>(config);
 
-	Ok(())
+  Ok(())
 }
 
 #[tokio::main]
-async fn main() {
-	let mut app = App::new();
-	app.startup(load_config);
-	app.run()?;
+async fn main() -> MainResult {
+  let mut app = App::new();
+  app.startup(load_config);
+  app.run().await?;
+
+  Ok(())
 }
 ```
 
@@ -84,8 +90,8 @@ parameters. For example, the above system can be rewritten as:
 ```rust
 #[system]
 async fn load_config(states: StatesMut) {
-	let config: AppConfig = do_load_config();
-	states.set::<AppConfig>(config);
+  let config: AppConfig = do_load_config();
+  states.set::<AppConfig>(config);
 }
 ```
 
@@ -94,9 +100,9 @@ account. If a rule is broken, we panic during compilation.
 
 ```rust
 async fn load_config(
-	states: starship::States,
-	resources: starship::Resources,
-	emitters: starship::Emitters,
+  states: starship::States,
+  resources: starship::Resources,
+  emitters: starship::Emitters,
 ) -> starship::SystemResult {
     let mut states = states.write().await;
     {
@@ -162,3 +168,62 @@ app.add_system(Phase::Shutdown, system_instance);
 ## Resources
 
 ## Emitters
+
+# How to
+
+## Error handling
+
+Errors and diagnostics are provided by the [`miette`](https://crates.io/crates/miette) crate. All
+layers of the application, from systems, to events, and the application itself, return the
+`miette::Result` type. This allows for errors to be easily converted to diagnostics, and for miette
+to automatically render to the terminal for errors and panics.
+
+To benefit from this, update your `main` function to return `MainResult`.
+
+```rust
+use starship::MainResult;
+
+#[tokio::main]
+async fn main() -> MainResult {
+  let mut app = App::new();
+  // ...
+  app.run().await?;
+
+  Ok(())
+}
+```
+
+To make the most out of errors, and in turn diagnostics, it's best (also suggested) to use the
+`thiserror` crate.
+
+```rust
+use starship::Diagnostic;
+use thiserror::Error;
+
+#[derive(Debug, Diagnostic, Error)]
+pub enum AppError {
+    #[error(transparent)]
+    #[diagnostic(code(app::io_error))]
+    IoError(#[from] std::io::Error),
+
+    #[error("Systems offline!")]
+    #[diagnostic(code(app::bad_code))]
+    SystemsOffline,
+}
+```
+
+### Caveats
+
+In systems, events, and other fallible layers, a returned `Err` must be converted to a diagnostic
+first. There are 2 approaches to achieve this:
+
+```rust
+#[system]
+async fn could_fail() {
+  // Convert error using into()
+  Err(AppError::SystemsOffline.into())
+
+  // OR use ? operator on Err()
+  Err(AppError::SystemsOffline)?
+}
+```

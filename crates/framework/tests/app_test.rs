@@ -1,3 +1,4 @@
+use miette::{bail, IntoDiagnostic};
 use starship::{App, AppState, Emitters, Resources, States, SystemResult};
 use starship_macros::*;
 use std::time::Duration;
@@ -17,6 +18,13 @@ async fn system(order: StateMut<RunOrder>) {
     order.push("async-function".into());
 }
 
+#[system]
+async fn fail() {
+    if true {
+        bail!("Fail!");
+    }
+}
+
 async fn system_with_thread(
     states: States,
     _resources: Resources,
@@ -29,7 +37,8 @@ async fn system_with_thread(
             .get_mut::<RunOrder>()
             .push("async-function-thread".into());
     })
-    .await?;
+    .await
+    .into_diagnostic()?;
 
     Ok(())
 }
@@ -84,7 +93,8 @@ mod startup {
                     let order = states.get_mut::<RunOrder>();
                     order.push("async-closure-thread".into());
                 })
-                .await?;
+                .await
+                .into_diagnostic()?;
 
                 Ok(())
             },
@@ -101,6 +111,17 @@ mod startup {
                 "async-function"
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn bubbles_up_error() {
+        let mut app = App::new();
+        app.startup(setup_state);
+        app.startup(fail);
+
+        let error = app.run().await;
+
+        assert!(error.is_err());
     }
 }
 
@@ -173,7 +194,8 @@ mod analyze {
                     let order = states.get_mut::<RunOrder>();
                     order.push("async-closure-thread".into());
                 })
-                .await?;
+                .await
+                .into_diagnostic()?;
 
                 Ok(())
             },
@@ -220,6 +242,17 @@ mod analyze {
         let states = app.run().await.unwrap();
 
         assert_eq!(states.get::<RunOrder>().0, vec!["startup", "analyze"]);
+    }
+
+    #[tokio::test]
+    async fn bubbles_up_error() {
+        let mut app = App::new();
+        app.startup(setup_state);
+        app.analyze(fail);
+
+        let error = app.run().await;
+
+        assert!(error.is_err());
     }
 }
 
@@ -292,7 +325,8 @@ mod execute {
                     let order = states.get_mut::<RunOrder>();
                     order.push("async-closure-thread".into());
                 })
-                .await?;
+                .await
+                .into_diagnostic()?;
 
                 Ok(())
             },
@@ -352,6 +386,17 @@ mod execute {
             states.get::<RunOrder>().0,
             vec!["startup", "analyze", "execute"]
         );
+    }
+
+    #[tokio::test]
+    async fn bubbles_up_error() {
+        let mut app = App::new();
+        app.startup(setup_state);
+        app.execute(fail);
+
+        let error = app.run().await;
+
+        assert!(error.is_err());
     }
 }
 
@@ -424,7 +469,8 @@ mod shutdown {
                     let order = states.get_mut::<RunOrder>();
                     order.push("async-closure-thread".into());
                 })
-                .await?;
+                .await
+                .into_diagnostic()?;
 
                 Ok(())
             },
@@ -494,6 +540,17 @@ mod shutdown {
             states.get::<RunOrder>().0,
             vec!["startup", "analyze", "execute", "shutdown"]
         );
+    }
+
+    #[tokio::test]
+    async fn bubbles_up_error() {
+        let mut app = App::new();
+        app.startup(setup_state);
+        app.shutdown(fail);
+
+        let error = app.run().await;
+
+        assert!(error.is_err());
     }
 }
 
