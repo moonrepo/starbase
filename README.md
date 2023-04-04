@@ -9,7 +9,7 @@ A starship is built with the following modules:
 - **Reactor core** - Async-first powered by the `tokio` runtime.
 - **Warp drive** - Thread-safe concurrent systems for easy processing.
 - **Communication array** - Event-driven architecture to decouple and isolate crates.
-- **Shield generator** - ???
+- **Shield generator** - Native diagnostics and reports with `miette`.
 - **Navigation sensors** -
 
 ### Roadmap
@@ -20,8 +20,8 @@ A starship is built with the following modules:
   - [x] Event emitters
 - [ ] Logging + tracing via the `tracing` crate
   - [ ] Include `metrics`?
-- [ ] Error handling + diagnostics via the `miette` crate
-  - [ ] Replace `anyhow`
+- [x] Error handling + diagnostics via the `miette` crate
+  - [x] Replace `anyhow`
 
 # Core
 
@@ -58,22 +58,24 @@ and are processed (only once) during the applications run cycle. Systems receive
 > component (C) parts.
 
 ```rust
-use starship::{States, Resources, Emitters, SystemResult};
+use starship::{States, Resources, Emitters, MainResult, SystemResult};
 
 async fn load_config(states: States, resources: Resources, emitters: Emitters) -> SystemResult {
-	let states = states.write().await;
+  let states = states.write().await;
 
-	let config: AppConfig = do_load_config();
-	states.set::<AppConfig>(config);
+  let config: AppConfig = do_load_config();
+  states.set::<AppConfig>(config);
 
-	Ok(())
+  Ok(())
 }
 
 #[tokio::main]
-async fn main() {
-	let mut app = App::new();
-	app.startup(load_config);
-	app.run()?;
+async fn main() -> MainResult {
+  let mut app = App::new();
+  app.startup(load_config);
+  app.run()?;
+
+  Ok(())
 }
 ```
 
@@ -88,8 +90,8 @@ parameters. For example, the above system can be rewritten as:
 ```rust
 #[system]
 async fn load_config(states: StatesMut) {
-	let config: AppConfig = do_load_config();
-	states.set::<AppConfig>(config);
+  let config: AppConfig = do_load_config();
+  states.set::<AppConfig>(config);
 }
 ```
 
@@ -98,9 +100,9 @@ account. If a rule is broken, we panic during compilation.
 
 ```rust
 async fn load_config(
-	states: starship::States,
-	resources: starship::Resources,
-	emitters: starship::Emitters,
+  states: starship::States,
+  resources: starship::Resources,
+  emitters: starship::Emitters,
 ) -> starship::SystemResult {
     let mut states = states.write().await;
     {

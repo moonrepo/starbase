@@ -1,4 +1,11 @@
+use starship::errors::Diagnostic;
 use starship::{App, Emitters, IntoDiagnostic, MainResult, Resources, State, States, SystemResult};
+use thiserror::Error;
+
+#[derive(Debug, Diagnostic, Error)]
+#[error("this error")]
+#[diagnostic(code(oops::my::bad), help("miette error"))]
+struct TestError {}
 
 #[derive(Debug, State)]
 struct Test(String);
@@ -40,6 +47,11 @@ async fn fin(states: States, _resources: Resources, _emitters: Emitters) -> Syst
     Ok(())
 }
 
+async fn fail(_states: States, _resources: Resources, _emitters: Emitters) -> SystemResult {
+    println!("fail");
+    Err(TestError {})?
+}
+
 #[tokio::main]
 async fn main() -> MainResult {
     let mut app = App::new();
@@ -47,8 +59,9 @@ async fn main() -> MainResult {
     app.analyze(anal1);
     app.startup(start1);
     app.startup(start2);
+    app.execute(fail);
 
-    let ctx = app.run().await.unwrap();
+    let ctx = app.run().await?;
     dbg!(ctx);
 
     Ok(())

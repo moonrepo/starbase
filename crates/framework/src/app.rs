@@ -4,7 +4,6 @@ use crate::events::{EmitterInstance, EmitterManager, Emitters};
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
 use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};
-use futures::future::try_join_all;
 use miette::IntoDiagnostic;
 use std::any::Any;
 use std::mem;
@@ -240,19 +239,19 @@ impl App {
             let states = Arc::clone(&states);
             let resources = Arc::clone(&resources);
             let emitters = Arc::clone(&emitters);
-            let permit = Arc::clone(&semaphore)
-                .acquire_owned()
-                .await
-                .into_diagnostic()?;
+            let semaphore = Arc::clone(&semaphore);
 
             futures.push(task::spawn(async move {
+                let permit = semaphore.acquire().await.into_diagnostic()?;
                 let result = system.run(states, resources, emitters).await;
                 drop(permit);
                 result
             }));
         }
 
-        try_join_all(futures).await.into_diagnostic()?;
+        for future in futures {
+            future.await.into_diagnostic()??;
+        }
 
         Ok(())
     }
