@@ -252,6 +252,89 @@ async fn write_state(touched_files: StateMut<TouchedFiles>) {
 
 ## Resources
 
+Resources are components that represent compound data structures as complex structs, and are akin to
+instance singletons in other languages. Some examples of resources are project graphs, dependency
+trees, plugin registries, cache engines, etc.
+
+Every resource must derive `Resource`.
+
+```rust
+use starship::Resource;
+use std::path::PathBuf;
+
+#[derive(Debug, Resource)]
+pub struct ProjectGraph {
+  pub nodes; // ...
+  pub edges; // ...
+}
+```
+
+> The `Resource` derive macro automatically implements `AsRef`. In the future, we may implement
+> other traits deemed necessary.
+
+### Adding resources
+
+Resources can be added directly to the application instance (before the run cycle has started), or
+through the `ResourcesMut` system parameter.
+
+```rust
+app.set_resource(ProjectGraph::new());
+```
+
+```rust
+#[system]
+async fn create_graph(resources: ResourcesMut) {
+  resources.set(ProjectGraph::new());
+}
+```
+
+### Reading resources
+
+The `ResourcesRef` system parameter can be used to acquire read access to the entire resources
+manager. It _cannot_ be used alongside `ResourcesMut`, `ResourceRef`, or `ResourceMut`.
+
+```rust
+#[system]
+async fn read_resources(resources: ResourcesRef) {
+  let project_graph = resources.get::<ProjectGraph>();
+}
+```
+
+Alternatively, the `ResourceRef` system parameter can be used to immutably read an individual value
+from the resources manager. Multiple `ResourceRef`s can be used together, but cannot be used with
+`ResourceMut`.
+
+```rust
+#[system]
+async fn read_resources(project_graph: ResourceRef<ProjectGraph>, cache: ResourceRef<CacheEngine>) {
+  let projects = project_graph.load_from_cache(cache).await?;
+}
+```
+
+### Writing resources
+
+The `ResourcesMut` system parameter can be used to acquire write access to the entire resources
+manager. It _cannot_ be used alongside `ResourcesRef`, `ResourceRef` or `ResourceMut`.
+
+```rust
+#[system]
+async fn write_resources(resources: ResourcesMut) {
+  resources.set(ProjectGraph::new());
+  resources.set(CacheEngine::new());
+}
+```
+
+Furthermore, the `ResourceMut` system parameter can be used to mutably access an individual value.
+Only 1 `ResourceMut` can be used in a system, and no other resource related system parameters can be
+used.
+
+```rust
+#[system]
+async fn write_resource(cache: ResourceMut<CacheEngine>) {
+  let item = cache.load_hash(some_hash).await?;
+}
+```
+
 ## Emitters
 
 # How to
