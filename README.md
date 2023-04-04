@@ -4,9 +4,13 @@ Starship is a framework for building performant command line applications or pro
 It takes heavy inspiration from the popular
 [ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system) but works quite differently.
 
-- **Async-first** powered by Tokio's runtime.
-- **Event-driven** architecture to decouple and isolate crates.
-- **Thread-safe** systems for easy processing.
+A starship is built with the following modules:
+
+- **Reactor core** - Async-first powered by the `tokio` runtime.
+- **Warp drive** - Thread-safe concurrent systems for easy processing.
+- **Communication array** - Event-driven architecture to decouple and isolate crates.
+- **Shield generator** - ???
+- **Navigation sensors** -
 
 ### Roadmap
 

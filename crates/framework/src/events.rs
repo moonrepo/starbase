@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub type EventResult<E> = anyhow::Result<EventState<<E as Event>::Value>>;
+pub type EventResult<E> = miette::Result<EventState<<E as Event>::Value>>;
 
 pub trait Event: Send + Sync {
     type Value;
@@ -106,7 +106,7 @@ impl<E: Event + 'static> Emitter<E> {
         self
     }
 
-    pub async fn emit(&mut self, mut event: E) -> anyhow::Result<(E, Option<E::Value>)> {
+    pub async fn emit(&mut self, mut event: E) -> miette::Result<(E, Option<E::Value>)> {
         let mut result = None;
         let mut remove_indices = FxHashSet::default();
 
@@ -144,7 +144,7 @@ impl EmitterManager {
     pub async fn emit<E: Event + 'static>(
         &mut self,
         event: E,
-    ) -> anyhow::Result<(E, Option<E::Value>)> {
+    ) -> miette::Result<(E, Option<E::Value>)> {
         self.get_mut::<Emitter<E>>().emit(event).await
     }
 }

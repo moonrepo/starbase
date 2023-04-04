@@ -1,9 +1,11 @@
 use crate::app_state::*;
+use crate::errors::AppResult;
 use crate::events::{EmitterInstance, EmitterManager, Emitters};
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
 use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};
 use futures::future::try_join_all;
+use miette::IntoDiagnostic;
 use std::any::Any;
 use std::mem;
 use std::sync::Arc;
@@ -117,7 +119,7 @@ impl App {
     }
 
     /// Start the application and run all registered systems grouped into phases.
-    pub async fn run(&mut self) -> anyhow::Result<StateManager> {
+    pub async fn run(&mut self) -> miette::Result<StateManager> {
         let emitters = Arc::new(RwLock::new(mem::take(&mut self.emitters)));
         let resources = Arc::new(RwLock::new(mem::take(&mut self.resources)));
         let states = Arc::new(RwLock::new(mem::take(&mut self.states)));
@@ -173,7 +175,7 @@ impl App {
         states: States,
         resources: Resources,
         emitters: Emitters,
-    ) -> anyhow::Result<()> {
+    ) -> AppResult {
         let systems = mem::take(&mut self.startups);
 
         self.run_systems_in_serial(systems, states, resources, emitters)
@@ -187,7 +189,7 @@ impl App {
         states: States,
         resources: Resources,
         emitters: Emitters,
-    ) -> anyhow::Result<()> {
+    ) -> AppResult {
         let systems = mem::take(&mut self.analyzers);
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
@@ -201,7 +203,7 @@ impl App {
         states: States,
         resources: Resources,
         emitters: Emitters,
-    ) -> anyhow::Result<()> {
+    ) -> AppResult {
         let systems = mem::take(&mut self.executors);
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
@@ -215,7 +217,7 @@ impl App {
         states: States,
         resources: Resources,
         emitters: Emitters,
-    ) -> anyhow::Result<()> {
+    ) -> AppResult {
         let systems = mem::take(&mut self.shutdowns);
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
@@ -230,7 +232,7 @@ impl App {
         states: States,
         resources: Resources,
         emitters: Emitters,
-    ) -> anyhow::Result<()> {
+    ) -> AppResult {
         let mut futures = vec![];
         let semaphore = Arc::new(Semaphore::new(num_cpus::get()));
 
@@ -238,7 +240,10 @@ impl App {
             let states = Arc::clone(&states);
             let resources = Arc::clone(&resources);
             let emitters = Arc::clone(&emitters);
-            let permit = Arc::clone(&semaphore).acquire_owned().await?;
+            let permit = Arc::clone(&semaphore)
+                .acquire_owned()
+                .await
+                .into_diagnostic()?;
 
             futures.push(task::spawn(async move {
                 let result = system.run(states, resources, emitters).await;
@@ -247,7 +252,7 @@ impl App {
             }));
         }
 
-        try_join_all(futures).await?;
+        try_join_all(futures).await.into_diagnostic()?;
 
         Ok(())
     }
@@ -258,7 +263,7 @@ impl App {
         states: States,
         resources: Resources,
         emitters: Emitters,
-    ) -> anyhow::Result<()> {
+    ) -> AppResult {
         for system in systems {
             let states = Arc::clone(&states);
             let resources = Arc::clone(&resources);

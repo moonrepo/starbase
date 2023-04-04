@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use core::future::Future;
 use std::fmt::Debug;
 
-pub type SystemResult = anyhow::Result<()>;
+pub type SystemResult = miette::Result<()>;
 
 #[async_trait]
 pub trait System: Debug + Send + Sync {

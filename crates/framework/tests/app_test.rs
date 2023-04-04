@@ -1,3 +1,4 @@
+use miette::IntoDiagnostic;
 use starship::{App, AppState, Emitters, Resources, States, SystemResult};
 use starship_macros::*;
 use std::time::Duration;
@@ -29,7 +30,8 @@ async fn system_with_thread(
             .get_mut::<RunOrder>()
             .push("async-function-thread".into());
     })
-    .await?;
+    .await
+    .into_diagnostic()?;
 
     Ok(())
 }
@@ -84,7 +86,8 @@ mod startup {
                     let order = states.get_mut::<RunOrder>();
                     order.push("async-closure-thread".into());
                 })
-                .await?;
+                .await
+                .into_diagnostic()?;
 
                 Ok(())
             },
@@ -173,7 +176,8 @@ mod analyze {
                     let order = states.get_mut::<RunOrder>();
                     order.push("async-closure-thread".into());
                 })
-                .await?;
+                .await
+                .into_diagnostic()?;
 
                 Ok(())
             },
@@ -292,7 +296,8 @@ mod execute {
                     let order = states.get_mut::<RunOrder>();
                     order.push("async-closure-thread".into());
                 })
-                .await?;
+                .await
+                .into_diagnostic()?;
 
                 Ok(())
             },
@@ -424,7 +429,8 @@ mod shutdown {
                     let order = states.get_mut::<RunOrder>();
                     order.push("async-closure-thread".into());
                 })
-                .await?;
+                .await
+                .into_diagnostic()?;
 
                 Ok(())
             },
