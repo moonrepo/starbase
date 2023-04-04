@@ -163,7 +163,92 @@ app.add_system(Phase::Shutdown, system_instance);
 
 # Components
 
+Components are values that live for the duration of the application (`'static`) and are stored
+internally as `Any` instances, ensuring strict uniqueness. Components are dividied into 3
+categories:
+
+- States - Granular values.
+- Resources - Compound values / singleton instances.
+- Emitters - Per-event emitters.
+
 ## States
+
+States are components that represent granular pieces of data, are typically implemented with a tuple
+or unit struct, and must derive `State`. For example, say we want to track the workspace root.
+
+```rust
+use starship::State;
+use std::path::PathBuf;
+
+#[derive(Debug, State)]
+pub struct WorkspaceRoot(PathBuf);
+```
+
+> The `State` derive macro automatically implements `AsRef`, `Deref`, and `DerefMut` when
+> applicable. In the future, we may implement other traits deemed necessary.
+
+### Adding state
+
+States can be added directly to the application instance (before the run cycle has started), or
+through the `StatesMut` system parameter.
+
+```rust
+app.set_state(WorkspaceRoot(PathBuf::from("/")));
+```
+
+```rust
+#[system]
+async fn detect_root(states: StatesMut) {
+  states.set(WorkspaceRoot(PathBuf::from("/")));
+}
+```
+
+### Reading state
+
+The `StatesRef` system parameter can be used to acquire read access to the entire states manager. It
+_cannot_ be used alongside `StatesMut`, `StateRef`, or `StateMut`.
+
+```rust
+#[system]
+async fn read_states(states: StatesRef) {
+  let workspace_root = states.get::<WorkspaceRoot>();
+}
+```
+
+Alternatively, the `StateRef` system parameter can be used to immutably read an individual value
+from the states manager. Multiple `StateRef`s can be used together, but cannot be used with
+`StateMut`.
+
+```rust
+#[system]
+async fn read_states(workspace_root: StateRef<WorkspaceRoot>, project: StateRef<Project>) {
+  let project_root = workspace_root.join(project.source);
+}
+```
+
+### Writing state
+
+The `StatesMut` system parameter can be used to acquire write access to the entire states manager.
+It _cannot_ be used alongside `StatesRef`, `StateRef` or `StateMut`.
+
+```rust
+#[system]
+async fn write_states(states: StatesMut) {
+  states.set(SomeState);
+  states.set(AnotherState);
+}
+```
+
+Furthermore, the `StateMut` system parameter can be used to mutably access an individual value,
+allowing for the value (or its inner value) to be modified. Only 1 `StateMut` can be used in a
+system, and no other state related system parameters can be used.
+
+```rust
+#[system]
+async fn write_state(touched_files: StateMut<TouchedFiles>) {
+  touched_files.push(another_path);
+}
+```
 
 ## Resources
 
