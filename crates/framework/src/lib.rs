@@ -9,7 +9,7 @@ mod system;
 
 pub use app::*;
 pub use app_state::AppState;
-pub use errors::{AppResult, Diagnostic, IntoDiagnostic, MainResult};
+pub use errors::{Diagnostic, IntoDiagnostic};
 pub use events::*;
 pub use resources::*;
 pub use starship_macros::*;

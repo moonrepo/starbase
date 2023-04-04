@@ -1,5 +1,4 @@
 use crate::app_state::*;
-use crate::errors::AppResult;
 use crate::events::{EmitterInstance, EmitterManager, Emitters};
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
@@ -10,6 +9,9 @@ use std::mem;
 use std::sync::Arc;
 use tokio::sync::{RwLock, Semaphore};
 use tokio::task;
+
+pub type AppResult = miette::Result<()>;
+pub type MainResult = miette::Result<()>;
 
 #[derive(Debug, Default)]
 pub enum Phase {
