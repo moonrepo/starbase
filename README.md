@@ -130,6 +130,7 @@ Additional benefits of `#[system]` are:
 - Parameters can be entirely ommitted if not required.
 - Avoids writing `read().await` and `write().await` over and over.
 - Avoids importing all necessary types/structs/etc. We compile to fully qualified paths.
+- Functions are automatically wrapped for instrumentation.
 
 Jump to the [components](#components) section for a full list of supported system parameters.
 
@@ -553,13 +554,16 @@ layers of the application, from systems, to events, and the application itself, 
 `miette::Result` type. This allows for errors to be easily converted to diagnostics, and for miette
 to automatically render to the terminal for errors and panics.
 
-To benefit from this, update your `main` function to return `MainResult`.
+To benefit from this, update your `main` function to return `MainResult`, and call
+`App::setup_hook()` to register error/panic handlers.
 
 ```rust
 use starship::MainResult;
 
 #[tokio::main]
 async fn main() -> MainResult {
+  App::setup_hook();
+
   let mut app = App::new();
   // ...
   app.run().await?;
