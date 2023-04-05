@@ -1,10 +1,7 @@
 # starship
 
-Starship is a framework for building performant command line applications or processing pipelines.
-It takes heavy inspiration from the popular
-[ECS pattern](https://en.wikipedia.org/wiki/Entity_component_system) but works quite differently.
-
-A starship is built with the following modules:
+Starship is a framework for building performant command line applications and developer tools. A
+starship is built with the following modules:
 
 - **Reactor core** - Async-first powered by the `tokio` runtime.
 - **Warp drive** - Thread-safe concurrent systems for easy processing.
@@ -20,7 +17,7 @@ Some things I have yet to resolve... help appreciated!
    use channels because we need to mutate the event in listeners, and we also need to support async.
 
 2. Async functions cannot be registered as listeners to `on()` or `once()` because of "mismatched
-   but equal" lifetime issues. This is the following error:
+   but equal" lifetime issues, which I've been unable to track down. This is the following error:
 
 ```
 error[E0308]: mismatched types
@@ -68,7 +65,7 @@ and are processed (only once) during the applications run cycle. Systems receive
 > component (C) parts.
 
 ```rust
-use starship::{States, Resources, Emitters, MainResult, SystemResult};
+use starship::{App, States, Resources, Emitters, MainResult, SystemResult};
 
 async fn load_config(states: States, resources: Resources, emitters: Emitters) -> SystemResult {
   let states = states.write().await;
@@ -81,6 +78,8 @@ async fn load_config(states: States, resources: Resources, emitters: Emitters) -
 
 #[tokio::main]
 async fn main() -> MainResult {
+  App::setup_hooks();
+
   let mut app = App::new();
   app.startup(load_config);
   app.run().await?;
@@ -558,7 +557,7 @@ To benefit from this, update your `main` function to return `MainResult`, and ca
 `App::setup_hook()` to register error/panic handlers.
 
 ```rust
-use starship::MainResult;
+use starship::{App, MainResult};
 
 #[tokio::main]
 async fn main() -> MainResult {
