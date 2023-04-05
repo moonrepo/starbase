@@ -57,6 +57,8 @@ impl App {
 
     pub fn setup_hooks() {
         miette::set_panic_hook();
+
+        #[cfg(feature = "tracing")]
         tracing_subscriber::fmt::init();
     }
 

@@ -297,8 +297,16 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let emitter_param = emitters.generate_param_name();
     let emitter_quotes = emitters.generate_quotes();
 
+    let attributes = if cfg!(feature = "tracing") {
+        quote! {
+            #[starship::trace::instrument(skip_all)]
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
-        #[starship::trace::instrument(skip_all)]
+        #attributes
         #func_vis async fn #func_name(
             #state_param: starship::States,
             #resource_param: starship::Resources,

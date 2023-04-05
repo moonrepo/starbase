@@ -10,18 +10,7 @@ A starship is built with the following modules:
 - **Warp drive** - Thread-safe concurrent systems for easy processing.
 - **Communication array** - Event-driven architecture to decouple and isolate crates.
 - **Shield generator** - Native diagnostics and reports with `miette`.
-- **Navigation sensors** -
-
-### Roadmap
-
-- [x] Async application layer built on `tokio`
-  - [x] Systems
-  - [x] States/resources
-  - [x] Event emitters
-- [ ] Logging + tracing via the `tracing` crate
-  - [ ] Include `metrics`?
-- [x] Error handling + diagnostics via the `miette` crate
-  - [x] Replace `anyhow`
+- **Navigation sensors** - Span based instrumentation and logging with `tracing`.
 
 ### Current issues
 

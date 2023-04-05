@@ -21,6 +21,7 @@ pub mod diagnose {
     pub use thiserror::Error;
 }
 
+#[cfg(feature = "tracing")]
 pub mod trace {
     pub use tracing::*;
 }
