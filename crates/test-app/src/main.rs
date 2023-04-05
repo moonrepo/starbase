@@ -1,6 +1,6 @@
-use starship::errors::Diagnostic;
-use starship::{App, Emitters, IntoDiagnostic, MainResult, Resources, State, States, SystemResult};
-use thiserror::Error;
+use starship::diagnose::{Diagnostic, Error, IntoDiagnostic};
+use starship::trace::{debug, info, warn};
+use starship::{system, App, MainResult, State};
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {
@@ -10,61 +10,56 @@ enum AppError {
 }
 
 #[derive(Debug, State)]
-struct Test(String);
+struct Test(pub String);
 
-async fn start1(states: States, _resources: Resources, _emitters: Emitters) -> SystemResult {
-    let mut states = states.write().await;
-    println!("startup 1");
+#[system]
+async fn start_one(states: StatesMut) {
+    info!("startup 1");
     states.set(Test("original".into()));
-    Ok(())
+    debug!("startup 1");
 }
 
-async fn start2(states: States, _resources: Resources, _emitters: Emitters) -> SystemResult {
+#[system]
+async fn start_two(states: States, _resources: Resources, _emitters: Emitters) {
     tokio::spawn(async move {
         let states = states.read().await;
-        println!("startup 2");
+        info!("startup 2");
         let state = states.get::<Test>();
         dbg!(state);
     })
     .await
     .into_diagnostic()?;
-
-    Ok(())
 }
 
-async fn anal1(states: States, _resources: Resources, _emitters: Emitters) -> SystemResult {
-    let mut states = states.write().await;
-    println!("analyze");
-    let state = states.get_mut::<Test>();
+#[system]
+async fn analyze_one(state: StateMut<Test>) {
+    info!(val = state.0, "analyze");
     **state = "mutated".to_string();
-    Ok(())
 }
 
-async fn fin(states: States, _resources: Resources, _emitters: Emitters) -> SystemResult {
-    let states = states.read().await;
-    println!("shutdown");
-    let state = states.get::<Test>();
+#[system]
+async fn finish(state: StateRef<Test>) {
+    info!(val = state.0, "shutdown");
     dbg!(state);
-
-    Ok(())
 }
 
-async fn fail(_states: States, _resources: Resources, _emitters: Emitters) -> SystemResult {
+#[system]
+async fn fail() {
     if std::env::var("FAIL").is_ok() {
-        println!("fail");
+        warn!("fail");
         return Err(AppError::Test)?;
     }
-
-    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> MainResult {
+    App::setup_hooks();
+
     let mut app = App::new();
-    app.shutdown(fin);
-    app.analyze(anal1);
-    app.startup(start1);
-    app.startup(start2);
+    app.shutdown(finish);
+    app.analyze(analyze_one);
+    app.startup(start_one);
+    app.startup(start_two);
     app.execute(fail);
 
     let ctx = app.run().await?;

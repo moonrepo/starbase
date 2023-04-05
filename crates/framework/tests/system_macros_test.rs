@@ -142,6 +142,11 @@ async fn write_all_managers(states: StatesMut, resources: ResourcesMut, emitters
 // MISC
 
 #[system]
+fn default_params_renamed(a: States, b: Resources, c: Emitters) {
+    dbg!(a, b, c);
+}
+
+#[system]
 fn no_args() {
     dbg!("none");
 }

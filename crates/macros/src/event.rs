@@ -23,6 +23,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
     };
 
     quote! {
+        #[automatically_derived]
         impl starship::Event for #struct_name {
             type Value = #value_type;
         }

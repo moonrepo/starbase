@@ -6,9 +6,15 @@ edition = "2021"
 [dependencies]
 starship_macros = { path = "../macros" }
 async-trait = "0.1.68"
-futures = "0.3.28"
 miette = "5.7.0"
 num_cpus = "1.15.0"
 relative-path = "1.8.0"
 rustc-hash = "1.1.0"
+thiserror = "1.0.40"
 tokio = { version = "1.27.0", features = ["full", "tracing"] }
+tracing = { version = "0.1.37", optional = true }
+tracing-subscriber = { version = "0.3.16", optional = true }
+
+[features]
+default = ["tracing"]
+tracing = ["dep:tracing", "dep:tracing-subscriber", "starship_macros/tracing"]

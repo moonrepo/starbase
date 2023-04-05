@@ -1,3 +1,7 @@
+// Creates a simple `Any` map registry of objects by type.
+// These methods `panic!` because it immediately bubbles up that
+// the order of operations for application state is wrong, and
+// that systems should be registered correctly.
 #[macro_export]
 macro_rules! create_instance_manager {
     ($manager:ident, $type:ident) => {

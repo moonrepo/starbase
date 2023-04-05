@@ -10,18 +10,7 @@ A starship is built with the following modules:
 - **Warp drive** - Thread-safe concurrent systems for easy processing.
 - **Communication array** - Event-driven architecture to decouple and isolate crates.
 - **Shield generator** - Native diagnostics and reports with `miette`.
-- **Navigation sensors** -
-
-### Roadmap
-
-- [x] Async application layer built on `tokio`
-  - [x] Systems
-  - [x] States/resources
-  - [x] Event emitters
-- [ ] Logging + tracing via the `tracing` crate
-  - [ ] Include `metrics`?
-- [x] Error handling + diagnostics via the `miette` crate
-  - [x] Replace `anyhow`
+- **Navigation sensors** - Span based instrumentation and logging with `tracing`.
 
 ### Current issues
 
@@ -141,6 +130,7 @@ Additional benefits of `#[system]` are:
 - Parameters can be entirely ommitted if not required.
 - Avoids writing `read().await` and `write().await` over and over.
 - Avoids importing all necessary types/structs/etc. We compile to fully qualified paths.
+- Functions are automatically wrapped for instrumentation.
 
 Jump to the [components](#components) section for a full list of supported system parameters.
 
@@ -564,13 +554,16 @@ layers of the application, from systems, to events, and the application itself, 
 `miette::Result` type. This allows for errors to be easily converted to diagnostics, and for miette
 to automatically render to the terminal for errors and panics.
 
-To benefit from this, update your `main` function to return `MainResult`.
+To benefit from this, update your `main` function to return `MainResult`, and call
+`App::setup_hook()` to register error/panic handlers.
 
 ```rust
 use starship::MainResult;
 
 #[tokio::main]
 async fn main() -> MainResult {
+  App::setup_hook();
+
   let mut app = App::new();
   // ...
   app.run().await?;
