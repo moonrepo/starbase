@@ -203,7 +203,7 @@ async fn detect_root(states: StatesMut) {
 }
 ```
 
-### Reading state
+### Readable state
 
 The `StatesRef` system parameter can be used to acquire read access to the entire states manager. It
 _cannot_ be used alongside `StatesMut`, `StateRef`, or `StateMut`.
@@ -226,7 +226,7 @@ async fn read_states(workspace_root: StateRef<WorkspaceRoot>, project: StateRef<
 }
 ```
 
-### Writing state
+### Writable state
 
 The `StatesMut` system parameter can be used to acquire write access to the entire states manager.
 It _cannot_ be used alongside `StatesRef`, `StateRef` or `StateMut`.
@@ -288,7 +288,7 @@ async fn create_graph(resources: ResourcesMut) {
 }
 ```
 
-### Reading resources
+### Readable resources
 
 The `ResourcesRef` system parameter can be used to acquire read access to the entire resources
 manager. It _cannot_ be used alongside `ResourcesMut`, `ResourceRef`, or `ResourceMut`.
@@ -311,7 +311,7 @@ async fn read_resources(project_graph: ResourceRef<ProjectGraph>, cache: Resourc
 }
 ```
 
-### Writing resources
+### Writable resources
 
 The `ResourcesMut` system parameter can be used to acquire write access to the entire resources
 manager. It _cannot_ be used alongside `ResourcesRef`, `ResourceRef` or `ResourceMut`.
@@ -337,7 +337,143 @@ async fn write_resource(cache: ResourceMut<CacheEngine>) {
 
 ## Emitters
 
+Emitters are components that can dispatch events to all registered listeners, allowing for
+non-coupled layers to interact with each other. Unlike states and resources that are implemented and
+registered individually, emitters are pre-built and provided by the starship `Emitter` struct, and
+instead the individual events themselves are implemented.
+
+Events must derive `Event`, or implement the `Event` trait. Events can be any type of struct, but
+the major selling point is that events are _mutable_, allowing inner content to be modified by
+listeners.
+
+```rust
+use starship::{Event, Emitter};
+use app::Project;
+
+#[derive(Debug, Event)]
+pub struct ProjectCreatedEvent(pub Project);
+
+let emitter = Emitter::<ProjectCreatedEvent>::new();
+```
+
+> Jump to the [how to section to learn more about emitting events](#event-emitting).
+
+### Adding emitters
+
+Emitters can be added directly to the application instance (before the run cycle has started), or
+through the `EmittersMut` system parameter.
+
+Each emitter represents a singular event, so the event type must be explicitly declared as a generic
+when creating a new emitter.
+
+```rust
+app.set_emitter(Emitter::<ProjectCreatedEvent>::new());
+```
+
+```rust
+#[system]
+async fn create_emitter(emitters: EmittersMut) {
+  emitters.set(Emitter::<ProjectCreatedEvent>::new());
+}
+```
+
+### Readable emitters
+
+Every method on `Emitter` requires a mutable self, so no system parameters exist for immutably
+reading an emitter.
+
+### Writable emitters
+
+The `EmittersMut` system parameter can be used to acquire write access to the entire emitters
+manager, where new emitters can be registered, or existing emitters can emit an event. It _cannot_
+be used alongside `EmitterMut`.
+
+```rust
+#[system]
+async fn write_emitters(emitters: EmittersMut) {
+  // Add emitter
+  emitters.set(Emitter::<ProjectCreatedEvent>::new());
+
+  // Emit event
+  emitters.get_mut::<Emitter<ProjectCreatedEvent>().emit(ProjectCreatedEvent::new()).await?;
+
+  // Emit event shorthand
+  emitters.emit(ProjectCreatedEvent::new()).await?;
+}
+```
+
+Furthermore, the `EmitterMut` system parameter can be used to mutably access an individual emitter.
+Only 1 `EmitterMut` can be used in a system, and no other emitter related system parameters can be
+used.
+
+```rust
+#[system]
+async fn write_emitter(project_created: EmitterMut<ProjectCreatedEvent>) {
+  project_created.emit(ProjectCreatedEvent::new()).await?;
+}
+```
+
 # How to
+
+## Event emitting
+
+TODO
+
+## Using listeners
+
+Listeners are async functions or structs that implement `Listener`, are registered into an emitter,
+and are executed when an `Emitter` emits an event. They are passed the event object as a mutable
+parameter, allowing for the inner data to be modified.
+
+```rust
+use starship::{EventResult, EventState};
+
+async fn listener(event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreatedEvent> {
+  event.0.root = new_path;
+  Ok(EventState::Continue)
+}
+
+// TODO: These currently don't work because of lifetime issues!
+emitter.on(listener); // Runs multiple times
+emitter.once(listener); // Only runs once
+```
+
+```rust
+use starship::{EventResult, EventState, Listener};
+
+struct TestListener;
+
+#[async_trait]
+impl Listener<ProjectCreatedEvent> for TestListener {
+  fn is_once(&self) -> bool {
+    false
+  }
+
+  async fn on_emit(&mut self, event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreatedEvent> {
+    event.0.root = new_path;
+    Ok(EventState::Continue)
+  }
+}
+
+emitter.listen(TestListener);
+```
+
+As a temporary solution for async function lifetime issues, we provide a `#[listener]` function
+attribute, which will convert the function to a `Listener` struct internally. The major drawback is
+that the function name is lost, and the new struct name must be passed to `listen()`.
+
+```rust
+use starship::{EventResult, EventState, listener};
+
+#[listener]
+async fn some_func(event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreatedEvent> {
+  event.0.root = new_path;
+  Ok(EventState::Continue)
+}
+
+// Rename to...
+emitter.listen(SomeFuncListener);
+```
 
 ## Error handling
 
