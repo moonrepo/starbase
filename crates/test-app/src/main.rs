@@ -1,6 +1,6 @@
 use starship::diagnose::{Diagnostic, Error, IntoDiagnostic};
 use starship::trace::{debug, info, warn};
-use starship::{system, App, Emitters, MainResult, Resources, State, States, SystemResult};
+use starship::{system, App, MainResult, State};
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {
@@ -19,7 +19,8 @@ async fn start_one(states: StatesMut) {
     debug!("startup 1");
 }
 
-async fn start_two(states: States, _resources: Resources, _emitters: Emitters) -> SystemResult {
+#[system]
+async fn start_two(states: States, _resources: Resources, _emitters: Emitters) {
     tokio::spawn(async move {
         let states = states.read().await;
         info!("startup 2");
@@ -28,8 +29,6 @@ async fn start_two(states: States, _resources: Resources, _emitters: Emitters) -
     })
     .await
     .into_diagnostic()?;
-
-    Ok(())
 }
 
 #[system]

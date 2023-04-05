@@ -35,6 +35,7 @@ impl InstanceType {
 }
 
 struct InstanceTracker<'l> {
+    param_name: Option<&'l Ident>,
     acquire_as: Option<&'l Ident>,
     manager_call: Option<SystemParam<'l>>,
     mut_calls: BTreeMap<&'l Ident, SystemParam<'l>>,
@@ -45,12 +46,17 @@ struct InstanceTracker<'l> {
 impl<'l> InstanceTracker<'l> {
     pub fn new(type_of: InstanceType) -> Self {
         Self {
+            param_name: None,
             acquire_as: None,
             manager_call: None,
             mut_calls: BTreeMap::new(),
             ref_calls: BTreeMap::new(),
             type_of,
         }
+    }
+
+    pub fn set_param(&mut self, name: &'l Ident) {
+        self.param_name = Some(name);
     }
 
     pub fn set_manager(&mut self, name: &'l Ident, param: SystemParam<'l>) {
@@ -104,6 +110,12 @@ impl<'l> InstanceTracker<'l> {
         }
     }
 
+    pub fn generate_param_name(&self) -> Ident {
+        self.param_name
+            .map(|n| n.to_owned())
+            .unwrap_or_else(|| format_ident!("{}", self.type_of.param_name()))
+    }
+
     pub fn generate_quotes(self) -> Vec<proc_macro2::TokenStream> {
         let mut quotes = vec![];
 
@@ -111,7 +123,7 @@ impl<'l> InstanceTracker<'l> {
             return quotes;
         }
 
-        let manager_param_name = format_ident!("{}", self.type_of.param_name());
+        let manager_param_name = self.generate_param_name();
         let manager_var_name = self
             .acquire_as
             .map(|n| n.to_owned())
@@ -213,14 +225,23 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
 
                 if segment.arguments.is_empty() {
                     match type_wrapper.as_ref() {
+                        "Emitters" => {
+                            emitters.set_param(var_name);
+                        }
                         "EmittersMut" => {
                             emitters.set_manager(var_name, SystemParam::ManagerMut);
+                        }
+                        "Resources" => {
+                            resources.set_param(var_name);
                         }
                         "ResourcesMut" => {
                             resources.set_manager(var_name, SystemParam::ManagerMut);
                         }
                         "ResourcesRef" => {
                             resources.set_manager(var_name, SystemParam::ManagerRef);
+                        }
+                        "States" => {
+                            states.set_param(var_name);
                         }
                         "StatesMut" => {
                             states.set_manager(var_name, SystemParam::ManagerMut);
@@ -269,16 +290,19 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
         };
     }
 
+    let state_param = states.generate_param_name();
     let state_quotes = states.generate_quotes();
+    let resource_param = resources.generate_param_name();
     let resource_quotes = resources.generate_quotes();
+    let emitter_param = emitters.generate_param_name();
     let emitter_quotes = emitters.generate_quotes();
 
     quote! {
         #[starship::trace::instrument(skip_all)]
         #func_vis async fn #func_name(
-            states: starship::States,
-            resources: starship::Resources,
-            emitters: starship::Emitters
+            #state_param: starship::States,
+            #resource_param: starship::Resources,
+            #emitter_param: starship::Emitters
         ) -> starship::SystemResult {
             #(#state_quotes)*
             #(#resource_quotes)*
