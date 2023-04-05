@@ -23,6 +23,27 @@ A starship is built with the following modules:
 - [x] Error handling + diagnostics via the `miette` crate
   - [x] Replace `anyhow`
 
+### Current issues
+
+Some things I have yet to resolve... help appreciated!
+
+1. I'm not entirely sure if the event emitter implementation is the best choice to go with. We can't
+   use channels because we need to mutate the event in listeners, and we also need to support async.
+
+2. Async functions cannot be registered as listeners to `on()` or `once()` because of "mismatched
+   but equal" lifetime issues. This is the following error:
+
+```
+error[E0308]: mismatched types
+  --> crates/framework/tests/events_test.rs:179:5
+    |
+179 |     emitter.on(callback_func);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ one type is more general than the other
+    |
+    = note: expected trait `for<'a> <for<'a> fn(&'a mut TestEvent) -> impl Future<Output = Result<EventState<<TestEvent as starship::Event>::Value>, ErrReport>> {callback_func} as FnOnce<(&'a mut TestEvent,)>>`
+               found trait `for<'a> <for<'a> fn(&'a mut TestEvent) -> impl Future<Output = Result<EventState<<TestEvent as starship::Event>::Value>, ErrReport>> {callback_func} as FnOnce<(&'a mut TestEvent,)>>`
+```
+
 # Core
 
 ## Phases
@@ -417,9 +438,7 @@ async fn write_emitter(project_created: EmitterMut<ProjectCreatedEvent>) {
 
 ## Event emitting
 
-TODO
-
-## Using listeners
+### Using listeners
 
 Listeners are async functions or structs that implement `Listener`, are registered into an emitter,
 and are executed when an `Emitter` emits an event. They are passed the event object as a mutable
@@ -440,6 +459,7 @@ emitter.once(listener); // Only runs once
 
 ```rust
 use starship::{EventResult, EventState, Listener};
+use async_trait::async_trait;
 
 struct TestListener;
 
@@ -458,9 +478,10 @@ impl Listener<ProjectCreatedEvent> for TestListener {
 emitter.listen(TestListener);
 ```
 
-As a temporary solution for async function lifetime issues, we provide a `#[listener]` function
-attribute, which will convert the function to a `Listener` struct internally. The major drawback is
-that the function name is lost, and the new struct name must be passed to `listen()`.
+As a temporary solution for async function lifetime issues, we provide `#[listener]` and
+`#[listener(once)]` function attributes, which will convert the function to a `Listener` struct
+internally. The major drawback is that the function name is lost, and the new struct name must be
+passed to `listen()`.
 
 ```rust
 use starship::{EventResult, EventState, listener};
@@ -474,6 +495,67 @@ async fn some_func(event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreate
 // Rename to...
 emitter.listen(SomeFuncListener);
 ```
+
+### Controlling the event flow
+
+Listeners can control this emit execution flow by returning `EventState`, which supports the
+following variants:
+
+- `Continue` - Continues to the next listener.
+- `Stop` - Stops after this listener, discarding subsequent listeners.
+- `Return` - Like `Stop` but also returns a value for interception.
+
+```rust
+async fn continue_flow(event: &mut CacheCheckEvent) -> EventResult<CacheCheckEvent> {
+  Ok(EventState::Continue)
+}
+
+async fn stop_flow(event: &mut CacheCheckEvent) -> EventResult<CacheCheckEvent> {
+  Ok(EventState::Stop)
+}
+
+async fn return_flow(event: &mut CacheCheckEvent) -> EventResult<CacheCheckEvent> {
+  Ok(EventState::Return(path_to_cache)))
+}
+```
+
+For `Return` flows, the type of value returned is inferred from the event. By default the value is a
+unit type (`()`), but can be customized with `#[event]` or `type Value` when implementing manually.
+
+```rust
+use starship::{Event, Emitter};
+use std::path::PathBuf;
+
+#[derive(Event)]
+#[event(value = "PathBuf")]
+pub struct CacheCheckEvent(pub PathBuf);
+
+// OR
+pub struct CacheCheckEvent(pub PathBuf);
+
+impl Event for CacheCheckEvent {
+  type Value = PathBuf;
+}
+```
+
+### Emitting and results
+
+When an event is emitted, listeners are executed sequentially in the same thread so that each
+listener can mutate the event if necessary. Because of this, events do not support references for
+inner values, and instead must own everything.
+
+An event can be emitted with the `emit()` method, which requires an owned event (and owned inner
+data).
+
+```rust
+let (event, result) = emitters.emit(ProjectCreatedEvent::new(owned_inner_data)).await?;
+
+// Take ownership of inner data
+let project = event.0;
+```
+
+Emitting returns a tuple, containing the final event after all modifications, and a result of type
+`Option<Event::Value>` (which is provided with `EventState::Return`).
 
 ## Error handling
 

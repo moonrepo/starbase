@@ -1,12 +1,12 @@
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, Ident};
+use syn::{parse_macro_input, DeriveInput, Type};
 
 #[derive(FromDeriveInput, Default)]
 #[darling(default, attributes(event))]
 struct EventArgs {
-    value: Option<Ident>,
+    value: Option<Type>,
 }
 
 // #[derive(Event)]
