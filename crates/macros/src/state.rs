@@ -8,6 +8,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
     let struct_name = input.ident;
 
     let shared_impl = quote! {
+        #[automatically_derived]
         impl starship::StateInstance for #struct_name {
         }
     };
@@ -19,6 +20,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                 Fields::Unit | Fields::Named(_) => quote! {
                     #shared_impl
 
+                    #[automatically_derived]
                     impl AsRef<#struct_name> for #struct_name {
                         fn as_ref(&self) -> &#struct_name {
                             self
@@ -41,6 +43,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                         Type::Path(path) => match path.path.get_ident() {
                             Some(ident) => match ident.to_string().as_str() {
                                 "PathBuf" => Some(quote! {
+                                    #[automatically_derived]
                                     impl AsRef<std::path::Path> for #struct_name {
                                         fn as_ref(&self) -> &std::path::Path {
                                             &self.0
@@ -48,6 +51,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                                     }
                                 }),
                                 "RelativePathBuf" => Some(quote! {
+                                    #[automatically_derived]
                                     impl AsRef<starship::RelativePath> for #struct_name {
                                         fn as_ref(&self) -> &starship::RelativePath {
                                             &self.0
@@ -64,6 +68,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                     quote! {
                         #shared_impl
 
+                        #[automatically_derived]
                         impl std::ops::Deref for #struct_name {
                             type Target = #inner_type;
 
@@ -72,12 +77,14 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                             }
                         }
 
+                        #[automatically_derived]
                         impl std::ops::DerefMut for #struct_name {
                             fn deref_mut(&mut self) -> &mut Self::Target {
                                 &mut self.0
                             }
                         }
 
+                        #[automatically_derived]
                         impl AsRef<#inner_type> for #struct_name {
                             fn as_ref(&self) -> &#inner_type {
                                 &self.0

@@ -8,6 +8,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
     let struct_name = input.ident;
 
     let shared_impl = quote! {
+        #[automatically_derived]
         impl starship::ResourceInstance for #struct_name {
         }
     };
@@ -16,6 +17,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
         Data::Struct(_) => quote! {
             #shared_impl
 
+            #[automatically_derived]
             impl AsRef<#struct_name> for #struct_name {
                 fn as_ref(&self) -> &#struct_name {
                     self
