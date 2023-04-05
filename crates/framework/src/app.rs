@@ -39,8 +39,6 @@ pub struct App {
 impl App {
     #[allow(clippy::new_without_default)]
     pub fn new() -> App {
-        miette::set_panic_hook();
-
         let mut app = App {
             analyzers: vec![],
             emitters: EmitterManager::default(),
@@ -55,6 +53,11 @@ impl App {
         app.execute(start_execute_phase);
         app.shutdown(start_shutdown_phase);
         app
+    }
+
+    pub fn setup_hooks() {
+        miette::set_panic_hook();
+        tracing_subscriber::fmt::init();
     }
 
     /// Add a system function that runs during the startup phase.

@@ -274,7 +274,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let emitter_quotes = emitters.generate_quotes();
 
     quote! {
-        #[starship::trace::instrument(level = "trace", skip_all)]
+        #[starship::trace::instrument(skip_all)]
         #func_vis async fn #func_name(
             states: starship::States,
             resources: starship::Resources,
