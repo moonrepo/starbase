@@ -15,9 +15,9 @@ miette = { workspace = true }
 num_cpus = "1.15.0"
 relative-path = "1.8.0"
 rustc-hash = "1.1.0"
-thiserror = "1.0.40"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
-tracing = { version = "0.1.37", optional = true }
+tracing = { workspace = true, optional = true }
 tracing-subscriber = { version = "0.3.16", optional = true }
 
 [features]
