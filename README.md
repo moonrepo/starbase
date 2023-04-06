@@ -8,7 +8,7 @@ starbase is built with the following modules:
 
 - **Reactor core** - Async-first powered by the `tokio` runtime.
 - **Fusion cells** - Thread-safe concurrent systems for easy processing.
-- **Communication array** - Event-driven architecture to decouple and isolate crates.
+- **Communication array** - Event-driven architecture with `starbase_events`.
 - **Shield generator** - Native diagnostics and reports with `miette`.
 - **Navigation sensors** - Span based instrumentation and logging with `tracing`.
 
@@ -331,8 +331,8 @@ async fn write_resource(cache: ResourceMut<CacheEngine>) {
 
 Emitters are components that can dispatch events to all registered subscribers, allowing for
 non-coupled layers to interact with each other. Unlike states and resources that are implemented and
-registered individually, emitters are pre-built and provided by the starbase `Emitter` struct, and
-instead the individual events themselves are implemented.
+registered individually, emitters are pre-built and provided by the `starbase_events::Emitter`
+struct, and instead the individual events themselves are implemented.
 
 Events must derive `Event`, or implement the `Event` trait. Events can be any type of struct, but
 the major selling point is that events are _mutable_, allowing inner content to be modified by
@@ -347,8 +347,6 @@ pub struct ProjectCreatedEvent(pub Project);
 
 let emitter = Emitter::<ProjectCreatedEvent>::new();
 ```
-
-> Jump to the [how to section to learn more about emitting events](#event-emitting).
 
 ### Adding emitters
 
@@ -406,110 +404,6 @@ async fn write_emitter(project_created: EmitterMut<ProjectCreatedEvent>) {
 ```
 
 # How to
-
-## Event emitting
-
-### Using subscribers
-
-Subscribers are async functions that are registered into an emitter, and are executed when the
-emitter emits an event. They are passed the event object as a `Arc<RwLock<T>>`, allowing for event
-and its inner data to be accessed;
-
-```rust
-use starbase::{EventResult, EventState};
-
-async fn update_root(event: Arc<RwLock<ProjectCreatedEvent>>) -> EventResult<ProjectCreatedEvent> {
-  let event = event.write().await;
-
-  event.0.root = new_path;
-
-  Ok(EventState::Continue)
-}
-
-emitter.on(subscriber); // Runs multiple times
-emitter.once(subscriber); // Only runs once
-```
-
-Similar to `#[system]`, we offer a `#[subscriber]` function attribute that streamlines the function
-implementation. For example, the above subscriber can be rewritten as:
-
-```rust
-#[subscriber]
-async fn update_root(mut event: ProjectCreatedEvent) {
-  event.0.root = new_path;
-}
-```
-
-When using `#[subscriber]`, the following benefits apply:
-
-- The return type is optional.
-- The return value is optional if `EventState::Continue`.
-- Using `mut event` or `&mut Event` will acquire a write lock, otherwise a read lock.
-- Omitting the event parameter will not acquire any lock.
-
-### Controlling the event flow
-
-Subscribers can control this emit execution flow by returning `EventState`, which supports the
-following variants:
-
-- `Continue` - Continues to the next subscriber (default).
-- `Stop` - Stops after this subscriber, discarding subsequent subscribers.
-- `Return` - Like `Stop` but also returns a value for interception.
-
-```rust
-#[subscriber]
-async fn continue_flow(mut event: CacheCheckEvent) {
-  Ok(EventState::Continue)
-}
-
-#[subscriber]
-async fn stop_flow(mut event: CacheCheckEvent) {
-  Ok(EventState::Stop)
-}
-
-#[subscriber]
-async fn return_flow(mut event: CacheCheckEvent) {
-  Ok(EventState::Return(path_to_cache)))
-}
-```
-
-For `Return` flows, the type of value returned is inferred from the event. By default the value is a
-unit type (`()`), but can be customized with `#[event]` or `type Value` when implementing manually.
-
-```rust
-use starbase::{Event, Emitter};
-use std::path::PathBuf;
-
-#[derive(Event)]
-#[event(value = "PathBuf")]
-pub struct CacheCheckEvent(pub PathBuf);
-
-// OR
-pub struct CacheCheckEvent(pub PathBuf);
-
-impl Event for CacheCheckEvent {
-  type Value = PathBuf;
-}
-```
-
-### Emitting and results
-
-When an event is emitted, subscribers are executed sequentially in the same thread so that each
-subscriber can mutate the event if necessary. Because of this, events do not support references for
-inner values, and instead must own everything.
-
-An event can be emitted with the `emit()` method, which requires an owned event (and owned inner
-data).
-
-```rust
-let (event, result) = emitters.emit(ProjectCreatedEvent::new(owned_inner_data)).await?;
-
-// Take ownership of inner data
-let project = event.0;
-```
-
-Emitting returns a tuple, containing the final event after all modifications, and a result of type
-`Option<Event::Value>` (which is provided with `EventState::Return`).
 
 ## Error handling
 
