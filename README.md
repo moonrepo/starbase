@@ -420,7 +420,9 @@ use starbase::{EventResult, EventState};
 
 async fn listener(event: Arc<RwLock<ProjectCreatedEvent>>) -> EventResult<ProjectCreatedEvent> {
   let event = event.write().await;
+
   event.0.root = new_path;
+
   Ok(EventState::Continue)
 }
 
@@ -432,37 +434,41 @@ Similar to `#[system]`, we also offer a `#[listener]` function attribute that st
 function implementation. For example, the above listener can be rewritten as:
 
 ```rust
-use starbase::{EventResult, EventState, listener};
-
 #[listener]
 async fn listener(mut event: ProjectCreatedEvent) {
   event.0.root = new_path;
-  Ok(EventState::Continue)
 }
 ```
+
+When using `#[listener]`, the following benefits apply:
+
+- The return type is optional.
+- The return value is optional if `EventState::Continue`.
+- Using `mut event` or `&mut Event` will acquire a write lock, otherwise a read lock.
+- Omitting the event parameter will not acquire any lock.
 
 ### Controlling the event flow
 
 Listeners can control this emit execution flow by returning `EventState`, which supports the
 following variants:
 
-- `Continue` - Continues to the next listener.
+- `Continue` - Continues to the next listener (default).
 - `Stop` - Stops after this listener, discarding subsequent listeners.
 - `Return` - Like `Stop` but also returns a value for interception.
 
 ```rust
 #[listener]
-async fn continue_flow(event: &mut CacheCheckEvent) {
+async fn continue_flow(mut event: CacheCheckEvent) {
   Ok(EventState::Continue)
 }
 
 #[listener]
-async fn stop_flow(event: &mut CacheCheckEvent) {
+async fn stop_flow(mut event: CacheCheckEvent) {
   Ok(EventState::Stop)
 }
 
 #[listener]
-async fn return_flow(event: &mut CacheCheckEvent) {
+async fn return_flow(mut event: CacheCheckEvent) {
   Ok(EventState::Return(path_to_cache)))
 }
 ```

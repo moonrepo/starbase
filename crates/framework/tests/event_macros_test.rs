@@ -1,9 +1,17 @@
 #![allow(dead_code, unused_must_use)]
 
+use miette::Diagnostic;
+use starbase::diagnose::Error;
 use starbase::{EventResult, EventState};
 use starbase_macros::*;
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
+
+#[derive(Debug, Diagnostic, Error)]
+enum TestError {
+    #[error("this error")]
+    Test,
+}
 
 #[derive(Event)]
 #[event(value = "i32")]
@@ -30,7 +38,6 @@ async fn callback_func(event: Arc<RwLock<IntEvent>>) -> EventResult<IntEvent> {
 #[listener]
 async fn callback_read(event: IntEvent) -> EventResult<IntEvent> {
     dbg!(event.0);
-    Ok(EventState::Continue)
 }
 
 #[listener]
@@ -42,11 +49,26 @@ async fn callback_write(mut event: IntEvent) -> EventResult<IntEvent> {
 #[listener]
 async fn callback_write_ref(event: &mut IntEvent) -> EventResult<IntEvent> {
     event.0 += 5;
-    Ok(EventState::Continue)
 }
 
 #[listener]
 fn callback_return(event: &mut IntEvent) {
     event.0 += 5;
     Ok(EventState::Stop)
+}
+
+#[listener]
+async fn no_return(event: &mut IntEvent) -> EventResult<IntEvent> {
+    event.0 += 5;
+}
+
+#[listener]
+async fn custom_return(event: &mut IntEvent) -> EventResult<IntEvent> {
+    event.0 += 5;
+    Ok(EventState::Return(123))
+}
+
+#[listener]
+async fn err_return(_event: IntEvent) -> EventResult<IntEvent> {
+    Err(TestError::Test.into())
 }

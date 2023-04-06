@@ -1,7 +1,74 @@
 use darling::FromMeta;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, FnArg, Pat, Type, TypePath};
+use syn::{parse_macro_input, Expr, ExprCall, ExprPath, FnArg, Pat, Stmt, Type, TypePath};
+
+fn is_event_state(path: &ExprPath) -> bool {
+    let Some(state) = path.path.segments.first() else {
+        return false;
+    };
+
+    state.ident == "EventState"
+}
+
+fn is_return_event_state(call: &ExprCall) -> bool {
+    // Ok(_), Err(_)
+    let Expr::Path(func) = call.func.as_ref() else {
+        return false;
+    };
+
+    let ident = func.path.get_ident().unwrap();
+
+    if ident == "Err" {
+        return true;
+    }
+
+    if ident != "Ok" {
+        return false;
+    }
+
+    match call.args.first() {
+        // EventState::Continue
+        // EventState::Stop
+        Some(Expr::Path(arg)) => is_event_state(arg),
+        // EventState::Return(_)
+        Some(Expr::Call(call)) => match call.func.as_ref() {
+            Expr::Path(func) => is_event_state(func),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+fn has_return_statement(block: &syn::Block) -> bool {
+    let Some(last_statement) = block.stmts.last() else {
+        return false;
+    };
+
+    let expr = match &last_statement {
+        // value
+        Stmt::Expr(expr) => expr,
+        // return value;
+        Stmt::Semi(expr, _) => expr,
+        _ => {
+            return false;
+        }
+    };
+
+    match expr {
+        // Ok(_)
+        Expr::Call(call) => is_return_event_state(call),
+        // return Ok(_);
+        Expr::Return(ret) => match ret.expr.as_ref() {
+            Some(expr) => match expr.as_ref() {
+                Expr::Call(call) => is_return_event_state(call),
+                _ => false,
+            },
+            _ => false,
+        },
+        _ => false,
+    }
+}
 
 // #[listener]
 pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
@@ -48,6 +115,11 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         quote! { let #event_name = #event_name.read().await; }
     };
+    let return_flow = if has_return_statement(&func_body) {
+        quote! {}
+    } else {
+        quote! { Ok(starbase::EventState::Continue) }
+    };
 
     quote! {
         async fn #func_name(
@@ -55,6 +127,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
         ) -> starbase::EventResult<#event_type> {
             #acquire_lock
             #func_body
+            #return_flow
         }
     }
     .into()
