@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use starbase::{Emitter, EventResult, EventState, Subscriber};
+use starbase_events::{Emitter, EventResult, EventState, Subscriber};
 use starbase_macros::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;

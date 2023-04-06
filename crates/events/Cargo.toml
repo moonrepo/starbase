@@ -11,3 +11,7 @@ starbase_macros = { version = "0.1.0", path = "../macros" }
 async-trait = { workspace = true }
 miette = { workspace = true }
 tokio = { workspace = true }
+
+[dev-dependencies]
+thiserror = { workspace = true }
+tracing = { workspace = true }

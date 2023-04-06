@@ -1,15 +1,15 @@
 #![allow(dead_code, unused_must_use)]
 
 use miette::Diagnostic;
-use starbase::diagnose::Error;
-use starbase::{EventResult, EventState};
+use starbase_events::{EventResult, EventState};
 use starbase_macros::*;
 use std::{path::PathBuf, sync::Arc};
+use thiserror::Error;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Diagnostic, Error)]
 enum TestError {
-    #[error("this error")]
+    #[error("Oops")]
     Test,
 }
 

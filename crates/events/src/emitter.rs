@@ -30,10 +30,34 @@ impl<E: Event + 'static> Emitter<E> {
             .await
     }
 
+    // pub async fn on_many<I, L>(&self, callbacks: I) -> &Self
+    // where
+    //     I: Iterator<Item = L>,
+    //     L: SubscriberFunc<E> + 'static,
+    // {
+    //     for callback in callbacks {
+    //         self.on(callback).await;
+    //     }
+
+    //     self
+    // }
+
     pub async fn once<L: SubscriberFunc<E> + 'static>(&self, callback: L) -> &Self {
         self.subscribe(CallbackSubscriber::new(callback, true))
             .await
     }
+
+    // pub async fn once_many<I, L>(&self, callbacks: I) -> &Self
+    // where
+    //     I: Iterator<Item = L>,
+    //     L: SubscriberFunc<E> + 'static,
+    // {
+    //     for callback in callbacks {
+    //         self.once(callback).await;
+    //     }
+
+    //     self
+    // }
 
     pub async fn emit(&self, event: E) -> miette::Result<(E, Option<E::Value>)> {
         let mut result = None;
