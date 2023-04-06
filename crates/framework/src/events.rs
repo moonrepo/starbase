@@ -1,8 +1,7 @@
 use crate::create_instance_manager;
 use async_trait::async_trait;
 use core::future::Future;
-use rustc_hash::FxHashMap;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::any::{type_name, Any, TypeId};
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -21,25 +20,25 @@ pub enum EventState<V> {
 }
 
 #[async_trait]
-pub trait Listener<E: Event>: Debug + Send + Sync {
+pub trait Listener<E: Event>: Send + Sync {
     fn is_once(&self) -> bool;
-    async fn on_emit(&mut self, event: &mut E) -> EventResult<E>;
+    async fn on_emit(&mut self, event: Arc<RwLock<E>>) -> EventResult<E>;
 }
 
 pub type BoxedListener<E> = Box<dyn Listener<E>>;
 
 #[async_trait]
 pub trait ListenerFunc<E: Event>: Send + Sync {
-    async fn call(&self, event: &mut E) -> EventResult<E>;
+    async fn call(&self, event: Arc<RwLock<E>>) -> EventResult<E>;
 }
 
 #[async_trait]
-impl<T: Send + Sync, F, E: Event> ListenerFunc<E> for T
+impl<T: Send + Sync, E: Event + 'static, F> ListenerFunc<E> for T
 where
-    T: Fn(&mut E) -> F,
-    F: Future<Output = EventResult<E>> + Send + 'static,
+    T: Fn(Arc<RwLock<E>>) -> F,
+    F: Future<Output = EventResult<E>> + Send,
 {
-    async fn call(&self, event: &mut E) -> EventResult<E> {
+    async fn call(&self, event: Arc<RwLock<E>>) -> EventResult<E> {
         self(event).await
     }
 }
@@ -55,23 +54,12 @@ impl<E: Event> Listener<E> for CallbackListener<E> {
         self.once
     }
 
-    async fn on_emit(&mut self, event: &mut E) -> EventResult<E> {
+    async fn on_emit(&mut self, event: Arc<RwLock<E>>) -> EventResult<E> {
         self.func.call(event).await
     }
 }
 
-impl<E: Event> Debug for CallbackListener<E> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct(if self.once {
-            "CallbackListener(once)"
-        } else {
-            "CallbackListener"
-        })
-        .finish()
-    }
-}
-
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Emitter<E: Event> {
     pub listeners: Vec<BoxedListener<E>>,
 }
@@ -106,16 +94,19 @@ impl<E: Event + 'static> Emitter<E> {
         self
     }
 
-    pub async fn emit(&mut self, mut event: E) -> miette::Result<(E, Option<E::Value>)> {
+    pub async fn emit(&mut self, event: E) -> miette::Result<(E, Option<E::Value>)> {
         let mut result = None;
         let mut remove_indices = FxHashSet::default();
+        let event = Arc::new(RwLock::new(event));
 
         for (index, listener) in self.listeners.iter_mut().enumerate() {
+            let event = Arc::clone(&event);
+
             if listener.is_once() {
                 remove_indices.insert(index);
             }
 
-            match listener.on_emit(&mut event).await? {
+            match listener.on_emit(event).await? {
                 EventState::Continue => continue,
                 EventState::Stop => break,
                 EventState::Return(value) => {
@@ -133,6 +124,8 @@ impl<E: Event + 'static> Emitter<E> {
             i += 1;
             !remove
         });
+
+        let event = unsafe { Arc::try_unwrap(event).unwrap_unchecked().into_inner() };
 
         Ok((event, result))
     }
