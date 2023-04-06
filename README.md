@@ -411,7 +411,7 @@ async fn write_emitter(project_created: EmitterMut<ProjectCreatedEvent>) {
 
 ### Using listeners
 
-Listeners are async functionsthat are registered into an emitter, and are executed when the emitter
+Listeners are async functions that are registered into an emitter, and are executed when the emitter
 emits an event. They are passed the event object as a `Arc<RwLock<T>>`, allowing for event and its
 inner data to be accessed;
 
@@ -430,8 +430,8 @@ emitter.on(listener); // Runs multiple times
 emitter.once(listener); // Only runs once
 ```
 
-Similar to `#[system]`, we also offer a `#[listener]` function attribute that streamlines the
-function implementation. For example, the above listener can be rewritten as:
+Similar to `#[system]`, we offer a `#[listener]` function attribute that streamlines the function
+implementation. For example, the above listener can be rewritten as:
 
 ```rust
 #[listener]

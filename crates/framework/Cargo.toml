@@ -8,6 +8,7 @@ repository = "https://github.com/moonrepo/starbase"
 readme = "../../README.md"
 
 [dependencies]
+starbase_events = { version = "0.1.0", path = "../events" }
 starbase_macros = { version = "0.1.0", path = "../framework-macros" }
 async-trait = "0.1.68"
 miette = "5.7.0"

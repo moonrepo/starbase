@@ -1,4 +1,4 @@
-use crate::events::Emitters;
+use crate::emitters::Emitters;
 use crate::resources::Resources;
 use crate::states::States;
 use async_trait::async_trait;

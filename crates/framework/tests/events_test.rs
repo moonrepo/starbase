@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use starbase::{Emitter, EventResult, EventState, Listener};
+use starbase::{Emitter, EventResult, EventState, Subscriber};
 use starbase_macros::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -9,12 +9,12 @@ use tokio::sync::RwLock;
 struct TestEvent(pub i32);
 
 #[derive(Debug)]
-struct TestListener {
+struct TestSubscriber {
     inc: i32,
 }
 
 #[async_trait]
-impl Listener<TestEvent> for TestListener {
+impl Subscriber<TestEvent> for TestSubscriber {
     fn is_once(&self) -> bool {
         false
     }
@@ -26,10 +26,10 @@ impl Listener<TestEvent> for TestListener {
 }
 
 #[derive(Debug)]
-struct TestOnceListener;
+struct TestOnceSubscriber;
 
 #[async_trait]
-impl Listener<TestEvent> for TestOnceListener {
+impl Subscriber<TestEvent> for TestOnceSubscriber {
     fn is_once(&self) -> bool {
         true
     }
@@ -41,12 +41,12 @@ impl Listener<TestEvent> for TestOnceListener {
 }
 
 #[derive(Debug)]
-struct TestStopListener {
+struct TestStopSubscriber {
     inc: i32,
 }
 
 #[async_trait]
-impl Listener<TestEvent> for TestStopListener {
+impl Subscriber<TestEvent> for TestStopSubscriber {
     fn is_once(&self) -> bool {
         false
     }
@@ -58,10 +58,10 @@ impl Listener<TestEvent> for TestStopListener {
 }
 
 #[derive(Debug)]
-struct TestReturnListener;
+struct TestReturnSubscriber;
 
 #[async_trait]
-impl Listener<TestEvent> for TestReturnListener {
+impl Subscriber<TestEvent> for TestReturnSubscriber {
     fn is_once(&self) -> bool {
         false
     }
@@ -74,9 +74,9 @@ impl Listener<TestEvent> for TestReturnListener {
 #[tokio::test]
 async fn listener() {
     let mut emitter = Emitter::<TestEvent>::new();
-    emitter.listen(TestListener { inc: 1 });
-    emitter.listen(TestListener { inc: 2 });
-    emitter.listen(TestListener { inc: 3 });
+    emitter.listen(TestSubscriber { inc: 1 });
+    emitter.listen(TestSubscriber { inc: 2 });
+    emitter.listen(TestSubscriber { inc: 3 });
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
@@ -87,9 +87,9 @@ async fn listener() {
 #[tokio::test]
 async fn listener_return() {
     let mut emitter = Emitter::<TestEvent>::new();
-    emitter.listen(TestListener { inc: 1 });
-    emitter.listen(TestListener { inc: 2 });
-    emitter.listen(TestReturnListener);
+    emitter.listen(TestSubscriber { inc: 1 });
+    emitter.listen(TestSubscriber { inc: 2 });
+    emitter.listen(TestReturnSubscriber);
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
@@ -100,9 +100,9 @@ async fn listener_return() {
 #[tokio::test]
 async fn listener_stop() {
     let mut emitter = Emitter::<TestEvent>::new();
-    emitter.listen(TestListener { inc: 1 });
-    emitter.listen(TestStopListener { inc: 2 });
-    emitter.listen(TestListener { inc: 3 });
+    emitter.listen(TestSubscriber { inc: 1 });
+    emitter.listen(TestStopSubscriber { inc: 2 });
+    emitter.listen(TestSubscriber { inc: 3 });
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
@@ -113,9 +113,9 @@ async fn listener_stop() {
 #[tokio::test]
 async fn listener_once() {
     let mut emitter = Emitter::<TestEvent>::new();
-    emitter.listen(TestOnceListener);
-    emitter.listen(TestOnceListener);
-    emitter.listen(TestOnceListener);
+    emitter.listen(TestOnceSubscriber);
+    emitter.listen(TestOnceSubscriber);
+    emitter.listen(TestOnceSubscriber);
 
     assert_eq!(emitter.listeners.len(), 3);
 
