@@ -56,6 +56,7 @@ impl App {
     }
 
     pub fn setup_hooks() {
+        #[cfg(feature = "panic")]
         miette::set_panic_hook();
 
         #[cfg(feature = "tracing")]

@@ -20,5 +20,6 @@ tracing = { version = "0.1.37", optional = true }
 tracing-subscriber = { version = "0.3.16", optional = true }
 
 [features]
-default = ["tracing"]
+default = ["panic", "tracing"]
+panic = ["miette/fancy"]
 tracing = ["dep:tracing", "dep:tracing-subscriber", "starbase_macros/tracing"]
