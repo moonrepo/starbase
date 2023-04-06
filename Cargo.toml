@@ -5,5 +5,5 @@ members = ["crates/*"]
 async-trait = "0.1.68"
 miette = "5.7.0"
 thiserror = "1.0.40"
-tokio = { version = "1.27.0" }
+tokio = { version = "1.27.0", features = ["full"] }
 tracing = { version = "0.1.37" }
