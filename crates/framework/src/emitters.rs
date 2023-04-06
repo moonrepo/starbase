@@ -11,10 +11,10 @@ create_instance_manager!(EmitterManager, EmitterInstance);
 
 impl EmitterManager {
     pub async fn emit<E: Event + 'static>(
-        &mut self,
+        &self,
         event: E,
     ) -> miette::Result<(E, Option<E::Value>)> {
-        self.get_mut::<Emitter<E>>().emit(event).await
+        self.get::<Emitter<E>>().emit(event).await
     }
 }
 

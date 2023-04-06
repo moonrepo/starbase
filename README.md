@@ -367,12 +367,7 @@ async fn create_emitter(emitters: EmittersMut) {
 }
 ```
 
-### Readable emitters
-
-Every method on `Emitter` requires a mutable self, so no system parameters exist for immutably
-reading an emitter.
-
-### Writable emitters
+### Using emitters
 
 The `EmittersMut` system parameter can be used to acquire write access to the entire emitters
 manager, where new emitters can be registered, or existing emitters can emit an event. It _cannot_
@@ -392,13 +387,14 @@ async fn write_emitters(emitters: EmittersMut) {
 }
 ```
 
-Furthermore, the `EmitterMut` system parameter can be used to mutably access an individual emitter.
-Only 1 `EmitterMut` can be used in a system, and no other emitter related system parameters can be
-used.
+Furthermore, the `EmitterRef` (preferred) or `EmitterMut` system parameters can be used to access an
+individual emitter. Only 1 `EmitterMut` can be used in a system, but multiple `EmitterRef` can be
+used. The latter is preferred as we utilize interior mutability for emitting events, which allows
+multiple emitters to be accessed in parallel.
 
 ```rust
 #[system]
-async fn write_emitter(project_created: EmitterMut<ProjectCreatedEvent>) {
+async fn emit_events(project_created: EmitterRef<ProjectCreatedEvent>) {
   project_created.emit(ProjectCreatedEvent::new()).await?;
 }
 ```

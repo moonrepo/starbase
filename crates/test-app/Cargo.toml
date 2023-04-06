@@ -8,4 +8,4 @@ publish = false
 starbase = { path = "../framework" }
 miette = { workspace = true, features = ["fancy"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
-tracing = "0.1.37"
+tracing = { workspace = true }

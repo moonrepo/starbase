@@ -52,8 +52,8 @@ async fn update_root(event: Arc<RwLock<ProjectCreatedEvent>>) -> EventResult<Pro
   Ok(EventState::Continue)
 }
 
-emitter.on(subscriber); // Runs multiple times
-emitter.once(subscriber); // Only runs once
+emitter.on(subscriber).await; // Runs multiple times
+emitter.once(subscriber).await; // Only runs once
 ```
 
 Furthermore, we provide a `#[subscriber]` function attribute that streamlines the function

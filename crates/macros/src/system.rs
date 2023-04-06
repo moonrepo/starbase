@@ -231,6 +231,9 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
                         "EmittersMut" => {
                             emitters.set_manager(var_name, SystemParam::ManagerMut);
                         }
+                        "EmittersRef" => {
+                            emitters.set_manager(var_name, SystemParam::ManagerRef);
+                        }
                         "Resources" => {
                             resources.set_param(var_name);
                         }
@@ -267,6 +270,9 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
                     match type_wrapper.as_ref() {
                         "EmitterMut" => {
                             emitters.add_call(var_name, SystemParam::ParamMut(inner_type));
+                        }
+                        "EmitterRef" => {
+                            emitters.add_call(var_name, SystemParam::ParamRef(inner_type));
                         }
                         "ResourceMut" => {
                             resources.add_call(var_name, SystemParam::ParamMut(inner_type));
