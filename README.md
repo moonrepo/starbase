@@ -1,4 +1,7 @@
-# starbase
+# Starbase
+
+![Crates.io](https://img.shields.io/crates/v/starbase)
+![Crates.io](https://img.shields.io/crates/d/starbase)
 
 Starbase is a framework for building performant command line applications and developer tools. A
 starbase is built with the following modules:

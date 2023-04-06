@@ -2,6 +2,9 @@
 name = "starbase_macros"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Macros for the starbase framework."
+repository = "https://github.com/moonrepo/starbase"
 
 [lib]
 proc-macro = true
