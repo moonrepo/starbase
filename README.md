@@ -12,27 +12,6 @@ starbase is built with the following modules:
 - **Shield generator** - Native diagnostics and reports with `miette`.
 - **Navigation sensors** - Span based instrumentation and logging with `tracing`.
 
-### Current issues
-
-Some things I have yet to resolve... help appreciated!
-
-1. I'm not entirely sure if the event emitter implementation is the best choice to go with. We can't
-   use channels because we need to mutate the event in listeners, and we also need to support async.
-
-2. Async functions cannot be registered as listeners to `on()` or `once()` because of "mismatched
-   but equal" lifetime issues, which I've been unable to track down. This is the following error:
-
-```
-error[E0308]: mismatched types
-  --> crates/framework/tests/events_test.rs:179:5
-    |
-179 |     emitter.on(callback_func);
-    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ one type is more general than the other
-    |
-    = note: expected trait `for<'a> <for<'a> fn(&'a mut TestEvent) -> impl Future<Output = Result<EventState<<TestEvent as starbase::Event>::Value>, ErrReport>> {callback_func} as FnOnce<(&'a mut TestEvent,)>>`
-               found trait `for<'a> <for<'a> fn(&'a mut TestEvent) -> impl Future<Output = Result<EventState<<TestEvent as starbase::Event>::Value>, ErrReport>> {callback_func} as FnOnce<(&'a mut TestEvent,)>>`
-```
-
 # Core
 
 ## Phases
@@ -432,60 +411,34 @@ async fn write_emitter(project_created: EmitterMut<ProjectCreatedEvent>) {
 
 ### Using listeners
 
-Listeners are async functions or structs that implement `Listener`, are registered into an emitter,
-and are executed when an `Emitter` emits an event. They are passed the event object as a mutable
-parameter, allowing for the inner data to be modified.
+Listeners are async functionsthat are registered into an emitter, and are executed when the emitter
+emits an event. They are passed the event object as a `Arc<RwLock<T>>`, allowing for event and its
+inner data to be accessed;
 
 ```rust
 use starbase::{EventResult, EventState};
 
-async fn listener(event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreatedEvent> {
+async fn listener(event: Arc<RwLock<ProjectCreatedEvent>>) -> EventResult<ProjectCreatedEvent> {
+  let event = event.write().await;
   event.0.root = new_path;
   Ok(EventState::Continue)
 }
 
-// TODO: These currently don't work because of lifetime issues!
 emitter.on(listener); // Runs multiple times
 emitter.once(listener); // Only runs once
 ```
 
-```rust
-use starbase::{EventResult, EventState, Listener};
-use async_trait::async_trait;
-
-struct TestListener;
-
-#[async_trait]
-impl Listener<ProjectCreatedEvent> for TestListener {
-  fn is_once(&self) -> bool {
-    false
-  }
-
-  async fn on_emit(&mut self, event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreatedEvent> {
-    event.0.root = new_path;
-    Ok(EventState::Continue)
-  }
-}
-
-emitter.listen(TestListener);
-```
-
-As a temporary solution for async function lifetime issues, we provide `#[listener]` and
-`#[listener(once)]` function attributes, which will convert the function to a `Listener` struct
-internally. The major drawback is that the function name is lost, and the new struct name must be
-passed to `listen()`.
+Similar to `#[system]`, we also offer a `#[listener]` function attribute that streamlines the
+function implementation. For example, the above listener can be rewritten as:
 
 ```rust
 use starbase::{EventResult, EventState, listener};
 
 #[listener]
-async fn some_func(event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreatedEvent> {
+async fn listener(mut event: ProjectCreatedEvent) {
   event.0.root = new_path;
   Ok(EventState::Continue)
 }
-
-// Rename to...
-emitter.listen(SomeFuncListener);
 ```
 
 ### Controlling the event flow
@@ -498,15 +451,18 @@ following variants:
 - `Return` - Like `Stop` but also returns a value for interception.
 
 ```rust
-async fn continue_flow(event: &mut CacheCheckEvent) -> EventResult<CacheCheckEvent> {
+#[listener]
+async fn continue_flow(event: &mut CacheCheckEvent) {
   Ok(EventState::Continue)
 }
 
-async fn stop_flow(event: &mut CacheCheckEvent) -> EventResult<CacheCheckEvent> {
+#[listener]
+async fn stop_flow(event: &mut CacheCheckEvent) {
   Ok(EventState::Stop)
 }
 
-async fn return_flow(event: &mut CacheCheckEvent) -> EventResult<CacheCheckEvent> {
+#[listener]
+async fn return_flow(event: &mut CacheCheckEvent) {
   Ok(EventState::Return(path_to_cache)))
 }
 ```
