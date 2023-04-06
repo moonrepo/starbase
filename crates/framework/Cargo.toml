@@ -9,7 +9,7 @@ readme = "../../README.md"
 
 [dependencies]
 starbase_events = { version = "0.1.0", path = "../events" }
-starbase_macros = { version = "0.1.0", path = "../macros" }
+starbase_macros = { version = "0.1.1", path = "../macros" }
 async-trait = { workspace = true }
 miette = { workspace = true }
 num_cpus = "1.15.0"
