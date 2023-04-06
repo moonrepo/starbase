@@ -10,7 +10,7 @@ pub use app::*;
 pub use app_state::AppState;
 pub use events::*;
 pub use resources::*;
-pub use starship_macros::*;
+pub use starbase_macros::*;
 pub use states::*;
 pub use system::*;
 

@@ -1,9 +1,9 @@
 use crate::app::Phase;
-use starship_macros::{system, State};
+use starbase_macros::{system, State};
 
-// This is a hack for starship macros to work from within
-// the starship crate itself!
-mod starship {
+// This is a hack for starbase macros to work from within
+// the starbase crate itself!
+mod starbase {
     pub use crate::*;
 }
 

@@ -9,7 +9,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
 
     let shared_impl = quote! {
         #[automatically_derived]
-        impl starship::ResourceInstance for #struct_name {
+        impl starbase::ResourceInstance for #struct_name {
         }
     };
 

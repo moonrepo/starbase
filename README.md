@@ -1,10 +1,10 @@
-# starship
+# starbase
 
-Starship is a framework for building performant command line applications and developer tools. A
-starship is built with the following modules:
+Starbase is a framework for building performant command line applications and developer tools. A
+starbase is built with the following modules:
 
 - **Reactor core** - Async-first powered by the `tokio` runtime.
-- **Warp drive** - Thread-safe concurrent systems for easy processing.
+- **Fusion cells** - Thread-safe concurrent systems for easy processing.
 - **Communication array** - Event-driven architecture to decouple and isolate crates.
 - **Shield generator** - Native diagnostics and reports with `miette`.
 - **Navigation sensors** - Span based instrumentation and logging with `tracing`.
@@ -26,8 +26,8 @@ error[E0308]: mismatched types
 179 |     emitter.on(callback_func);
     |     ^^^^^^^^^^^^^^^^^^^^^^^^^ one type is more general than the other
     |
-    = note: expected trait `for<'a> <for<'a> fn(&'a mut TestEvent) -> impl Future<Output = Result<EventState<<TestEvent as starship::Event>::Value>, ErrReport>> {callback_func} as FnOnce<(&'a mut TestEvent,)>>`
-               found trait `for<'a> <for<'a> fn(&'a mut TestEvent) -> impl Future<Output = Result<EventState<<TestEvent as starship::Event>::Value>, ErrReport>> {callback_func} as FnOnce<(&'a mut TestEvent,)>>`
+    = note: expected trait `for<'a> <for<'a> fn(&'a mut TestEvent) -> impl Future<Output = Result<EventState<<TestEvent as starbase::Event>::Value>, ErrReport>> {callback_func} as FnOnce<(&'a mut TestEvent,)>>`
+               found trait `for<'a> <for<'a> fn(&'a mut TestEvent) -> impl Future<Output = Result<EventState<<TestEvent as starbase::Event>::Value>, ErrReport>> {callback_func} as FnOnce<(&'a mut TestEvent,)>>`
 ```
 
 # Core
@@ -65,7 +65,7 @@ and are processed (only once) during the applications run cycle. Systems receive
 > component (C) parts.
 
 ```rust
-use starship::{App, States, Resources, Emitters, MainResult, SystemResult};
+use starbase::{App, States, Resources, Emitters, MainResult, SystemResult};
 
 async fn load_config(states: States, resources: Resources, emitters: Emitters) -> SystemResult {
   let states = states.write().await;
@@ -109,10 +109,10 @@ account. If a rule is broken, we panic during compilation.
 
 ```rust
 async fn load_config(
-  states: starship::States,
-  resources: starship::Resources,
-  emitters: starship::Emitters,
-) -> starship::SystemResult {
+  states: starbase::States,
+  resources: starbase::Resources,
+  emitters: starbase::Emitters,
+) -> starbase::SystemResult {
     let mut states = states.write().await;
     {
         let config: AppConfig = do_load_config();
@@ -187,7 +187,7 @@ States are components that represent granular pieces of data, are typically impl
 or unit struct, and must derive `State`. For example, say we want to track the workspace root.
 
 ```rust
-use starship::State;
+use starbase::State;
 use std::path::PathBuf;
 
 #[derive(Debug, State)]
@@ -269,7 +269,7 @@ trees, plugin registries, cache engines, etc.
 Every resource must derive `Resource`.
 
 ```rust
-use starship::Resource;
+use starbase::Resource;
 use std::path::PathBuf;
 
 #[derive(Debug, Resource)]
@@ -349,7 +349,7 @@ async fn write_resource(cache: ResourceMut<CacheEngine>) {
 
 Emitters are components that can dispatch events to all registered listeners, allowing for
 non-coupled layers to interact with each other. Unlike states and resources that are implemented and
-registered individually, emitters are pre-built and provided by the starship `Emitter` struct, and
+registered individually, emitters are pre-built and provided by the starbase `Emitter` struct, and
 instead the individual events themselves are implemented.
 
 Events must derive `Event`, or implement the `Event` trait. Events can be any type of struct, but
@@ -357,7 +357,7 @@ the major selling point is that events are _mutable_, allowing inner content to 
 listeners.
 
 ```rust
-use starship::{Event, Emitter};
+use starbase::{Event, Emitter};
 use app::Project;
 
 #[derive(Debug, Event)]
@@ -434,7 +434,7 @@ and are executed when an `Emitter` emits an event. They are passed the event obj
 parameter, allowing for the inner data to be modified.
 
 ```rust
-use starship::{EventResult, EventState};
+use starbase::{EventResult, EventState};
 
 async fn listener(event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreatedEvent> {
   event.0.root = new_path;
@@ -447,7 +447,7 @@ emitter.once(listener); // Only runs once
 ```
 
 ```rust
-use starship::{EventResult, EventState, Listener};
+use starbase::{EventResult, EventState, Listener};
 use async_trait::async_trait;
 
 struct TestListener;
@@ -473,7 +473,7 @@ internally. The major drawback is that the function name is lost, and the new st
 passed to `listen()`.
 
 ```rust
-use starship::{EventResult, EventState, listener};
+use starbase::{EventResult, EventState, listener};
 
 #[listener]
 async fn some_func(event: &mut ProjectCreatedEvent) -> EventResult<ProjectCreatedEvent> {
@@ -512,7 +512,7 @@ For `Return` flows, the type of value returned is inferred from the event. By de
 unit type (`()`), but can be customized with `#[event]` or `type Value` when implementing manually.
 
 ```rust
-use starship::{Event, Emitter};
+use starbase::{Event, Emitter};
 use std::path::PathBuf;
 
 #[derive(Event)]
@@ -557,7 +557,7 @@ To benefit from this, update your `main` function to return `MainResult`, and ca
 `App::setup_hook()` to register error/panic handlers.
 
 ```rust
-use starship::{App, MainResult};
+use starbase::{App, MainResult};
 
 #[tokio::main]
 async fn main() -> MainResult {
@@ -575,7 +575,7 @@ To make the most out of errors, and in turn diagnostics, it's best (also suggest
 `thiserror` crate.
 
 ```rust
-use starship::Diagnostic;
+use starbase::Diagnostic;
 use thiserror::Error;
 
 #[derive(Debug, Diagnostic, Error)]

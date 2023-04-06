@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_must_use)]
 
-use starship::RelativePathBuf;
-use starship_macros::*;
+use starbase::RelativePathBuf;
+use starbase_macros::*;
 use std::path::PathBuf;
 
 // STATE

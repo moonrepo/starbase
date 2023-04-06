@@ -1,6 +1,6 @@
 use miette::{bail, IntoDiagnostic};
-use starship::{App, AppState, Emitters, Resources, States, SystemResult};
-use starship_macros::*;
+use starbase::{App, AppState, Emitters, Resources, States, SystemResult};
+use starbase_macros::*;
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
