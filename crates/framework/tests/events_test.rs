@@ -72,11 +72,11 @@ impl Subscriber<TestEvent> for TestReturnSubscriber {
 }
 
 #[tokio::test]
-async fn listener() {
+async fn subscriber() {
     let mut emitter = Emitter::<TestEvent>::new();
-    emitter.listen(TestSubscriber { inc: 1 });
-    emitter.listen(TestSubscriber { inc: 2 });
-    emitter.listen(TestSubscriber { inc: 3 });
+    emitter.subscribe(TestSubscriber { inc: 1 });
+    emitter.subscribe(TestSubscriber { inc: 2 });
+    emitter.subscribe(TestSubscriber { inc: 3 });
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
@@ -85,11 +85,11 @@ async fn listener() {
 }
 
 #[tokio::test]
-async fn listener_return() {
+async fn subscriber_return() {
     let mut emitter = Emitter::<TestEvent>::new();
-    emitter.listen(TestSubscriber { inc: 1 });
-    emitter.listen(TestSubscriber { inc: 2 });
-    emitter.listen(TestReturnSubscriber);
+    emitter.subscribe(TestSubscriber { inc: 1 });
+    emitter.subscribe(TestSubscriber { inc: 2 });
+    emitter.subscribe(TestReturnSubscriber);
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
@@ -98,11 +98,11 @@ async fn listener_return() {
 }
 
 #[tokio::test]
-async fn listener_stop() {
+async fn subscriber_stop() {
     let mut emitter = Emitter::<TestEvent>::new();
-    emitter.listen(TestSubscriber { inc: 1 });
-    emitter.listen(TestStopSubscriber { inc: 2 });
-    emitter.listen(TestSubscriber { inc: 3 });
+    emitter.subscribe(TestSubscriber { inc: 1 });
+    emitter.subscribe(TestStopSubscriber { inc: 2 });
+    emitter.subscribe(TestSubscriber { inc: 3 });
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
@@ -111,25 +111,25 @@ async fn listener_stop() {
 }
 
 #[tokio::test]
-async fn listener_once() {
+async fn subscriber_once() {
     let mut emitter = Emitter::<TestEvent>::new();
-    emitter.listen(TestOnceSubscriber);
-    emitter.listen(TestOnceSubscriber);
-    emitter.listen(TestOnceSubscriber);
+    emitter.subscribe(TestOnceSubscriber);
+    emitter.subscribe(TestOnceSubscriber);
+    emitter.subscribe(TestOnceSubscriber);
 
-    assert_eq!(emitter.listeners.len(), 3);
+    assert_eq!(emitter.subscribers.len(), 3);
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
     assert_eq!(event.0, 9);
     assert_eq!(result, None);
-    assert_eq!(emitter.listeners.len(), 0);
+    assert_eq!(emitter.subscribers.len(), 0);
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
     assert_eq!(event.0, 0);
     assert_eq!(result, None);
-    assert_eq!(emitter.listeners.len(), 0);
+    assert_eq!(emitter.subscribers.len(), 0);
 }
 
 // async fn callback_func(event: Arc<RwLock<TestEvent>>) -> EventResult<TestEvent> {
@@ -138,36 +138,36 @@ async fn listener_once() {
 //     Ok(EventState::Continue)
 // }
 
-#[listener]
+#[subscriber]
 async fn callback_one(event: &mut TestEvent) -> EventResult<TestEvent> {
     event.0 += 1;
     Ok(EventState::Continue)
 }
 
-#[listener]
+#[subscriber]
 async fn callback_two(mut event: TestEvent) -> EventResult<TestEvent> {
     event.0 += 2;
     Ok(EventState::Continue)
 }
 
-#[listener]
+#[subscriber]
 async fn callback_three(event: &mut TestEvent) {
     event.0 += 3;
     Ok(EventState::Continue)
 }
 
-#[listener]
+#[subscriber]
 async fn callback_return(_event: TestEvent) {
     Ok(EventState::Return(0))
 }
 
-#[listener]
+#[subscriber]
 async fn callback_stop(event: &mut TestEvent) -> EventResult<TestEvent> {
     event.0 += 2;
     Ok(EventState::Stop)
 }
 
-#[listener]
+#[subscriber]
 async fn callback_once(mut event: TestEvent) -> EventResult<TestEvent> {
     event.0 += 3;
     Ok(EventState::Continue)
@@ -219,19 +219,19 @@ async fn callbacks_once() {
     emitter.once(callback_once);
     emitter.once(callback_once);
 
-    assert_eq!(emitter.listeners.len(), 3);
+    assert_eq!(emitter.subscribers.len(), 3);
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
     assert_eq!(event.0, 9);
     assert_eq!(result, None);
-    assert_eq!(emitter.listeners.len(), 0);
+    assert_eq!(emitter.subscribers.len(), 0);
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
     assert_eq!(event.0, 0);
     assert_eq!(result, None);
-    assert_eq!(emitter.listeners.len(), 0);
+    assert_eq!(emitter.subscribers.len(), 0);
 }
 
 #[tokio::test]
@@ -243,18 +243,18 @@ async fn preserves_onces_that_didnt_run() {
     emitter.once(callback_once);
     emitter.once(callback_once);
 
-    assert_eq!(emitter.listeners.len(), 5);
+    assert_eq!(emitter.subscribers.len(), 5);
 
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
     assert_eq!(event.0, 8);
     assert_eq!(result, None);
-    assert_eq!(emitter.listeners.len(), 3);
+    assert_eq!(emitter.subscribers.len(), 3);
 
     // Will stop immediately
     let (event, result) = emitter.emit(TestEvent(0)).await.unwrap();
 
     assert_eq!(event.0, 2);
     assert_eq!(result, None);
-    assert_eq!(emitter.listeners.len(), 3);
+    assert_eq!(emitter.subscribers.len(), 3);
 }

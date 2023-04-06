@@ -35,40 +35,40 @@ async fn callback_func(event: Arc<RwLock<IntEvent>>) -> EventResult<IntEvent> {
     Ok(EventState::Continue)
 }
 
-#[listener]
+#[subscriber]
 async fn callback_read(event: IntEvent) -> EventResult<IntEvent> {
     dbg!(event.0);
 }
 
-#[listener]
+#[subscriber]
 async fn callback_write(mut event: IntEvent) -> EventResult<IntEvent> {
     event.0 += 5;
     Ok(EventState::Continue)
 }
 
-#[listener]
+#[subscriber]
 async fn callback_write_ref(event: &mut IntEvent) -> EventResult<IntEvent> {
     event.0 += 5;
 }
 
-#[listener]
+#[subscriber]
 fn callback_return(event: &mut IntEvent) {
     event.0 += 5;
     Ok(EventState::Stop)
 }
 
-#[listener]
+#[subscriber]
 async fn no_return(event: &mut IntEvent) -> EventResult<IntEvent> {
     event.0 += 5;
 }
 
-#[listener]
+#[subscriber]
 async fn custom_return(event: &mut IntEvent) -> EventResult<IntEvent> {
     event.0 += 5;
     Ok(EventState::Return(123))
 }
 
-#[listener]
+#[subscriber]
 async fn err_return(_event: IntEvent) -> EventResult<IntEvent> {
     Err(TestError::Test.into())
 }

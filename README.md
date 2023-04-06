@@ -329,14 +329,14 @@ async fn write_resource(cache: ResourceMut<CacheEngine>) {
 
 ## Emitters
 
-Emitters are components that can dispatch events to all registered listeners, allowing for
+Emitters are components that can dispatch events to all registered subscribers, allowing for
 non-coupled layers to interact with each other. Unlike states and resources that are implemented and
 registered individually, emitters are pre-built and provided by the starbase `Emitter` struct, and
 instead the individual events themselves are implemented.
 
 Events must derive `Event`, or implement the `Event` trait. Events can be any type of struct, but
 the major selling point is that events are _mutable_, allowing inner content to be modified by
-listeners.
+subscribers.
 
 ```rust
 use starbase::{Event, Emitter};
@@ -409,16 +409,16 @@ async fn write_emitter(project_created: EmitterMut<ProjectCreatedEvent>) {
 
 ## Event emitting
 
-### Using listeners
+### Using subscribers
 
-Listeners are async functions that are registered into an emitter, and are executed when the emitter
-emits an event. They are passed the event object as a `Arc<RwLock<T>>`, allowing for event and its
-inner data to be accessed;
+Subscribers are async functions that are registered into an emitter, and are executed when the
+emitter emits an event. They are passed the event object as a `Arc<RwLock<T>>`, allowing for event
+and its inner data to be accessed;
 
 ```rust
 use starbase::{EventResult, EventState};
 
-async fn listener(event: Arc<RwLock<ProjectCreatedEvent>>) -> EventResult<ProjectCreatedEvent> {
+async fn update_root(event: Arc<RwLock<ProjectCreatedEvent>>) -> EventResult<ProjectCreatedEvent> {
   let event = event.write().await;
 
   event.0.root = new_path;
@@ -426,21 +426,21 @@ async fn listener(event: Arc<RwLock<ProjectCreatedEvent>>) -> EventResult<Projec
   Ok(EventState::Continue)
 }
 
-emitter.on(listener); // Runs multiple times
-emitter.once(listener); // Only runs once
+emitter.on(subscriber); // Runs multiple times
+emitter.once(subscriber); // Only runs once
 ```
 
-Similar to `#[system]`, we offer a `#[listener]` function attribute that streamlines the function
-implementation. For example, the above listener can be rewritten as:
+Similar to `#[system]`, we offer a `#[subscriber]` function attribute that streamlines the function
+implementation. For example, the above subscriber can be rewritten as:
 
 ```rust
-#[listener]
-async fn listener(mut event: ProjectCreatedEvent) {
+#[subscriber]
+async fn update_root(mut event: ProjectCreatedEvent) {
   event.0.root = new_path;
 }
 ```
 
-When using `#[listener]`, the following benefits apply:
+When using `#[subscriber]`, the following benefits apply:
 
 - The return type is optional.
 - The return value is optional if `EventState::Continue`.
@@ -449,25 +449,25 @@ When using `#[listener]`, the following benefits apply:
 
 ### Controlling the event flow
 
-Listeners can control this emit execution flow by returning `EventState`, which supports the
+Subscribers can control this emit execution flow by returning `EventState`, which supports the
 following variants:
 
-- `Continue` - Continues to the next listener (default).
-- `Stop` - Stops after this listener, discarding subsequent listeners.
+- `Continue` - Continues to the next subscriber (default).
+- `Stop` - Stops after this subscriber, discarding subsequent subscribers.
 - `Return` - Like `Stop` but also returns a value for interception.
 
 ```rust
-#[listener]
+#[subscriber]
 async fn continue_flow(mut event: CacheCheckEvent) {
   Ok(EventState::Continue)
 }
 
-#[listener]
+#[subscriber]
 async fn stop_flow(mut event: CacheCheckEvent) {
   Ok(EventState::Stop)
 }
 
-#[listener]
+#[subscriber]
 async fn return_flow(mut event: CacheCheckEvent) {
   Ok(EventState::Return(path_to_cache)))
 }
@@ -494,8 +494,8 @@ impl Event for CacheCheckEvent {
 
 ### Emitting and results
 
-When an event is emitted, listeners are executed sequentially in the same thread so that each
-listener can mutate the event if necessary. Because of this, events do not support references for
+When an event is emitted, subscribers are executed sequentially in the same thread so that each
+subscriber can mutate the event if necessary. Because of this, events do not support references for
 inner values, and instead must own everything.
 
 An event can be emitted with the `emit()` method, which requires an owned event (and owned inner

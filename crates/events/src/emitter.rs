@@ -6,28 +6,28 @@ use tokio::sync::RwLock;
 
 #[derive(Default)]
 pub struct Emitter<E: Event> {
-    pub listeners: Vec<BoxedSubscriber<E>>,
+    pub subscribers: Vec<BoxedSubscriber<E>>,
 }
 
 impl<E: Event + 'static> Emitter<E> {
     pub fn new() -> Self {
         Emitter {
-            listeners: Vec::new(),
+            subscribers: Vec::new(),
         }
     }
 
-    pub fn listen<L: Subscriber<E> + 'static>(&mut self, listener: L) -> &mut Self {
-        self.listeners.push(Box::new(listener));
+    pub fn subscribe<L: Subscriber<E> + 'static>(&mut self, subscriber: L) -> &mut Self {
+        self.subscribers.push(Box::new(subscriber));
         self
     }
 
     pub fn on<L: SubscriberFunc<E> + 'static>(&mut self, callback: L) -> &mut Self {
-        self.listen(CallbackSubscriber::new(callback, false));
+        self.subscribe(CallbackSubscriber::new(callback, false));
         self
     }
 
     pub fn once<L: SubscriberFunc<E> + 'static>(&mut self, callback: L) -> &mut Self {
-        self.listen(CallbackSubscriber::new(callback, true));
+        self.subscribe(CallbackSubscriber::new(callback, true));
         self
     }
 
@@ -36,14 +36,14 @@ impl<E: Event + 'static> Emitter<E> {
         let mut remove_indices = HashSet::new();
         let event = Arc::new(RwLock::new(event));
 
-        for (index, listener) in self.listeners.iter_mut().enumerate() {
+        for (index, subscriber) in self.subscribers.iter_mut().enumerate() {
             let event = Arc::clone(&event);
 
-            if listener.is_once() {
+            if subscriber.is_once() {
                 remove_indices.insert(index);
             }
 
-            match listener.on_emit(event).await? {
+            match subscriber.on_emit(event).await? {
                 EventState::Continue => continue,
                 EventState::Stop => break,
                 EventState::Return(value) => {
@@ -53,10 +53,10 @@ impl<E: Event + 'static> Emitter<E> {
             }
         }
 
-        // Remove only once listeners that were called
+        // Remove only once subscribers that were called
         let mut i = 0;
 
-        self.listeners.retain(|_| {
+        self.subscribers.retain(|_| {
             let remove = remove_indices.contains(&i);
             i += 1;
             !remove

@@ -1,4 +1,4 @@
-# starbase-macros
+# starbase_macros
 
 ![Crates.io](https://img.shields.io/crates/v/starbase)
 ![Crates.io](https://img.shields.io/crates/d/starbase)

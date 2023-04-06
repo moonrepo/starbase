@@ -7,7 +7,7 @@ mod events {
     #[derive(Debug, Event)]
     struct TestEvent(pub usize);
 
-    #[listener]
+    #[subscriber]
     async fn callback_one(mut event: TestEvent) -> EventResult<TestEvent> {
         event.0 += 5;
         Ok(EventState::Continue)

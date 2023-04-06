@@ -70,7 +70,7 @@ fn has_return_statement(block: &syn::Block) -> bool {
     }
 }
 
-// #[listener]
+// #[subscriber]
 pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let func = parse_macro_input!(item as syn::ItemFn);
     let func_name = func.sig.ident;
@@ -115,13 +115,23 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     } else {
         quote! { let #event_name = #event_name.read().await; }
     };
+
     let return_flow = if has_return_statement(&func_body) {
         quote! {}
     } else {
         quote! { Ok(starbase::EventState::Continue) }
     };
 
+    let attributes = if cfg!(feature = "tracing") {
+        quote! {
+            #[tracing::instrument(skip_all)]
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
+        #attributes
         async fn #func_name(
             #event_name: std::sync::Arc<tokio::sync::RwLock<#event_type>>
         ) -> starbase::EventResult<#event_type> {

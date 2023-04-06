@@ -299,7 +299,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
 
     let attributes = if cfg!(feature = "tracing") {
         quote! {
-            #[starbase::trace::instrument(skip_all)]
+            #[tracing::instrument(skip_all)]
         }
     } else {
         quote! {}
