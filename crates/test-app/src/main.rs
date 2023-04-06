@@ -1,6 +1,6 @@
 use starbase::diagnose::{Diagnostic, Error, IntoDiagnostic};
 use starbase::trace::{debug, info, warn};
-use starbase::{system, App, MainResult, State};
+use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {
@@ -10,21 +10,33 @@ enum AppError {
 }
 
 #[derive(Debug, State)]
-struct Test(pub String);
+struct TestState(pub String);
+
+#[derive(Debug, Event)]
+struct TestEvent(pub usize);
+
+#[subscriber]
+async fn update_event(mut event: TestEvent) {
+    event.0 = 100;
+}
 
 #[system]
-async fn start_one(states: StatesMut) {
+async fn start_one(states: StatesMut, emitters: EmittersMut) {
     info!("startup 1");
-    states.set(Test("original".into()));
+    states.set(TestState("original".into()));
+    emitters.set(Emitter::<TestEvent>::new());
     debug!("startup 1");
 }
 
 #[system]
-async fn start_two(states: States, _resources: Resources, _emitters: Emitters) {
+async fn start_two(states: States, _resources: Resources, em: EmitterMut<TestEvent>) {
+    em.on(update_event).await;
+
     tokio::spawn(async move {
         let states = states.read().await;
         info!("startup 2");
-        let state = states.get::<Test>();
+        let state = states.get::<TestState>();
+
         dbg!(state);
     })
     .await
@@ -32,13 +44,18 @@ async fn start_two(states: States, _resources: Resources, _emitters: Emitters) {
 }
 
 #[system]
-async fn analyze_one(state: StateMut<Test>) {
+async fn analyze_one(state: StateMut<TestState>, em: EmitterRef<TestEvent>) {
     info!(val = state.0, "analyze");
     **state = "mutated".to_string();
+
+    let event = TestEvent(50);
+    dbg!(&event);
+    let (event, _) = em.emit(event).await.unwrap();
+    dbg!(event);
 }
 
 #[system]
-async fn finish(state: StateRef<Test>) {
+async fn finish(state: StateRef<TestState>) {
     info!(val = state.0, "shutdown");
     dbg!(state);
 }

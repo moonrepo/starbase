@@ -4,6 +4,10 @@ use starbase_macros::*;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+mod starbase {
+    pub use starbase_events::*;
+}
+
 #[derive(Event)]
 #[event(value = "i32")]
 struct TestEvent(pub i32);

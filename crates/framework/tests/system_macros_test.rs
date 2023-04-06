@@ -79,6 +79,16 @@ async fn read_resource_same_arg(arg1: ResourceRef<Resource1>, arg2: ResourceRef<
 }
 
 #[system]
+async fn read_emitters(emitters: EmittersRef) {
+    emitters.get::<Emitter<Event1>>();
+}
+
+#[system]
+async fn read_emitter(em: EmitterRef<Event1>) {
+    em.emit(Event1("test".into())).await?;
+}
+
+#[system]
 async fn read_all_managers(states: StatesRef, resources: ResourcesRef, emitters: EmittersMut) {
     dbg!(states, resources, emitters);
 }
@@ -128,7 +138,7 @@ async fn write_emitters_renamed(other: EmittersMut) {
 }
 
 #[system]
-async fn write_emitter(em: EmitterRef<Event1>) {
+async fn write_emitter(em: EmitterMut<Event1>) {
     em.emit(Event1("test".into())).await?;
 }
 

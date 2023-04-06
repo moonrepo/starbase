@@ -7,6 +7,10 @@ use std::{path::PathBuf, sync::Arc};
 use thiserror::Error;
 use tokio::sync::RwLock;
 
+mod starbase {
+    pub use starbase_events::*;
+}
+
 #[derive(Debug, Diagnostic, Error)]
 enum TestError {
     #[error("Oops")]
