@@ -7,6 +7,6 @@ description = "Macros for the starbase framework."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
-async-trait = "0.1.68"
-miette = "5.7.0"
-tokio = { version = "1.27.0" }
+async-trait = { workspace = true }
+miette = { workspace = true }
+tokio = { workspace = true }

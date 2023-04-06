@@ -10,13 +10,13 @@ readme = "../../README.md"
 [dependencies]
 starbase_events = { version = "0.1.0", path = "../events" }
 starbase_macros = { version = "0.1.0", path = "../macros" }
-async-trait = "0.1.68"
-miette = "5.7.0"
+async-trait = { workspace = true }
+miette = { workspace = true }
 num_cpus = "1.15.0"
 relative-path = "1.8.0"
 rustc-hash = "1.1.0"
 thiserror = "1.0.40"
-tokio = { version = "1.27.0", features = ["full", "tracing"] }
+tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { version = "0.1.37", optional = true }
 tracing-subscriber = { version = "0.3.16", optional = true }
 

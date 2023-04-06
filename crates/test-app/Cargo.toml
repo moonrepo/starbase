@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 starbase = { path = "../framework" }
-miette = { version = "5.7.0", features = ["fancy"] }
-tokio = { version = "1.27.0", features = ["full", "tracing"] }
+miette = { workspace = true, features = ["fancy"] }
+tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = "0.1.37"
