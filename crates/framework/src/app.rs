@@ -1,5 +1,5 @@
 use crate::app_state::*;
-use crate::events::{EmitterInstance, EmitterManager, Emitters};
+use crate::emitters::{EmitterInstance, EmitterManager, Emitters};
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
 use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};

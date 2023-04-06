@@ -1,6 +1,6 @@
 mod app;
 mod app_state;
-mod events;
+mod emitters;
 mod instance;
 mod resources;
 mod states;
@@ -8,7 +8,7 @@ mod system;
 
 pub use app::*;
 pub use app_state::AppState;
-pub use events::*;
+pub use emitters::*;
 pub use resources::*;
 pub use starbase_macros::*;
 pub use states::*;

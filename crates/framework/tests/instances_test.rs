@@ -7,8 +7,8 @@ mod events {
     #[derive(Debug, Event)]
     struct TestEvent(pub usize);
 
-    #[listener]
-    async fn callback_one(event: &mut TestEvent) -> EventResult<TestEvent> {
+    #[subscriber]
+    async fn callback_one(mut event: TestEvent) -> EventResult<TestEvent> {
         event.0 += 5;
         Ok(EventState::Continue)
     }
@@ -19,7 +19,7 @@ mod events {
         ctx.set(Emitter::<TestEvent>::new());
 
         let em = ctx.get_mut::<Emitter<TestEvent>>();
-        em.listen(CallbackOneListener);
+        em.on(callback_one);
 
         let (event, _) = em.emit(TestEvent(5)).await.unwrap();
 

@@ -10,7 +10,6 @@ repository = "https://github.com/moonrepo/starbase"
 proc-macro = true
 
 [dependencies]
-convert_case = "0.6.0"
 darling = "0.14.4"
 proc-macro2 = "1.0.56"
 quote = "1.0.26"
