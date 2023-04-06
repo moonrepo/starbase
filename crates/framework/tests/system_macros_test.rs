@@ -128,7 +128,7 @@ async fn write_emitters_renamed(other: EmittersMut) {
 }
 
 #[system]
-async fn write_emitter(em: EmitterMut<Event1>) {
+async fn write_emitter(em: EmitterRef<Event1>) {
     em.emit(Event1("test".into())).await?;
 }
 

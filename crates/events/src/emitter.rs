@@ -1,51 +1,45 @@
 use crate::event::*;
 use crate::subscriber::*;
 use std::collections::HashSet;
-use std::sync::{Arc, RwLock as StdRwLock};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
 pub struct Emitter<E: Event> {
-    subscribers: StdRwLock<Vec<BoxedSubscriber<E>>>,
+    subscribers: RwLock<Vec<BoxedSubscriber<E>>>,
 }
 
+#[allow(clippy::new_without_default)]
 impl<E: Event + 'static> Emitter<E> {
     pub fn new() -> Self {
         Emitter {
-            subscribers: StdRwLock::new(Vec::new()),
+            subscribers: RwLock::new(Vec::new()),
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.subscribers.read().unwrap().len()
+    pub async fn len(&self) -> usize {
+        self.subscribers.read().await.len()
     }
 
-    pub fn subscribe<L: Subscriber<E> + 'static>(&self, subscriber: L) -> &Self {
-        self.subscribers
-            .write()
-            .expect("Failed to add subscriber. Emitter lock poisoned.")
-            .push(Box::new(subscriber));
-
+    pub async fn subscribe<L: Subscriber<E> + 'static>(&self, subscriber: L) -> &Self {
+        self.subscribers.write().await.push(Box::new(subscriber));
         self
     }
 
-    pub fn on<L: SubscriberFunc<E> + 'static>(&self, callback: L) -> &Self {
-        self.subscribe(CallbackSubscriber::new(callback, false));
-        self
+    pub async fn on<L: SubscriberFunc<E> + 'static>(&self, callback: L) -> &Self {
+        self.subscribe(CallbackSubscriber::new(callback, false))
+            .await
     }
 
-    pub fn once<L: SubscriberFunc<E> + 'static>(&self, callback: L) -> &Self {
-        self.subscribe(CallbackSubscriber::new(callback, true));
-        self
+    pub async fn once<L: SubscriberFunc<E> + 'static>(&self, callback: L) -> &Self {
+        self.subscribe(CallbackSubscriber::new(callback, true))
+            .await
     }
 
     pub async fn emit(&self, event: E) -> miette::Result<(E, Option<E::Value>)> {
         let mut result = None;
         let mut remove_indices = HashSet::new();
         let event = Arc::new(RwLock::new(event));
-        let mut subscribers = self
-            .subscribers
-            .write()
-            .expect("Failed to get subscribers. Emitter lock poisoned.");
+        let mut subscribers = self.subscribers.write().await;
 
         for (index, subscriber) in subscribers.iter_mut().enumerate() {
             let event = Arc::clone(&event);
