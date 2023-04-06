@@ -1,34 +1,31 @@
 use starbase::{Emitter, EmitterManager, EventState, ResourceManager, StateManager};
 use starbase_macros::*;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
-// mod events {
+mod events {
+    use super::*;
 
-//     use super::*;
+    #[derive(Debug, Event)]
+    struct TestEvent(pub usize);
 
-//     #[derive(Debug, Event)]
-//     struct TestEvent(pub usize);
+    #[listener]
+    async fn callback_one(mut event: TestEvent) -> EventResult<TestEvent> {
+        event.0 += 5;
+        Ok(EventState::Continue)
+    }
 
-//     #[listener]
-//     async fn callback_one(event: Arc<RwLock<TestEvent>>) -> EventResult<TestEvent> {
-//         event.0 += 5;
-//         Ok(EventState::Continue)
-//     }
+    #[tokio::test]
+    async fn register_and_emit() {
+        let mut ctx = EmitterManager::default();
+        ctx.set(Emitter::<TestEvent>::new());
 
-//     #[tokio::test]
-//     async fn register_and_emit() {
-//         let mut ctx = EmitterManager::default();
-//         ctx.set(Emitter::<TestEvent>::new());
+        let em = ctx.get_mut::<Emitter<TestEvent>>();
+        em.on(callback_one);
 
-//         let em = ctx.get_mut::<Emitter<TestEvent>>();
-//         em.listen(CallbackOneListener);
+        let (event, _) = em.emit(TestEvent(5)).await.unwrap();
 
-//         let (event, _) = em.emit(TestEvent(5)).await.unwrap();
-
-//         assert_eq!(event.0, 10);
-//     }
-// }
+        assert_eq!(event.0, 10);
+    }
+}
 
 mod resources {
     use super::*;
