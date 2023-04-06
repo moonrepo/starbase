@@ -1,4 +1,4 @@
-use starship_macros::*;
+use starbase_macros::*;
 use std::path::PathBuf;
 
 #[derive(Event)]

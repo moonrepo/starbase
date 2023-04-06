@@ -46,12 +46,12 @@ pub fn macro_impl(args: TokenStream, item: TokenStream) -> TokenStream {
 
         #[async_trait::async_trait]
         #[automatically_derived]
-        impl starship::Listener<#event_name> for #listener_name {
+        impl starbase::Listener<#event_name> for #listener_name {
             fn is_once(&self) -> bool {
                 #is_once
             }
 
-            async fn on_emit(&mut self, event: &mut #event_name) -> starship::EventResult<#event_name> {
+            async fn on_emit(&mut self, event: &mut #event_name) -> starbase::EventResult<#event_name> {
                 #func_body
             }
         }

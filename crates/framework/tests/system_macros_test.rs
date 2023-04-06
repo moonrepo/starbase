@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_must_use)]
 
-use starship::{App, Emitter};
-use starship_macros::*;
+use starbase::{App, Emitter};
+use starbase_macros::*;
 
 #[derive(Debug, Event)]
 struct Event1(String);

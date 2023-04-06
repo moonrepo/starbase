@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use starship::{Emitter, EventResult, EventState, Listener};
-use starship_macros::*;
+use starbase::{Emitter, EventResult, EventState, Listener};
+use starbase_macros::*;
 
 #[derive(Event)]
 #[event(value = "i32")]

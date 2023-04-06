@@ -1,5 +1,5 @@
-use starship::{Emitter, EmitterManager, EventState, ResourceManager, StateManager};
-use starship_macros::*;
+use starbase::{Emitter, EmitterManager, EventState, ResourceManager, StateManager};
+use starbase_macros::*;
 
 mod events {
     use super::*;

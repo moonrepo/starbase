@@ -9,7 +9,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
 
     let shared_impl = quote! {
         #[automatically_derived]
-        impl starship::StateInstance for #struct_name {
+        impl starbase::StateInstance for #struct_name {
         }
     };
 
@@ -52,8 +52,8 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                                 }),
                                 "RelativePathBuf" => Some(quote! {
                                     #[automatically_derived]
-                                    impl AsRef<starship::RelativePath> for #struct_name {
-                                        fn as_ref(&self) -> &starship::RelativePath {
+                                    impl AsRef<starbase::RelativePath> for #struct_name {
+                                        fn as_ref(&self) -> &starbase::RelativePath {
                                             &self.0
                                         }
                                     }

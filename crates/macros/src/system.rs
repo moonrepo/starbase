@@ -161,7 +161,7 @@ impl<'l> InstanceTracker<'l> {
                 SystemParam::ParamMut(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let #name = #manager_var_name.get_mut::<starship::Emitter<#ty>>();
+                            let #name = #manager_var_name.get_mut::<starbase::Emitter<#ty>>();
                         });
                     } else {
                         quotes.push(quote! {
@@ -172,7 +172,7 @@ impl<'l> InstanceTracker<'l> {
                 SystemParam::ParamRef(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let #name = #manager_var_name.get::<starship::Emitter<#ty>>();
+                            let #name = #manager_var_name.get::<starbase::Emitter<#ty>>();
                         });
                     } else {
                         quotes.push(quote! {
@@ -299,7 +299,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
 
     let attributes = if cfg!(feature = "tracing") {
         quote! {
-            #[starship::trace::instrument(skip_all)]
+            #[starbase::trace::instrument(skip_all)]
         }
     } else {
         quote! {}
@@ -308,10 +308,10 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #attributes
         #func_vis async fn #func_name(
-            #state_param: starship::States,
-            #resource_param: starship::Resources,
-            #emitter_param: starship::Emitters
-        ) -> starship::SystemResult {
+            #state_param: starbase::States,
+            #resource_param: starbase::Resources,
+            #emitter_param: starbase::Emitters
+        ) -> starbase::SystemResult {
             #(#state_quotes)*
             #(#resource_quotes)*
             #(#emitter_quotes)*

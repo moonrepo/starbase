@@ -1,10 +1,10 @@
 [package]
-name = "starship"
+name = "starbase"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-starship_macros = { path = "../macros" }
+starbase_macros = { path = "../macros" }
 async-trait = "0.1.68"
 miette = "5.7.0"
 num_cpus = "1.15.0"
@@ -17,4 +17,4 @@ tracing-subscriber = { version = "0.3.16", optional = true }
 
 [features]
 default = ["tracing"]
-tracing = ["dep:tracing", "dep:tracing-subscriber", "starship_macros/tracing"]
+tracing = ["dep:tracing", "dep:tracing-subscriber", "starbase_macros/tracing"]

@@ -1,6 +1,6 @@
-use starship::diagnose::{Diagnostic, Error, IntoDiagnostic};
-use starship::trace::{debug, info, warn};
-use starship::{system, App, MainResult, State};
+use starbase::diagnose::{Diagnostic, Error, IntoDiagnostic};
+use starbase::trace::{debug, info, warn};
+use starbase::{system, App, MainResult, State};
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {
