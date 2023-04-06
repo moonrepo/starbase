@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-starbase_macros = { path = "../macros" }
+starbase_macros = { path = "../framework-macros" }
 async-trait = "0.1.68"
 miette = "5.7.0"
 num_cpus = "1.15.0"
