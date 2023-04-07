@@ -1,6 +1,6 @@
 use miette::Diagnostic;
 use std::ffi::OsStr;
-use std::fs;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
@@ -101,6 +101,16 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
 }
 
 #[inline]
+pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+    let path = path.as_ref();
+
+    File::create(&path).map_err(|error| FsError::Create {
+        path: path.to_path_buf(),
+        error,
+    })
+}
+
+#[inline]
 pub fn create_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
@@ -190,6 +200,16 @@ pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
     let path = path.as_ref();
 
     fs::metadata(path).map_err(|error| FsError::Read {
+        path: path.to_path_buf(),
+        error,
+    })
+}
+
+#[inline]
+pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+    let path = path.as_ref();
+
+    File::open(&path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
         error,
     })
