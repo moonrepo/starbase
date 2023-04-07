@@ -27,7 +27,11 @@ pub fn style(color: u8) -> Style {
 }
 
 pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {
-    value.as_ref().style(style(color)).to_string()
+    if no_color() {
+        value.as_ref().to_string()
+    } else {
+        value.as_ref().style(style(color)).to_string()
+    }
 }
 
 // States
