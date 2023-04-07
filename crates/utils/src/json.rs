@@ -20,7 +20,7 @@ pub enum JsonError {
     Fs(#[from] FsError),
 
     #[diagnostic(code(json::read_file))]
-    #[error("Failed to read JSON file <path>{path}</path>: {error}")]
+    #[error("Failed to read JSON file <path>{path}</path>")]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -28,7 +28,7 @@ pub enum JsonError {
     },
 
     #[diagnostic(code(json::stringify_file))]
-    #[error("Failed to stringify JSON for file <path>{path}</path>: {error}")]
+    #[error("Failed to stringify JSON for file <path>{path}</path>")]
     StringifyFile {
         path: PathBuf,
         #[source]

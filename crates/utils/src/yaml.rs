@@ -19,7 +19,7 @@ pub enum YamlError {
     Fs(#[from] FsError),
 
     #[diagnostic(code(yaml::read_file))]
-    #[error("Failed to read YAML file <path>{path}</path>: {error}")]
+    #[error("Failed to read YAML file <path>{path}</path>")]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -27,7 +27,7 @@ pub enum YamlError {
     },
 
     #[diagnostic(code(yaml::stringify_file))]
-    #[error("Failed to stringify YAML for file <path>{path}</path>: {error}")]
+    #[error("Failed to stringify YAML for file <path>{path}</path>")]
     StringifyFile {
         path: PathBuf,
         #[source]

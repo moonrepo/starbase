@@ -11,7 +11,7 @@ pub use wax::{self, Glob};
 #[derive(Error, Diagnostic, Debug)]
 pub enum GlobError {
     #[diagnostic(code(glob::create))]
-    #[error("Failed to create glob from pattern <file>{glob}</file>: {error}")]
+    #[error("Failed to create glob from pattern <file>{glob}</file>")]
     Create {
         glob: String,
         #[source]

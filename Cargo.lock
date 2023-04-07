@@ -866,6 +866,7 @@ version = "0.1.0"
 dependencies = [
  "miette",
  "starbase",
+ "starbase_utils",
  "tokio",
  "tracing",
 ]

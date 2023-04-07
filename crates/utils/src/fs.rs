@@ -8,7 +8,7 @@ use thiserror::Error;
 #[derive(Error, Diagnostic, Debug)]
 pub enum FsError {
     #[diagnostic(code(fs::copy), help("Does the source file exist?"))]
-    #[error("Failed to copy <path>{from}</path> to <path>{to}</path>: {error}")]
+    #[error("Failed to copy <path>{from}</path> to <path>{to}</path>")]
     Copy {
         from: PathBuf,
         to: PathBuf,
@@ -17,7 +17,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::create))]
-    #[error("Failed to create <path>{path}</path>: {error}")]
+    #[error("Failed to create <path>{path}</path>")]
     Create {
         path: PathBuf,
         #[source]
@@ -25,7 +25,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::read))]
-    #[error("Failed to read path <path>{path}</path>: {error}")]
+    #[error("Failed to read path <path>{path}</path>")]
     Read {
         path: PathBuf,
         #[source]
@@ -33,7 +33,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::remove))]
-    #[error("Failed to remove path <path>{path}</path>: {error}")]
+    #[error("Failed to remove path <path>{path}</path>")]
     Remove {
         path: PathBuf,
         #[source]
@@ -41,7 +41,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::rename), help("Does the source file exist?"))]
-    #[error("Failed to rename <path>{from}</path> to <path>{to}</path>: {error}")]
+    #[error("Failed to rename <path>{from}</path> to <path>{to}</path>")]
     Rename {
         from: PathBuf,
         to: PathBuf,
@@ -50,7 +50,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::write), help("Does the parent directory exist?"))]
-    #[error("Failed to write <path>{path}</path>: {error}")]
+    #[error("Failed to write <path>{path}</path>")]
     Write {
         path: PathBuf,
         #[source]
