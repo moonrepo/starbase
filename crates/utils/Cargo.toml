@@ -32,7 +32,7 @@ toml = { version = "0.7.3", optional = true }
 serde_yaml = { workspace = true, optional = true }
 
 [features]
-default = ["editor-config", "glob", "json", "yaml", "toml"]
+default = ["editor-config", "glob", "json", "yaml"]
 glob = ["dep:wax"]
 json = ["dep:json_comments", "dep:regex", "dep:serde", "dep:serde_json"]
 editor-config = ["dep:ec4rs"]
