@@ -1,6 +1,6 @@
 use miette::Diagnostic;
 use std::ffi::OsStr;
-use std::fs;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
@@ -19,6 +19,14 @@ pub enum FsError {
     #[diagnostic(code(fs::create))]
     #[error("Failed to create <path>{path}</path>")]
     Create {
+        path: PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[diagnostic(code(fs::perms))]
+    #[error("Failed to update permissions for <path>{path}</path>")]
+    Perms {
         path: PathBuf,
         #[source]
         error: std::io::Error,
@@ -98,6 +106,16 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
     }
 
     Ok(())
+}
+
+#[inline]
+pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+    let path = path.as_ref();
+
+    File::create(path).map_err(|error| FsError::Create {
+        path: path.to_path_buf(),
+        error,
+    })
 }
 
 #[inline]
@@ -196,6 +214,16 @@ pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
 }
 
 #[inline]
+pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+    let path = path.as_ref();
+
+    File::open(path).map_err(|error| FsError::Read {
+        path: path.to_path_buf(),
+        error,
+    })
+}
+
+#[inline]
 pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     let path = path.as_ref();
 
@@ -241,7 +269,7 @@ pub fn read_dir_all<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsErro
 }
 
 #[inline]
-pub fn read<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
+pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
     let path = path.as_ref();
 
     fs::read_to_string(path).map_err(|error| FsError::Read {
@@ -356,7 +384,26 @@ pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsEr
 }
 
 #[inline]
-pub fn write<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
+pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), FsError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = path.as_ref();
+
+        fs::set_permissions(path, fs::Permissions::from_mode(mode.unwrap_or(0o755))).map_err(
+            |error| FsError::Perms {
+                path: path.to_path_buf(),
+                error,
+            },
+        )?;
+    }
+
+    Ok(())
+}
+
+#[inline]
+pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
     let path = path.as_ref();
 
     fs::write(path, data).map_err(|error| FsError::Write {

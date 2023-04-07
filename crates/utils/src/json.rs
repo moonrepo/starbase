@@ -19,8 +19,8 @@ pub enum JsonError {
     #[error(transparent)]
     Fs(#[from] FsError),
 
-    #[diagnostic(code(json::read_file))]
-    #[error("Failed to read JSON file <path>{path}</path>")]
+    #[diagnostic(code(json::parse_file))]
+    #[error("Failed to parse JSON file <path>{path}</path>")]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -80,7 +80,7 @@ pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
 }
 
 #[inline]
-pub fn read<P, D>(path: P) -> Result<D, JsonError>
+pub fn read_file<P, D>(path: P) -> Result<D, JsonError>
 where
     P: AsRef<Path>,
     D: DeserializeOwned,
@@ -96,12 +96,12 @@ where
 
 #[inline]
 pub fn read_to_string<T: AsRef<Path>>(path: T) -> Result<String, JsonError> {
-    Ok(clean(fs::read(path.as_ref())?))
+    Ok(clean(fs::read_file(path.as_ref())?))
 }
 
 // This function is primarily used internally for non-consumer facing files.
 #[inline]
-pub fn write<P, D>(path: P, json: &D, pretty: bool) -> Result<(), JsonError>
+pub fn write_file<P, D>(path: P, json: &D, pretty: bool) -> Result<(), JsonError>
 where
     P: AsRef<Path>,
     D: ?Sized + Serialize,
@@ -120,7 +120,7 @@ where
         })?
     };
 
-    fs::write(path, data)?;
+    fs::write_file(path, data)?;
 
     Ok(())
 }
@@ -134,7 +134,7 @@ pub fn write_with_config<P: AsRef<Path>>(
     pretty: bool,
 ) -> Result<(), JsonError> {
     if !pretty {
-        return write(path, &json, false);
+        return write_file(path, &json, false);
     }
 
     use serde_json::ser::PrettyFormatter;
@@ -159,7 +159,7 @@ pub fn write_with_config<P: AsRef<Path>>(
     let mut data = unsafe { String::from_utf8_unchecked(writer) };
     data += &editor_config.eof;
 
-    fs::write(path, data)?;
+    fs::write_file(path, data)?;
 
     Ok(())
 }

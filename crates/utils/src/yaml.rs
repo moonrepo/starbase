@@ -18,8 +18,8 @@ pub enum YamlError {
     #[error(transparent)]
     Fs(#[from] FsError),
 
-    #[diagnostic(code(yaml::read_file))]
-    #[error("Failed to read YAML file <path>{path}</path>")]
+    #[diagnostic(code(yaml::parse_file))]
+    #[error("Failed to parse YAML file <path>{path}</path>")]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -59,13 +59,13 @@ pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
 }
 
 #[inline]
-pub fn read<P, D>(path: P) -> Result<D, YamlError>
+pub fn read_file<P, D>(path: P) -> Result<D, YamlError>
 where
     P: AsRef<Path>,
     D: DeserializeOwned,
 {
     let path = path.as_ref();
-    let contents = fs::read(path)?;
+    let contents = fs::read_file(path)?;
 
     serde_yaml::from_str(&contents).map_err(|error| YamlError::ReadFile {
         path: path.to_path_buf(),
@@ -75,7 +75,7 @@ where
 
 // This function is primarily used internally for non-consumer facing files.
 #[inline]
-pub fn write<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
+pub fn write_file<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
 where
     P: AsRef<Path>,
     D: ?Sized + Serialize,
@@ -87,7 +87,7 @@ where
         error,
     })?;
 
-    fs::write(path, data)?;
+    fs::write_file(path, data)?;
 
     Ok(())
 }
@@ -138,7 +138,7 @@ where
 
     data += &editor_config.eof;
 
-    fs::write(path, data)?;
+    fs::write_file(path, data)?;
 
     Ok(())
 }

@@ -3,6 +3,7 @@ members = ["crates/*"]
 
 [workspace.dependencies]
 async-trait = "0.1.68"
+insta = "1.29.0"
 miette = "5.7.0"
 once_cell = "1.17.1"
 regex = "1.7.3"
