@@ -1,0 +1,13 @@
+[package]
+name = "starbase_utils"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "General fs, io, serde, etc utilies."
+repository = "https://github.com/moonrepo/starbase"
+
+[dependencies]
+ec4rs = "1.0.2"
+miette = { workspace = true}
+relative-path = "1.8.0"
+thiserror = { workspace = true}

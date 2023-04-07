@@ -138,6 +138,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ec4rs"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbe77819d458aa1ffc58cfdc1cc240f6356952908ea4ee1864da53b0c7e19437"
+
+[[package]]
 name = "errno"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -571,6 +577,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "starbase_utils"
+version = "0.1.0"
+dependencies = [
+ "ec4rs",
+ "miette",
+ "relative-path",
+ "thiserror",
 ]
 
 [[package]]
