@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-pub use toml::value;
+pub use toml::value::{Datetime as TomlDatetime, Table as TomlTable, Value as TomlValue};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum TomlError {
