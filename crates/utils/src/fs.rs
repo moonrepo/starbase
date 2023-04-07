@@ -143,11 +143,13 @@ where
     }
 }
 
+#[cfg(feature = "editor-config")]
 pub struct EditorConfigProps {
     pub eof: String,
     pub indent: String,
 }
 
+#[cfg(feature = "editor-config")]
 pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
     use ec4rs::property::*;
 

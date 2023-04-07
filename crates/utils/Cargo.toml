@@ -7,18 +7,21 @@ description = "General fs, io, serde, etc utilies."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
-ec4rs = "1.0.2"
 miette = { workspace = true }
 once_cell = { workspace = true }
 relative-path = "1.8.0"
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 
-# JSON
+# editor-config
+ec4rs = { version = "1.0.2", optional = true }
+
+# json
 json_comments = { version = "0.2.1", optional = true }
 regex = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 
 [features]
-default = ["json"]
+default = ["editor-config", "json"]
 json = ["dep:json_comments", "dep:regex", "dep:serde", "dep:serde_json"]
+editor-config = ["dep:ec4rs"]

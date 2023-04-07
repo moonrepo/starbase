@@ -10,7 +10,9 @@ use std::sync::Mutex;
 use std::{io::Read, path::PathBuf};
 use thiserror::Error;
 
-pub use serde_json::{json, Map as JsonMap, Value as JsonValue};
+pub use serde_json::{
+    from_value, json, to_value, Map as JsonMap, Number as JsonNumber, Value as JsonValue,
+};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum JsonError {
@@ -124,6 +126,7 @@ where
 }
 
 // This function is used for consumer facing files, like configs.
+#[cfg(feature = "editor-config")]
 #[inline]
 pub fn write_with_config<P: AsRef<Path>>(
     path: P,
@@ -138,7 +141,7 @@ pub fn write_with_config<P: AsRef<Path>>(
     use serde_json::Serializer;
 
     let path = path.as_ref();
-    let editor_config = crate::fs::get_editor_config_props(path);
+    let editor_config = fs::get_editor_config_props(path);
 
     // Based on serde_json::to_string_pretty!
     let mut writer = Vec::with_capacity(128);
