@@ -241,7 +241,7 @@ pub fn read_dir_all<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsErro
 }
 
 #[inline]
-pub fn read<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
+pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
     let path = path.as_ref();
 
     fs::read_to_string(path).map_err(|error| FsError::Read {
@@ -356,7 +356,7 @@ pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsEr
 }
 
 #[inline]
-pub fn write<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
+pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
     let path = path.as_ref();
 
     fs::write(path, data).map_err(|error| FsError::Write {

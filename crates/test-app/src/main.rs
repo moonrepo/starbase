@@ -63,7 +63,7 @@ async fn finish(state: StateRef<TestState>) {
 
 #[system]
 async fn missing_file() {
-    starbase_utils::fs::read(PathBuf::from("fake.file"))?;
+    starbase_utils::fs::read_file(PathBuf::from("fake.file"))?;
 }
 
 #[system]
