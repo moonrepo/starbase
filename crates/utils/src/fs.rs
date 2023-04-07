@@ -24,6 +24,14 @@ pub enum FsError {
         error: std::io::Error,
     },
 
+    #[diagnostic(code(fs::perms))]
+    #[error("Failed to update permissions for <path>{path}</path>")]
+    Perms {
+        path: PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
     #[diagnostic(code(fs::read))]
     #[error("Failed to read path <path>{path}</path>")]
     Read {
@@ -373,6 +381,25 @@ pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsEr
         to: to.to_path_buf(),
         error,
     })
+}
+
+#[inline]
+pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), FsError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = path.as_ref();
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(mode.unwrap_or(0o755))).map_err(
+            |error| FsError::Perms {
+                path: path.to_path_buf(),
+                error,
+            },
+        )?;
+    }
+
+    Ok(())
 }
 
 #[inline]
