@@ -2,7 +2,7 @@
 // https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg
 
 use dirs::home_dir;
-use owo_colors::{OwoColorize, XtermColors};
+use owo_colors::{OwoColorize, Style, XtermColors};
 use std::env;
 use std::path::Path;
 
@@ -22,8 +22,12 @@ pub enum Color {
     GrayLight = 248,
 }
 
+pub fn style(color: u8) -> Style {
+    Style::new().color(XtermColors::from(color))
+}
+
 pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {
-    value.as_ref().color(XtermColors::from(color)).to_string()
+    value.as_ref().style(style(color)).to_string()
 }
 
 // States

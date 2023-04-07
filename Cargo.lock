@@ -780,6 +780,7 @@ dependencies = [
  "rustc-hash",
  "starbase_events",
  "starbase_macros",
+ "starbase_styles",
  "thiserror",
  "tokio",
  "tracing",
@@ -813,6 +814,7 @@ name = "starbase_styles"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "miette",
  "once_cell",
  "owo-colors",
  "regex",
