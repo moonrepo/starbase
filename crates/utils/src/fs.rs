@@ -112,7 +112,7 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
 pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
 
-    File::create(&path).map_err(|error| FsError::Create {
+    File::create(path).map_err(|error| FsError::Create {
         path: path.to_path_buf(),
         error,
     })
@@ -217,7 +217,7 @@ pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
 pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
 
-    File::open(&path).map_err(|error| FsError::Read {
+    File::open(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
         error,
     })
@@ -391,7 +391,7 @@ pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), Fs
 
         let path = path.as_ref();
 
-        fs::set_permissions(&path, fs::Permissions::from_mode(mode.unwrap_or(0o755))).map_err(
+        fs::set_permissions(path, fs::Permissions::from_mode(mode.unwrap_or(0o755))).map_err(
             |error| FsError::Perms {
                 path: path.to_path_buf(),
                 error,

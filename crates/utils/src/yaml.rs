@@ -18,8 +18,8 @@ pub enum YamlError {
     #[error(transparent)]
     Fs(#[from] FsError),
 
-    #[diagnostic(code(yaml::read_file))]
-    #[error("Failed to read YAML file <path>{path}</path>")]
+    #[diagnostic(code(yaml::parse_file))]
+    #[error("Failed to parse YAML file <path>{path}</path>")]
     ReadFile {
         path: PathBuf,
         #[source]

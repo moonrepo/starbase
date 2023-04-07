@@ -19,8 +19,8 @@ pub enum JsonError {
     #[error(transparent)]
     Fs(#[from] FsError),
 
-    #[diagnostic(code(json::read_file))]
-    #[error("Failed to read JSON file <path>{path}</path>")]
+    #[diagnostic(code(json::parse_file))]
+    #[error("Failed to parse JSON file <path>{path}</path>")]
     ReadFile {
         path: PathBuf,
         #[source]
