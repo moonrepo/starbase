@@ -821,6 +821,7 @@ dependencies = [
 name = "starbase_utils"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "ec4rs",
  "json_comments",
  "miette",

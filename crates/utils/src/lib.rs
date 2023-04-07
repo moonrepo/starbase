@@ -1,3 +1,5 @@
+pub use dirs;
+
 pub mod fs;
 
 #[cfg(feature = "glob")]
