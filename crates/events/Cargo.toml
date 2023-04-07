@@ -3,7 +3,7 @@ name = "starbase_events"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Macros for the starbase framework."
+description = "Async and mutable event system."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
