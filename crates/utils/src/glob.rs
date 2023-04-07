@@ -6,7 +6,7 @@ use std::{
 use thiserror::Error;
 use wax::{Any, BuildError, LinkBehavior, Negation, Pattern};
 
-pub use wax::Glob;
+pub use wax::{self, Glob};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum GlobError {

@@ -3,13 +3,13 @@ name = "starbase_utils"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "General fs, io, serde, etc utilies."
+description = "General fs, io, serde, etc, utilities."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
 miette = { workspace = true }
 once_cell = { workspace = true }
-relative-path = "1.8.0"
+relative-path = { workspace = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
