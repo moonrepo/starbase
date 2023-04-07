@@ -11,6 +11,7 @@ starbase is built with the following modules:
 - **Communication array** - Event-driven architecture with `starbase_events`.
 - **Shield generator** - Native diagnostics and reports with `miette`.
 - **Navigation sensors** - Span based instrumentation and logging with `tracing`.
+- **Engineering bay** - Ergonomic utilities with `starbase_utils`.
 
 # Core
 

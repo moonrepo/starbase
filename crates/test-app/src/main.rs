@@ -1,6 +1,7 @@
 use starbase::diagnose::{Diagnostic, Error, IntoDiagnostic};
 use starbase::trace::{debug, info, warn};
 use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
+use std::path::PathBuf;
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {
@@ -61,6 +62,11 @@ async fn finish(state: StateRef<TestState>) {
 }
 
 #[system]
+async fn missing_file() {
+    starbase_utils::fs::read(PathBuf::from("fake.file"))?;
+}
+
+#[system]
 async fn fail() {
     if std::env::var("FAIL").is_ok() {
         warn!("fail");
@@ -77,6 +83,7 @@ async fn main() -> MainResult {
     app.analyze(analyze_one);
     app.startup(start_one);
     app.startup(start_two);
+    // app.execute(missing_file);
     app.execute(fail);
 
     let ctx = app.run().await?;
