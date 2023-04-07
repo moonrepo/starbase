@@ -813,7 +813,9 @@ name = "starbase_styles"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "once_cell",
  "owo-colors",
+ "regex",
  "supports-color",
 ]
 

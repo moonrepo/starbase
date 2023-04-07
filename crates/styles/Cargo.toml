@@ -8,5 +8,7 @@ repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
 dirs = "5.0.0"
+once_cell = { workspace = true }
 owo-colors = "3.5.0"
+regex = { workspace = true }
 supports-color = "2.0.0"
