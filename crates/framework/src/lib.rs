@@ -25,3 +25,6 @@ pub mod diagnose {
 pub mod trace {
     pub use tracing::*;
 }
+
+pub use starbase_events as event;
+pub use starbase_styles as style;

@@ -1,0 +1,19 @@
+[package]
+name = "starbase_styles"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Utilities for styling the terminal."
+repository = "https://github.com/moonrepo/starbase"
+
+[dependencies]
+dirs = "5.0.0"
+miette = { workspace = true, optional = true }
+once_cell = { workspace = true }
+owo-colors = "3.5.0"
+regex = { workspace = true }
+supports-color = "2.0.0"
+
+[features]
+default = []
+theme = ["dep:miette"]

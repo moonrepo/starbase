@@ -184,6 +184,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dece029acd3353e3a58ac2e3eb3c8d6c35827a892edc6cc4138ef9c33df46ecd"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04414300db88f70d74c5ff54e50f9e1d1737d9a5b90f53fcf2e95ca2a9ab554b"
+dependencies = [
+ "libc",
+ "redox_users",
+ "windows-sys",
+]
+
+[[package]]
 name = "ec4rs"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -579,6 +599,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "redox_users"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b033d837a7cf162d7993aded9304e30a83213c648b6e389db233191f891e5c2b"
+dependencies = [
+ "getrandom",
+ "redox_syscall",
+ "thiserror",
+]
+
+[[package]]
 name = "regex"
 version = "1.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -749,6 +780,7 @@ dependencies = [
  "rustc-hash",
  "starbase_events",
  "starbase_macros",
+ "starbase_styles",
  "thiserror",
  "tokio",
  "tracing",
@@ -778,9 +810,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "starbase_styles"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "miette",
+ "once_cell",
+ "owo-colors",
+ "regex",
+ "supports-color",
+]
+
+[[package]]
 name = "starbase_utils"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "ec4rs",
  "json_comments",
  "miette",
