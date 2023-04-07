@@ -1,0 +1,15 @@
+---
+source: crates/utils/tests/yaml_test.rs
+expression: "fs::read_file(&path).unwrap()"
+---
+foo: true
+bar: 123
+qux:
+        baz:
+        - a
+        - b
+        - c
+        nested: true
+        deep:
+                nested: yaaa
+

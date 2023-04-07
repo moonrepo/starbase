@@ -34,3 +34,8 @@ glob = ["dep:wax"]
 json = ["dep:json_comments", "dep:regex", "dep:serde", "dep:serde_json"]
 editor-config = ["dep:ec4rs"]
 yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
+
+
+[dev-dependencies]
+assert_fs = "1.0.12"
+insta = { workspace = true }
