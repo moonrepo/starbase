@@ -52,8 +52,8 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
                                 }),
                                 "RelativePathBuf" => Some(quote! {
                                     #[automatically_derived]
-                                    impl AsRef<starbase::RelativePath> for #struct_name {
-                                        fn as_ref(&self) -> &starbase::RelativePath {
+                                    impl AsRef<relative_path::RelativePath> for #struct_name {
+                                        fn as_ref(&self) -> &relative_path::RelativePath {
                                             &self.0
                                         }
                                     }

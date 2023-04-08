@@ -46,7 +46,7 @@ async fn start_two(states: States, _resources: Resources, em: EmitterMut<TestEve
 
 #[system]
 async fn analyze_one(state: StateMut<TestState>, em: EmitterRef<TestEvent>) {
-    info!(val = state.0, "analyze");
+    info!(val = state.0, "analyze <file>foo.bar</file>");
     **state = "mutated".to_string();
 
     let event = TestEvent(50);
@@ -68,7 +68,11 @@ async fn missing_file() {
 
 #[system]
 async fn fail() {
-    if std::env::var("FAIL").is_ok() {
+    if let Ok(fail) = std::env::var("FAIL") {
+        if fail == "panic" {
+            panic!("This paniced!");
+        }
+
         warn!("fail");
         return Err(AppError::Test)?;
     }

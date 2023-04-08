@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_must_use)]
 
-use starbase::RelativePathBuf;
+// use starbase::RelativePathBuf;
 use starbase_macros::*;
 use std::path::PathBuf;
 
@@ -27,8 +27,8 @@ enum State4 {
 #[derive(Debug, State)]
 struct StatePath(PathBuf);
 
-#[derive(Debug, State)]
-struct StateRelPath(RelativePathBuf);
+// #[derive(Debug, State)]
+// struct StateRelPath(RelativePathBuf);
 
 // RESOURCE
 

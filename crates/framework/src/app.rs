@@ -4,7 +4,6 @@ use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
 use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};
 use miette::IntoDiagnostic;
-use starbase_styles::theme::create_graphical_theme;
 use std::any::Any;
 use std::mem;
 use std::sync::Arc;
@@ -57,20 +56,9 @@ impl App {
     }
 
     pub fn setup_hooks() {
-        #[cfg(feature = "panic")]
-        miette::set_panic_hook();
-
+        crate::diagnostic::set_miette_hooks();
         #[cfg(feature = "tracing")]
-        tracing_subscriber::fmt::init();
-
-        miette::set_hook(Box::new(|_| {
-            Box::new(
-                miette::MietteHandlerOpts::new()
-                    .graphical_theme(create_graphical_theme())
-                    .build(),
-            )
-        }))
-        .unwrap();
+        crate::tracing::set_tracing_subscriber();
     }
 
     /// Add a system function that runs during the startup phase.

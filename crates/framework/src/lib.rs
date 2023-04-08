@@ -1,10 +1,14 @@
 mod app;
 mod app_state;
+mod diagnostic;
 mod emitters;
 mod instance;
 mod resources;
 mod states;
 mod system;
+
+#[cfg(feature = "tracing")]
+mod tracing;
 
 pub use app::*;
 pub use app_state::AppState;
@@ -13,8 +17,6 @@ pub use resources::*;
 pub use starbase_macros::*;
 pub use states::*;
 pub use system::*;
-
-pub use relative_path::{RelativePath, RelativePathBuf};
 
 pub mod diagnose {
     pub use miette::*;

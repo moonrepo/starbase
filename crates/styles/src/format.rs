@@ -9,11 +9,17 @@ static STYLE_TOKEN: Lazy<Mutex<Regex>> =
 
 #[inline]
 pub fn format_style_tags<T: AsRef<str>>(value: T) -> String {
+    let value = value.as_ref();
+
+    if !value.contains('<') {
+        return value.to_string();
+    }
+
     String::from(
         STYLE_TOKEN
             .lock()
             .unwrap()
-            .replace_all(value.as_ref(), |caps: &Captures| {
+            .replace_all(value, |caps: &Captures| {
                 let token = caps.get(1).map_or("", |m| m.as_str());
                 let inner = caps.get(2).map_or("", |m| m.as_str());
 
