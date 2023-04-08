@@ -1100,7 +1100,7 @@ dependencies = [
 
 [[package]]
 name = "starbase"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1118,7 +1118,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_events"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "miette",
@@ -1130,7 +1130,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -1140,7 +1140,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_styles"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "dirs",
  "miette",
@@ -1152,7 +1152,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "assert_fs",
  "dirs",
@@ -1267,7 +1267,7 @@ checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 
 [[package]]
 name = "test-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "miette",
  "starbase",
