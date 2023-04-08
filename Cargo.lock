@@ -1106,7 +1106,6 @@ dependencies = [
  "chrono",
  "miette",
  "num_cpus",
- "relative-path",
  "rustc-hash",
  "starbase_events",
  "starbase_macros",

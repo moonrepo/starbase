@@ -13,9 +13,8 @@ starbase_macros = { version = "0.1.1", path = "../macros" }
 starbase_styles = { version = "0.1.0", path = "../styles", features = ["theme"] }
 async-trait = { workspace = true }
 chrono = { version = "0.4.24", default-features = false, features = ["clock", "std"] }
-miette = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
 num_cpus = "1.15.0"
-relative-path = { workspace = true }
 rustc-hash = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["tracing"] }
@@ -23,6 +22,5 @@ tracing = { workspace = true, optional = true }
 tracing-subscriber = { version = "0.3.16", optional = true, default-features = false, features = ["fmt"] }
 
 [features]
-default = ["panic", "tracing"]
-panic = ["miette/fancy"]
+default = ["tracing"]
 tracing = ["dep:tracing", "dep:tracing-subscriber", "starbase_macros/tracing"]

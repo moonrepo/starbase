@@ -68,7 +68,11 @@ async fn missing_file() {
 
 #[system]
 async fn fail() {
-    if std::env::var("FAIL").is_ok() {
+    if let Ok(fail) = std::env::var("FAIL") {
+        if fail == "panic" {
+            panic!("This paniced!");
+        }
+
         warn!("fail");
         return Err(AppError::Test)?;
     }
