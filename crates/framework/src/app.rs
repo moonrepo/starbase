@@ -1,5 +1,6 @@
 use crate::app_state::*;
 use crate::emitters::{EmitterInstance, EmitterManager, Emitters};
+use crate::output::set_tracing_subscriber;
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
 use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};
@@ -60,9 +61,6 @@ impl App {
         #[cfg(feature = "panic")]
         miette::set_panic_hook();
 
-        #[cfg(feature = "tracing")]
-        tracing_subscriber::fmt::init();
-
         miette::set_hook(Box::new(|_| {
             Box::new(
                 miette::MietteHandlerOpts::new()
@@ -71,6 +69,9 @@ impl App {
             )
         }))
         .unwrap();
+
+        #[cfg(feature = "tracing")]
+        set_tracing_subscriber();
     }
 
     /// Add a system function that runs during the startup phase.

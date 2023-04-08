@@ -2,6 +2,7 @@ mod app;
 mod app_state;
 mod emitters;
 mod instance;
+mod output;
 mod resources;
 mod states;
 mod system;
