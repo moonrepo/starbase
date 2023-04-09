@@ -1,4 +1,5 @@
 use miette::Diagnostic;
+use starbase_styles::{Style, Stylize};
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -8,7 +9,7 @@ use thiserror::Error;
 #[derive(Error, Diagnostic, Debug)]
 pub enum FsError {
     #[diagnostic(code(fs::copy), help("Does the source file exist?"))]
-    #[error("Failed to copy <path>{from}</path> to <path>{to}</path>")]
+    #[error("Failed to copy {} to {}", .from.style(Style::Path), .to.style(Style::Path))]
     Copy {
         from: PathBuf,
         to: PathBuf,
@@ -17,7 +18,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::create))]
-    #[error("Failed to create <path>{path}</path>")]
+    #[error("Failed to create {}", .path.style(Style::Path))]
     Create {
         path: PathBuf,
         #[source]
@@ -25,7 +26,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::perms))]
-    #[error("Failed to update permissions for <path>{path}</path>")]
+    #[error("Failed to update permissions for {}", .path.style(Style::Path))]
     Perms {
         path: PathBuf,
         #[source]
@@ -33,7 +34,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::read))]
-    #[error("Failed to read path <path>{path}</path>")]
+    #[error("Failed to read path {}", .path.style(Style::Path))]
     Read {
         path: PathBuf,
         #[source]
@@ -41,7 +42,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::remove))]
-    #[error("Failed to remove path <path>{path}</path>")]
+    #[error("Failed to remove path {}", .path.style(Style::Path))]
     Remove {
         path: PathBuf,
         #[source]
@@ -49,7 +50,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::rename), help("Does the source file exist?"))]
-    #[error("Failed to rename <path>{from}</path> to <path>{to}</path>")]
+    #[error("Failed to rename {} to {}", .from.style(Style::Path), .to.style(Style::Path))]
     Rename {
         from: PathBuf,
         to: PathBuf,
@@ -58,7 +59,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::write), help("Does the parent directory exist?"))]
-    #[error("Failed to write <path>{path}</path>")]
+    #[error("Failed to write {}", .path.style(Style::Path))]
     Write {
         path: PathBuf,
         #[source]

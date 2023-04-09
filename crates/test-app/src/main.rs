@@ -1,11 +1,13 @@
 use starbase::diagnose::{Diagnostic, Error, IntoDiagnostic};
+use starbase::style::{Style, Stylize};
 use starbase::trace::{debug, info, warn};
 use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
+use starbase_utils::fs;
 use std::path::PathBuf;
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {
-    #[error("this error")]
+    #[error("this {}", "error".style(Style::Success))]
     #[diagnostic(code(oops::my::bad), help("miette error"))]
     Test,
 }
@@ -29,41 +31,50 @@ async fn start_one(states: StatesMut, emitters: EmittersMut) {
     debug!("startup 1");
 }
 
-#[system]
-async fn start_two(states: States, _resources: Resources, em: EmitterMut<TestEvent>) {
-    em.on(update_event).await;
+mod sub_mod {
+    use super::*;
 
-    tokio::spawn(async move {
-        let states = states.read().await;
-        info!("startup 2");
-        let state = states.get::<TestState>();
+    #[system]
+    pub async fn start_two(states: States, _resources: Resources, em: EmitterMut<TestEvent>) {
+        em.on(update_event).await;
 
-        dbg!(state);
-    })
-    .await
-    .into_diagnostic()?;
+        tokio::spawn(async move {
+            let states = states.read().await;
+            info!("startup 2");
+            let _ = states.get::<TestState>();
+
+            // dbg!(state);
+        })
+        .await
+        .into_diagnostic()?;
+    }
 }
 
 #[system]
 async fn analyze_one(state: StateMut<TestState>, em: EmitterRef<TestEvent>) {
-    info!(val = state.0, "analyze <file>foo.bar</file>");
+    info!(val = state.0, "analyze {}", "foo.bar".style(Style::File));
     **state = "mutated".to_string();
 
     let event = TestEvent(50);
-    dbg!(&event);
-    let (event, _) = em.emit(event).await.unwrap();
-    dbg!(event);
+    // dbg!(&event);
+    let (_, _) = em.emit(event).await.unwrap();
+    // dbg!(event);
 }
 
 #[system]
 async fn finish(state: StateRef<TestState>) {
     info!(val = state.0, "shutdown");
-    dbg!(state);
+    // dbg!(state);
+}
+
+#[system]
+async fn create_file() {
+    test_lib::create_file()?;
 }
 
 #[system]
 async fn missing_file() {
-    starbase_utils::fs::read_file(PathBuf::from("fake.file"))?;
+    fs::read_file(PathBuf::from("fake.file"))?;
 }
 
 #[system]
@@ -80,14 +91,15 @@ async fn fail() {
 
 #[tokio::main]
 async fn main() -> MainResult {
-    App::setup_hooks();
+    App::setup_hooks("RUST_LOG");
 
     let mut app = App::new();
     app.shutdown(finish);
     app.analyze(analyze_one);
     app.startup(start_one);
-    app.startup(start_two);
+    app.startup(sub_mod::start_two);
     // app.execute(missing_file);
+    app.execute(create_file);
     app.execute(fail);
 
     let ctx = app.run().await?;

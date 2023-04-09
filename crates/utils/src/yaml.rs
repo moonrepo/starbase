@@ -4,6 +4,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use starbase_styles::{Style, Stylize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use thiserror::Error;
@@ -19,7 +20,7 @@ pub enum YamlError {
     Fs(#[from] FsError),
 
     #[diagnostic(code(yaml::parse_file))]
-    #[error("Failed to parse YAML file <path>{path}</path>")]
+    #[error("Failed to parse YAML file {}", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -27,7 +28,7 @@ pub enum YamlError {
     },
 
     #[diagnostic(code(yaml::stringify_file))]
-    #[error("Failed to stringify YAML for file <path>{path}</path>")]
+    #[error("Failed to stringify YAML for file {}", .path.style(Style::Path))]
     StringifyFile {
         path: PathBuf,
         #[source]

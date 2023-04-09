@@ -2,7 +2,7 @@
 // https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg
 
 use dirs::home_dir;
-use owo_colors::{OwoColorize, Style, XtermColors};
+use owo_colors::{OwoColorize, Style as OwoStyle, XtermColors};
 use std::env;
 use std::path::Path;
 
@@ -22,75 +22,119 @@ pub enum Color {
     GrayLight = 248,
 }
 
-pub fn style(color: u8) -> Style {
-    Style::new().color(XtermColors::from(color))
+pub enum Style {
+    // States
+    Failure,
+    Invalid,
+    Muted,
+    MutedLight,
+    Success,
+
+    // Types
+    File,
+    Hash,
+    Id,
+    Label,
+    Path,
+    Shell,
+    Symbol,
+    Url,
+}
+
+impl Style {
+    pub fn color(&self) -> Color {
+        match self {
+            Style::Failure => Color::Red,
+            Style::Invalid => Color::Yellow,
+            Style::Muted => Color::Gray,
+            Style::MutedLight => Color::GrayLight,
+            Style::Success => Color::Green,
+            Style::File => Color::Teal,
+            Style::Hash => Color::Green,
+            Style::Id => Color::Purple,
+            Style::Label => Color::Blue,
+            Style::Path => Color::Cyan,
+            Style::Shell => Color::Pink,
+            Style::Symbol => Color::Lime,
+            Style::Url => Color::Blue,
+        }
+    }
+}
+
+pub fn create_style(color: u8) -> OwoStyle {
+    OwoStyle::new().color(XtermColors::from(color))
 }
 
 pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {
     if no_color() {
         value.as_ref().to_string()
     } else {
-        value.as_ref().style(style(color)).to_string()
+        value.as_ref().style(create_style(color)).to_string()
+    }
+}
+
+pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
+    if matches!(style, Style::File | Style::Path | Style::Shell) {
+        paint(style.color() as u8, clean_path(value.as_ref()))
+    } else {
+        paint(style.color() as u8, value)
     }
 }
 
 // States
 
 pub fn failure<T: AsRef<str>>(value: T) -> String {
-    paint(Color::Red as u8, value)
+    paint_style(Style::Failure, value)
 }
 
 pub fn invalid<T: AsRef<str>>(value: T) -> String {
-    paint(Color::Yellow as u8, value)
+    paint_style(Style::Invalid, value)
 }
 
 pub fn muted<T: AsRef<str>>(value: T) -> String {
-    paint(Color::Gray as u8, value)
+    paint_style(Style::Muted, value)
 }
 
 pub fn muted_light<T: AsRef<str>>(value: T) -> String {
-    paint(Color::GrayLight as u8, value)
+    paint_style(Style::MutedLight, value)
 }
 
 pub fn success<T: AsRef<str>>(value: T) -> String {
-    paint(Color::Green as u8, value)
+    paint_style(Style::Success, value)
 }
 
 // Types
 
 pub fn file<T: AsRef<str>>(path: T) -> String {
-    paint(Color::Teal as u8, path)
+    paint_style(Style::File, path)
 }
 
 pub fn hash<T: AsRef<str>>(value: T) -> String {
-    paint(Color::Green as u8, value)
+    paint_style(Style::Hash, value)
 }
 
 pub fn id<T: AsRef<str>>(value: T) -> String {
-    paint(Color::Purple as u8, value)
+    paint_style(Style::Id, value)
 }
 
 pub fn label<T: AsRef<str>>(value: T) -> String {
-    paint(Color::Blue as u8, value)
+    paint_style(Style::Label, value)
 }
 
 pub fn path<T: AsRef<Path>>(path: T) -> String {
-    paint(
-        Color::Cyan as u8,
-        clean_path(path.as_ref().to_str().unwrap_or("<unknown>")),
-    )
+    paint_style(Style::Path, path.as_ref().to_str().unwrap_or("<unknown>"))
 }
 
 pub fn shell<T: AsRef<str>>(cmd: T) -> String {
-    paint(Color::Pink as u8, clean_path(cmd))
+    paint_style(Style::Shell, cmd)
 }
 
 pub fn symbol<T: AsRef<str>>(value: T) -> String {
-    paint(Color::Lime as u8, value)
+    paint_style(Style::Symbol, value)
 }
 
 pub fn url<T: AsRef<str>>(url: T) -> String {
-    paint(Color::Blue as u8, url)
+    paint_style(Style::Url, url)
 }
 
 // Helpers
@@ -127,14 +171,14 @@ pub fn log_target<T: AsRef<str>>(value: T) -> String {
 }
 
 pub fn no_color() -> bool {
-    env::var("NO_COLOR").is_ok() || supports_color::on(supports_color::Stream::Stdout).is_none()
+    env::var("NO_COLOR").is_ok() || supports_color::on(supports_color::Stream::Stderr).is_none()
 }
 
 // 1 = 8
 // 2 = 256
 // 3 = 16m
 pub fn supports_color() -> u8 {
-    if let Some(support) = supports_color::on(supports_color::Stream::Stdout) {
+    if let Some(support) = supports_color::on(supports_color::Stream::Stderr) {
         if support.has_16m {
             return 3;
         } else if support.has_256 {
