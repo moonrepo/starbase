@@ -3,6 +3,8 @@ use starbase_styles::color;
 use std::env;
 use std::sync::atomic::{AtomicU8, Ordering};
 use tracing::{field::Visit, Level, Metadata, Subscriber};
+// use tracing_subscriber::fmt::FormattedFields;
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::{
     field::RecordFields,
     fmt::{self, time::FormatTime, FormatEvent, FormatFields, SubscriberBuilder},
@@ -13,28 +15,22 @@ static LAST_HOUR: AtomicU8 = AtomicU8::new(0);
 
 struct FieldVisitor<'writer> {
     is_testing: bool,
-    printed_delimiter: bool,
     writer: fmt::format::Writer<'writer>,
 }
 
 impl<'writer> Visit for FieldVisitor<'writer> {
-    // fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-    //     if field.name() == "message" {
-    //         self.record_debug(field, &format_args!("{}", value))
-    //     } else {
-    //         self.record_debug(field, &value)
-    //     }
-    // }
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "message" {
+            self.record_debug(field, &format_args!("{}", value))
+        } else {
+            self.record_debug(field, &value)
+        }
+    }
 
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
-            write!(self.writer, " {:?}", value).unwrap()
+            write!(self.writer, "  {:?} ", value).unwrap()
         } else if !self.is_testing {
-            if !self.printed_delimiter {
-                write!(self.writer, " {}", color::muted("|")).unwrap();
-                self.printed_delimiter = true;
-            }
-
             write!(
                 self.writer,
                 " {}",
@@ -42,6 +38,35 @@ impl<'writer> Visit for FieldVisitor<'writer> {
             )
             .unwrap()
         }
+    }
+}
+
+struct FieldFormatter {
+    is_testing: bool,
+}
+
+impl FieldFormatter {
+    pub fn new() -> Self {
+        Self {
+            is_testing: env::var("STARBASE_TEST").is_ok(),
+        }
+    }
+}
+
+impl<'writer> FormatFields<'writer> for FieldFormatter {
+    fn format_fields<R: RecordFields>(
+        &self,
+        writer: fmt::format::Writer<'writer>,
+        fields: R,
+    ) -> std::fmt::Result {
+        let mut visitor = FieldVisitor {
+            is_testing: self.is_testing,
+            writer,
+        };
+
+        fields.record(&mut visitor);
+
+        Ok(())
     }
 }
 
@@ -81,24 +106,6 @@ impl FormatTime for EventFormatter {
     }
 }
 
-impl<'writer> FormatFields<'writer> for EventFormatter {
-    fn format_fields<R: RecordFields>(
-        &self,
-        writer: fmt::format::Writer<'writer>,
-        fields: R,
-    ) -> std::fmt::Result {
-        let mut visitor = FieldVisitor {
-            is_testing: self.is_testing,
-            printed_delimiter: false,
-            writer,
-        };
-
-        fields.record(&mut visitor);
-
-        Ok(())
-    }
-}
-
 impl<S, N> FormatEvent<S, N> for EventFormatter
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
@@ -115,8 +122,14 @@ where
 
         // [level timestamp]
         write!(writer, "{}", color::muted("["))?;
-        write!(writer, "{} ", color::muted(level.as_str()))?;
+        write!(
+            writer,
+            "{} ",
+            color::muted(format!("{: >5}", level.as_str()))
+        )?;
+
         self.format_time(&mut writer)?;
+
         write!(writer, "{}", color::muted("]"))?;
 
         // target:spans...
@@ -134,17 +147,41 @@ where
         }
 
         // message ...field=value
-        self.format_fields(writer.by_ref(), event)?;
+        ctx.format_fields(writer.by_ref(), event)?;
+
+        // spans(vars=values)...
+        // if let Some(scope) = ctx.event_scope() {
+        //     for span in scope.from_root() {
+        //         let ext = span.extensions();
+
+        //         if let Some(fields) = &ext.get::<FormattedFields<N>>() {
+        //             write!(
+        //                 writer,
+        //                 " {}{}{}{}",
+        //                 color::muted_light(span.name()),
+        //                 color::muted_light("("),
+        //                 fields,
+        //                 color::muted_light(")"),
+        //             )?;
+        //         } else {
+        //             write!(writer, " {}", color::muted_light(span.name()))?;
+        //         }
+        //     }
+        // }
 
         writeln!(writer)
     }
 }
 
-pub fn set_tracing_subscriber() {
+pub fn set_tracing_subscriber(env_name: &str) {
     let subscriber = SubscriberBuilder::default()
         .event_format(EventFormatter::new())
+        .fmt_fields(FieldFormatter::new())
+        .with_env_filter(EnvFilter::from_env(env_name))
         .finish();
 
     // Ignore the error incase the subscriber is already set
     let _ = tracing::subscriber::set_global_default(subscriber);
+
+    // tracing_subscriber::fmt::init();
 }

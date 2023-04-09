@@ -91,7 +91,7 @@ async fn fail() {
 
 #[tokio::main]
 async fn main() -> MainResult {
-    App::setup_hooks();
+    App::setup_hooks("RUST_LOG");
 
     let mut app = App::new();
     app.shutdown(finish);

@@ -55,10 +55,10 @@ impl App {
         app
     }
 
-    pub fn setup_hooks() {
+    pub fn setup_hooks(env_name: &str) {
         crate::diagnostic::set_miette_hooks();
         #[cfg(feature = "tracing")]
-        crate::tracing::set_tracing_subscriber();
+        crate::tracing::set_tracing_subscriber(env_name);
     }
 
     /// Add a system function that runs during the startup phase.
