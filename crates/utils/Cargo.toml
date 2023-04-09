@@ -13,6 +13,7 @@ once_cell = { workspace = true }
 relative-path = { workspace = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
+starbase_styles = { version = "0.1.1", path = "../styles" }
 thiserror = { workspace = true }
 
 # editor-config

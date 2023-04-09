@@ -1166,6 +1166,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "starbase_styles",
  "thiserror",
  "toml",
  "wax",
