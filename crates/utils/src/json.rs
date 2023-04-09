@@ -5,6 +5,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use starbase_styles::{Style, Stylize};
 use std::path::Path;
 use std::sync::Mutex;
 use std::{io::Read, path::PathBuf};
@@ -20,7 +21,7 @@ pub enum JsonError {
     Fs(#[from] FsError),
 
     #[diagnostic(code(json::parse_file))]
-    #[error("Failed to parse JSON file <path>{path}</path>")]
+    #[error("Failed to parse JSON file {}", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -28,7 +29,7 @@ pub enum JsonError {
     },
 
     #[diagnostic(code(json::stringify_file))]
-    #[error("Failed to stringify JSON for file <path>{path}</path>")]
+    #[error("Failed to stringify JSON for file {}", .path.style(Style::Path))]
     StringifyFile {
         path: PathBuf,
         #[source]

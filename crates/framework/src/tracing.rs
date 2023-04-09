@@ -1,5 +1,5 @@
 use chrono::{Local, Timelike};
-use starbase_styles::{color, format_style_tags};
+use starbase_styles::color;
 use std::env;
 use std::sync::atomic::{AtomicU8, Ordering};
 use tracing::{field::Visit, Level, Metadata, Subscriber};
@@ -28,12 +28,7 @@ impl<'writer> Visit for FieldVisitor<'writer> {
 
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
-            write!(
-                self.writer,
-                " {}",
-                format_style_tags(format!("{:?}", value))
-            )
-            .unwrap()
+            write!(self.writer, " {:?}", value).unwrap()
         } else if !self.is_testing {
             if !self.printed_delimiter {
                 write!(self.writer, " {}", color::muted("|")).unwrap();

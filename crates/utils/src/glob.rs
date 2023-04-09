@@ -1,4 +1,5 @@
 use miette::Diagnostic;
+use starbase_styles::{Style, Stylize};
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -11,7 +12,7 @@ pub use wax::{self, Glob};
 #[derive(Error, Diagnostic, Debug)]
 pub enum GlobError {
     #[diagnostic(code(glob::create))]
-    #[error("Failed to create glob from pattern <file>{glob}</file>")]
+    #[error("Failed to create glob from pattern {}", .glob.style(Style::File))]
     Create {
         glob: String,
         #[source]
@@ -19,7 +20,7 @@ pub enum GlobError {
     },
 
     #[diagnostic(code(glob::invalid_path))]
-    #[error("Failed to normalize glob path <path>{path}</path>")]
+    #[error("Failed to normalize glob path {}", .path.style(Style::Path))]
     InvalidPath { path: PathBuf },
 }
 

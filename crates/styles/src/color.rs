@@ -170,14 +170,14 @@ pub fn log_target<T: AsRef<str>>(value: T) -> String {
 }
 
 pub fn no_color() -> bool {
-    env::var("NO_COLOR").is_ok() || supports_color::on(supports_color::Stream::Stdout).is_none()
+    env::var("NO_COLOR").is_ok() || supports_color::on(supports_color::Stream::Stderr).is_none()
 }
 
 // 1 = 8
 // 2 = 256
 // 3 = 16m
 pub fn supports_color() -> u8 {
-    if let Some(support) = supports_color::on(supports_color::Stream::Stdout) {
+    if let Some(support) = supports_color::on(supports_color::Stream::Stderr) {
         if support.has_16m {
             return 3;
         } else if support.has_256 {

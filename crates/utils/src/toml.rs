@@ -2,6 +2,7 @@ use crate::fs::{self, FsError};
 use miette::Diagnostic;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use starbase_styles::{Style, Stylize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -13,7 +14,7 @@ pub enum TomlError {
     Fs(#[from] FsError),
 
     #[diagnostic(code(toml::parse_file))]
-    #[error("Failed to parse TOML file <path>{path}</path>")]
+    #[error("Failed to parse TOML file {}", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -21,7 +22,7 @@ pub enum TomlError {
     },
 
     #[diagnostic(code(toml::stringify_file))]
-    #[error("Failed to stringify TOML for file <path>{path}</path>")]
+    #[error("Failed to stringify TOML for file {}", .path.style(Style::Path))]
     StringifyFile {
         path: PathBuf,
         #[source]
