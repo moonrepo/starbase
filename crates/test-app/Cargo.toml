@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 starbase = { path = "../framework" }
+starbase_styles = { path = "../styles" }
 starbase_utils = { path = "../utils" }
 miette = { workspace = true, features = ["fancy"] }
 tokio = { workspace = true, features = ["full", "tracing"] }

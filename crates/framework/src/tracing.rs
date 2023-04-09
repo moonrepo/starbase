@@ -18,13 +18,13 @@ struct FieldVisitor<'writer> {
 }
 
 impl<'writer> Visit for FieldVisitor<'writer> {
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        if field.name() == "message" {
-            self.record_debug(field, &format_args!("{}", value))
-        } else {
-            self.record_debug(field, &value)
-        }
-    }
+    // fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+    //     if field.name() == "message" {
+    //         self.record_debug(field, &format_args!("{}", value))
+    //     } else {
+    //         self.record_debug(field, &value)
+    //     }
+    // }
 
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {

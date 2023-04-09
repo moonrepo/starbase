@@ -61,8 +61,8 @@ impl Style {
     }
 }
 
-pub fn create_style(ansi: u8) -> OwoStyle {
-    OwoStyle::new().color(XtermColors::from(ansi))
+pub fn create_style(color: u8) -> OwoStyle {
+    OwoStyle::new().color(XtermColors::from(color))
 }
 
 pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {

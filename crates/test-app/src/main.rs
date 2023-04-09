@@ -1,11 +1,12 @@
 use starbase::diagnose::{Diagnostic, Error, IntoDiagnostic};
 use starbase::trace::{debug, info, warn};
 use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
+use starbase_styles::{Style, Stylize};
 use std::path::PathBuf;
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {
-    #[error("this error")]
+    #[error("this {}", "error".style(Style::Success))]
     #[diagnostic(code(oops::my::bad), help("miette error"))]
     Test,
 }
@@ -46,7 +47,7 @@ async fn start_two(states: States, _resources: Resources, em: EmitterMut<TestEve
 
 #[system]
 async fn analyze_one(state: StateMut<TestState>, em: EmitterRef<TestEvent>) {
-    info!(val = state.0, "analyze <file>foo.bar</file>");
+    info!(val = state.0, "analyze {}", "foo.bar".style(Style::File));
     **state = "mutated".to_string();
 
     let event = TestEvent(50);
