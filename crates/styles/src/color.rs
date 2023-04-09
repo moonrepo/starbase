@@ -74,7 +74,7 @@ pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {
 }
 
 pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
-    if matches!(style, Style::Path | Style::Shell) {
+    if matches!(style, Style::File | Style::Path | Style::Shell) {
         paint(style.color() as u8, clean_path(value.as_ref()))
     } else {
         paint(style.color() as u8, value)

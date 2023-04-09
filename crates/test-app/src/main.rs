@@ -1,7 +1,7 @@
 use starbase::diagnose::{Diagnostic, Error, IntoDiagnostic};
+use starbase::style::{Style, Stylize};
 use starbase::trace::{debug, info, warn};
 use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
-use starbase_styles::{Style, Stylize};
 use starbase_utils::fs;
 use std::path::PathBuf;
 
