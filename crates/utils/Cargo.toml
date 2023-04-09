@@ -1,6 +1,6 @@
 [package]
 name = "starbase_utils"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "MIT"
 description = "General fs, io, serde, etc, utilities."
@@ -13,7 +13,7 @@ once_cell = { workspace = true }
 relative-path = { workspace = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
-starbase_styles = { version = "0.1.1", path = "../styles" }
+starbase_styles = { version = "0.1.2", path = "../styles" }
 thiserror = { workspace = true }
 
 # editor-config
