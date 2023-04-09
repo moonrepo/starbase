@@ -74,7 +74,11 @@ pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {
 }
 
 pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
-    paint(style.color() as u8, value)
+    if matches!(style, Style::Path | Style::Shell) {
+        paint(style.color() as u8, clean_path(value.as_ref()))
+    } else {
+        paint(style.color() as u8, value)
+    }
 }
 
 // States
@@ -118,14 +122,11 @@ pub fn label<T: AsRef<str>>(value: T) -> String {
 }
 
 pub fn path<T: AsRef<Path>>(path: T) -> String {
-    paint_style(
-        Style::Path,
-        clean_path(path.as_ref().to_str().unwrap_or("<unknown>")),
-    )
+    paint_style(Style::Path, path.as_ref().to_str().unwrap_or("<unknown>"))
 }
 
 pub fn shell<T: AsRef<str>>(cmd: T) -> String {
-    paint_style(Style::Shell, clean_path(cmd))
+    paint_style(Style::Shell, cmd)
 }
 
 pub fn symbol<T: AsRef<str>>(value: T) -> String {
