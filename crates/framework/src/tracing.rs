@@ -178,6 +178,7 @@ pub fn set_tracing_subscriber(env_name: &str) {
         .event_format(EventFormatter::new())
         .fmt_fields(FieldFormatter::new())
         .with_env_filter(EnvFilter::from_env(env_name))
+        .with_writer(std::io::stderr)
         .finish();
 
     // Ignore the error incase the subscriber is already set

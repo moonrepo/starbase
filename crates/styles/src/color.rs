@@ -19,7 +19,7 @@ pub enum Color {
     Pink = 183,
     Yellow = 185,
     Gray = 239,
-    GrayLight = 248,
+    GrayLight = 246,
 }
 
 pub enum Style {
