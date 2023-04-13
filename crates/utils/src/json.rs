@@ -10,6 +10,7 @@ use std::path::Path;
 use std::sync::Mutex;
 use std::{io::Read, path::PathBuf};
 use thiserror::Error;
+use tracing::trace;
 
 pub use serde_json::{
     from_value, json, to_value, Map as JsonMap, Number as JsonNumber, Value as JsonValue,
@@ -89,6 +90,8 @@ where
     let path = path.as_ref();
     let contents = read_to_string(path)?;
 
+    trace!(file = %path.display(), "Parsing JSON");
+
     serde_json::from_str(&contents).map_err(|error| JsonError::ReadFile {
         path: path.to_path_buf(),
         error,
@@ -108,6 +111,8 @@ where
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();
+
+    trace!(file = %path.display(), "Stringifying JSON");
 
     let data = if pretty {
         serde_json::to_string_pretty(&json).map_err(|error| JsonError::StringifyFile {
@@ -143,6 +148,8 @@ pub fn write_with_config<P: AsRef<Path>>(
 
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path);
+
+    trace!(file = %path.display(), "Stringifying JSON with .editorconfig");
 
     // Based on serde_json::to_string_pretty!
     let mut writer = Vec::with_capacity(128);

@@ -5,6 +5,7 @@ use serde::Serialize;
 use starbase_styles::{Style, Stylize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+use tracing::trace;
 
 pub use toml::value::{Datetime as TomlDatetime, Table as TomlTable, Value as TomlValue};
 
@@ -39,6 +40,8 @@ where
     let path = path.as_ref();
     let contents = fs::read_file(path)?;
 
+    trace!(file = %path.display(), "Parsing TOML");
+
     toml::from_str(&contents).map_err(|error| TomlError::ReadFile {
         path: path.to_path_buf(),
         error,
@@ -52,6 +55,8 @@ where
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();
+
+    trace!(file = %path.display(), "Stringifying TOML");
 
     let data = if pretty {
         toml::to_string_pretty(&toml).map_err(|error| TomlError::StringifyFile {

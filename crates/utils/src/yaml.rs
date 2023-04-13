@@ -8,6 +8,7 @@ use starbase_styles::{Style, Stylize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use thiserror::Error;
+use tracing::trace;
 
 pub use serde_yaml::{
     from_value, to_value, Mapping as YamlMapping, Number as YamlNumber, Sequence as YamlSequence,
@@ -68,6 +69,8 @@ where
     let path = path.as_ref();
     let contents = fs::read_file(path)?;
 
+    trace!(file = %path.display(), "Parsing YAML");
+
     serde_yaml::from_str(&contents).map_err(|error| YamlError::ReadFile {
         path: path.to_path_buf(),
         error,
@@ -82,6 +85,8 @@ where
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();
+
+    trace!(file = %path.display(), "Stringifying YAML");
 
     let data = serde_yaml::to_string(&yaml).map_err(|error| YamlError::StringifyFile {
         path: path.to_path_buf(),
@@ -103,6 +108,8 @@ where
 {
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path);
+
+    trace!(file = %path.display(), "Stringifying YAML with .editorconfig");
 
     let mut data = serde_yaml::to_string(&yaml)
         .map_err(|error| YamlError::StringifyFile {
