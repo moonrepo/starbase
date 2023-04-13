@@ -2,9 +2,11 @@
 // https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg
 
 use dirs::home_dir;
-use owo_colors::{OwoColorize, Style as OwoStyle, XtermColors};
+use owo_colors::{OwoColorize, XtermColors};
 use std::env;
 use std::path::Path;
+
+pub use owo_colors::Style as OwoStyle;
 
 pub enum Color {
     White = 15,
