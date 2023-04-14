@@ -10,7 +10,7 @@ readme = "../../README.md"
 [dependencies]
 starbase_events = { version = "0.1.2", path = "../events" }
 starbase_macros = { version = "0.1.3", path = "../macros" }
-starbase_styles = { version = "0.1.3", path = "../styles", features = ["theme"] }
+starbase_styles = { version = "0.1.4", path = "../styles", features = ["theme"] }
 async-trait = { workspace = true }
 chrono = { version = "0.4.24", default-features = false, features = ["clock", "std"] }
 miette = { workspace = true, features = ["fancy"] }
