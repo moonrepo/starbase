@@ -7,7 +7,10 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::trace;
 
-pub use toml::value::{Datetime as TomlDatetime, Table as TomlTable, Value as TomlValue};
+pub use toml::{
+    from_str, to_string, to_string_pretty,
+    value::{Datetime as TomlDatetime, Table as TomlTable, Value as TomlValue},
+};
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum TomlError {

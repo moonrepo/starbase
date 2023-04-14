@@ -11,8 +11,8 @@ use thiserror::Error;
 use tracing::trace;
 
 pub use serde_yaml::{
-    from_value, to_value, Mapping as YamlMapping, Number as YamlNumber, Sequence as YamlSequence,
-    Value as YamlValue,
+    from_str, from_value, to_string, to_value, Mapping as YamlMapping, Number as YamlNumber,
+    Sequence as YamlSequence, Value as YamlValue,
 };
 
 #[derive(Error, Diagnostic, Debug)]
