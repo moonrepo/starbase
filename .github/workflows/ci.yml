@@ -10,17 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        name: Setup toolchain
-        with:
-          toolchain: 1.68.2
-          profile: minimal
-          components: rustfmt
-      - uses: actions-rs/cargo@v1
-        name: Check formatting
-        with:
-          command: fmt
-          args: --all --check
+      - uses: moonrepo/setup-rust@v0
+      - name: Check formatting
+        run: cargo fmt --all --check
   lint:
     name: Lint
     runs-on: ${{ matrix.os }}
@@ -30,17 +22,11 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        name: Setup toolchain
+      - uses: moonrepo/setup-rust@v0
         with:
-          toolchain: 1.68.2
-          profile: minimal
           components: clippy
-      - uses: actions-rs/cargo@v1
-        name: Run linter
-        with:
-          command: clippy
-          args: --workspace --all-targets
+      - name: Run linter
+        run: cargo clippy --workspace --all-targets
   test:
     name: Test
     runs-on: ${{ matrix.os }}
@@ -50,13 +36,6 @@ jobs:
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        name: Setup toolchain
-        with:
-          toolchain: 1.68.2
-          profile: minimal
-      - uses: actions-rs/cargo@v1
-        name: Run tests
-        with:
-          command: test
-          args: --workspace
+      - uses: moonrepo/setup-rust@v0
+      - name: Run tests
+        run: cargo test --workspace

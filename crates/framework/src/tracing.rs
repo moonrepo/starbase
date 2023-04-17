@@ -177,8 +177,8 @@ where
 pub struct TracingOptions {
     default_level: LevelFilter,
     env_name: String,
+    filter_modules: Vec<String>,
     intercept_log: bool,
-    module_prefixes: Vec<String>,
 }
 
 impl Default for TracingOptions {
@@ -186,19 +186,19 @@ impl Default for TracingOptions {
         TracingOptions {
             default_level: LevelFilter::INFO,
             env_name: "RUST_LOG".into(),
+            filter_modules: vec![],
             intercept_log: true,
-            module_prefixes: vec![],
         }
     }
 }
 
 pub fn set_tracing_subscriber(options: TracingOptions) {
     let set_env_var = |level: String| {
-        let env_value = if options.module_prefixes.is_empty() {
+        let env_value = if options.filter_modules.is_empty() {
             level
         } else {
             options
-                .module_prefixes
+                .filter_modules
                 .iter()
                 .map(|prefix| format!("{prefix}={level}"))
                 .collect::<Vec<_>>()
