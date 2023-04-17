@@ -199,7 +199,12 @@ where
     I: IntoIterator<Item = &'glob V>,
     V: AsRef<str> + 'glob + ?Sized,
 {
-    let (expressions, negations) = split_patterns(patterns);
+    let (expressions, mut negations) = split_patterns(patterns);
+
+    // Always ignore common directories
+    negations.push("**/.*/**"); // .git, .moon, .yarn, etc
+    negations.push("**/node_modules/**");
+
     let negation = Negation::try_from_patterns(negations).unwrap();
     let mut paths = vec![];
 
