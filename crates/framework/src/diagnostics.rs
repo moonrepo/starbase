@@ -1,5 +1,8 @@
 use starbase_styles::theme::create_graphical_theme;
 
+pub use miette::*;
+pub use thiserror::Error;
+
 pub fn set_miette_hooks() {
     miette::set_panic_hook();
 

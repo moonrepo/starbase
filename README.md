@@ -62,8 +62,6 @@ async fn load_config(states: States, resources: Resources, emitters: Emitters) -
 
 #[tokio::main]
 async fn main() -> MainResult {
-  App::setup_hooks();
-
   let mut app = App::new();
   app.startup(load_config);
   app.run().await?;
@@ -410,15 +408,16 @@ layers of the application, from systems, to events, and the application itself, 
 `miette::Result` type. This allows for errors to be easily converted to diagnostics, and for miette
 to automatically render to the terminal for errors and panics.
 
-To benefit from this, update your `main` function to return `MainResult`, and call
-`App::setup_hook()` to register error/panic handlers.
+To benefit from this, update your `main` function to return `MainResult`, and call `App::setup_*()`
+to register error/panic handlers.
 
 ```rust
 use starbase::{App, MainResult};
 
 #[tokio::main]
 async fn main() -> MainResult {
-  App::setup_hook();
+  App::setup_diagnostics();
+  App::setup_tracing();
 
   let mut app = App::new();
   // ...

@@ -1,6 +1,6 @@
-use starbase::diagnose::{Diagnostic, Error, IntoDiagnostic};
+use starbase::diagnostics::{Diagnostic, Error, IntoDiagnostic};
 use starbase::style::{Style, Stylize};
-use starbase::trace::{debug, info, warn};
+use starbase::tracing::{debug, info, warn};
 use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
 use starbase_utils::fs;
 use std::path::PathBuf;
@@ -44,6 +44,8 @@ mod sub_mod {
             let _ = states.get::<TestState>();
 
             // dbg!(state);
+
+            log::info!("This comes from the log crate");
         })
         .await
         .into_diagnostic()?;
@@ -91,7 +93,8 @@ async fn fail() {
 
 #[tokio::main]
 async fn main() -> MainResult {
-    App::setup_hooks("RUST_LOG");
+    App::setup_diagnostics();
+    App::setup_tracing();
 
     let mut app = App::new();
     app.shutdown(finish);
