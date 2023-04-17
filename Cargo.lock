@@ -1163,7 +1163,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "assert_fs",
  "dirs",
