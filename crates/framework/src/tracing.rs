@@ -12,6 +12,8 @@ use tracing_subscriber::{
     registry::LookupSpan,
 };
 
+pub use tracing::*;
+
 static LAST_HOUR: AtomicU8 = AtomicU8::new(0);
 
 struct FieldVisitor<'writer> {
@@ -192,7 +194,7 @@ impl Default for TracingOptions {
     }
 }
 
-pub fn set_tracing_subscriber(options: TracingOptions) {
+pub fn setup_tracing(options: TracingOptions) {
     let set_env_var = |level: String| {
         let env_value = if options.filter_modules.is_empty() {
             level

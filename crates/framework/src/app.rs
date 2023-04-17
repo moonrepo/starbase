@@ -56,6 +56,10 @@ impl App {
         app
     }
 
+    pub fn setup_diagnostics() {
+        crate::diagnostics::set_miette_hooks();
+    }
+
     #[cfg(feature = "tracing")]
     pub fn setup_tracing() {
         Self::setup_tracing_with_options(TracingOptions::default())
@@ -63,11 +67,7 @@ impl App {
 
     #[cfg(feature = "tracing")]
     pub fn setup_tracing_with_options(options: TracingOptions) {
-        crate::tracing::set_tracing_subscriber(options);
-    }
-
-    pub fn setup_hooks() {
-        crate::diagnostic::set_miette_hooks();
+        crate::tracing::setup_tracing(options);
     }
 
     /// Add a system function that runs during the startup phase.

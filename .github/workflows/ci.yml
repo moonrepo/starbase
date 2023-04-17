@@ -11,6 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: moonrepo/setup-rust@v0
+        with:
+          components: rustfmt
       - name: Check formatting
         run: cargo fmt --all --check
   lint:
