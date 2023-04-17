@@ -31,22 +31,34 @@ pub struct GlobSet<'glob> {
 }
 
 impl<'glob> GlobSet<'glob> {
-    pub fn new<I>(patterns: I) -> Result<Self, GlobError>
+    pub fn new<I, V>(patterns: I) -> Result<Self, GlobError>
     where
-        I: IntoIterator<Item = &'glob str>,
+        I: IntoIterator<Item = &'glob V>,
+        V: AsRef<str> + 'glob + ?Sized,
     {
         let (expressions, negations) = split_patterns(patterns);
+
+        GlobSet::new_split(expressions, negations)
+    }
+
+    pub fn new_split<I1, V1, I2, V2>(expressions: I1, negations: I2) -> Result<Self, GlobError>
+    where
+        I1: IntoIterator<Item = &'glob V1>,
+        V1: AsRef<str> + 'glob + ?Sized,
+        I2: IntoIterator<Item = &'glob V2>,
+        V2: AsRef<str> + 'glob + ?Sized,
+    {
         let mut ex = vec![];
         let mut ng = vec![];
         let mut count = 0;
 
         for pattern in expressions.into_iter() {
-            ex.push(create_glob(pattern)?);
+            ex.push(create_glob(pattern.as_ref())?);
             count += 1;
         }
 
         for pattern in negations.into_iter() {
-            ng.push(create_glob(pattern)?);
+            ng.push(create_glob(pattern.as_ref())?);
             count += 1;
         }
 
@@ -149,16 +161,17 @@ pub fn normalize<T: AsRef<Path>>(path: T) -> Result<String, GlobError> {
 /// Wax currently doesn't support negated globs (starts with !),
 /// so we must extract them manually.
 #[inline]
-pub fn split_patterns<'glob, I>(patterns: I) -> (Vec<&'glob str>, Vec<&'glob str>)
+pub fn split_patterns<'glob, I, V>(patterns: I) -> (Vec<&'glob str>, Vec<&'glob str>)
 where
-    I: IntoIterator<Item = &'glob str>,
+    I: IntoIterator<Item = &'glob V>,
+    V: AsRef<str> + 'glob + ?Sized,
 {
     let mut expressions = vec![];
     let mut negations = vec![];
 
     for pattern in patterns {
         let mut negate = false;
-        let mut value = pattern;
+        let mut value = pattern.as_ref();
 
         while value.starts_with('!') || value.starts_with('/') {
             if let Some(neg) = value.strip_prefix('!') {
@@ -180,10 +193,11 @@ where
 }
 
 #[inline]
-pub fn walk<'glob, P, I>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
+pub fn walk<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
     P: AsRef<Path>,
-    I: IntoIterator<Item = &'glob str>,
+    I: IntoIterator<Item = &'glob V>,
+    V: AsRef<str> + 'glob + ?Sized,
 {
     let (expressions, negations) = split_patterns(patterns);
     let negation = Negation::try_from_patterns(negations).unwrap();
@@ -214,10 +228,11 @@ where
 }
 
 #[inline]
-pub fn walk_files<'glob, P, I>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
+pub fn walk_files<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
     P: AsRef<Path>,
-    I: IntoIterator<Item = &'glob str>,
+    I: IntoIterator<Item = &'glob V>,
+    V: AsRef<str> + 'glob + ?Sized,
 {
     let paths = walk(base_dir, patterns)?;
 
@@ -236,7 +251,14 @@ mod tests {
 
         #[test]
         fn doesnt_match_when_empty() {
-            let set = GlobSet::new(vec![]).unwrap();
+            let list: Vec<String> = vec![];
+            let set = GlobSet::new(&list).unwrap();
+
+            assert!(!set.matches("file.ts"));
+
+            // Testing types
+            let list: Vec<&str> = vec![];
+            let set = GlobSet::new(list).unwrap();
 
             assert!(!set.matches("file.ts"));
         }
@@ -263,6 +285,15 @@ mod tests {
         #[test]
         fn doesnt_match_negations() {
             let set = GlobSet::new(["files/*", "!**/*.ts"]).unwrap();
+
+            assert!(set.matches("files/test.js"));
+            assert!(set.matches("files/test.go"));
+            assert!(!set.matches("files/test.ts"));
+        }
+
+        #[test]
+        fn doesnt_match_negations_using_split() {
+            let set = GlobSet::new_split(["files/*"], ["**/*.ts"]).unwrap();
 
             assert!(set.matches("files/test.js"));
             assert!(set.matches("files/test.go"));
