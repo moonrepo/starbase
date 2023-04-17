@@ -177,10 +177,10 @@ where
 }
 
 pub struct TracingOptions {
-    default_level: LevelFilter,
-    env_name: String,
-    filter_modules: Vec<String>,
-    intercept_log: bool,
+    pub default_level: LevelFilter,
+    pub env_name: String,
+    pub filter_modules: Vec<String>,
+    pub intercept_log: bool,
 }
 
 impl Default for TracingOptions {
