@@ -44,6 +44,8 @@ mod sub_mod {
             let _ = states.get::<TestState>();
 
             // dbg!(state);
+
+            log::info!("This comes from the log crate");
         })
         .await
         .into_diagnostic()?;
@@ -91,7 +93,7 @@ async fn fail() {
 
 #[tokio::main]
 async fn main() -> MainResult {
-    App::setup_hooks("RUST_LOG");
+    App::setup_tracing();
 
     let mut app = App::new();
     app.shutdown(finish);

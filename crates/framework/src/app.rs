@@ -3,6 +3,7 @@ use crate::emitters::{EmitterInstance, EmitterManager, Emitters};
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
 use crate::system::{BoxedSystem, CallbackSystem, System, SystemFunc};
+use crate::tracing::TracingOptions;
 use miette::IntoDiagnostic;
 use std::any::Any;
 use std::mem;
@@ -55,10 +56,18 @@ impl App {
         app
     }
 
-    pub fn setup_hooks(env_name: &str) {
+    #[cfg(feature = "tracing")]
+    pub fn setup_tracing() {
+        Self::setup_tracing_with_options(TracingOptions::default())
+    }
+
+    #[cfg(feature = "tracing")]
+    pub fn setup_tracing_with_options(options: TracingOptions) {
+        crate::tracing::set_tracing_subscriber(options);
+    }
+
+    pub fn setup_hooks() {
         crate::diagnostic::set_miette_hooks();
-        #[cfg(feature = "tracing")]
-        crate::tracing::set_tracing_subscriber(env_name);
     }
 
     /// Add a system function that runs during the startup phase.

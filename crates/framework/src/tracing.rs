@@ -2,6 +2,7 @@ use chrono::{Local, Timelike};
 use starbase_styles::color;
 use std::env;
 use std::sync::atomic::{AtomicU8, Ordering};
+use tracing::metadata::LevelFilter;
 use tracing::{field::Visit, Level, Metadata, Subscriber};
 // use tracing_subscriber::fmt::FormattedFields;
 use tracing_subscriber::EnvFilter;
@@ -173,16 +174,59 @@ where
     }
 }
 
-pub fn set_tracing_subscriber(env_name: &str) {
+pub struct TracingOptions {
+    default_level: LevelFilter,
+    env_name: String,
+    intercept_log: bool,
+    module_prefixes: Vec<String>,
+}
+
+impl Default for TracingOptions {
+    fn default() -> Self {
+        TracingOptions {
+            default_level: LevelFilter::INFO,
+            env_name: "RUST_LOG".into(),
+            intercept_log: true,
+            module_prefixes: vec![],
+        }
+    }
+}
+
+pub fn set_tracing_subscriber(options: TracingOptions) {
+    let set_env_var = |level: String| {
+        let env_value = if options.module_prefixes.is_empty() {
+            level
+        } else {
+            options
+                .module_prefixes
+                .iter()
+                .map(|prefix| format!("{prefix}={level}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+
+        env::set_var(&options.env_name, env_value);
+    };
+
+    if let Ok(level) = env::var(&options.env_name) {
+        if !level.contains('=') && !level.contains(',') && level != "off" {
+            set_env_var(level);
+        }
+    } else {
+        set_env_var(options.default_level.to_string().to_lowercase());
+    }
+
     let subscriber = SubscriberBuilder::default()
         .event_format(EventFormatter::new())
         .fmt_fields(FieldFormatter::new())
-        .with_env_filter(EnvFilter::from_env(env_name))
+        .with_env_filter(EnvFilter::from_env(options.env_name))
         .with_writer(std::io::stderr)
         .finish();
 
     // Ignore the error incase the subscriber is already set
     let _ = tracing::subscriber::set_global_default(subscriber);
 
-    // tracing_subscriber::fmt::init();
+    if options.intercept_log {
+        tracing_log::LogTracer::init().unwrap();
+    }
 }
