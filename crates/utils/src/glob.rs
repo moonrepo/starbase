@@ -1,5 +1,7 @@
 use miette::Diagnostic;
+use once_cell::sync::Lazy;
 use starbase_styles::{Style, Stylize};
+use std::sync::RwLock;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -22,6 +24,26 @@ pub enum GlobError {
     #[diagnostic(code(glob::invalid_path))]
     #[error("Failed to normalize glob path {}", .path.style(Style::Path))]
     InvalidPath { path: PathBuf },
+}
+
+static GLOBAL_NEGATIONS: Lazy<RwLock<Vec<&'static str>>> =
+    Lazy::new(|| RwLock::new(vec!["**/.{git,svn}/**", "**/node_modules/**"]));
+
+pub fn add_global_negations<I>(patterns: I)
+where
+    I: IntoIterator<Item = &'static str>,
+{
+    let mut negations = GLOBAL_NEGATIONS.write().unwrap();
+    negations.extend(patterns);
+}
+
+pub fn set_global_negations<I>(patterns: I)
+where
+    I: IntoIterator<Item = &'static str>,
+{
+    let mut negations = GLOBAL_NEGATIONS.write().unwrap();
+    negations.clear();
+    negations.extend(patterns);
 }
 
 pub struct GlobSet<'glob> {
@@ -59,6 +81,13 @@ impl<'glob> GlobSet<'glob> {
 
         for pattern in negations.into_iter() {
             ng.push(create_glob(pattern.as_ref())?);
+            count += 1;
+        }
+
+        let global_negations = GLOBAL_NEGATIONS.read().unwrap();
+
+        for pattern in global_negations.iter() {
+            ng.push(create_glob(pattern)?);
             count += 1;
         }
 
@@ -200,10 +229,7 @@ where
     V: AsRef<str> + 'glob + ?Sized,
 {
     let (expressions, mut negations) = split_patterns(patterns);
-
-    // Always ignore common directories
-    negations.push("**/.*/**"); // .git, .moon, .yarn, etc
-    negations.push("**/node_modules/**");
+    negations.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
     let negation = Negation::try_from_patterns(negations).unwrap();
     let mut paths = vec![];
@@ -303,6 +329,15 @@ mod tests {
             assert!(set.matches("files/test.js"));
             assert!(set.matches("files/test.go"));
             assert!(!set.matches("files/test.ts"));
+        }
+
+        #[test]
+        fn doesnt_match_global_negations() {
+            let set = GlobSet::new(["files/**/*"]).unwrap();
+
+            assert!(set.matches("files/test.js"));
+            assert!(!set.matches("files/node_modules/test.js"));
+            assert!(!set.matches("files/.git/cache"));
         }
     }
 
