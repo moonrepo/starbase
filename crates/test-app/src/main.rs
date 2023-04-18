@@ -2,7 +2,7 @@ use starbase::diagnostics::{Diagnostic, Error, IntoDiagnostic};
 use starbase::style::{Style, Stylize};
 use starbase::tracing::{debug, info, warn};
 use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
-use starbase_utils::fs;
+use starbase_utils::{fs, glob};
 use std::path::PathBuf;
 
 #[derive(Debug, Diagnostic, Error)]
@@ -93,6 +93,8 @@ async fn fail() {
 
 #[tokio::main]
 async fn main() -> MainResult {
+    glob::add_global_negations(["**/target/**"]);
+
     App::setup_diagnostics();
     App::setup_tracing();
 

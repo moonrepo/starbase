@@ -1,5 +1,7 @@
 use miette::Diagnostic;
+use once_cell::sync::Lazy;
 use starbase_styles::{Style, Stylize};
+use std::sync::RwLock;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -22,6 +24,26 @@ pub enum GlobError {
     #[diagnostic(code(glob::invalid_path))]
     #[error("Failed to normalize glob path {}", .path.style(Style::Path))]
     InvalidPath { path: PathBuf },
+}
+
+static GLOBAL_NEGATIONS: Lazy<RwLock<Vec<&'static str>>> =
+    Lazy::new(|| RwLock::new(vec!["**/.{git,svn}/**", "**/node_modules/**"]));
+
+pub fn add_global_negations<I>(patterns: I)
+where
+    I: IntoIterator<Item = &'static str>,
+{
+    let mut negations = GLOBAL_NEGATIONS.write().unwrap();
+    negations.extend(patterns);
+}
+
+pub fn set_global_negations<I>(patterns: I)
+where
+    I: IntoIterator<Item = &'static str>,
+{
+    let mut negations = GLOBAL_NEGATIONS.write().unwrap();
+    negations.clear();
+    negations.extend(patterns);
 }
 
 pub struct GlobSet<'glob> {
@@ -59,6 +81,13 @@ impl<'glob> GlobSet<'glob> {
 
         for pattern in negations.into_iter() {
             ng.push(create_glob(pattern.as_ref())?);
+            count += 1;
+        }
+
+        let global_negations = GLOBAL_NEGATIONS.read().unwrap();
+
+        for pattern in global_negations.iter() {
+            ng.push(create_glob(pattern)?);
             count += 1;
         }
 
@@ -199,13 +228,11 @@ where
     I: IntoIterator<Item = &'glob V>,
     V: AsRef<str> + 'glob + ?Sized,
 {
-    let (expressions, mut negations) = split_patterns(patterns);
-
-    // Always ignore common directories
-    negations.push("**/.*/**"); // .git, .moon, .yarn, etc
-    negations.push("**/node_modules/**");
+    let (expressions, negations) = split_patterns(patterns);
+    let global_negations = GLOBAL_NEGATIONS.read().unwrap().clone();
 
     let negation = Negation::try_from_patterns(negations).unwrap();
+    let global_negation = Negation::try_from_patterns(global_negations).unwrap();
     let mut paths = vec![];
 
     for expression in expressions {
@@ -215,7 +242,7 @@ where
             match entry {
                 Ok(e) => {
                     // Filter out negated results
-                    if negation.target(&e).is_some() {
+                    if negation.target(&e).is_some() || global_negation.target(&e).is_some() {
                         continue;
                     }
 
