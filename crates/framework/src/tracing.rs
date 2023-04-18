@@ -1,15 +1,16 @@
 use chrono::{Local, Timelike};
 use starbase_styles::color;
 use std::env;
+use std::io;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use tracing::metadata::LevelFilter;
-use tracing::{field::Visit, Level, Metadata, Subscriber};
-// use tracing_subscriber::fmt::FormattedFields;
-use tracing_subscriber::EnvFilter;
+use tracing::{field::Visit, subscriber::set_global_default, Level, Metadata, Subscriber};
 use tracing_subscriber::{
     field::RecordFields,
     fmt::{self, time::FormatTime, FormatEvent, FormatFields, SubscriberBuilder},
     registry::LookupSpan,
+    EnvFilter,
 };
 
 pub use tracing::*;
@@ -181,6 +182,7 @@ pub struct TracingOptions {
     pub env_name: String,
     pub filter_modules: Vec<String>,
     pub intercept_log: bool,
+    pub log_file: Option<PathBuf>,
 }
 
 impl Default for TracingOptions {
@@ -190,6 +192,7 @@ impl Default for TracingOptions {
             env_name: "RUST_LOG".into(),
             filter_modules: vec![],
             intercept_log: true,
+            log_file: Some(PathBuf::from("test.log")),
         }
     }
 }
@@ -218,17 +221,25 @@ pub fn setup_tracing(options: TracingOptions) {
         set_env_var(options.default_level.to_string().to_lowercase());
     }
 
-    let subscriber = SubscriberBuilder::default()
-        .event_format(EventFormatter::new())
-        .fmt_fields(FieldFormatter::new())
-        .with_env_filter(EnvFilter::from_env(options.env_name))
-        .with_writer(std::io::stderr)
-        .finish();
-
-    // Ignore the error incase the subscriber is already set
-    let _ = tracing::subscriber::set_global_default(subscriber);
-
     if options.intercept_log {
         tracing_log::LogTracer::init().unwrap();
     }
+
+    let subscriber = SubscriberBuilder::default()
+        .event_format(EventFormatter::new())
+        .fmt_fields(FieldFormatter::new())
+        .with_env_filter(EnvFilter::from_env(options.env_name));
+
+    // Ignore the error in case the subscriber is already set
+    let _ = if let Some(log_file) = options.log_file {
+        let (file_appender, _guard) =
+            tracing_appender::non_blocking(tracing_appender::rolling::never(
+                log_file.parent().unwrap(),
+                log_file.file_name().unwrap(),
+            ));
+
+        set_global_default(subscriber.with_writer(file_appender).finish())
+    } else {
+        set_global_default(subscriber.with_writer(io::stderr).finish())
+    };
 }
