@@ -1,23 +1,27 @@
 use chrono::{Local, Timelike};
 use starbase_styles::color;
 use std::env;
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::io;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use tracing::metadata::LevelFilter;
-use tracing::{field::Visit, Level, Metadata, Subscriber};
-// use tracing_subscriber::fmt::FormattedFields;
-use tracing_subscriber::EnvFilter;
+use tracing::{field::Visit, subscriber::set_global_default, Level, Metadata, Subscriber};
 use tracing_subscriber::{
     field::RecordFields,
     fmt::{self, time::FormatTime, FormatEvent, FormatFields, SubscriberBuilder},
     registry::LookupSpan,
+    EnvFilter,
 };
 
-pub use tracing::*;
+pub use tracing::{
+    debug, debug_span, enabled, error, error_span, event, event_enabled, info, info_span,
+    instrument, span, span_enabled, trace, trace_span, warn, warn_span,
+};
 
 static LAST_HOUR: AtomicU8 = AtomicU8::new(0);
+static TEST_ENV: AtomicBool = AtomicBool::new(false);
 
 struct FieldVisitor<'writer> {
-    is_testing: bool,
     writer: fmt::format::Writer<'writer>,
 }
 
@@ -33,7 +37,7 @@ impl<'writer> Visit for FieldVisitor<'writer> {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
             write!(self.writer, "  {:?} ", value).unwrap()
-        } else if !self.is_testing {
+        } else if !TEST_ENV.load(Ordering::Relaxed) {
             write!(
                 self.writer,
                 " {}",
@@ -44,17 +48,7 @@ impl<'writer> Visit for FieldVisitor<'writer> {
     }
 }
 
-struct FieldFormatter {
-    is_testing: bool,
-}
-
-impl FieldFormatter {
-    pub fn new() -> Self {
-        Self {
-            is_testing: env::var("STARBASE_TEST").is_ok(),
-        }
-    }
-}
+struct FieldFormatter;
 
 impl<'writer> FormatFields<'writer> for FieldFormatter {
     fn format_fields<R: RecordFields>(
@@ -62,10 +56,7 @@ impl<'writer> FormatFields<'writer> for FieldFormatter {
         writer: fmt::format::Writer<'writer>,
         fields: R,
     ) -> std::fmt::Result {
-        let mut visitor = FieldVisitor {
-            is_testing: self.is_testing,
-            writer,
-        };
+        let mut visitor = FieldVisitor { writer };
 
         fields.record(&mut visitor);
 
@@ -73,21 +64,11 @@ impl<'writer> FormatFields<'writer> for FieldFormatter {
     }
 }
 
-struct EventFormatter {
-    is_testing: bool,
-}
-
-impl EventFormatter {
-    pub fn new() -> Self {
-        Self {
-            is_testing: env::var("STARBASE_TEST").is_ok(),
-        }
-    }
-}
+struct EventFormatter;
 
 impl FormatTime for EventFormatter {
     fn format_time(&self, writer: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
-        if self.is_testing {
+        if TEST_ENV.load(Ordering::Relaxed) {
             return write!(writer, "YYYY-MM-DD");
         }
 
@@ -178,23 +159,29 @@ where
 
 pub struct TracingOptions {
     pub default_level: LevelFilter,
-    pub env_name: String,
     pub filter_modules: Vec<String>,
     pub intercept_log: bool,
+    pub log_env: String,
+    pub log_file: Option<PathBuf>,
+    pub test_env: String,
 }
 
 impl Default for TracingOptions {
     fn default() -> Self {
         TracingOptions {
             default_level: LevelFilter::INFO,
-            env_name: "RUST_LOG".into(),
             filter_modules: vec![],
             intercept_log: true,
+            log_env: "RUST_LOG".into(),
+            log_file: None,
+            test_env: "STARBASE_TEST".into(),
         }
     }
 }
 
 pub fn setup_tracing(options: TracingOptions) {
+    TEST_ENV.store(env::var(options.test_env).is_ok(), Ordering::Release);
+
     let set_env_var = |level: String| {
         let env_value = if options.filter_modules.is_empty() {
             level
@@ -207,10 +194,10 @@ pub fn setup_tracing(options: TracingOptions) {
                 .join(",")
         };
 
-        env::set_var(&options.env_name, env_value);
+        env::set_var(&options.log_env, env_value);
     };
 
-    if let Ok(level) = env::var(&options.env_name) {
+    if let Ok(level) = env::var(&options.log_env) {
         if !level.contains('=') && !level.contains(',') && level != "off" {
             set_env_var(level);
         }
@@ -218,17 +205,32 @@ pub fn setup_tracing(options: TracingOptions) {
         set_env_var(options.default_level.to_string().to_lowercase());
     }
 
-    let subscriber = SubscriberBuilder::default()
-        .event_format(EventFormatter::new())
-        .fmt_fields(FieldFormatter::new())
-        .with_env_filter(EnvFilter::from_env(options.env_name))
-        .with_writer(std::io::stderr)
-        .finish();
-
-    // Ignore the error incase the subscriber is already set
-    let _ = tracing::subscriber::set_global_default(subscriber);
-
     if options.intercept_log {
-        tracing_log::LogTracer::init().unwrap();
+        tracing_log::LogTracer::init().expect("Failed to initialize log interceptor.");
     }
+
+    let subscriber = SubscriberBuilder::default()
+        .event_format(EventFormatter)
+        .fmt_fields(FieldFormatter)
+        .with_env_filter(EnvFilter::from_env(options.log_env));
+
+    // Ignore the error in case the subscriber is already set
+    let _ = if let Some(log_file) = options.log_file {
+        env::set_var("NO_COLOR", "1");
+
+        set_global_default(
+            subscriber
+                .with_writer(tracing_appender::rolling::never(
+                    log_file
+                        .parent()
+                        .expect("Missing parent directory for log file."),
+                    log_file
+                        .file_name()
+                        .expect("Missing file name for log file."),
+                ))
+                .finish(),
+        )
+    } else {
+        set_global_default(subscriber.with_writer(io::stderr).finish())
+    };
 }

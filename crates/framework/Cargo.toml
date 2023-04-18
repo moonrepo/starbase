@@ -19,9 +19,10 @@ rustc-hash = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["tracing"] }
 tracing = { workspace = true, optional = true }
+tracing-appender = { version = "0.2.2", optional = true }
 tracing-log = { version = "0.1.3", optional = true, default-features = false, features = ["log-tracer", "std"] }
 tracing-subscriber = { version = "0.3.16", optional = true, default-features = false, features = ["env-filter", "fmt"] }
 
 [features]
 default = ["tracing"]
-tracing = ["dep:tracing", "dep:tracing-log", "dep:tracing-subscriber", "starbase_macros/tracing"]
+tracing = ["dep:tracing", "dep:tracing-appender", "dep:tracing-log", "dep:tracing-subscriber", "starbase_macros/tracing"]
