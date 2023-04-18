@@ -228,11 +228,10 @@ where
     I: IntoIterator<Item = &'glob V>,
     V: AsRef<str> + 'glob + ?Sized,
 {
-    let (expressions, negations) = split_patterns(patterns);
-    let global_negations = GLOBAL_NEGATIONS.read().unwrap().clone();
+    let (expressions, mut negations) = split_patterns(patterns);
+    negations.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
     let negation = Negation::try_from_patterns(negations).unwrap();
-    let global_negation = Negation::try_from_patterns(global_negations).unwrap();
     let mut paths = vec![];
 
     for expression in expressions {
@@ -242,7 +241,7 @@ where
             match entry {
                 Ok(e) => {
                     // Filter out negated results
-                    if negation.target(&e).is_some() || global_negation.target(&e).is_some() {
+                    if negation.target(&e).is_some() {
                         continue;
                     }
 
@@ -330,6 +329,15 @@ mod tests {
             assert!(set.matches("files/test.js"));
             assert!(set.matches("files/test.go"));
             assert!(!set.matches("files/test.ts"));
+        }
+
+        #[test]
+        fn doesnt_match_global_negations() {
+            let set = GlobSet::new(["files/**/*"]).unwrap();
+
+            assert!(set.matches("files/test.js"));
+            assert!(!set.matches("files/node_modules/test.js"));
+            assert!(!set.matches("files/.git/cache"));
         }
     }
 
