@@ -424,25 +424,29 @@ pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsEr
     })
 }
 
+#[cfg(unix)]
 #[inline]
 pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), FsError> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::PermissionsExt;
 
-        let path = path.as_ref();
-        let mode = mode.unwrap_or(0o755);
+    let path = path.as_ref();
+    let mode = mode.unwrap_or(0o755);
 
-        trace!(file = %path.display(), mode, "Updating file permissions");
+    trace!(file = %path.display(), mode, "Updating file permissions");
 
-        fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|error| {
-            FsError::Perms {
-                path: path.to_path_buf(),
-                error,
-            }
-        })?;
-    }
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|error| {
+        FsError::Perms {
+            path: path.to_path_buf(),
+            error,
+        }
+    })?;
 
+    Ok(())
+}
+
+#[cfg(not(unix))]
+#[inline]
+pub fn update_perms<T: AsRef<Path>>(_path: T, _mode: Option<u32>) -> Result<(), FsError> {
     Ok(())
 }
 
