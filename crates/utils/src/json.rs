@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use starbase_styles::{Style, Stylize};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::RwLock;
 use std::{io::Read, path::PathBuf};
 use thiserror::Error;
 use tracing::trace;
@@ -39,8 +39,8 @@ pub enum JsonError {
     },
 }
 
-static CLEAN_REGEX: Lazy<Mutex<Regex>> =
-    Lazy::new(|| Mutex::new(Regex::new(r",(?P<valid>\s*})").unwrap()));
+static CLEAN_REGEX: Lazy<RwLock<Regex>> =
+    Lazy::new(|| RwLock::new(Regex::new(r",(?P<valid>\s*})").unwrap()));
 
 #[inline]
 #[track_caller]
@@ -56,7 +56,7 @@ pub fn clean<D: AsRef<str>>(json: D) -> String {
 
     // Remove trailing commas
     CLEAN_REGEX
-        .lock()
+        .read()
         .unwrap()
         .replace_all(&stripped, "$valid")
         .to_string()

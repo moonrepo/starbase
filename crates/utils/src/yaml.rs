@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use starbase_styles::{Style, Stylize};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::RwLock;
 use thiserror::Error;
 use tracing::trace;
 
@@ -37,8 +37,8 @@ pub enum YamlError {
     },
 }
 
-static WHITESPACE_PREFIX: Lazy<Mutex<Regex>> =
-    Lazy::new(|| Mutex::new(Regex::new(r"^(\s+)").unwrap()));
+static WHITESPACE_PREFIX: Lazy<RwLock<Regex>> =
+    Lazy::new(|| RwLock::new(Regex::new(r"^(\s+)").unwrap()));
 
 #[inline]
 pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
@@ -123,6 +123,8 @@ where
     // this, we do it manually on the YAML string, but only if the indent is different than
     // a double space (the default), which can be customized with `.editorconfig`.
     if editor_config.indent != "  " {
+        let prefix = WHITESPACE_PREFIX.read().unwrap();
+
         data = data
             .split('\n')
             .map(|line| {
@@ -130,9 +132,7 @@ where
                     return line.to_string();
                 }
 
-                WHITESPACE_PREFIX
-                    .lock()
-                    .unwrap()
+                prefix
                     .replace_all(line, |caps: &regex::Captures| {
                         editor_config
                             .indent
