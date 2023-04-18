@@ -222,7 +222,7 @@ pub fn setup_tracing(options: TracingOptions) {
     }
 
     if options.intercept_log {
-        tracing_log::LogTracer::init().unwrap();
+        tracing_log::LogTracer::init().expect("Failed to initialize log interceptor.");
     }
 
     let subscriber = SubscriberBuilder::default()
@@ -232,13 +232,20 @@ pub fn setup_tracing(options: TracingOptions) {
 
     // Ignore the error in case the subscriber is already set
     let _ = if let Some(log_file) = options.log_file {
-        let (file_appender, _guard) =
-            tracing_appender::non_blocking(tracing_appender::rolling::never(
-                log_file.parent().unwrap(),
-                log_file.file_name().unwrap(),
-            ));
+        env::set_var("NO_COLOR", "1");
 
-        set_global_default(subscriber.with_writer(file_appender).finish())
+        set_global_default(
+            subscriber
+                .with_writer(tracing_appender::rolling::never(
+                    log_file
+                        .parent()
+                        .expect("Missing parent directory for log file."),
+                    log_file
+                        .file_name()
+                        .expect("Missing file name for log file."),
+                ))
+                .finish(),
+        )
     } else {
         set_global_default(subscriber.with_writer(io::stderr).finish())
     };
