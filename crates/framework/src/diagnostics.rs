@@ -3,7 +3,7 @@ use starbase_styles::theme::create_graphical_theme;
 pub use miette::*;
 pub use thiserror::Error;
 
-pub fn set_miette_hooks() {
+pub fn setup_miette() {
     miette::set_panic_hook();
 
     miette::set_hook(Box::new(|_| {

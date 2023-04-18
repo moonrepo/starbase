@@ -57,7 +57,7 @@ impl App {
     }
 
     pub fn setup_diagnostics() {
-        crate::diagnostics::set_miette_hooks();
+        crate::diagnostics::setup_miette();
     }
 
     #[cfg(feature = "tracing")]

@@ -13,7 +13,10 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-pub use tracing::*;
+pub use tracing::{
+    debug, debug_span, enabled, error, error_span, event, event_enabled, info, info_span,
+    instrument, span, span_enabled, trace, trace_span, warn, warn_span,
+};
 
 static LAST_HOUR: AtomicU8 = AtomicU8::new(0);
 static TEST_ENV: AtomicBool = AtomicBool::new(false);
