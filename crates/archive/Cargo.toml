@@ -1,0 +1,27 @@
+[package]
+name = "starbase_archive"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "TODO"
+repository = "https://github.com/moonrepo/starbase"
+
+[dependencies]
+miette = { workspace = true }
+rustc-hash = { workspace = true }
+starbase_styles = { version = "0.1.5", path = "../styles" }
+starbase_utils = { version = "0.2.6", path = "../utils" }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+
+flate2 = "1.0.25"
+tar = "0.4.38"
+xz2 = "0.1.7"
+zip = { version = "0.6.4", default-features = false }
+
+[features]
+default = []
+
+[dev-dependencies]
+assert_fs = "1.0.12"
