@@ -1,5 +1,6 @@
+use crate::archive::ArchivePacker;
+use crate::error::ArchiveError;
 use crate::join_file_name;
-use crate::{archive::ArchivePacker, ArchiveError};
 use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
 use starbase_utils::fs::{self, FsError};
@@ -36,7 +37,7 @@ pub struct ZipPacker {
 }
 
 impl ZipPacker {
-    pub fn new<P>(archive_file: P) -> Result<Self, ArchiveError>
+    pub fn new<P>(archive_file: P) -> Result<Self, ZipError>
     where
         P: AsRef<Path>,
     {
@@ -47,9 +48,7 @@ impl ZipPacker {
 }
 
 impl ArchivePacker for ZipPacker {
-    type Error = ZipError;
-
-    fn add_file(&mut self, name: &str, file: &Path) -> Result<(), Self::Error> {
+    fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
         #[allow(unused_mut)] // windows
         let mut options = FileOptions::default().compression_method(CompressionMethod::Stored);
 
@@ -79,7 +78,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
-    fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), Self::Error> {
+    fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError> {
         self.archive
             .add_directory(
                 name,
@@ -105,7 +104,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
-    fn pack(&mut self) -> Result<(), Self::Error> {
+    fn pack(&mut self) -> Result<(), ArchiveError> {
         self.archive
             .finish()
             .map_err(|error| ZipError::PackFailure { error })?;

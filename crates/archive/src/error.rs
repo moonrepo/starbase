@@ -10,4 +10,12 @@ pub enum ArchiveError {
 
     #[error(transparent)]
     Glob(#[from] GlobError),
+
+    #[cfg(feature = "tar")]
+    #[error(transparent)]
+    Tar(#[from] crate::tar::TarError),
+
+    #[cfg(feature = "zip")]
+    #[error(transparent)]
+    Zip(#[from] crate::zip::ZipError),
 }

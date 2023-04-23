@@ -18,7 +18,7 @@ impl TreeDiffer {
     pub fn load<P, I, V>(dest_root: P, lookup_paths: I) -> Result<Self, ArchiveError>
     where
         P: AsRef<Path>,
-        I: Iterator<Item = V>,
+        I: IntoIterator<Item = V>,
         V: AsRef<str>,
     {
         let mut files = FxHashMap::default();

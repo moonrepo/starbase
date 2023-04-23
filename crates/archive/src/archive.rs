@@ -1,15 +1,31 @@
+use crate::error::ArchiveError;
 use crate::join_file_name;
+use crate::tree_differ::TreeDiffer;
 use rustc_hash::FxHashMap;
 use starbase_utils::{fs, glob};
-use std::path::{Path, PathBuf};
+use std::{
+    io::Read,
+    path::{Path, PathBuf},
+};
 use tracing::trace;
 
 pub trait ArchivePacker {
-    type Error;
+    fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError>;
+    fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError>;
+    fn pack(&mut self) -> Result<(), ArchiveError>;
+}
 
-    fn add_file(&mut self, name: &str, file: &Path) -> Result<(), Self::Error>;
-    fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), Self::Error>;
-    fn pack(&mut self) -> Result<(), Self::Error>;
+pub trait ArchiveUnpacker {
+    type Content: ArchiveContent;
+
+    fn contents(&mut self) -> Result<Vec<Self::Content>, ArchiveError>;
+    fn unpack(&mut self) -> Result<(), ArchiveError>;
+}
+
+pub trait ArchiveContent: Read {
+    fn create(&mut self, dest: &Path) -> Result<(), ArchiveError>;
+    fn path(&self) -> PathBuf;
+    fn size(&self) -> u64;
 }
 
 pub struct Archiver<'owner> {
@@ -63,13 +79,13 @@ impl<'owner> Archiver<'owner> {
         self
     }
 
-    pub fn pack<F, P>(&self, packer: F) -> Result<(), P::Error>
+    pub fn pack<F, P>(&self, packer: F) -> Result<(), ArchiveError>
     where
         F: FnOnce(&Path, &Path) -> P,
         P: ArchivePacker,
     {
         trace!(
-            sources = %self.source_root.display(),
+            input = %self.source_root.display(),
             archive = %self.archive_file.display(),
             "Packing archive",
         );
@@ -117,6 +133,44 @@ impl<'owner> Archiver<'owner> {
         }
 
         archive.pack()?;
+
+        Ok(())
+    }
+
+    pub fn unpack<F, P>(&self, unpacker: F) -> Result<(), ArchiveError>
+    where
+        F: FnOnce(&Path, &Path) -> P,
+        P: ArchiveUnpacker,
+    {
+        trace!(
+            output = %self.source_root.display(),
+            archive = %self.archive_file.display(),
+            "Unpacking archive",
+        );
+
+        let mut archive = unpacker(&self.source_root, &self.archive_file);
+        let mut differ = TreeDiffer::load(&self.source_root, &["*.test"]).unwrap(); // TODO
+
+        for mut entry in archive.contents()? {
+            let mut path = entry.path();
+
+            // Remove the prefix
+            if !self.prefix.is_empty() && path.starts_with(&self.prefix) {
+                path = path.strip_prefix(&self.prefix).unwrap().to_owned();
+            }
+
+            let output_path = self.source_root.join(path);
+
+            // Unpack the file if different than destination
+            if differ.should_write_source(entry.size(), &mut entry, &output_path)? {
+                entry.create(&output_path)?;
+            }
+
+            differ.untrack_file(&output_path);
+        }
+
+        archive.unpack()?;
+        differ.remove_stale_tracked_files();
 
         Ok(())
     }
