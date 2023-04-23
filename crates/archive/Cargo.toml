@@ -14,14 +14,21 @@ starbase_utils = { version = "0.2.6", path = "../utils" }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
+# tar
+tar = { version = "0.4.38", optional = true }
+flate2 =  { version = "1.0.25", optional = true }
+xz2 = { version ="0.1.7", optional = true }
 
-flate2 = "1.0.25"
-tar = "0.4.38"
-xz2 = "0.1.7"
-zip = { version = "0.6.4", default-features = false }
-
-[features]
-default = []
+# zip
+zip = { version = "0.6.4", default-features = false, optional = true }
 
 [dev-dependencies]
 assert_fs = "1.0.12"
+
+[features]
+default = ["tar-gz", "tar-xz", "zip"]
+tar = ["dep:tar"]
+tar-gz = ["dep:flate2", "tar"]
+tar-xz = ["dep:xz2", "tar"]
+zip = ["dep:zip"]
+

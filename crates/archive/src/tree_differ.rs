@@ -1,20 +1,9 @@
-use miette::Diagnostic;
+use crate::error::ArchiveError;
 use rustc_hash::FxHashMap;
-use starbase_utils::fs::{self, FsError};
-use starbase_utils::glob::{self, GlobError};
+use starbase_utils::{fs, glob};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
-use thiserror::Error;
 use tracing::trace;
-
-#[derive(Error, Diagnostic, Debug)]
-pub enum TreeDifferError {
-    #[error(transparent)]
-    Fs(#[from] FsError),
-
-    #[error(transparent)]
-    Glob(#[from] GlobError),
-}
 
 pub struct TreeDiffer {
     /// A mapping of all files in the destination directory
@@ -26,7 +15,7 @@ impl TreeDiffer {
     /// Load the tree at the defined destination root and scan the file system
     /// using the defined lists of paths, either files, folders, or globs. If a folder,
     /// recursively scan all files and create an internal manifest to track diffing.
-    pub fn load<P, I, V>(dest_root: P, lookup_paths: I) -> Result<Self, TreeDifferError>
+    pub fn load<P, I, V>(dest_root: P, lookup_paths: I) -> Result<Self, ArchiveError>
     where
         P: AsRef<Path>,
         I: Iterator<Item = V>,
@@ -128,7 +117,7 @@ impl TreeDiffer {
         source_size: u64,
         source: &mut T,
         dest_path: &Path,
-    ) -> Result<bool, TreeDifferError> {
+    ) -> Result<bool, ArchiveError> {
         // If the destination doesn't exist, always use the source
         if !dest_path.exists() || !self.files.contains_key(dest_path) {
             return Ok(true);
