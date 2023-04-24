@@ -16,13 +16,14 @@ pub trait ArchivePacker {
 }
 
 pub trait ArchiveUnpacker {
-    type Content: ArchiveContent;
+    type Item: ArchiveItem;
+    type Iterator: Iterator<Item = Result<Self::Item, ArchiveError>>;
 
-    fn contents(&mut self) -> Result<Vec<Self::Content>, ArchiveError>;
+    fn contents(&mut self) -> Result<Self::Iterator, ArchiveError>;
     fn unpack(&mut self) -> Result<(), ArchiveError>;
 }
 
-pub trait ArchiveContent: Read {
+pub trait ArchiveItem: Read {
     fn create(&mut self, dest: &Path) -> Result<(), ArchiveError>;
     fn path(&self) -> PathBuf;
     fn size(&self) -> u64;
@@ -149,9 +150,10 @@ impl<'owner> Archiver<'owner> {
         );
 
         let mut archive = unpacker(&self.source_root, &self.archive_file);
-        let mut differ = TreeDiffer::load(&self.source_root, &["*.test"]).unwrap(); // TODO
+        let mut differ = TreeDiffer::load(&self.source_root, &["*.test"])?;
 
-        for mut entry in archive.contents()? {
+        for entry in archive.contents()? {
+            let mut entry = entry?;
             let mut path = entry.path();
 
             // Remove the prefix

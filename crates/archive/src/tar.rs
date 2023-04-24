@@ -1,4 +1,4 @@
-use crate::archive::{ArchiveContent, ArchivePacker, ArchiveUnpacker};
+use crate::archive::{ArchiveItem, ArchivePacker, ArchiveUnpacker};
 use crate::error::ArchiveError;
 use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
@@ -6,7 +6,7 @@ use starbase_utils::fs::{self, FsError};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use tar::{Archive as TarArchive, Builder as TarBuilder, Entry};
+use tar::{Archive as TarArchive, Builder as TarBuilder, Entries, Entry};
 use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug)]
@@ -156,34 +156,44 @@ impl<'archive, R: Read> TarUnpacker<'archive, R> {
 }
 
 impl<'archive, R: Read + 'archive> ArchiveUnpacker for TarUnpacker<'archive, R> {
-    type Content = TarUnpackerEntry<'archive, R>;
+    type Item = TarItem<'archive, R>;
+    type Iterator = TarItemIterator<'archive, R>;
 
     fn unpack(&mut self) -> Result<(), ArchiveError> {
         Ok(())
     }
 
-    fn contents(&mut self) -> Result<Vec<Self::Content>, ArchiveError> {
-        let entries = vec![];
-
-        // for entry in self
-        //     .archive
-        //     .entries()
-        //     .map_err(|error| TarError::UnpackFailure { error })?
-        // {
-        //     entries.push(TarUnpackerEntry::<'archive> {
-        //         entry: entry.map_err(|error| TarError::UnpackFailure { error })?,
-        //     })
-        // }
-
-        Ok(entries)
+    fn contents(&mut self) -> Result<Self::Iterator, ArchiveError> {
+        Ok(TarItemIterator {
+            entries: self
+                .archive
+                .entries()
+                .map_err(|error| TarError::UnpackFailure { error })?,
+        })
     }
 }
 
-pub struct TarUnpackerEntry<'archive, R: Read> {
+pub struct TarItemIterator<'archive, R: Read> {
+    entries: Entries<'archive, R>,
+}
+
+impl<'archive, R: Read> Iterator for TarItemIterator<'archive, R> {
+    type Item = Result<TarItem<'archive, R>, ArchiveError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.entries.next().map(|entry| {
+            entry
+                .map(|e| TarItem { entry: e })
+                .map_err(|error| ArchiveError::Tar(TarError::UnpackFailure { error }))
+        })
+    }
+}
+
+pub struct TarItem<'archive, R: Read> {
     entry: Entry<'archive, R>,
 }
 
-impl<'archive, R: Read> ArchiveContent for TarUnpackerEntry<'archive, R> {
+impl<'archive, R: Read> ArchiveItem for TarItem<'archive, R> {
     fn create(&mut self, dest: &Path) -> Result<(), ArchiveError> {
         if let Some(parent_dir) = dest.parent() {
             fs::create_dir_all(parent_dir)?;
@@ -208,7 +218,7 @@ impl<'archive, R: Read> ArchiveContent for TarUnpackerEntry<'archive, R> {
     }
 }
 
-impl<'archive, R: Read> Read for TarUnpackerEntry<'archive, R> {
+impl<'archive, R: Read> Read for TarItem<'archive, R> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.entry.read(buf)
     }
