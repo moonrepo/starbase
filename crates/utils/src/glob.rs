@@ -26,8 +26,13 @@ pub enum GlobError {
     InvalidPath { path: PathBuf },
 }
 
-static GLOBAL_NEGATIONS: Lazy<RwLock<Vec<&'static str>>> =
-    Lazy::new(|| RwLock::new(vec!["**/.{git,svn}/**", "**/node_modules/**"]));
+static GLOBAL_NEGATIONS: Lazy<RwLock<Vec<&'static str>>> = Lazy::new(|| {
+    RwLock::new(vec![
+        "**/.{git,svn}/**",
+        "**/.DS_Store",
+        "**/node_modules/**",
+    ])
+});
 
 pub fn add_global_negations<I>(patterns: I)
 where
