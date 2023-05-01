@@ -44,7 +44,7 @@ pub enum Style {
 }
 
 impl Style {
-    /// Convert the style to a specific `Color`.
+    /// Convert the style to a specific [Color].
     pub fn color(&self) -> Color {
         match self {
             Style::Failure => Color::Red,
@@ -64,7 +64,7 @@ impl Style {
     }
 }
 
-/// Create a new `owo_colors` `Style` instance and apply the given color.
+/// Create a new `owo_colors` [Style][OwoStyle] instance and apply the given color.
 pub fn create_style(color: u8) -> OwoStyle {
     OwoStyle::new().color(XtermColors::from(color))
 }

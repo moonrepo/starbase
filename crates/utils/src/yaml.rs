@@ -38,7 +38,7 @@ pub enum YamlError {
 
 static WHITESPACE_PREFIX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\s+)").unwrap());
 
-/// Recursively merge YAML `Value` objects, with values from next overwriting previous.
+/// Recursively merge [YamlValue] objects, with values from next overwriting previous.
 #[inline]
 pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
     match (prev, next) {

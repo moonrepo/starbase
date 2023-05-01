@@ -38,6 +38,7 @@ pub struct App {
 }
 
 impl App {
+    /// Create a new application instance.
     #[allow(clippy::new_without_default)]
     pub fn new() -> App {
         let mut app = App {
@@ -56,15 +57,18 @@ impl App {
         app
     }
 
+    /// Setup `miette` diagnostics by registering error and panic hooks.
     pub fn setup_diagnostics() {
         crate::diagnostics::setup_miette();
     }
 
+    /// Setup `tracing` messages with default options.
     #[cfg(feature = "tracing")]
     pub fn setup_tracing() {
         Self::setup_tracing_with_options(TracingOptions::default())
     }
 
+    /// Setup `tracing` messages with custom options.
     #[cfg(feature = "tracing")]
     pub fn setup_tracing_with_options(options: TracingOptions) {
         crate::tracing::setup_tracing(options);
@@ -249,7 +253,7 @@ impl App {
         resources: Resources,
         emitters: Emitters,
     ) -> AppResult {
-        let mut futures = vec![];
+        let mut futures = Vec::with_capacity(systems.len());
         let semaphore = Arc::new(Semaphore::new(num_cpus::get()));
 
         for system in systems {
