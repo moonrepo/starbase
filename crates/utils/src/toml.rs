@@ -34,6 +34,8 @@ pub enum TomlError {
     },
 }
 
+/// Read a file at the provided path and deserialize into the required type.
+/// The path must already exist.
 #[inline]
 pub fn read_file<P, D>(path: P) -> Result<D, TomlError>
 where
@@ -51,6 +53,8 @@ where
     })
 }
 
+/// Write a file and serialize the provided data to the provided path. If the parent directory
+/// does not exist, it will be created.
 #[inline]
 pub fn write_file<P, D>(path: P, toml: &D, pretty: bool) -> Result<(), TomlError>
 where

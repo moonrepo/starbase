@@ -6,7 +6,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use starbase_styles::{Style, Stylize};
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
 use thiserror::Error;
 use tracing::trace;
 
@@ -37,9 +36,9 @@ pub enum YamlError {
     },
 }
 
-static WHITESPACE_PREFIX: Lazy<RwLock<Regex>> =
-    Lazy::new(|| RwLock::new(Regex::new(r"^(\s+)").unwrap()));
+static WHITESPACE_PREFIX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\s+)").unwrap());
 
+/// Recursively merge [YamlValue] objects, with values from next overwriting previous.
 #[inline]
 pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
     match (prev, next) {
@@ -60,6 +59,8 @@ pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
     }
 }
 
+/// Read a file at the provided path and deserialize into the required type.
+/// The path must already exist.
 #[inline]
 pub fn read_file<P, D>(path: P) -> Result<D, YamlError>
 where
@@ -77,7 +78,10 @@ where
     })
 }
 
-// This function is primarily used internally for non-consumer facing files.
+/// Write a file and serialize the provided data to the provided path. If the parent directory
+/// does not exist, it will be created.
+///
+/// This function is primarily used internally for non-consumer facing files.
 #[inline]
 pub fn write_file<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
 where
@@ -98,7 +102,11 @@ where
     Ok(())
 }
 
-// This function is used for consumer facing files, like configs.
+/// Write a file and serialize the provided data to the provided path, while taking the
+/// closest `.editorconfig` into account. If the parent directory does not exist,
+/// it will be created.
+///
+/// This function is used for consumer facing files, like configs.
 #[cfg(feature = "editor-config")]
 #[inline]
 pub fn write_with_config<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
@@ -123,8 +131,6 @@ where
     // this, we do it manually on the YAML string, but only if the indent is different than
     // a double space (the default), which can be customized with `.editorconfig`.
     if editor_config.indent != "  " {
-        let prefix = WHITESPACE_PREFIX.read().unwrap();
-
         data = data
             .split('\n')
             .map(|line| {
@@ -132,7 +138,7 @@ where
                     return line.to_string();
                 }
 
-                prefix
+                WHITESPACE_PREFIX
                     .replace_all(line, |caps: &regex::Captures| {
                         editor_config
                             .indent

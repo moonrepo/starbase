@@ -68,6 +68,8 @@ pub enum FsError {
     },
 }
 
+/// Copy a file from source to destination. If the destination directory does not exist,
+/// it will be created.
 #[inline]
 pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(from: S, to: D) -> Result<(), FsError> {
     let from = from.as_ref();
@@ -88,6 +90,8 @@ pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(from: S, to: D) -> Result<(), F
     Ok(())
 }
 
+/// Copy a directory and all of its contents from source to destination. If the destination
+/// directory does not exist, it will be created.
 #[inline]
 pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result<(), FsError> {
     let from_root = from_root.as_ref();
@@ -118,9 +122,15 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
     Ok(())
 }
 
+/// Create a file and return a [File] instance. If the parent directory does not exist,
+/// it will be created.
 #[inline]
 pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
+
+    if let Some(parent) = path.parent() {
+        create_dir_all(parent)?;
+    }
 
     trace!(file = %path.display(), "Creating file");
 
@@ -130,6 +140,8 @@ pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     })
 }
 
+/// Create a directory and all parent directories if they do not exist.
+/// If the directory already exists, this is a no-op.
 #[inline]
 pub fn create_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
@@ -146,6 +158,8 @@ pub fn create_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Return the name of a file or directory, or "unknown" if invalid UTF-8,
+/// or unknown path component.
 #[inline]
 pub fn file_name<T: AsRef<Path>>(path: T) -> String {
     path.as_ref()
@@ -156,6 +170,9 @@ pub fn file_name<T: AsRef<Path>>(path: T) -> String {
         .to_string()
 }
 
+/// Find a file with the provided name in the starting directory,
+/// and traverse upwards until one is found. If no file is found,
+/// returns [None].
 #[inline]
 pub fn find_upwards<F, P>(name: F, starting_dir: P) -> Option<PathBuf>
 where
@@ -188,6 +205,7 @@ pub struct EditorConfigProps {
     pub indent: String,
 }
 
+/// Load properties from the closest `.editorconfig` file.
 #[cfg(feature = "editor-config")]
 pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
     use ec4rs::property::*;
@@ -224,6 +242,7 @@ pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
     }
 }
 
+/// Return metadata for the provided path. The path must already exist.
 #[inline]
 pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
     let path = path.as_ref();
@@ -236,6 +255,8 @@ pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
     })
 }
 
+/// Open a file at the provided path and return a [File] instance.
+/// The path must already exist.
 #[inline]
 pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
@@ -248,6 +269,8 @@ pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     })
 }
 
+/// Read direct contents for the provided directory path. If the directory
+/// does not exist, an empty vector is returned.
 #[inline]
 pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     let path = path.as_ref();
@@ -255,6 +278,11 @@ pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     trace!(dir = %path.display(), "Reading directory");
 
     let mut results = vec![];
+
+    if !path.exists() {
+        return Ok(results);
+    }
+
     let entries = fs::read_dir(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
         error,
@@ -277,6 +305,7 @@ pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     Ok(results)
 }
 
+/// Read all contents recursively for the provided directory path.
 #[inline]
 pub fn read_dir_all<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     let entries = read_dir(path)?;
@@ -295,6 +324,7 @@ pub fn read_dir_all<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsErro
     Ok(results)
 }
 
+/// Read a file at the provided path into a string. The path must already exist.
 #[inline]
 pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
     let path = path.as_ref();
@@ -307,6 +337,21 @@ pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
     })
 }
 
+/// Read a file at the provided path into a bytes vector. The path must already exist.
+#[inline]
+pub fn read_file_bytes<T: AsRef<Path>>(path: T) -> Result<Vec<u8>, FsError> {
+    let path = path.as_ref();
+
+    trace!(file = %path.display(), "Reading file");
+
+    fs::read(path).map_err(|error| FsError::Read {
+        path: path.to_path_buf(),
+        error,
+    })
+}
+
+/// Remove a file or directory (recursively) at the provided path.
+/// If the path does not exist, this is a no-op.
 #[inline]
 pub fn remove<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
@@ -322,6 +367,7 @@ pub fn remove<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Remove a file at the provided path. If the file does not exist, this is a no-op.
 #[inline]
 pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
@@ -338,6 +384,8 @@ pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Remove a directory, and all of its contents recursively, at the provided path.
+/// If the directory does not exist, this is a no-op.
 #[inline]
 pub fn remove_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
@@ -359,6 +407,9 @@ pub struct RemoveDirContentsResult {
     pub bytes_saved: u64,
 }
 
+/// Remove all contents from the provided directory path that are older than the
+/// provided duration, and return a sum of bytes saved and files deleted.
+/// If the directory does not exist, this is a no-op.
 pub fn remove_dir_stale_contents<P: AsRef<Path>>(
     dir: P,
     duration: Duration,
@@ -406,6 +457,8 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
     })
 }
 
+/// Rename a file from source to destination. If the destination directory does not exist,
+/// it will be created.
 #[inline]
 pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsError> {
     let from = from.as_ref();
@@ -424,6 +477,8 @@ pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsEr
     })
 }
 
+/// Update the permissions of a file at the provided path. If a mode is not provided,
+/// the default of 0o755 will be used. The path must already exist.
 #[cfg(unix)]
 #[inline]
 pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), FsError> {
@@ -444,15 +499,22 @@ pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), Fs
     Ok(())
 }
 
+/// This is a no-op on Windows.
 #[cfg(not(unix))]
 #[inline]
 pub fn update_perms<T: AsRef<Path>>(_path: T, _mode: Option<u32>) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Write a file with the provided data to the provided path. If the parent directory
+/// does not exist, it will be created.
 #[inline]
 pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
     let path = path.as_ref();
+
+    if let Some(parent) = path.parent() {
+        create_dir_all(parent)?;
+    }
 
     trace!(file = %path.display(), "Writing file");
 

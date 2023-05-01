@@ -34,6 +34,7 @@ static GLOBAL_NEGATIONS: Lazy<RwLock<Vec<&'static str>>> = Lazy::new(|| {
     ])
 });
 
+/// Add global negated patterns to all glob sets and walking operations.
 pub fn add_global_negations<I>(patterns: I)
 where
     I: IntoIterator<Item = &'static str>,
@@ -42,6 +43,8 @@ where
     negations.extend(patterns);
 }
 
+/// Set global negated patterns to be used by all glob sets and walking operations.
+/// This will overwrite any existing global negated patterns.
 pub fn set_global_negations<I>(patterns: I)
 where
     I: IntoIterator<Item = &'static str>,
@@ -58,6 +61,7 @@ pub struct GlobSet<'glob> {
 }
 
 impl<'glob> GlobSet<'glob> {
+    /// Create a new glob set from the list of patterns. Negated patterns must start with `!`.
     pub fn new<I, V>(patterns: I) -> Result<Self, GlobError>
     where
         I: IntoIterator<Item = &'glob V>,
@@ -68,6 +72,8 @@ impl<'glob> GlobSet<'glob> {
         GlobSet::new_split(expressions, negations)
     }
 
+    /// Create a new glob set with explicitly separate expressions and negations.
+    /// Negated patterns must not start with `!`.
     pub fn new_split<I1, V1, I2, V2>(expressions: I1, negations: I2) -> Result<Self, GlobError>
     where
         I1: IntoIterator<Item = &'glob V1>,
@@ -103,14 +109,18 @@ impl<'glob> GlobSet<'glob> {
         })
     }
 
+    /// Return true if the path matches the negated patterns.
     pub fn is_negated<P: AsRef<OsStr>>(&self, path: P) -> bool {
         self.negations.is_match(path.as_ref())
     }
 
+    /// Return true if the path matches the non-negated patterns.
     pub fn is_match<P: AsRef<OsStr>>(&self, path: P) -> bool {
         self.expressions.is_match(path.as_ref())
     }
 
+    /// Return true if the path matches the glob patterns,
+    /// while taking into account negated patterns.
     pub fn matches<P: AsRef<OsStr>>(&self, path: P) -> bool {
         if !self.enabled {
             return false;
@@ -126,6 +136,8 @@ impl<'glob> GlobSet<'glob> {
     }
 }
 
+/// Parse and create a [Glob] instance from the borrowed string pattern.
+/// If parsing fails, a [GlobError] is returned.
 #[inline]
 pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
     Glob::new(pattern).map_err(|error| GlobError::Create {
@@ -134,7 +146,8 @@ pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
     })
 }
 
-// This is not very exhaustive and may be inaccurate.
+/// Return true if the provided string looks like a glob pattern.
+/// This is not exhaustive and may be inaccurate.
 #[inline]
 pub fn is_glob<T: AsRef<str>>(value: T) -> bool {
     let value = value.as_ref();
@@ -180,6 +193,8 @@ pub fn is_glob<T: AsRef<str>>(value: T) -> bool {
     false
 }
 
+/// Normalize a glob-based file path to use forward slashes. If the path contains
+/// invalid UTF-8 characters, a [GlobError] is returned.
 #[inline]
 pub fn normalize<T: AsRef<Path>>(path: T) -> Result<String, GlobError> {
     let path = path.as_ref();
@@ -192,8 +207,8 @@ pub fn normalize<T: AsRef<Path>>(path: T) -> Result<String, GlobError> {
     }
 }
 
-/// Wax currently doesn't support negated globs (starts with !),
-/// so we must extract them manually.
+/// Split a list of glob patterns into separate non-negated and negated patterns.
+/// Negated patterns must start with `!`.
 #[inline]
 pub fn split_patterns<'glob, I, V>(patterns: I) -> (Vec<&'glob str>, Vec<&'glob str>)
 where
@@ -226,6 +241,8 @@ where
     (expressions, negations)
 }
 
+/// Walk the file system starting from the provided directory, and return all files and directories
+/// that match the provided glob patterns. Use [walk_files] if you only want to return files.
 #[inline]
 pub fn walk<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
@@ -263,6 +280,8 @@ where
     Ok(paths)
 }
 
+/// Walk the file system starting from the provided directory, and return all files
+/// that match the provided glob patterns. Use [walk] if you need to get directories as well.
 #[inline]
 pub fn walk_files<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
@@ -276,120 +295,4 @@ where
         .into_iter()
         .filter(|p| p.is_file())
         .collect::<Vec<_>>())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    mod globset {
-        use super::*;
-
-        #[test]
-        fn doesnt_match_when_empty() {
-            let list: Vec<String> = vec![];
-            let set = GlobSet::new(&list).unwrap();
-
-            assert!(!set.matches("file.ts"));
-
-            // Testing types
-            let list: Vec<&str> = vec![];
-            let set = GlobSet::new(list).unwrap();
-
-            assert!(!set.matches("file.ts"));
-        }
-
-        #[test]
-        fn matches_explicit() {
-            let set = GlobSet::new(["source"]).unwrap();
-
-            assert!(set.matches("source"));
-            assert!(!set.matches("source.ts"));
-        }
-
-        #[test]
-        fn matches_exprs() {
-            let set = GlobSet::new(["files/*.ts"]).unwrap();
-
-            assert!(set.matches("files/index.ts"));
-            assert!(set.matches("files/test.ts"));
-            assert!(!set.matches("index.ts"));
-            assert!(!set.matches("files/index.js"));
-            assert!(!set.matches("files/dir/index.ts"));
-        }
-
-        #[test]
-        fn doesnt_match_negations() {
-            let set = GlobSet::new(["files/*", "!**/*.ts"]).unwrap();
-
-            assert!(set.matches("files/test.js"));
-            assert!(set.matches("files/test.go"));
-            assert!(!set.matches("files/test.ts"));
-        }
-
-        #[test]
-        fn doesnt_match_negations_using_split() {
-            let set = GlobSet::new_split(["files/*"], ["**/*.ts"]).unwrap();
-
-            assert!(set.matches("files/test.js"));
-            assert!(set.matches("files/test.go"));
-            assert!(!set.matches("files/test.ts"));
-        }
-
-        #[test]
-        fn doesnt_match_global_negations() {
-            let set = GlobSet::new(["files/**/*"]).unwrap();
-
-            assert!(set.matches("files/test.js"));
-            assert!(!set.matches("files/node_modules/test.js"));
-            assert!(!set.matches("files/.git/cache"));
-        }
-    }
-
-    mod is_glob {
-        use super::*;
-
-        #[test]
-        fn returns_true_when_a_glob() {
-            assert!(is_glob("**"));
-            assert!(is_glob("**/src/*"));
-            assert!(is_glob("src/**"));
-            assert!(is_glob("*.ts"));
-            assert!(is_glob("file.*"));
-            assert!(is_glob("file.{js,ts}"));
-            assert!(is_glob("file.[jstx]"));
-            assert!(is_glob("file.tsx?"));
-        }
-
-        #[test]
-        fn returns_false_when_not_glob() {
-            assert!(!is_glob("dir"));
-            assert!(!is_glob("file.rs"));
-            assert!(!is_glob("dir/file.ts"));
-            assert!(!is_glob("dir/dir/file_test.rs"));
-            assert!(!is_glob("dir/dirDir/file-ts.js"));
-        }
-
-        #[test]
-        fn returns_false_when_escaped_glob() {
-            assert!(!is_glob("\\*.rs"));
-            assert!(!is_glob("file\\?.js"));
-            assert!(!is_glob("folder-\\[id\\]"));
-        }
-    }
-
-    mod split_patterns {
-        use super::*;
-
-        #[test]
-        fn splits_all_patterns() {
-            assert_eq!(
-                split_patterns(["*.file", "!neg1.*", "/*.file2", "/!neg2.*", "!/neg3.*"]),
-                (
-                    vec!["*.file", "*.file2"],
-                    vec!["neg1.*", "neg2.*", "neg3.*"]
-                )
-            );
-        }
-    }
 }

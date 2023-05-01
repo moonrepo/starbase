@@ -1,5 +1,3 @@
-pub use dirs;
-
 pub mod fs;
 
 #[cfg(feature = "glob")]
@@ -13,6 +11,8 @@ pub mod toml;
 
 #[cfg(feature = "yaml")]
 pub mod yaml;
+
+pub use dirs;
 
 #[macro_export]
 macro_rules! string_vec {

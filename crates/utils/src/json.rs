@@ -7,7 +7,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use starbase_styles::{Style, Stylize};
 use std::path::Path;
-use std::sync::RwLock;
 use std::{io::Read, path::PathBuf};
 use thiserror::Error;
 use tracing::trace;
@@ -39,9 +38,9 @@ pub enum JsonError {
     },
 }
 
-static CLEAN_REGEX: Lazy<RwLock<Regex>> =
-    Lazy::new(|| RwLock::new(Regex::new(r",(?P<valid>\s*})").unwrap()));
+static CLEAN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r",(?P<valid>\s*})").unwrap());
 
+/// Clean a JSON string by removing comments and trailing commas.
 #[inline]
 #[track_caller]
 pub fn clean<D: AsRef<str>>(json: D) -> String {
@@ -55,13 +54,10 @@ pub fn clean<D: AsRef<str>>(json: D) -> String {
         .unwrap();
 
     // Remove trailing commas
-    CLEAN_REGEX
-        .read()
-        .unwrap()
-        .replace_all(&stripped, "$valid")
-        .to_string()
+    CLEAN_REGEX.replace_all(&stripped, "$valid").to_string()
 }
 
+/// Recursively merge [JsonValue] objects, with values from next overwriting previous.
 #[inline]
 pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
     match (prev, next) {
@@ -82,6 +78,8 @@ pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
     }
 }
 
+/// Read a file at the provided path and deserialize into the required type.
+/// The path must already exist.
 #[inline]
 pub fn read_file<P, D>(path: P) -> Result<D, JsonError>
 where
@@ -99,12 +97,17 @@ where
     })
 }
 
+/// Read a file at the provided path into a string, without deserializing it.
+/// The path must already exist.
 #[inline]
 pub fn read_to_string<T: AsRef<Path>>(path: T) -> Result<String, JsonError> {
     Ok(clean(fs::read_file(path.as_ref())?))
 }
 
-// This function is primarily used internally for non-consumer facing files.
+/// Write a file and serialize the provided data to the provided path. If the parent directory
+/// does not exist, it will be created.
+///
+/// This function is primarily used internally for non-consumer facing files.
 #[inline]
 pub fn write_file<P, D>(path: P, json: &D, pretty: bool) -> Result<(), JsonError>
 where
@@ -132,7 +135,11 @@ where
     Ok(())
 }
 
-// This function is used for consumer facing files, like configs.
+/// Write a file and serialize the provided data to the provided path, while taking the
+/// closest `.editorconfig` into account. If the parent directory does not exist,
+/// it will be created.
+///
+/// This function is used for consumer facing files, like configs.
 #[cfg(feature = "editor-config")]
 #[inline]
 pub fn write_with_config<P: AsRef<Path>>(

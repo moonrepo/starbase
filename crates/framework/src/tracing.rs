@@ -158,11 +158,17 @@ where
 }
 
 pub struct TracingOptions {
+    /// Minimum level of messages to display.
     pub default_level: LevelFilter,
+    /// List of modules/prefixes to only log.
     pub filter_modules: Vec<String>,
+    /// Whether to intercept messages from the global `log` crate.
     pub intercept_log: bool,
+    /// Name of the logging environment variable.
     pub log_env: String,
+    /// Absolute path to a file to write logs to.
     pub log_file: Option<PathBuf>,
+    /// Name of the testing environment variable.
     pub test_env: String,
 }
 
