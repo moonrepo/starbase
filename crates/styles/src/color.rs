@@ -44,6 +44,7 @@ pub enum Style {
 }
 
 impl Style {
+    /// Convert the style to a specific `Color`.
     pub fn color(&self) -> Color {
         match self {
             Style::Failure => Color::Red,
@@ -63,10 +64,13 @@ impl Style {
     }
 }
 
+/// Create a new `owo_colors` `Style` instance and apply the given color.
 pub fn create_style(color: u8) -> OwoStyle {
     OwoStyle::new().color(XtermColors::from(color))
 }
 
+/// Paint and wrap the string with the appropriate ANSI color escape code.
+/// If colors are disabled, the string is returned as-is.
 pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {
     if no_color() {
         value.as_ref().to_string()
@@ -75,6 +79,7 @@ pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {
     }
 }
 
+/// Paint the string with the given style.
 pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
     if matches!(style, Style::File | Style::Path | Style::Shell) {
         paint(style.color() as u8, clean_path(value.as_ref()))
@@ -85,62 +90,76 @@ pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
 
 // States
 
+/// Paint a failure state.
 pub fn failure<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::Failure, value)
 }
 
+/// Paint an invalid state.
 pub fn invalid<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::Invalid, value)
 }
 
+/// Paint a muted dark state.
 pub fn muted<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::Muted, value)
 }
 
+/// Paint a muted light state.
 pub fn muted_light<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::MutedLight, value)
 }
 
+/// Paint a success state.
 pub fn success<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::Success, value)
 }
 
 // Types
 
+/// Paint a partial file path or glob pattern.
 pub fn file<T: AsRef<str>>(path: T) -> String {
     paint_style(Style::File, path)
 }
 
+/// Paint a hash-like value.
 pub fn hash<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::Hash, value)
 }
 
+/// Paint an identifier.
 pub fn id<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::Id, value)
 }
 
+/// Paint a label, heading, or title.
 pub fn label<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::Label, value)
 }
 
+/// Paint an absolute file path.
 pub fn path<T: AsRef<Path>>(path: T) -> String {
     paint_style(Style::Path, path.as_ref().to_str().unwrap_or("<unknown>"))
 }
 
+/// Paint a shell command or input string.
 pub fn shell<T: AsRef<str>>(cmd: T) -> String {
     paint_style(Style::Shell, cmd)
 }
 
+/// Paint a symbol, value, or number.
 pub fn symbol<T: AsRef<str>>(value: T) -> String {
     paint_style(Style::Symbol, value)
 }
 
+/// Paint a URL.
 pub fn url<T: AsRef<str>>(url: T) -> String {
     paint_style(Style::Url, url)
 }
 
 // Helpers
 
+/// Clean a file system path by replacing the home directory with `~`.
 pub fn clean_path<T: AsRef<str>>(path: T) -> String {
     let path = path.as_ref();
 
@@ -151,7 +170,8 @@ pub fn clean_path<T: AsRef<str>>(path: T) -> String {
     }
 }
 
-// Based on https://github.com/debug-js/debug/blob/master/src/common.js#L41
+/// Dynamically apply a color to the log target/module/namespace based
+/// on the characters in the string.
 pub fn log_target<T: AsRef<str>>(value: T) -> String {
     let value = value.as_ref();
     let mut hash: u32 = 0;
@@ -172,14 +192,18 @@ pub fn log_target<T: AsRef<str>>(value: T) -> String {
     paint(COLOR_LIST_UNSUPPORTED[index], value)
 }
 
+/// Return true if color has been disabled for the `stderr` stream.
 pub fn no_color() -> bool {
     env::var("NO_COLOR").is_ok() || supports_color::on(supports_color::Stream::Stderr).is_none()
 }
 
-// 1 = 8
-// 2 = 256
-// 3 = 16m
+/// Return a color level support for the `stderr` stream. 0 = no support, 1 = basic support,
+/// 2 = 256 colors, and 3 = 16 million colors.
 pub fn supports_color() -> u8 {
+    if no_color() {
+        return 0;
+    }
+
     if let Some(support) = supports_color::on(supports_color::Stream::Stderr) {
         if support.has_16m {
             return 3;

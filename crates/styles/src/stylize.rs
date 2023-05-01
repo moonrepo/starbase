@@ -4,6 +4,7 @@ use std::path::PathBuf;
 pub use crate::color::Style;
 
 pub trait Stylize {
+    /// Wrap the current value in the given style (an ANSI color escape code).
     fn style(&self, style: Style) -> String;
 }
 

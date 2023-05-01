@@ -1,6 +1,7 @@
 use crate::color::{self, Color};
 use miette::{GraphicalTheme, ThemeStyles};
 
+/// Create a graphical theme for use in `miette`.
 pub fn create_graphical_theme() -> GraphicalTheme {
     let mut theme = GraphicalTheme::unicode();
 
