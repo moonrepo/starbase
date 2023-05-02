@@ -1,12 +1,8 @@
 use crate::sandbox::{debug_process_output, debug_sandbox_files, Sandbox};
+use crate::settings::get_bin_name;
 use assert_cmd::assert::Assert;
 use starbase_utils::dirs::home_dir;
-use std::env;
 use std::path::Path;
-
-pub fn get_bin_name() -> String {
-    env::var("CARGO_BIN_NAME").expect("Missing CARGO_BIN_NAME!")
-}
 
 pub fn create_command_with_name<P: AsRef<Path>, N: AsRef<str>>(
     path: P,

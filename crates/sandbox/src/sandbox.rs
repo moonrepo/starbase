@@ -1,12 +1,12 @@
-use crate::bin::{create_command_with_name, get_bin_name, output_to_string, SandboxAssert};
+use crate::bin::{create_command_with_name, output_to_string, SandboxAssert};
 use crate::fixture::locate_fixture;
+use crate::settings::get_bin_name;
 use assert_cmd::Command;
 use assert_fs::prelude::*;
+use assert_fs::TempDir;
 use starbase_utils::fs;
 use std::path::Path;
 use std::process::{Command as StdCommand, Output};
-
-pub use assert_fs::TempDir;
 
 pub struct Sandbox {
     pub fixture: TempDir,

@@ -1257,6 +1257,7 @@ dependencies = [
  "assert_fs",
  "clean-path",
  "insta",
+ "once_cell",
  "predicates",
  "pretty_assertions",
  "rustc-hash",
