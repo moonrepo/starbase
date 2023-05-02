@@ -1260,6 +1260,7 @@ dependencies = [
  "predicates",
  "pretty_assertions",
  "rustc-hash",
+ "starbase_utils",
 ]
 
 [[package]]
