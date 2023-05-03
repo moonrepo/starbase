@@ -115,7 +115,14 @@ pub fn create_temp_dir() -> TempDir {
     TempDir::new().unwrap()
 }
 
-/// Create a temporary directory and populate it with the contents of a fixture.
+/// Create an empty sandbox.
+pub fn create_empty_sandbox() -> Sandbox {
+    Sandbox {
+        fixture: create_temp_dir(),
+    }
+}
+
+/// Create a sandbox and populate it with the contents of a fixture.
 pub fn create_sandbox<N: AsRef<str>>(fixture: N) -> Sandbox {
     let temp_dir = create_temp_dir();
 
