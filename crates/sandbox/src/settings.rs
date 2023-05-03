@@ -1,5 +1,5 @@
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::sync::RwLock;
 
@@ -22,4 +22,10 @@ pub static ENV_VARS: Lazy<RwLock<HashMap<String, String>>> =
 
 pub fn set_command_env_vars(vars: HashMap<String, String>) {
     ENV_VARS.write().unwrap().extend(vars);
+}
+
+pub static LOG_FILTERS: Lazy<RwLock<HashSet<String>>> = Lazy::new(|| RwLock::new(HashSet::new()));
+
+pub fn set_output_log_filters(filters: HashSet<String>) {
+    LOG_FILTERS.write().unwrap().extend(filters);
 }

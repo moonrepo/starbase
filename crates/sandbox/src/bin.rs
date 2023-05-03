@@ -1,5 +1,5 @@
 use crate::sandbox::{debug_process_output, debug_sandbox_files, Sandbox};
-use crate::settings::{get_bin_name, ENV_VARS};
+use crate::settings::{get_bin_name, ENV_VARS, LOG_FILTERS};
 use assert_cmd::assert::Assert;
 use starbase_utils::dirs::home_dir;
 use std::path::Path;
@@ -37,19 +37,15 @@ pub fn get_assert_stdout_output(assert: &Assert) -> String {
 pub fn get_assert_stderr_output(assert: &Assert) -> String {
     let mut output = String::new();
     let stderr = output_to_string(&assert.get_output().stderr);
+    let filters = LOG_FILTERS.read().unwrap();
 
-    // We need to always show logs for proper code coverage,
-    // but this breaks snapshots, and as such, we need to manually
-    // filter out log lines and env vars!
     for line in stderr.split('\n') {
         if !line.starts_with("[ERROR")
             && !line.starts_with("[WARN")
             && !line.starts_with("[INFO")
             && !line.starts_with("[DEBUG")
             && !line.starts_with("[TRACE")
-            && !line.starts_with("  MOON_")
-            && !line.starts_with("  NODE_")
-            && !line.starts_with("  PROTO_")
+            && filters.iter().all(|f| !line.starts_with(f))
         {
             output.push_str(line);
             output.push('\n');
