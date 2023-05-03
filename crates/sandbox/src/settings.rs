@@ -6,6 +6,7 @@ use std::sync::RwLock;
 
 pub static BIN_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
 
+/// Get the configured binary name, or the `CARGO_BIN_NAME` environment variable.
 pub fn get_bin_name() -> String {
     if let Some(bin) = BIN_NAME.read().unwrap().as_ref() {
         return bin.to_owned();
@@ -15,8 +16,8 @@ pub fn get_bin_name() -> String {
 }
 
 /// Set the binary name to use when running binaries in the sandbox.
-pub fn set_bin_name(name: &str) {
-    *BIN_NAME.write().unwrap() = Some(name.to_owned());
+pub fn set_bin_name<N: AsRef<str>>(name: N) {
+    *BIN_NAME.write().unwrap() = Some(name.as_ref().to_owned());
 }
 
 pub static ENV_VARS: Lazy<RwLock<HashMap<String, String>>> =

@@ -20,9 +20,9 @@ impl Sandbox {
 
     /// Create a file at the defined path with the provided content.
     /// Parent directories will automatically be created.
-    pub fn create_file<T: AsRef<str>>(&self, name: &str, content: T) -> &Self {
+    pub fn create_file<N: AsRef<str>, T: AsRef<str>>(&self, name: N, content: T) -> &Self {
         self.fixture
-            .child(name)
+            .child(name.as_ref())
             .write_str(content.as_ref())
             .unwrap();
 

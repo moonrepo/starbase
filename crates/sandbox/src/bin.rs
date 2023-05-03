@@ -21,7 +21,7 @@ pub fn create_command_with_name<P: AsRef<Path>, N: AsRef<str>>(
 
 /// Create a command to run. Will default the binary name to the `BIN_NAME` setting,
 /// or the `CARGO_BIN_NAME` environment variable.
-pub fn create_command<T: AsRef<Path>>(path: T) -> assert_cmd::Command {
+pub fn create_command<P: AsRef<Path>>(path: P) -> assert_cmd::Command {
     create_command_with_name(path, get_bin_name())
 }
 
@@ -105,6 +105,7 @@ impl<'s> SandboxAssert<'s> {
             output = output.replace(&home.replace('\\', "/"), "~");
         }
 
+        // Replace private path weirdness
         output.replace("/private<", "<")
     }
 
