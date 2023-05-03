@@ -1,15 +1,12 @@
-mod utils;
-
-use insta::assert_snapshot;
+use serde_yaml::Value;
+use starbase_sandbox::{assert_snapshot, create_sandbox};
 use starbase_utils::{fs, yaml};
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
-use utils::create_sandbox;
 
 mod editor_config {
     use super::*;
-    use serde_yaml::Value;
 
     pub fn append_editor_config(root: &Path, data: &str) {
         let mut file = OpenOptions::new()

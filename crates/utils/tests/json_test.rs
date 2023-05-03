@@ -1,15 +1,12 @@
-mod utils;
-
-use insta::assert_snapshot;
+use starbase_sandbox::{assert_snapshot, create_sandbox};
+use starbase_utils::json::json as object;
 use starbase_utils::{fs, json};
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
-use utils::create_sandbox;
 
 mod merge {
     use super::*;
-    use starbase_utils::json::json as object;
 
     #[test]
     pub fn merges_fields() {

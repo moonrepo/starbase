@@ -1277,10 +1277,8 @@ dependencies = [
 name = "starbase_utils"
 version = "0.2.8"
 dependencies = [
- "assert_fs",
  "dirs",
  "ec4rs",
- "insta",
  "json_comments",
  "miette",
  "once_cell",
@@ -1289,6 +1287,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "starbase_sandbox",
  "starbase_styles",
  "thiserror",
  "toml",
