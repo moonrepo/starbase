@@ -1260,7 +1260,6 @@ dependencies = [
  "once_cell",
  "predicates",
  "pretty_assertions",
- "rustc-hash",
  "starbase_utils",
 ]
 

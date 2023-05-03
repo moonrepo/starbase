@@ -1,5 +1,5 @@
 use crate::sandbox::{debug_process_output, debug_sandbox_files, Sandbox};
-use crate::settings::get_bin_name;
+use crate::settings::{get_bin_name, ENV_VARS};
 use assert_cmd::assert::Assert;
 use starbase_utils::dirs::home_dir;
 use std::path::Path;
@@ -14,6 +14,7 @@ pub fn create_command_with_name<P: AsRef<Path>, N: AsRef<str>>(
     cmd.env("RUST_BACKTRACE", "1");
     cmd.env("STARBASE_LOG", "trace");
     cmd.env("STARBASE_TEST", "true");
+    cmd.envs(ENV_VARS.read().unwrap().iter());
     cmd
 }
 
