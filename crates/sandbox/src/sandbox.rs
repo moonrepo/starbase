@@ -13,10 +13,13 @@ pub struct Sandbox {
 }
 
 impl Sandbox {
+    /// Return a path to the sandbox root.
     pub fn path(&self) -> &Path {
         self.fixture.path()
     }
 
+    /// Create a file at the defined path with the provided content.
+    /// Parent directories will automatically be created.
     pub fn create_file<T: AsRef<str>>(&self, name: &str, content: T) -> &Self {
         self.fixture
             .child(name)
@@ -26,12 +29,14 @@ impl Sandbox {
         self
     }
 
+    /// Debug all files in the sandbox by printing to the console.
     pub fn debug_files(&self) -> &Self {
         debug_sandbox_files(self.path());
 
         self
     }
 
+    /// Enable git in the sandbox by initializing a project and committing initial files.
     pub fn enable_git(&self) -> &Self {
         if !self.path().join(".gitignore").exists() {
             self.create_file(".gitignore", "node_modules\ntarget\n");
@@ -59,6 +64,7 @@ impl Sandbox {
         self
     }
 
+    /// Run a git command in the sandbox.
     pub fn run_git<C>(&self, handler: C) -> &Self
     where
         C: FnOnce(&mut StdCommand),
@@ -78,6 +84,7 @@ impl Sandbox {
         self
     }
 
+    /// Run a binary with the provided name in the sandbox.
     pub fn run_bin_with_name<N, C>(&self, name: N, handler: C) -> SandboxAssert
     where
         N: AsRef<str>,
@@ -93,6 +100,8 @@ impl Sandbox {
         }
     }
 
+    /// Run a binary in the sandbox. Will default to the `BIN_NAME` setting,
+    /// or the `CARGO_BIN_NAME` environment variable.
     pub fn run_bin<N, C>(&self, handler: C) -> SandboxAssert
     where
         C: FnOnce(&mut Command),
@@ -101,10 +110,12 @@ impl Sandbox {
     }
 }
 
+/// Create a temporary directory.
 pub fn create_temp_dir() -> TempDir {
     TempDir::new().unwrap()
 }
 
+/// Create a temporary directory and populate it with the contents of a fixture.
 pub fn create_sandbox<N: AsRef<str>>(fixture: N) -> Sandbox {
     let temp_dir = create_temp_dir();
 
@@ -115,6 +126,7 @@ pub fn create_sandbox<N: AsRef<str>>(fixture: N) -> Sandbox {
     Sandbox { fixture: temp_dir }
 }
 
+/// Debug all files in the sandbox by printing to the console.
 pub fn debug_sandbox_files<P: AsRef<Path>>(dir: P) {
     println!("SANDBOX:");
 
@@ -125,6 +137,7 @@ pub fn debug_sandbox_files<P: AsRef<Path>>(dir: P) {
     }
 }
 
+/// Debug the stderr, stdout, and status of a process output by printing to the console.
 pub fn debug_process_output(output: &Output) {
     println!("STDOUT:\n{}\n", output_to_string(&output.stdout));
     println!("STDERR:\n{}\n", output_to_string(&output.stderr));

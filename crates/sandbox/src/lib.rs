@@ -9,6 +9,7 @@ pub use insta::*;
 pub use sandbox::*;
 pub use settings::*;
 
+// Re-export for convenience
 pub use assert_cmd;
 pub use assert_fs;
 pub use predicates;
