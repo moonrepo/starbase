@@ -2,6 +2,9 @@
 name = "starbase_sandbox"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "A temporary sandbox for testing file system and process operations, with fixtures support."
+repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
 assert_cmd = "2.0.11"
