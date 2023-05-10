@@ -47,9 +47,8 @@ fn has_return_statement(block: &syn::Block) -> bool {
 
     let expr = match &last_statement {
         // value
-        Stmt::Expr(expr) => expr,
         // return value;
-        Stmt::Semi(expr, _) => expr,
+        Stmt::Expr(expr, _) => expr,
         _ => {
             return false;
         }
