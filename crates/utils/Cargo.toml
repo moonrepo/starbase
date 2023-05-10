@@ -7,7 +7,7 @@ description = "General fs, io, serde, etc, utilities."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
-dirs = "5.0.0"
+dirs = "5.0.1"
 miette = { workspace = true }
 once_cell = { workspace = true }
 relative-path = { workspace = true }

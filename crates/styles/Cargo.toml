@@ -7,7 +7,7 @@ description = "Utilities for styling the terminal."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
-dirs = "5.0.0"
+dirs = "5.0.1"
 miette = { workspace = true, optional = true }
 owo-colors = "3.5.0"
 supports-color = "2.0.0"

@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, Semaphore};
 use tokio::task;
 
-pub type AppResult = miette::Result<()>;
+pub type AppResult<T = ()> = miette::Result<T>;
 pub type MainResult = miette::Result<()>;
 
 #[derive(Debug, Default)]
