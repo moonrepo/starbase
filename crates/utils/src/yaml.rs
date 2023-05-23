@@ -16,6 +16,7 @@ pub use serde_yaml::{
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum YamlError {
+    #[diagnostic(transparent)]
     #[error(transparent)]
     Fs(#[from] FsError),
 

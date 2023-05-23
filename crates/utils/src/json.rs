@@ -18,6 +18,7 @@ pub use serde_json::{
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum JsonError {
+    #[diagnostic(transparent)]
     #[error(transparent)]
     Fs(#[from] FsError),
 

@@ -14,6 +14,7 @@ pub use toml::{
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum TomlError {
+    #[diagnostic(transparent)]
     #[error(transparent)]
     Fs(#[from] FsError),
 
