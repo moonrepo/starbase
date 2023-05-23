@@ -28,7 +28,7 @@ json_comments = { version = "0.2.1", optional = true }
 serde_json = { workspace = true, optional = true }
 
 # toml
-toml = { version = "0.7.3", optional = true }
+toml = { version = "0.7.4", optional = true }
 
 # yaml
 serde_yaml = { workspace = true, optional = true }
