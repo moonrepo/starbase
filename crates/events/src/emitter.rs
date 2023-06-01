@@ -8,7 +8,7 @@ pub struct Emitter<E: Event> {
     subscribers: Arc<RwLock<Vec<BoxedSubscriber<E>>>>,
 }
 
-#[allow(clippy::new_without_default)]
+#[allow(clippy::new_without_default, clippy::len_without_is_empty)]
 impl<E: Event + 'static> Emitter<E> {
     /// Create a new event emitter.
     pub fn new() -> Self {
