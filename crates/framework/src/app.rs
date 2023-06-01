@@ -181,9 +181,8 @@ impl App {
         self.run_shutdown(states.clone(), resources.clone(), emitters.clone())
             .await?;
 
-        let states = Arc::try_unwrap(states)
-            .expect("Failed to acquire state before closing the application. This typically means that threads are still running that have not been awaited.")
-            .into_inner();
+        let states = Arc::into_inner(states)
+            .expect("Failed to acquire state before closing the application. This typically means that threads are still running that have not been awaited.").into_inner();
 
         Ok(states)
     }

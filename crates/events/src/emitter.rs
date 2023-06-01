@@ -83,7 +83,7 @@ impl<E: Event + 'static> Emitter<E> {
             !remove
         });
 
-        let event = unsafe { Arc::try_unwrap(event).unwrap_unchecked().into_inner() };
+        let event = Arc::into_inner(event).unwrap().into_inner();
 
         Ok((event, result))
     }
