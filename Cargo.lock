@@ -1288,6 +1288,7 @@ dependencies = [
  "dirs",
  "miette",
  "owo-colors",
+ "relative-path",
  "supports-color",
 ]
 

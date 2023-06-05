@@ -142,6 +142,12 @@ pub fn path<T: AsRef<Path>>(path: T) -> String {
     paint_style(Style::Path, path.as_ref().to_str().unwrap_or("<unknown>"))
 }
 
+/// Paint an relative file path.
+#[cfg(feature = "relative-path")]
+pub fn rel_path<T: AsRef<relative_path::RelativePath>>(path: T) -> String {
+    paint_style(Style::Path, path.as_ref().as_str())
+}
+
 /// Paint a shell command or input string.
 pub fn shell<T: AsRef<str>>(cmd: T) -> String {
     paint_style(Style::Shell, cmd)

@@ -10,8 +10,10 @@ repository = "https://github.com/moonrepo/starbase"
 dirs = "5.0.1"
 miette = { workspace = true, optional = true }
 owo-colors = "3.5.0"
+relative-path = { workspace = true, optional = true }
 supports-color = "2.0.0"
 
 [features]
 default = []
 theme = ["dep:miette"]
+relative-path = ["dep:relative-path"]
