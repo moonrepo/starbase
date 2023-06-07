@@ -30,6 +30,13 @@ pub enum JsonError {
         error: serde_json::Error,
     },
 
+    #[diagnostic(code(json::stringify))]
+    #[error("Failed to stringify JSON")]
+    Stringify {
+        #[source]
+        error: serde_json::Error,
+    },
+
     #[diagnostic(code(json::stringify_file))]
     #[error("Failed to stringify JSON for file {}", .path.style(Style::Path))]
     StringifyFile {

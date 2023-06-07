@@ -28,6 +28,13 @@ pub enum YamlError {
         error: serde_yaml::Error,
     },
 
+    #[diagnostic(code(yaml::stringify))]
+    #[error("Failed to stringify YAML")]
+    Stringify {
+        #[source]
+        error: serde_yaml::Error,
+    },
+
     #[diagnostic(code(yaml::stringify_file))]
     #[error("Failed to stringify YAML for file {}", .path.style(Style::Path))]
     StringifyFile {

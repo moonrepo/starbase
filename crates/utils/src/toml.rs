@@ -26,6 +26,13 @@ pub enum TomlError {
         error: toml::de::Error,
     },
 
+    #[diagnostic(code(toml::stringify))]
+    #[error("Failed to stringify TOML")]
+    Stringify {
+        #[source]
+        error: toml::ser::Error,
+    },
+
     #[diagnostic(code(toml::stringify_file))]
     #[error("Failed to stringify TOML for file {}", .path.style(Style::Path))]
     StringifyFile {
