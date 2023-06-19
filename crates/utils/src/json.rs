@@ -181,7 +181,7 @@ pub fn write_with_config<P: AsRef<Path>>(
         })?;
 
     let mut data = unsafe { String::from_utf8_unchecked(writer) };
-    data += &editor_config.eof;
+    editor_config.apply_eof(&mut data);
 
     fs::write_file(path, data)?;
 

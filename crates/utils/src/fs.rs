@@ -205,6 +205,15 @@ pub struct EditorConfigProps {
     pub indent: String,
 }
 
+#[cfg(feature = "editor-config")]
+impl EditorConfigProps {
+    pub fn apply_eof(&self, data: &mut String) {
+        if !self.eof.is_empty() && !data.ends_with(&self.eof) {
+            data.push_str(&self.eof);
+        }
+    }
+}
+
 /// Load properties from the closest `.editorconfig` file.
 #[cfg(feature = "editor-config")]
 pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
@@ -522,4 +531,18 @@ pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<()
         path: path.to_path_buf(),
         error,
     })
+}
+
+/// Write a file with the provided data to the provided path, while taking the
+/// closest `.editorconfig` into account
+#[cfg(feature = "editor-config")]
+#[inline]
+pub fn write_with_config<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
+    let path = path.as_ref();
+    let editor_config = get_editor_config_props(path);
+
+    let mut data = unsafe { String::from_utf8_unchecked(data.as_ref().to_vec()) };
+    editor_config.apply_eof(&mut data);
+
+    write_file(path, data)
 }

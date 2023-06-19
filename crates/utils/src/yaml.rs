@@ -158,7 +158,7 @@ where
             .join("\n");
     }
 
-    data += &editor_config.eof;
+    editor_config.apply_eof(&mut data);
 
     fs::write_file(path, data)?;
 
