@@ -65,7 +65,7 @@ pub fn clean<D: AsRef<str>>(json: D) -> String {
     CLEAN_REGEX.replace_all(&stripped, "$valid").to_string()
 }
 
-/// Recursively merge [JsonValue] objects, with values from next overwriting previous.
+/// Recursively merge [`JsonValue`] objects, with values from next overwriting previous.
 #[inline]
 pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
     match (prev, next) {

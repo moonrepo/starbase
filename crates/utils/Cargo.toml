@@ -6,6 +6,9 @@ license = "MIT"
 description = "General fs, io, serde, etc, utilities."
 repository = "https://github.com/moonrepo/starbase"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 dirs = "5.0.1"
 miette = { workspace = true }

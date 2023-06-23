@@ -122,7 +122,7 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
     Ok(())
 }
 
-/// Create a file and return a [File] instance. If the parent directory does not exist,
+/// Create a file and return a [`File`] instance. If the parent directory does not exist,
 /// it will be created.
 #[inline]
 pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
@@ -176,7 +176,7 @@ pub fn file_name<T: AsRef<Path>>(path: T) -> String {
 
 /// Find a file with the provided name in the starting directory,
 /// and traverse upwards until one is found. If no file is found,
-/// returns [None].
+/// returns [`None`].
 #[inline]
 pub fn find_upwards<F, P>(name: F, starting_dir: P) -> Option<PathBuf>
 where
@@ -195,6 +195,34 @@ where
 
     if findable.exists() {
         return Some(findable);
+    }
+
+    match dir.parent() {
+        Some(parent_dir) => find_upwards(name, parent_dir),
+        None => None,
+    }
+}
+
+/// Find the root directory that contains the file with the provided name,
+/// from the starting directory, and traverse upwards until one is found.
+/// If no root is found, returns [`None`].
+#[inline]
+pub fn find_upwards_root<F, P>(name: F, starting_dir: P) -> Option<PathBuf>
+where
+    F: AsRef<OsStr>,
+    P: AsRef<Path>,
+{
+    let dir = starting_dir.as_ref();
+    let name = name.as_ref();
+    let findable = dir.join(name);
+
+    trace!(
+        needle = ?findable,
+        "Traversing upwards to find a root"
+    );
+
+    if findable.exists() {
+        return Some(dir.to_path_buf());
     }
 
     match dir.parent() {
@@ -268,7 +296,7 @@ pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
     })
 }
 
-/// Open a file at the provided path and return a [File] instance.
+/// Open a file at the provided path and return a [`File`] instance.
 /// The path must already exist.
 #[inline]
 pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
@@ -355,7 +383,7 @@ pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
 pub fn read_file_bytes<T: AsRef<Path>>(path: T) -> Result<Vec<u8>, FsError> {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Reading file");
+    trace!(file = ?path, "Reading bytes of file");
 
     fs::read(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
@@ -548,5 +576,14 @@ pub fn write_with_config<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Re
     let mut data = unsafe { String::from_utf8_unchecked(data.as_ref().to_vec()) };
     editor_config.apply_eof(&mut data);
 
-    write_file(path, data)
+    if let Some(parent) = path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    trace!(file = ?path, "Writing file with .editorconfig");
+
+    fs::write(path, data).map_err(|error| FsError::Write {
+        path: path.to_path_buf(),
+        error,
+    })
 }

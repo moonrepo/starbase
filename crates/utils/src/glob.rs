@@ -54,6 +54,7 @@ where
     negations.extend(patterns);
 }
 
+/// Match values against a set of glob patterns.
 pub struct GlobSet<'glob> {
     expressions: Any<'glob>,
     negations: Any<'glob>,
@@ -136,8 +137,8 @@ impl<'glob> GlobSet<'glob> {
     }
 }
 
-/// Parse and create a [Glob] instance from the borrowed string pattern.
-/// If parsing fails, a [GlobError] is returned.
+/// Parse and create a [`Glob`] instance from the borrowed string pattern.
+/// If parsing fails, a [`GlobError`] is returned.
 #[inline]
 pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
     Glob::new(pattern).map_err(|error| GlobError::Create {
@@ -194,7 +195,7 @@ pub fn is_glob<T: AsRef<str>>(value: T) -> bool {
 }
 
 /// Normalize a glob-based file path to use forward slashes. If the path contains
-/// invalid UTF-8 characters, a [GlobError] is returned.
+/// invalid UTF-8 characters, a [`GlobError`] is returned.
 #[inline]
 pub fn normalize<T: AsRef<Path>>(path: T) -> Result<String, GlobError> {
     let path = path.as_ref();
@@ -242,7 +243,7 @@ where
 }
 
 /// Walk the file system starting from the provided directory, and return all files and directories
-/// that match the provided glob patterns. Use [walk_files] if you only want to return files.
+/// that match the provided glob patterns. Use [`walk_files`] if you only want to return files.
 #[inline]
 pub fn walk<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
@@ -281,7 +282,7 @@ where
 }
 
 /// Walk the file system starting from the provided directory, and return all files
-/// that match the provided glob patterns. Use [walk] if you need to get directories as well.
+/// that match the provided glob patterns. Use [`walk`] if you need directories as well.
 #[inline]
 pub fn walk_files<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where

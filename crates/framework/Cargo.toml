@@ -7,6 +7,9 @@ description = "Framework for building performant command line applications and d
 repository = "https://github.com/moonrepo/starbase"
 readme = "../../README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 starbase_events = { version = "0.1.7", path = "../events" }
 starbase_macros = { version = "0.1.8", path = "../macros" }
