@@ -46,7 +46,7 @@ pub enum YamlError {
 
 static WHITESPACE_PREFIX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\s+)").unwrap());
 
-/// Recursively merge [YamlValue] objects, with values from next overwriting previous.
+/// Recursively merge [`YamlValue`] objects, with values from next overwriting previous.
 #[inline]
 pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
     match (prev, next) {
@@ -78,7 +78,7 @@ where
     let path = path.as_ref();
     let contents = fs::read_file(path)?;
 
-    trace!(file = %path.display(), "Parsing YAML");
+    trace!(file = ?path, "Parsing YAML");
 
     serde_yaml::from_str(&contents).map_err(|error| YamlError::ReadFile {
         path: path.to_path_buf(),
@@ -98,7 +98,7 @@ where
 {
     let path = path.as_ref();
 
-    trace!(file = %path.display(), "Stringifying YAML");
+    trace!(file = ?path, "Stringifying YAML");
 
     let data = serde_yaml::to_string(&yaml).map_err(|error| YamlError::StringifyFile {
         path: path.to_path_buf(),
@@ -125,7 +125,7 @@ where
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path);
 
-    trace!(file = %path.display(), "Stringifying YAML with .editorconfig");
+    trace!(file = ?path, "Stringifying YAML with .editorconfig");
 
     let mut data = serde_yaml::to_string(&yaml)
         .map_err(|error| YamlError::StringifyFile {

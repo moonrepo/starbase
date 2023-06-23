@@ -79,7 +79,7 @@ pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(from: S, to: D) -> Result<(), F
         create_dir_all(parent)?;
     }
 
-    trace!(from = %from.display(), to = %to.display(), "Copying file");
+    trace!(from = ?from, to = ?to, "Copying file");
 
     fs::copy(from, to).map_err(|error| FsError::Copy {
         from: from.to_path_buf(),
@@ -100,8 +100,8 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
     let mut dirs = vec![];
 
     trace!(
-        from = %from.display(),
-        to = %to_root.display(),
+        from = ?from,
+        to = ?to_root,
         "Copying directory"
     );
 
@@ -122,7 +122,7 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
     Ok(())
 }
 
-/// Create a file and return a [File] instance. If the parent directory does not exist,
+/// Create a file and return a [`File`] instance. If the parent directory does not exist,
 /// it will be created.
 #[inline]
 pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
@@ -132,7 +132,7 @@ pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
         create_dir_all(parent)?;
     }
 
-    trace!(file = %path.display(), "Creating file");
+    trace!(file = ?path, "Creating file");
 
     File::create(path).map_err(|error| FsError::Create {
         path: path.to_path_buf(),
@@ -146,8 +146,12 @@ pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
 pub fn create_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
+    if path.as_os_str().is_empty() {
+        return Ok(());
+    }
+
     if !path.exists() {
-        trace!(dir = %path.display(), "Creating directory");
+        trace!(dir = ?path, "Creating directory");
 
         fs::create_dir_all(path).map_err(|error| FsError::Create {
             path: path.to_path_buf(),
@@ -172,7 +176,7 @@ pub fn file_name<T: AsRef<Path>>(path: T) -> String {
 
 /// Find a file with the provided name in the starting directory,
 /// and traverse upwards until one is found. If no file is found,
-/// returns [None].
+/// returns [`None`].
 #[inline]
 pub fn find_upwards<F, P>(name: F, starting_dir: P) -> Option<PathBuf>
 where
@@ -185,12 +189,40 @@ where
 
     trace!(
         file = name.to_str(),
-        dir = %dir.display(),
+        dir = ?dir,
         "Traversing upwards to find a file"
     );
 
     if findable.exists() {
         return Some(findable);
+    }
+
+    match dir.parent() {
+        Some(parent_dir) => find_upwards(name, parent_dir),
+        None => None,
+    }
+}
+
+/// Find the root directory that contains the file with the provided name,
+/// from the starting directory, and traverse upwards until one is found.
+/// If no root is found, returns [`None`].
+#[inline]
+pub fn find_upwards_root<F, P>(name: F, starting_dir: P) -> Option<PathBuf>
+where
+    F: AsRef<OsStr>,
+    P: AsRef<Path>,
+{
+    let dir = starting_dir.as_ref();
+    let name = name.as_ref();
+    let findable = dir.join(name);
+
+    trace!(
+        needle = ?findable,
+        "Traversing upwards to find a root"
+    );
+
+    if findable.exists() {
+        return Some(dir.to_path_buf());
     }
 
     match dir.parent() {
@@ -256,7 +288,7 @@ pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
 pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
     let path = path.as_ref();
 
-    trace!(file = %path.display(), "Reading file metadata");
+    trace!(file = ?path, "Reading file metadata");
 
     fs::metadata(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
@@ -264,13 +296,13 @@ pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
     })
 }
 
-/// Open a file at the provided path and return a [File] instance.
+/// Open a file at the provided path and return a [`File`] instance.
 /// The path must already exist.
 #[inline]
 pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
 
-    trace!(file = %path.display(), "Opening file");
+    trace!(file = ?path, "Opening file");
 
     File::open(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
@@ -284,7 +316,7 @@ pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
 pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     let path = path.as_ref();
 
-    trace!(dir = %path.display(), "Reading directory");
+    trace!(dir = ?path, "Reading directory");
 
     let mut results = vec![];
 
@@ -338,7 +370,7 @@ pub fn read_dir_all<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsErro
 pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
     let path = path.as_ref();
 
-    trace!(file = %path.display(), "Reading file");
+    trace!(file = ?path, "Reading file");
 
     fs::read_to_string(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
@@ -351,7 +383,7 @@ pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
 pub fn read_file_bytes<T: AsRef<Path>>(path: T) -> Result<Vec<u8>, FsError> {
     let path = path.as_ref();
 
-    trace!(file = %path.display(), "Reading file");
+    trace!(file = ?path, "Reading bytes of file");
 
     fs::read(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
@@ -382,7 +414,7 @@ pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if path.exists() {
-        trace!(file = %path.display(), "Removing file");
+        trace!(file = ?path, "Removing file");
 
         fs::remove_file(path).map_err(|error| FsError::Remove {
             path: path.to_path_buf(),
@@ -400,7 +432,7 @@ pub fn remove_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if path.exists() {
-        trace!(dir = %path.display(), "Removing directory");
+        trace!(dir = ?path, "Removing directory");
 
         fs::remove_dir_all(path).map_err(|error| FsError::Remove {
             path: path.to_path_buf(),
@@ -429,7 +461,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
     let dir = dir.as_ref();
 
     trace!(
-        dir = %dir.display(),
+        dir = ?dir,
         "Removing stale contents from directory"
     );
 
@@ -477,7 +509,7 @@ pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsEr
         create_dir_all(parent)?;
     }
 
-    trace!(from = %from.display(), to = %to.display(), "Renaming file");
+    trace!(from = ?from, to = ?to, "Renaming file");
 
     fs::rename(from, to).map_err(|error| FsError::Rename {
         from: from.to_path_buf(),
@@ -496,7 +528,7 @@ pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), Fs
     let path = path.as_ref();
     let mode = mode.unwrap_or(0o755);
 
-    trace!(file = %path.display(), mode, "Updating file permissions");
+    trace!(file = ?path, mode, "Updating file permissions");
 
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|error| {
         FsError::Perms {
@@ -525,7 +557,7 @@ pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<()
         create_dir_all(parent)?;
     }
 
-    trace!(file = %path.display(), "Writing file");
+    trace!(file = ?path, "Writing file");
 
     fs::write(path, data).map_err(|error| FsError::Write {
         path: path.to_path_buf(),
@@ -544,5 +576,14 @@ pub fn write_with_config<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Re
     let mut data = unsafe { String::from_utf8_unchecked(data.as_ref().to_vec()) };
     editor_config.apply_eof(&mut data);
 
-    write_file(path, data)
+    if let Some(parent) = path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    trace!(file = ?path, "Writing file with .editorconfig");
+
+    fs::write(path, data).map_err(|error| FsError::Write {
+        path: path.to_path_buf(),
+        error,
+    })
 }

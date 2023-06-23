@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 test_lib = { path = "../test-lib" }
 starbase = { path = "../framework" }
-starbase_utils = { path = "../utils" }
+starbase_utils = { path = "../utils", features = ["glob"] }
 log = "0.4.19"
 miette = { workspace = true, features = ["fancy"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
