@@ -97,7 +97,7 @@ where
     let path = path.as_ref();
     let contents = read_to_string(path)?;
 
-    trace!(file = %path.display(), "Parsing JSON");
+    trace!(file = ?path, "Parsing JSON");
 
     serde_json::from_str(&contents).map_err(|error| JsonError::ReadFile {
         path: path.to_path_buf(),
@@ -124,7 +124,7 @@ where
 {
     let path = path.as_ref();
 
-    trace!(file = %path.display(), "Stringifying JSON");
+    trace!(file = ?path, "Stringifying JSON");
 
     let data = if pretty {
         serde_json::to_string_pretty(&json).map_err(|error| JsonError::StringifyFile {
@@ -165,7 +165,7 @@ pub fn write_with_config<P: AsRef<Path>>(
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path);
 
-    trace!(file = %path.display(), "Stringifying JSON with .editorconfig");
+    trace!(file = ?path, "Stringifying JSON with .editorconfig");
 
     // Based on serde_json::to_string_pretty!
     let mut writer = Vec::with_capacity(128);

@@ -53,7 +53,7 @@ where
     let path = path.as_ref();
     let contents = fs::read_file(path)?;
 
-    trace!(file = %path.display(), "Parsing TOML");
+    trace!(file = ?path, "Parsing TOML");
 
     toml::from_str(&contents).map_err(|error| TomlError::ReadFile {
         path: path.to_path_buf(),
@@ -71,7 +71,7 @@ where
 {
     let path = path.as_ref();
 
-    trace!(file = %path.display(), "Stringifying TOML");
+    trace!(file = ?path, "Stringifying TOML");
 
     let data = if pretty {
         toml::to_string_pretty(&toml).map_err(|error| TomlError::StringifyFile {
