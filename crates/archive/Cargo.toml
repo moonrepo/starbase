@@ -9,8 +9,8 @@ repository = "https://github.com/moonrepo/starbase"
 [dependencies]
 miette = { workspace = true }
 rustc-hash = { workspace = true }
-starbase_styles = { version = "0.1.5", path = "../styles" }
-starbase_utils = { version = "0.2.6", path = "../utils" }
+starbase_styles = { version = "0.1.11", path = "../styles" }
+starbase_utils = { version = "0.2.13", path = "../utils" }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 

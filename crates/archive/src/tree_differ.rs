@@ -24,7 +24,7 @@ impl TreeDiffer {
         let mut files = FxHashMap::default();
         let dest_root = dest_root.as_ref();
 
-        trace!(dir = %dest_root.display(), "Creating a tree differ for destination directory");
+        trace!(dir = ?dest_root, "Creating a tree differ for destination directory");
 
         let mut track = |file: PathBuf| {
             if file.exists() {
@@ -48,11 +48,11 @@ impl TreeDiffer {
                 let path = dest_root.join(path);
 
                 if path.is_file() {
-                    trace!(file = %path.display(), "Tracking file");
+                    trace!(file = ?path, "Tracking file");
 
                     track(path);
                 } else if path.is_dir() {
-                    trace!(dir = %path.display(), "Tracking directory");
+                    trace!(dir = ?path, "Tracking directory");
 
                     for file in fs::read_dir_all(path)? {
                         track(file.path());
@@ -63,9 +63,9 @@ impl TreeDiffer {
 
         if !globs.is_empty() {
             trace!(
-                root = %dest_root.display(),
+                root = ?dest_root,
                 globs = globs.join(", "),
-                "Tracking files using glob",
+                "Tracking files with glob",
             );
 
             for file in glob::walk_files(dest_root, &globs)? {
@@ -114,28 +114,32 @@ impl TreeDiffer {
     /// determine whether we overwrite the file or keep it (equal content).
     pub fn should_write_source<T: Read>(
         &self,
-        source_size: u64,
-        source: &mut T,
-        dest_path: &Path,
+        _source_size: u64,
+        _source: &mut T,
+        _dest_path: &Path,
     ) -> Result<bool, ArchiveError> {
+        // NOTE: gzip doesn't support seeking, so we can't use the following util then!
+
         // If the destination doesn't exist, always use the source
-        if !dest_path.exists() || !self.files.contains_key(dest_path) {
-            return Ok(true);
-        }
+        // if !dest_path.exists() || !self.files.contains_key(dest_path) {
+        //     return Ok(true);
+        // }
 
         // If the file sizes are different, use the source
-        let Some(dest_size) = self.files.get(dest_path) else {
-            return Ok(true);
-        };
+        // let Some(dest_size) = self.files.get(dest_path) else {
+        //     return Ok(true);
+        // };
 
-        if source_size != *dest_size {
-            return Ok(true);
-        }
+        // if source_size != *dest_size {
+        //     return Ok(true);
+        // }
 
         // If the file sizes are the same, compare byte ranges to determine a difference
-        let mut dest = fs::open_file(dest_path)?;
+        // let mut dest = fs::open_file(dest_path)?;
 
-        Ok(!self.are_files_equal(source, &mut dest))
+        // Ok(!self.are_files_equal(source, &mut dest))
+
+        Ok(true)
     }
 
     /// Untrack a destination file from the internal registry.

@@ -21,7 +21,7 @@ pub enum YamlError {
     Fs(#[from] FsError),
 
     #[diagnostic(code(yaml::parse_file))]
-    #[error("Failed to parse YAML file {}", .path.style(Style::Path))]
+    #[error("Failed to parse YAML file {}.", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -29,14 +29,14 @@ pub enum YamlError {
     },
 
     #[diagnostic(code(yaml::stringify))]
-    #[error("Failed to stringify YAML")]
+    #[error("Failed to stringify YAML.")]
     Stringify {
         #[source]
         error: serde_yaml::Error,
     },
 
     #[diagnostic(code(yaml::stringify_file))]
-    #[error("Failed to stringify YAML for file {}", .path.style(Style::Path))]
+    #[error("Failed to stringify YAML for file {}.", .path.style(Style::Path))]
     StringifyFile {
         path: PathBuf,
         #[source]
