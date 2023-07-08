@@ -1307,6 +1307,7 @@ dependencies = [
  "flate2",
  "miette",
  "rustc-hash",
+ "starbase_archive",
  "starbase_styles",
  "starbase_utils",
  "tar",
@@ -2097,4 +2098,5 @@ dependencies = [
  "byteorder",
  "crc32fast",
  "crossbeam-utils",
+ "flate2",
 ]

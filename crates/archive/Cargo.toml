@@ -6,6 +6,9 @@ license = "MIT"
 description = "TODO"
 repository = "https://github.com/moonrepo/starbase"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 miette = { workspace = true }
 rustc-hash = { workspace = true }
@@ -14,21 +17,23 @@ starbase_utils = { version = "0.2.13", path = "../utils" }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
+flate2 =  { version = "1.0.26", optional = true }
+
 # tar
 tar = { version = "0.4.38", optional = true }
-flate2 =  { version = "1.0.25", optional = true }
 xz2 = { version ="0.1.7", optional = true }
 
 # zip
-zip = { version = "0.6.4", default-features = false, optional = true }
+zip = { version = "0.6.6", default-features = false, features = ["deflate"], optional = true }
 
 [dev-dependencies]
+starbase_archive = { path = ".", features = ["tar-gz", "tar-xz", "zip"] }
 assert_fs = "1.0.12"
 
 [features]
-default = ["tar-gz", "tar-xz", "zip"]
+default = ["tar-gz"]
 tar = ["dep:tar"]
 tar-gz = ["dep:flate2", "tar"]
 tar-xz = ["dep:xz2", "tar"]
-zip = ["dep:zip"]
+zip = ["dep:zip", "dep:flate2"]
 

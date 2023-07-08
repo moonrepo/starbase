@@ -82,7 +82,7 @@ impl<'owner> Archiver<'owner> {
             "Packing archive",
         );
 
-        let mut archive = packer(&self.source_root, &self.archive_file);
+        let mut archive = packer(self.source_root, self.archive_file);
 
         for (file, source) in &self.source_files {
             if !source.exists() {
@@ -91,7 +91,7 @@ impl<'owner> Archiver<'owner> {
                 continue;
             }
 
-            let name = join_file_name(&[self.prefix, file]);
+            let name = join_file_name([self.prefix, file]);
 
             if source.is_file() {
                 trace!(source = ?source, "Packing file");
@@ -105,13 +105,13 @@ impl<'owner> Archiver<'owner> {
         }
 
         for (file_prefix, glob) in &self.source_globs {
-            trace!(glob, "Packing files using glob");
+            trace!(glob, prefix = file_prefix, "Packing files using glob");
 
             for file in glob::walk_files(self.source_root, &[glob]).unwrap() {
                 let file_name = fs::file_name(file.strip_prefix(self.source_root).unwrap());
 
                 archive.add_file(
-                    &join_file_name(&[self.prefix, file_prefix, &file_name]),
+                    &join_file_name([self.prefix, file_prefix, &file_name]),
                     &file,
                 )?;
             }
@@ -133,12 +133,21 @@ impl<'owner> Archiver<'owner> {
             "Unpacking archive",
         );
 
-        let mut archive = unpacker(&self.source_root, &self.archive_file);
-        let mut differ = TreeDiffer::load(&self.source_root, &["*.test"])?;
+        let mut differ = TreeDiffer::load(self.source_root, ["*.test"])?; // TODO
+        let mut archive = unpacker(self.source_root, self.archive_file);
+        let result = archive.unpack(self.prefix, &mut differ);
 
-        archive.unpack(self.prefix, &mut differ)?;
+        if result.is_err() {
+            trace!(
+                output_dir = ?self.source_root,
+                "Failed to unpack archive, removing partially extracted files",
+            );
+
+            fs::remove_dir_all(self.source_root)?;
+        }
+
         differ.remove_stale_tracked_files();
 
-        Ok(())
+        result
     }
 }

@@ -14,10 +14,22 @@ pub use tree_differ::*;
 
 // Use native path utils to join the paths, so we can ensure
 // the parts are joined correctly within the archive!
-pub fn join_file_name(parts: &[&str]) -> String {
-    Vec::from(parts)
-        .iter()
-        .filter(|p| !p.is_empty())
+pub fn join_file_name<I, V>(parts: I) -> String
+where
+    I: IntoIterator<Item = V>,
+    V: AsRef<str>,
+{
+    parts
+        .into_iter()
+        .filter_map(|p| {
+            let p = p.as_ref().to_owned();
+
+            if p.is_empty() {
+                None
+            } else {
+                Some(p)
+            }
+        })
         .collect::<std::path::PathBuf>()
         .to_string_lossy()
         .to_string()

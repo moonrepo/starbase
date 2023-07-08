@@ -1,6 +1,7 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::error::ArchiveError;
 use crate::join_file_name;
+use crate::tree_differ::TreeDiffer;
 use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
 use starbase_utils::fs::{self, FsError};
@@ -8,7 +9,6 @@ use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use zip::read::ZipFile;
 use zip::write::FileOptions;
 use zip::{result::ZipError as BaseZipError, CompressionMethod, ZipArchive, ZipWriter};
 
@@ -67,7 +67,7 @@ impl ZipPacker {
 impl ArchivePacker for ZipPacker {
     fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
         #[allow(unused_mut)] // windows
-        let mut options = FileOptions::default().compression_method(CompressionMethod::Stored);
+        let mut options = FileOptions::default().compression_method(CompressionMethod::Deflated);
 
         #[cfg(unix)]
         {
@@ -84,7 +84,7 @@ impl ArchivePacker for ZipPacker {
             })?;
 
         self.archive
-            .write_all(fs::read_file(file)?.as_bytes())
+            .write_all(&fs::read_file_bytes(file)?)
             .map_err(|error| {
                 ZipError::Fs(FsError::Write {
                     path: file.to_path_buf(),
@@ -109,7 +109,7 @@ impl ArchivePacker for ZipPacker {
         for entry in fs::read_dir(dir)? {
             let path = entry.path();
             let path_suffix = path.strip_prefix(dir).unwrap();
-            let name = join_file_name(&[name, path_suffix.to_str().unwrap()]);
+            let name = join_file_name([name, path_suffix.to_str().unwrap()]);
 
             if path.is_dir() {
                 self.add_dir(&name, &path)?;
@@ -130,88 +130,62 @@ impl ArchivePacker for ZipPacker {
     }
 }
 
-// pub struct ZipUnpacker<'archive> {
-//     archive: ZipArchive<File>,
-//     _marker: std::marker::PhantomData<&'archive ()>,
-// }
+pub struct ZipUnpacker {
+    archive: ZipArchive<File>,
+    source_root: PathBuf,
+}
 
-// impl<'archive> ZipUnpacker<'archive> {
-//     pub fn new<P>(archive_file: P) -> Result<Self, ZipError>
-//     where
-//         P: AsRef<Path>,
-//     {
-//         Ok(ZipUnpacker {
-//             archive: ZipArchive::new(fs::open_file(archive_file.as_ref())?)
-//                 .map_err(|error| ZipError::UnpackFailure { error })?,
-//             _marker: std::marker::PhantomData,
-//         })
-//     }
-// }
+impl ZipUnpacker {
+    pub fn new(source_root: &Path, archive_file: &Path) -> Result<Self, ZipError> {
+        Ok(ZipUnpacker {
+            archive: ZipArchive::new(fs::open_file(archive_file)?)
+                .map_err(|error| ZipError::UnpackFailure { error })?,
+            source_root: source_root.to_path_buf(),
+        })
+    }
+}
 
-// // impl<'archive> ArchiveUnpacker for ZipUnpacker<'archive> {
-// //     type Item = ZipUnpackerEntry<'archive>;
+impl ArchiveUnpacker for ZipUnpacker {
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<(), ArchiveError> {
+        for i in 0..self.archive.len() {
+            let mut file = self
+                .archive
+                .by_index_raw(i)
+                .map_err(|error| ZipError::UnpackFailure { error })?;
 
-// //     fn unpack(&mut self) -> Result<(), ArchiveError> {
-// //         Ok(())
-// //     }
+            let mut path = match file.enclosed_name() {
+                Some(path) => path.to_owned(),
+                None => continue,
+            };
 
-// //     fn contents(&mut self) -> Result<Vec<Self::Content>, ArchiveError> {
-// //         let mut entries = vec![];
+            // Remove the prefix
+            if !prefix.is_empty() && path.starts_with(prefix) {
+                path = path.strip_prefix(prefix).unwrap().to_owned();
+            }
 
-// //         // for i in 0..self.archive.len() {
-// //         //     entries.push(ZipUnpackerEntry {
-// //         //         entry: self
-// //         //             .archive
-// //         //             .by_index(i)
-// //         //             .map_err(|error| ZipError::UnpackFailure { error })?,
-// //         //     });
-// //         // }
+            let output_path = self.source_root.join(&path);
 
-// //         Ok(entries)
-// //     }
-// // }
+            // If a folder, create the dir
+            if file.is_dir() {
+                fs::create_dir_all(&output_path)?;
+            }
 
-// pub struct ZipUnpackerEntry<'archive> {
-//     entry: ZipFile<'archive>,
-// }
+            // If a file, copy it to the output dir
+            // if file.is_file() && differ.should_write_source(file.size(), &mut file, &output_path)? {
+            if file.is_file() {
+                let mut out = fs::create_file(&output_path)?;
 
-// impl<'archive> ArchiveItem for ZipUnpackerEntry<'archive> {
-//     fn create(&mut self, dest: &Path) -> Result<(), ArchiveError> {
-//         if let Some(parent_dir) = dest.parent() {
-//             fs::create_dir_all(parent_dir)?;
-//         }
+                io::copy(&mut file, &mut out).map_err(|error| ZipError::ExtractFailure {
+                    source: output_path.to_path_buf(),
+                    error,
+                })?;
 
-//         // If a folder, create the dir
-//         if self.entry.is_dir() {
-//             fs::create_dir_all(&dest)?;
-//         }
+                fs::update_perms(&output_path, file.unix_mode())?;
+            }
 
-//         // If a file, copy it to the output dir
-//         if self.entry.is_file() {
-//             let mut out = fs::create_file(&dest)?;
+            differ.untrack_file(&output_path);
+        }
 
-//             io::copy(&mut self.entry, &mut out).map_err(|error| ZipError::ExtractFailure {
-//                 source: dest.to_path_buf(),
-//                 error,
-//             })?;
-
-//             fs::update_perms(&dest, self.entry.unix_mode())?;
-//         }
-
-//         Ok(())
-//     }
-
-//     fn path(&self) -> PathBuf {
-//         self.entry.enclosed_name().unwrap().to_path_buf()
-//     }
-
-//     fn size(&self) -> u64 {
-//         self.entry.size()
-//     }
-// }
-
-// impl<'archive> Read for ZipUnpackerEntry<'archive> {
-//     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-//         self.entry.read(buf)
-//     }
-// }
+        Ok(())
+    }
+}

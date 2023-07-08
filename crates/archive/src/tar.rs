@@ -135,34 +135,30 @@ impl<R: Read> TarUnpacker<R> {
     #[cfg(feature = "tar-gz")]
     pub fn new_gz<P>(
         source_root: &Path,
-        archive_file: P,
-    ) -> Result<TarUnpacker<flate2::write::GzDecoder<File>>, TarError>
-    where
-        P: AsRef<Path>,
-    {
+        archive_file: &Path,
+    ) -> Result<TarUnpacker<flate2::write::GzDecoder<File>>, TarError> {
         TarUnpacker::new(
             source_root,
-            flate2::write::GzDecoder::new(fs::create_file(archive_file.as_ref())?),
+            flate2::write::GzDecoder::new(fs::create_file(archive_file)?),
         )
     }
 
     #[cfg(feature = "tar-xz")]
     pub fn new_xz<P>(
         source_root: &Path,
-        archive_file: P,
-    ) -> Result<TarUnpacker<xz2::read::XzDecoder<File>>, TarError>
-    where
-        P: AsRef<Path>,
-    {
+        archive_file: &Path,
+    ) -> Result<TarUnpacker<xz2::read::XzDecoder<File>>, TarError> {
         TarUnpacker::new(
             source_root,
-            xz2::read::XzDecoder::new(fs::create_file(archive_file.as_ref())?),
+            xz2::read::XzDecoder::new(fs::create_file(archive_file)?),
         )
     }
 }
 
 impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<(), ArchiveError> {
+        self.archive.set_overwrite(true);
+
         for entry in self
             .archive
             .entries()
@@ -180,14 +176,19 @@ impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
             // Unpack the file if different than destination
             let output_path = self.source_root.join(path);
 
-            if differ.should_write_source(entry.size(), &mut entry, &output_path)? {
-                entry
-                    .unpack(&output_path)
-                    .map_err(|error| TarError::ExtractFailure {
-                        source: output_path.clone(),
-                        error,
-                    })?;
+            if let Some(parent_dir) = output_path.parent() {
+                fs::create_dir_all(parent_dir)?;
             }
+
+            // NOTE: gzip doesn't support seeking, so we can't use the following util then!
+            // if differ.should_write_source(entry.size(), &mut entry, &output_path)? {
+            entry
+                .unpack(&output_path)
+                .map_err(|error| TarError::ExtractFailure {
+                    source: output_path.clone(),
+                    error,
+                })?;
+            // }
 
             differ.untrack_file(&output_path);
         }
