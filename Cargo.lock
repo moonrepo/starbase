@@ -1303,11 +1303,11 @@ dependencies = [
 name = "starbase_archive"
 version = "0.1.0"
 dependencies = [
- "assert_fs",
  "flate2",
  "miette",
  "rustc-hash",
  "starbase_archive",
+ "starbase_sandbox",
  "starbase_styles",
  "starbase_utils",
  "tar",

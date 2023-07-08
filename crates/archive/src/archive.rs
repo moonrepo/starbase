@@ -1,4 +1,3 @@
-use crate::error::ArchiveError;
 use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
 use rustc_hash::FxHashMap;
@@ -7,24 +6,25 @@ use std::path::{Path, PathBuf};
 use tracing::trace;
 
 pub trait ArchivePacker {
-    fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError>;
-    fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError>;
-    fn pack(&mut self) -> Result<(), ArchiveError>;
+    fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()>;
+    fn add_dir(&mut self, name: &str, dir: &Path) -> miette::Result<()>;
+    fn pack(&mut self) -> miette::Result<()>;
 }
 
 pub trait ArchiveUnpacker {
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<(), ArchiveError>;
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()>;
 }
 
+#[derive(Debug)]
 pub struct Archiver<'owner> {
     archive_file: &'owner Path,
 
     prefix: &'owner str,
 
-    // Relative file path in archive -> absolute file path to source
-    source_files: FxHashMap<String, PathBuf>,
+    // Absolute file path to source -> Relative file path in archive
+    source_files: FxHashMap<PathBuf, String>,
 
-    // Relative file prefix in archive -> glob to finds files with
+    // Glob to finds files with -> Relative file prefix in archive
     source_globs: FxHashMap<String, String>,
 
     source_root: &'owner Path,
@@ -51,7 +51,8 @@ impl<'owner> Archiver<'owner> {
             .map(|n| n.to_owned())
             .unwrap_or_else(|| fs::file_name(source));
 
-        self.source_files.insert(name, source.to_path_buf());
+        self.source_files
+            .insert(self.source_root.join(source), name);
         self
     }
 
@@ -60,9 +61,10 @@ impl<'owner> Archiver<'owner> {
         glob: G,
         custom_prefix: Option<&str>,
     ) -> &mut Self {
-        let prefix = custom_prefix.unwrap_or_default().to_owned();
-
-        self.source_globs.insert(prefix, glob.as_ref().to_owned());
+        self.source_globs.insert(
+            glob.as_ref().to_owned(),
+            custom_prefix.unwrap_or_default().to_owned(),
+        );
         self
     }
 
@@ -71,9 +73,9 @@ impl<'owner> Archiver<'owner> {
         self
     }
 
-    pub fn pack<F, P>(&self, packer: F) -> Result<(), ArchiveError>
+    pub fn pack<F, P>(&self, packer: F) -> miette::Result<()>
     where
-        F: FnOnce(&Path, &Path) -> P,
+        F: FnOnce(&Path, &Path) -> miette::Result<P>,
         P: ArchivePacker,
     {
         trace!(
@@ -82,9 +84,9 @@ impl<'owner> Archiver<'owner> {
             "Packing archive",
         );
 
-        let mut archive = packer(self.source_root, self.archive_file);
+        let mut archive = packer(self.source_root, self.archive_file)?;
 
-        for (file, source) in &self.source_files {
+        for (source, file) in &self.source_files {
             if !source.exists() {
                 trace!(source = ?source, "Source file does not exist, skipping");
 
@@ -104,7 +106,7 @@ impl<'owner> Archiver<'owner> {
             }
         }
 
-        for (file_prefix, glob) in &self.source_globs {
+        for (glob, file_prefix) in &self.source_globs {
             trace!(glob, prefix = file_prefix, "Packing files using glob");
 
             for file in glob::walk_files(self.source_root, &[glob]).unwrap() {
@@ -122,9 +124,9 @@ impl<'owner> Archiver<'owner> {
         Ok(())
     }
 
-    pub fn unpack<F, P>(&self, unpacker: F) -> Result<(), ArchiveError>
+    pub fn unpack<F, P>(&self, unpacker: F) -> miette::Result<()>
     where
-        F: FnOnce(&Path, &Path) -> P,
+        F: FnOnce(&Path, &Path) -> miette::Result<P>,
         P: ArchiveUnpacker,
     {
         trace!(
@@ -133,8 +135,10 @@ impl<'owner> Archiver<'owner> {
             "Unpacking archive",
         );
 
-        let mut differ = TreeDiffer::load(self.source_root, ["*.test"])?; // TODO
-        let mut archive = unpacker(self.source_root, self.archive_file);
+        dbg!("unpack", &self);
+
+        let mut differ = TreeDiffer::load(self.source_root, ["**/*"])?; // TODO
+        let mut archive = unpacker(self.source_root, self.archive_file)?;
         let result = archive.unpack(self.prefix, &mut differ);
 
         if result.is_err() {

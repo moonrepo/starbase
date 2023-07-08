@@ -1,5 +1,4 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
-use crate::error::ArchiveError;
 use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
 use miette::Diagnostic;
@@ -54,20 +53,17 @@ pub struct ZipPacker {
 }
 
 impl ZipPacker {
-    pub fn new<P>(archive_file: P) -> Result<Self, ZipError>
-    where
-        P: AsRef<Path>,
-    {
+    pub fn new(archive_file: &Path) -> miette::Result<Self> {
         Ok(ZipPacker {
-            archive: ZipWriter::new(fs::create_file(archive_file.as_ref())?),
+            archive: ZipWriter::new(fs::create_file(archive_file)?),
         })
     }
 }
 
 impl ArchivePacker for ZipPacker {
-    fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
+    fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()> {
         #[allow(unused_mut)] // windows
-        let mut options = FileOptions::default().compression_method(CompressionMethod::Deflated);
+        let mut options = FileOptions::default().compression_method(CompressionMethod::Stored);
 
         #[cfg(unix)]
         {
@@ -84,7 +80,7 @@ impl ArchivePacker for ZipPacker {
             })?;
 
         self.archive
-            .write_all(&fs::read_file_bytes(file)?)
+            .write_all(fs::read_file(file)?.as_bytes())
             .map_err(|error| {
                 ZipError::Fs(FsError::Write {
                     path: file.to_path_buf(),
@@ -95,7 +91,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
-    fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError> {
+    fn add_dir(&mut self, name: &str, dir: &Path) -> miette::Result<()> {
         self.archive
             .add_directory(
                 name,
@@ -121,7 +117,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
-    fn pack(&mut self) -> Result<(), ArchiveError> {
+    fn pack(&mut self) -> miette::Result<()> {
         self.archive
             .finish()
             .map_err(|error| ZipError::PackFailure { error })?;
@@ -136,7 +132,9 @@ pub struct ZipUnpacker {
 }
 
 impl ZipUnpacker {
-    pub fn new(source_root: &Path, archive_file: &Path) -> Result<Self, ZipError> {
+    pub fn new(source_root: &Path, archive_file: &Path) -> miette::Result<Self> {
+        fs::create_dir_all(source_root)?;
+
         Ok(ZipUnpacker {
             archive: ZipArchive::new(fs::open_file(archive_file)?)
                 .map_err(|error| ZipError::UnpackFailure { error })?,
@@ -146,7 +144,7 @@ impl ZipUnpacker {
 }
 
 impl ArchiveUnpacker for ZipUnpacker {
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<(), ArchiveError> {
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
         for i in 0..self.archive.len() {
             let mut file = self
                 .archive

@@ -5,11 +5,9 @@ pub mod tar;
 pub mod zip;
 
 mod archive;
-mod error;
 mod tree_differ;
 
 pub use archive::*;
-pub use error::*;
 pub use tree_differ::*;
 
 // Use native path utils to join the paths, so we can ensure
@@ -22,15 +20,14 @@ where
     parts
         .into_iter()
         .filter_map(|p| {
-            let p = p.as_ref().to_owned();
+            let p = p.as_ref();
 
             if p.is_empty() {
                 None
             } else {
-                Some(p)
+                Some(p.to_owned())
             }
         })
-        .collect::<std::path::PathBuf>()
-        .to_string_lossy()
-        .to_string()
+        .collect::<Vec<_>>()
+        .join("/")
 }

@@ -3,7 +3,7 @@ name = "starbase_archive"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "TODO"
+description = "Utilities for packing and unpacking archives. Support tar and zip."
 repository = "https://github.com/moonrepo/starbase"
 
 [package.metadata.docs.rs]
@@ -28,7 +28,7 @@ zip = { version = "0.6.6", default-features = false, features = ["deflate"], opt
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = ["tar-gz", "tar-xz", "zip"] }
-assert_fs = "1.0.12"
+starbase_sandbox = { path = "../sandbox" }
 
 [features]
 default = ["tar-gz"]
