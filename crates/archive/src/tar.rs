@@ -140,6 +140,10 @@ impl<R: Read> TarUnpacker<R> {
         source_root: &Path,
         archive_file: &Path,
     ) -> miette::Result<TarUnpacker<flate2::write::GzDecoder<File>>> {
+        dbg!("new_gz", source_root, archive_file);
+
+        dbg!(fs::metadata(archive_file).unwrap().len());
+
         TarUnpacker::new(
             source_root,
             flate2::write::GzDecoder::new(fs::open_file(archive_file)?),

@@ -49,7 +49,7 @@ impl<'owner> Archiver<'owner> {
         let source = source.as_ref();
         let name = custom_name
             .map(|n| n.to_owned())
-            .unwrap_or_else(|| fs::file_name(source));
+            .unwrap_or_else(|| source.to_string_lossy().to_string());
 
         self.source_files
             .insert(self.source_root.join(source), name);
@@ -110,10 +110,14 @@ impl<'owner> Archiver<'owner> {
             trace!(glob, prefix = file_prefix, "Packing files using glob");
 
             for file in glob::walk_files(self.source_root, &[glob]).unwrap() {
-                let file_name = fs::file_name(file.strip_prefix(self.source_root).unwrap());
+                let file_name = file
+                    .strip_prefix(self.source_root)
+                    .unwrap()
+                    .to_str()
+                    .unwrap();
 
                 archive.add_file(
-                    &join_file_name([self.prefix, file_prefix, &file_name]),
+                    &join_file_name([self.prefix, file_prefix, file_name]),
                     &file,
                 )?;
             }
