@@ -37,7 +37,8 @@ impl<'writer> Visit for FieldVisitor<'writer> {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
             write!(self.writer, "  {:?} ", value).unwrap()
-        } else if !TEST_ENV.load(Ordering::Relaxed) {
+        // } else if !TEST_ENV.load(Ordering::Relaxed) {
+        } else {
             write!(
                 self.writer,
                 " {}",
