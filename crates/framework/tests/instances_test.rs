@@ -5,11 +5,12 @@ mod events {
     use super::*;
 
     #[derive(Debug, Event)]
+    #[event(dataset = usize)]
     struct TestEvent(pub usize);
 
     #[subscriber]
-    async fn callback_one(mut event: TestEvent) -> EventResult<TestEvent> {
-        event.0 += 5;
+    async fn callback_one(mut data: TestEvent) -> EventResult<TestEvent> {
+        *data += 5;
         Ok(EventState::Continue)
     }
 

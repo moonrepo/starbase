@@ -7,23 +7,23 @@ use tokio::sync::RwLock;
 #[async_trait]
 pub trait Subscriber<E: Event>: Send + Sync {
     fn is_once(&self) -> bool;
-    async fn on_emit(&mut self, event: Arc<E>, data: Arc<RwLock<E::Data>>) -> EventResult<E>;
+    async fn on_emit(&mut self, event: Arc<E>, data: Arc<RwLock<E::Data>>) -> EventResult;
 }
 
 pub type BoxedSubscriber<E> = Box<dyn Subscriber<E>>;
 
 #[async_trait]
 pub trait SubscriberFunc<E: Event>: Send + Sync {
-    async fn call(&self, event: Arc<E>, data: Arc<RwLock<E::Data>>) -> EventResult<E>;
+    async fn call(&self, event: Arc<E>, data: Arc<RwLock<E::Data>>) -> EventResult;
 }
 
 #[async_trait]
 impl<T: Send + Sync, E: Event + 'static, F> SubscriberFunc<E> for T
 where
     T: Fn(Arc<E>, Arc<RwLock<E::Data>>) -> F,
-    F: Future<Output = EventResult<E>> + Send,
+    F: Future<Output = EventResult> + Send,
 {
-    async fn call(&self, event: Arc<E>, data: Arc<RwLock<E::Data>>) -> EventResult<E> {
+    async fn call(&self, event: Arc<E>, data: Arc<RwLock<E::Data>>) -> EventResult {
         self(event, data).await
     }
 }
@@ -48,7 +48,7 @@ impl<E: Event> Subscriber<E> for CallbackSubscriber<E> {
         self.once
     }
 
-    async fn on_emit(&mut self, event: Arc<E>, data: Arc<RwLock<E::Data>>) -> EventResult<E> {
+    async fn on_emit(&mut self, event: Arc<E>, data: Arc<RwLock<E::Data>>) -> EventResult {
         self.func.call(event, data).await
     }
 }

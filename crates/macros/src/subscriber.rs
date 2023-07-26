@@ -87,7 +87,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
         panic!("Unsupported param, must be an identifier.");
     };
 
-    let event_name = &event_param_name.ident;
+    let data_name = &event_param_name.ident;
     let mut event_type = TypePath::from_string("Event").unwrap();
     let mut is_mutable = event_param_name.mutability.is_some();
 
@@ -110,9 +110,9 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     let acquire_lock = if is_mutable {
-        quote! { let mut #event_name = #event_name.write().await; }
+        quote! { let mut #data_name = #data_name.write().await; }
     } else {
-        quote! { let #event_name = #event_name.read().await; }
+        quote! { let #data_name = #data_name.read().await; }
     };
 
     let return_flow = if has_return_statement(&func_body) {
@@ -133,8 +133,8 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
         #attributes
         async fn #func_name(
             event: std::sync::Arc<#event_type>,
-            #event_name: std::sync::Arc<tokio::sync::RwLock<<#event_type as starbase::Event>::Data>>
-        ) -> starbase::EventResult<#event_type> {
+            #data_name: std::sync::Arc<tokio::sync::RwLock<<#event_type as starbase::Event>::Data>>
+        ) -> starbase::EventResult {
             #acquire_lock
             #func_body
             #return_flow

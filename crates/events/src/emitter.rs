@@ -51,8 +51,7 @@ impl<E: Event + 'static> Emitter<E> {
     ///
     /// When complete, the provided event will be returned along with the value returned
     /// by the subscriber that returned [`EventState::Return`], or [`None`] if not occurred.
-    pub async fn emit(&self, event: E) -> miette::Result<EmitResult<E>> {
-        let mut return_value = None;
+    pub async fn emit(&self, event: E) -> miette::Result<(E, E::Data)> {
         let mut remove_indices = HashSet::new();
         let mut subscribers = self.subscribers.write().await;
 
@@ -70,11 +69,7 @@ impl<E: Event + 'static> Emitter<E> {
             match subscriber.on_emit(event, data).await? {
                 EventState::Continue => continue,
                 EventState::Stop => break,
-                EventState::Return(value) => {
-                    return_value = Some(value);
-                    break;
-                }
-            }
+            };
         }
 
         // Remove only once subscribers that were called
@@ -86,10 +81,9 @@ impl<E: Event + 'static> Emitter<E> {
             !remove
         });
 
-        Ok(EmitResult {
-            event: Arc::into_inner(event).unwrap(),
-            data: Arc::into_inner(data).unwrap().into_inner(),
-            value: return_value,
-        })
+        let event = Arc::into_inner(event).unwrap();
+        let data = Arc::into_inner(data).unwrap().into_inner();
+
+        Ok((event, data))
     }
 }
