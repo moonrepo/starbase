@@ -17,62 +17,56 @@ enum TestError {
     Test,
 }
 
-#[derive(Event)]
-#[event(value = "i32")]
+#[derive(Debug, Event)]
+#[event(dataset = i32)]
 struct IntEvent(pub i32);
 
 #[derive(Event)]
-#[event(value = "String")]
+#[event(dataset = String)]
 struct StringEvent(pub String);
 
 #[derive(Event)]
-#[event(value = "PathBuf")]
+#[event(dataset = PathBuf)]
 struct PathEvent(pub PathBuf);
 
 #[derive(Event)]
-#[event(value = "std::path::PathBuf")]
+#[event(dataset = std::path::PathBuf)]
 struct FQPathEvent(pub PathBuf);
 
-async fn callback_func(event: Arc<RwLock<IntEvent>>) -> EventResult<IntEvent> {
-    let mut event = event.write().await;
-    event.0 += 5;
+async fn callback_func(_event: Arc<IntEvent>, data: Arc<RwLock<i32>>) -> EventResult {
+    let mut data = data.write().await;
+    *data += 5;
     Ok(EventState::Continue)
 }
 
 #[subscriber]
-async fn callback_read(event: IntEvent) -> EventResult<IntEvent> {
-    dbg!(event.0);
+async fn callback_read(data: IntEvent) -> EventResult {
+    dbg!(event, data);
 }
 
 #[subscriber]
-async fn callback_write(mut event: IntEvent) -> EventResult<IntEvent> {
-    event.0 += 5;
+async fn callback_write(mut data: IntEvent) -> EventResult {
+    *data += 5;
     Ok(EventState::Continue)
 }
 
 #[subscriber]
-async fn callback_write_ref(event: &mut IntEvent) -> EventResult<IntEvent> {
-    event.0 += 5;
+async fn callback_write_ref(data: &mut IntEvent) -> EventResult {
+    *data += 5;
 }
 
 #[subscriber]
-fn callback_return(event: &mut IntEvent) {
-    event.0 += 5;
+fn callback_return(data: &mut IntEvent) {
+    *data += 5;
     Ok(EventState::Stop)
 }
 
 #[subscriber]
-async fn no_return(event: &mut IntEvent) -> EventResult<IntEvent> {
-    event.0 += 5;
+async fn no_return(data: &mut IntEvent) -> EventResult {
+    *data += 5;
 }
 
 #[subscriber]
-async fn custom_return(event: &mut IntEvent) -> EventResult<IntEvent> {
-    event.0 += 5;
-    Ok(EventState::Return(123))
-}
-
-#[subscriber]
-async fn err_return(_event: IntEvent) -> EventResult<IntEvent> {
+async fn err_return(_data: IntEvent) -> EventResult {
     Err(TestError::Test.into())
 }

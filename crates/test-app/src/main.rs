@@ -16,11 +16,12 @@ enum AppError {
 struct TestState(pub String);
 
 #[derive(Debug, Event)]
-struct TestEvent(pub usize);
+#[event(dataset = usize)]
+struct TestEvent;
 
 #[subscriber]
-async fn update_event(mut event: TestEvent) {
-    event.0 = 100;
+async fn update_event(mut data: TestEvent) {
+    *data = 100;
 }
 
 #[system]
@@ -57,9 +58,9 @@ async fn analyze_one(state: StateMut<TestState>, em: EmitterRef<TestEvent>) {
     info!(val = state.0, "analyze {}", "foo.bar".style(Style::File));
     **state = "mutated".to_string();
 
-    let event = TestEvent(50);
+    let event = TestEvent;
     // dbg!(&event);
-    let (_, _) = em.emit(event).await.unwrap();
+    let _data = em.emit(event).await.unwrap();
     // dbg!(event);
 }
 

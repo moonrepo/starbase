@@ -4,14 +4,12 @@
 ![Crates.io](https://img.shields.io/crates/d/starbase_events)
 
 An async event emitter for the `starbase` application framework. This crate works quite differently
-than other event systems, as subscribers _can mutate_ the event and its data. Because of this, we
-cannot use message channels, and must take extra precaution to satisfy `Send` + `Sync` requirements.
+than other event systems, as subscribers _can mutate_ event data. Because of this, we cannot use
+message channels, and must take extra precaution to satisfy `Send` + `Sync` requirements.
 
 ## Creating events
 
-Events must derive `Event`, or implement the `Event` trait. Events can be any type of struct, but
-the major selling point is that events are _mutable_, allowing inner content to be modified by
-subscribers.
+Events must derive `Event` or implement the `Event` trait.
 
 ```rust
 use starbase_events::Event;
@@ -19,6 +17,29 @@ use app::Project;
 
 #[derive(Debug, Event)]
 pub struct ProjectCreatedEvent(pub Project);
+```
+
+### Event data
+
+Events can optionally contain data, which is passed to and can be mutated by subscribers. By default
+the value is a unit type (`()`), but can be customized with `#[event]` for derived events, or
+`type Data` when implemented manually.
+
+```rust
+use starbase_events::Event;
+use std::path::PathBuf;
+
+#[derive(Event)]
+#[event(dataset = PathBuf)]
+pub struct CacheCheckEvent(pub PathBuf);
+
+// OR
+
+pub struct CacheCheckEvent(pub PathBuf);
+
+impl Event for CacheCheckEvent {
+  type Data = PathBuf;
+}
 ```
 
 ## Creating emitters
@@ -38,16 +59,19 @@ let cache_check: Emitter<CacheCheckEvent> = Emitter::new();
 ## Using subscribers
 
 Subscribers are async functions that are registered into an emitter, and are executed when the
-emitter emits an event. They are passed the event object as a `Arc<RwLock<T>>`, allowing for the
-event and its inner data to be accessed mutably or immutably.
+emitter emits an event. They are passed the event object as a `Arc<T>`, and the event's data as
+`Arc<RwLock<T::Data>>`, allowing for the event to referenced immutably, and its data to be accessed
+mutably or immutably.
 
 ```rust
-use starbase_events::{EventResult, EventState};
+use starbase_events::{Event, EventResult, EventState};
 
-async fn update_root(event: Arc<RwLock<ProjectCreatedEvent>>) -> EventResult<ProjectCreatedEvent> {
-  let event = event.write().await;
-
-  event.0.root = new_path;
+async fn update_root(
+  event: Arc<ProjectCreatedEvent>,
+  data: Arc<RwLock<<ProjectCreatedEvent as Event>::Data>>
+) -> EventResult {
+  let mut data = data.write().await;
+  data.root = new_path;
 
   Ok(EventState::Continue)
 }
@@ -61,8 +85,8 @@ implementation. For example, the above subscriber can be rewritten as:
 
 ```rust
 #[subscriber]
-async fn update_root(mut event: ProjectCreatedEvent) {
-  event.0.root = new_path;
+async fn update_root(mut data: ProjectCreatedEvent) {
+  data.root = new_path;
 }
 ```
 
@@ -70,8 +94,9 @@ When using `#[subscriber]`, the following benefits apply:
 
 - The return type is optional.
 - The return value is optional if `EventState::Continue`.
-- Using `mut event` or `&mut Event` will acquire a write lock, otherwise a read lock.
+- Using `mut event` or `&mut Event` will acquire a write lock on data, otherwise a read lock.
 - Omitting the event parameter will not acquire any lock.
+- The name of the parameter is for _the data_, while the event is simply `event`.
 
 ## Controlling the event flow
 
@@ -80,7 +105,6 @@ following variants:
 
 - `Continue` - Continues to the next subscriber (default).
 - `Stop` - Stops after this subscriber, discarding subsequent subscribers.
-- `Return` - Like `Stop` but also returns a value for interception.
 
 ```rust
 #[subscriber]
@@ -92,49 +116,19 @@ async fn continue_flow(mut event: CacheCheckEvent) {
 async fn stop_flow(mut event: CacheCheckEvent) {
   Ok(EventState::Stop)
 }
-
-#[subscriber]
-async fn return_flow(mut event: CacheCheckEvent) {
-  Ok(EventState::Return(path_to_cache)))
-}
-```
-
-For `Return` flows, the type of value returned is inferred from the event. By default the value is a
-unit type (`()`), but can be customized with `#[event]` for derived events, or `type Value` when
-implemented manually.
-
-```rust
-use starbase_events::{Event, Emitter};
-use std::path::PathBuf;
-
-#[derive(Event)]
-#[event(value = "PathBuf")]
-pub struct CacheCheckEvent(pub PathBuf);
-
-// OR
-
-pub struct CacheCheckEvent(pub PathBuf);
-
-impl Event for CacheCheckEvent {
-  type Value = PathBuf;
-}
 ```
 
 ## Emitting and handling results
 
 When an event is emitted, subscribers are executed sequentially in the same thread so that each
-subscriber can mutate the event if necessary. Because of this, events do not support references for
-inner values, and instead must own everything.
+subscriber can mutate the event if necessary. Because of this, events do not support
+references/lifetimes for inner values, and instead must own everything.
 
 An event can be emitted with the `emit()` method, which requires an owned event (and owned inner
 data).
 
 ```rust
-let (event, result) = emitter.emit(ProjectCreatedEvent(owned_project)).await?;
-
-// Take back ownership of inner data
-let project = event.0;
+let data = emitter.emit(ProjectCreatedEvent(owned_project)).await?;
 ```
 
-Emitting returns a tuple, containing the final event after all modifications, and a result of type
-`Option<Event::Value>` (which is provided with `EventState::Return`).
+Emitting returns the event data after all modifications.
