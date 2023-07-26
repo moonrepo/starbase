@@ -11,7 +11,7 @@ all-features = true
 
 [dependencies]
 starbase_styles = { version = "0.1.12", path = "../styles" }
-starbase_utils = { version = "0.2.15", path = "../utils" }
+starbase_utils = { version = "0.2.16", path = "../utils" }
 miette = { workspace = true }
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
