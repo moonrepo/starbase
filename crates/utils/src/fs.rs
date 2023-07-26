@@ -10,7 +10,7 @@ use tracing::trace;
 #[derive(Error, Diagnostic, Debug)]
 pub enum FsError {
     #[diagnostic(code(fs::copy), help("Does the source file exist?"))]
-    #[error("Failed to copy {} to {}", .from.style(Style::Path), .to.style(Style::Path))]
+    #[error("Failed to copy {} to {}.", .from.style(Style::Path), .to.style(Style::Path))]
     Copy {
         from: PathBuf,
         to: PathBuf,
@@ -19,7 +19,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::create))]
-    #[error("Failed to create {}", .path.style(Style::Path))]
+    #[error("Failed to create {}.", .path.style(Style::Path))]
     Create {
         path: PathBuf,
         #[source]
@@ -27,7 +27,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::perms))]
-    #[error("Failed to update permissions for {}", .path.style(Style::Path))]
+    #[error("Failed to update permissions for {}.", .path.style(Style::Path))]
     Perms {
         path: PathBuf,
         #[source]
@@ -35,7 +35,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::read))]
-    #[error("Failed to read path {}", .path.style(Style::Path))]
+    #[error("Failed to read path {}.", .path.style(Style::Path))]
     Read {
         path: PathBuf,
         #[source]
@@ -43,7 +43,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::remove))]
-    #[error("Failed to remove path {}", .path.style(Style::Path))]
+    #[error("Failed to remove path {}.", .path.style(Style::Path))]
     Remove {
         path: PathBuf,
         #[source]
@@ -51,7 +51,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::rename), help("Does the source file exist?"))]
-    #[error("Failed to rename {} to {}", .from.style(Style::Path), .to.style(Style::Path))]
+    #[error("Failed to rename {} to {}.", .from.style(Style::Path), .to.style(Style::Path))]
     Rename {
         from: PathBuf,
         to: PathBuf,
@@ -60,7 +60,7 @@ pub enum FsError {
     },
 
     #[diagnostic(code(fs::write), help("Does the parent directory exist?"))]
-    #[error("Failed to write {}", .path.style(Style::Path))]
+    #[error("Failed to write {}.", .path.style(Style::Path))]
     Write {
         path: PathBuf,
         #[source]

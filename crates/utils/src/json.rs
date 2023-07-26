@@ -23,7 +23,7 @@ pub enum JsonError {
     Fs(#[from] FsError),
 
     #[diagnostic(code(json::parse_file))]
-    #[error("Failed to parse JSON file {}", .path.style(Style::Path))]
+    #[error("Failed to parse JSON file {}.", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -31,14 +31,14 @@ pub enum JsonError {
     },
 
     #[diagnostic(code(json::stringify))]
-    #[error("Failed to stringify JSON")]
+    #[error("Failed to stringify JSON.")]
     Stringify {
         #[source]
         error: serde_json::Error,
     },
 
     #[diagnostic(code(json::stringify_file))]
-    #[error("Failed to stringify JSON for file {}", .path.style(Style::Path))]
+    #[error("Failed to stringify JSON for file {}.", .path.style(Style::Path))]
     StringifyFile {
         path: PathBuf,
         #[source]

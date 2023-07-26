@@ -14,7 +14,7 @@ pub use wax::{self, Glob};
 #[derive(Error, Diagnostic, Debug)]
 pub enum GlobError {
     #[diagnostic(code(glob::create))]
-    #[error("Failed to create glob from pattern {}", .glob.style(Style::File))]
+    #[error("Failed to create glob from pattern {}.", .glob.style(Style::File))]
     Create {
         glob: String,
         #[source]
@@ -22,7 +22,7 @@ pub enum GlobError {
     },
 
     #[diagnostic(code(glob::invalid_path))]
-    #[error("Failed to normalize glob path {}", .path.style(Style::Path))]
+    #[error("Failed to normalize glob path {}.", .path.style(Style::Path))]
     InvalidPath { path: PathBuf },
 }
 

@@ -19,7 +19,7 @@ pub enum TomlError {
     Fs(#[from] FsError),
 
     #[diagnostic(code(toml::parse_file))]
-    #[error("Failed to parse TOML file {}", .path.style(Style::Path))]
+    #[error("Failed to parse TOML file {}.", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
@@ -27,14 +27,14 @@ pub enum TomlError {
     },
 
     #[diagnostic(code(toml::stringify))]
-    #[error("Failed to stringify TOML")]
+    #[error("Failed to stringify TOML.")]
     Stringify {
         #[source]
         error: toml::ser::Error,
     },
 
     #[diagnostic(code(toml::stringify_file))]
-    #[error("Failed to stringify TOML for file {}", .path.style(Style::Path))]
+    #[error("Failed to stringify TOML for file {}.", .path.style(Style::Path))]
     StringifyFile {
         path: PathBuf,
         #[source]

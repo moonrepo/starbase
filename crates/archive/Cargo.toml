@@ -1,0 +1,40 @@
+[package]
+name = "starbase_archive"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Utilities for packing and unpacking archives. Supports tar and zip."
+repository = "https://github.com/moonrepo/starbase"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+starbase_styles = { version = "0.1.12", path = "../styles" }
+starbase_utils = { version = "0.2.15", path = "../utils" }
+miette = { workspace = true }
+rustc-hash = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+flate2 = { version = "1.0.26", optional = true }
+
+# tar
+tar = { version = "0.4.39", optional = true }
+xz2 = { version = "0.1.7", optional = true }
+
+# zip
+zip = { version = "0.6.6", default-features = false, features = [
+	"deflate",
+], optional = true }
+
+[dev-dependencies]
+starbase_archive = { path = ".", features = ["tar-gz", "tar-xz", "zip"] }
+starbase_sandbox = { path = "../sandbox" }
+
+[features]
+default = ["tar-gz"]
+tar = ["dep:tar"]
+tar-gz = ["dep:flate2", "tar"]
+tar-xz = ["dep:xz2", "tar"]
+zip = ["dep:zip", "dep:flate2"]
