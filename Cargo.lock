@@ -1218,7 +1218,7 @@ dependencies = [
 
 [[package]]
 name = "starbase"
-version = "0.1.13"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1238,7 +1238,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_events"
-version = "0.1.9"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "miette",
@@ -1250,7 +1250,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_macros"
-version = "0.1.10"
+version = "0.2.0"
 dependencies = [
  "darling",
  "proc-macro2",
