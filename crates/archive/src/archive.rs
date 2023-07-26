@@ -139,8 +139,6 @@ impl<'owner> Archiver<'owner> {
             "Unpacking archive",
         );
 
-        dbg!("unpack", &self);
-
         let mut differ = TreeDiffer::load(self.source_root, ["**/*"])?; // TODO
         let mut archive = unpacker(self.source_root, self.archive_file)?;
         let result = archive.unpack(self.prefix, &mut differ);

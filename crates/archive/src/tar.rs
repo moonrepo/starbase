@@ -76,8 +76,8 @@ impl<W: Write> TarPacker<W> {
     pub fn new_xz(
         archive_file: &Path,
         level: Option<u32>,
-    ) -> miette::Result<TarPacker<xz2::read::XzEncoder<File>>> {
-        TarPacker::new(xz2::read::XzEncoder::new(
+    ) -> miette::Result<TarPacker<xz2::write::XzEncoder<File>>> {
+        TarPacker::new(xz2::write::XzEncoder::new(
             fs::create_file(archive_file)?,
             level.unwrap_or(4),
         ))
@@ -139,14 +139,10 @@ impl<R: Read> TarUnpacker<R> {
     pub fn new_gz(
         source_root: &Path,
         archive_file: &Path,
-    ) -> miette::Result<TarUnpacker<flate2::write::GzDecoder<File>>> {
-        dbg!("new_gz", source_root, archive_file);
-
-        dbg!(fs::metadata(archive_file).unwrap().len());
-
+    ) -> miette::Result<TarUnpacker<flate2::read::GzDecoder<File>>> {
         TarUnpacker::new(
             source_root,
-            flate2::write::GzDecoder::new(fs::open_file(archive_file)?),
+            flate2::read::GzDecoder::new(fs::open_file(archive_file)?),
         )
     }
 
@@ -166,18 +162,13 @@ impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
         self.archive.set_overwrite(true);
 
-        dbg!("unpack", &self.source_root);
-
         for entry in self
             .archive
             .entries()
             .map_err(|error| TarError::UnpackFailure { error })?
         {
-            dbg!("entry");
             let mut entry = entry.map_err(|error| TarError::UnpackFailure { error })?;
             let mut path: PathBuf = entry.path().unwrap().into_owned();
-
-            dbg!(3, &path);
 
             // Remove the prefix
             if !prefix.is_empty() && path.starts_with(prefix) {
