@@ -1,14 +1,13 @@
 use miette::IntoDiagnostic;
-use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use starbase_utils::{fs, glob};
-use std::io::{BufReader, Read, Seek};
+use std::io::{self, BufReader, Read, Seek};
 use std::path::{Path, PathBuf};
 use tracing::trace;
 
 pub struct TreeDiffer {
-    /// A mapping of all files in the destination directory
-    /// to their current file sizes.
-    pub files: FxHashMap<PathBuf, u64>,
+    /// A mapping of all files in the destination directory.
+    pub files: FxHashSet<PathBuf>,
 }
 
 impl TreeDiffer {
@@ -21,19 +20,14 @@ impl TreeDiffer {
         I: IntoIterator<Item = V>,
         V: AsRef<str>,
     {
-        let mut files = FxHashMap::default();
+        let mut files = FxHashSet::default();
         let dest_root = dest_root.as_ref();
 
         trace!(dir = ?dest_root, "Creating a tree differ for destination directory");
 
         let mut track = |file: PathBuf| {
             if file.exists() {
-                let size = match fs::metadata(&file) {
-                    Ok(meta) => meta.len(),
-                    Err(_) => 0,
-                };
-
-                files.insert(file, size);
+                files.insert(file);
             }
         };
 
@@ -104,7 +98,7 @@ impl TreeDiffer {
     pub fn remove_stale_tracked_files(&mut self) {
         trace!("Removing stale and invalid files");
 
-        for (file, _) in self.files.drain() {
+        for file in self.files.drain() {
             let _ = fs::remove_file(file);
         }
     }
@@ -119,16 +113,14 @@ impl TreeDiffer {
         dest_path: &Path,
     ) -> miette::Result<bool> {
         // If the destination doesn't exist, always use the source
-        if !dest_path.exists() || !self.files.contains_key(dest_path) {
+        if !dest_path.exists() || !self.files.contains(dest_path) {
             return Ok(true);
         }
 
         // If the file sizes are different, use the source
-        let Some(dest_size) = self.files.get(dest_path) else {
-            return Ok(true);
-        };
+        let dest_size = fs::metadata(dest_path).map(|m| m.len()).unwrap_or(0);
 
-        if source_size != *dest_size {
+        if source_size != dest_size {
             return Ok(true);
         }
 
@@ -140,7 +132,7 @@ impl TreeDiffer {
         }
 
         // Reset read pointer to the start of the buffer
-        source.seek(std::io::SeekFrom::Start(0)).into_diagnostic()?;
+        source.seek(io::SeekFrom::Start(0)).into_diagnostic()?;
 
         Ok(true)
     }

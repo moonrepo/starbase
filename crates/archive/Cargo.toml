@@ -10,21 +10,23 @@ repository = "https://github.com/moonrepo/starbase"
 all-features = true
 
 [dependencies]
+starbase_styles = { version = "0.1.12", path = "../styles" }
+starbase_utils = { version = "0.2.15", path = "../utils" }
 miette = { workspace = true }
 rustc-hash = { workspace = true }
-starbase_styles = { version = "0.1.11", path = "../styles" }
-starbase_utils = { version = "0.2.13", path = "../utils" }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
-flate2 =  { version = "1.0.26", optional = true }
+flate2 = { version = "1.0.26", optional = true }
 
 # tar
-tar = { version = "0.4.38", optional = true }
-xz2 = { version ="0.1.7", optional = true }
+tar = { version = "0.4.39", optional = true }
+xz2 = { version = "0.1.7", optional = true }
 
 # zip
-zip = { version = "0.6.6", default-features = false, features = ["deflate"], optional = true }
+zip = { version = "0.6.6", default-features = false, features = [
+	"deflate",
+], optional = true }
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = ["tar-gz", "tar-xz", "zip"] }
