@@ -8,10 +8,10 @@ repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
 starbase_utils = { version = "0.2.14", path = "../utils", default-features = false }
-assert_cmd = "2.0.11"
+assert_cmd = "2.0.12"
 assert_fs = "1.0.13"
 clean-path = "0.2.1"
-insta = "1.30.0"
+insta = "1.31.0"
 once_cell = { workspace = true }
 predicates = "3.0.3"
 pretty_assertions = "1.4.0"
