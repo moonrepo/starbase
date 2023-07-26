@@ -13,6 +13,7 @@ starbase is built with the following modules:
 - **Navigation sensors** - Span based instrumentation and logging with `tracing`.
 - **Engineering bay** - Ergonomic utilities with `starbase_utils`.
 - **Command center** - Terminal styling and theming with `starbase_styles`.
+- **Cargo hold** - Archive packing and unpacking with `starbase_archive`.
 
 # Core
 
