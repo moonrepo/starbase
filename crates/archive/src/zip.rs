@@ -128,17 +128,17 @@ impl ArchivePacker for ZipPacker {
 
 pub struct ZipUnpacker {
     archive: ZipArchive<File>,
-    source_root: PathBuf,
+    output_dir: PathBuf,
 }
 
 impl ZipUnpacker {
-    pub fn new(source_root: &Path, archive_file: &Path) -> miette::Result<Self> {
-        fs::create_dir_all(source_root)?;
+    pub fn new(output_dir: &Path, archive_file: &Path) -> miette::Result<Self> {
+        fs::create_dir_all(output_dir)?;
 
         Ok(ZipUnpacker {
             archive: ZipArchive::new(fs::open_file(archive_file)?)
                 .map_err(|error| ZipError::UnpackFailure { error })?,
-            source_root: source_root.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
         })
     }
 }
@@ -161,7 +161,7 @@ impl ArchiveUnpacker for ZipUnpacker {
                 path = path.strip_prefix(prefix).unwrap().to_owned();
             }
 
-            let output_path = self.source_root.join(&path);
+            let output_path = self.output_dir.join(&path);
 
             // If a folder, create the dir
             if file.is_dir() {

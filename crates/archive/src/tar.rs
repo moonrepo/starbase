@@ -118,41 +118,41 @@ impl<W: Write> ArchivePacker for TarPacker<W> {
 
 pub struct TarUnpacker<R: Read> {
     archive: TarArchive<R>,
-    source_root: PathBuf,
+    output_dir: PathBuf,
 }
 
 impl<R: Read> TarUnpacker<R> {
-    pub fn new(source_root: &Path, reader: R) -> miette::Result<Self> {
-        fs::create_dir_all(source_root)?;
+    pub fn new(output_dir: &Path, reader: R) -> miette::Result<Self> {
+        fs::create_dir_all(output_dir)?;
 
         Ok(TarUnpacker {
             archive: TarArchive::new(reader),
-            source_root: source_root.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
         })
     }
 
-    pub fn new_raw(source_root: &Path, archive_file: &Path) -> miette::Result<TarUnpacker<File>> {
-        TarUnpacker::new(source_root, fs::open_file(archive_file)?)
+    pub fn new_raw(output_dir: &Path, archive_file: &Path) -> miette::Result<TarUnpacker<File>> {
+        TarUnpacker::new(output_dir, fs::open_file(archive_file)?)
     }
 
     #[cfg(feature = "tar-gz")]
     pub fn new_gz(
-        source_root: &Path,
+        output_dir: &Path,
         archive_file: &Path,
     ) -> miette::Result<TarUnpacker<flate2::read::GzDecoder<File>>> {
         TarUnpacker::new(
-            source_root,
+            output_dir,
             flate2::read::GzDecoder::new(fs::open_file(archive_file)?),
         )
     }
 
     #[cfg(feature = "tar-xz")]
     pub fn new_xz(
-        source_root: &Path,
+        output_dir: &Path,
         archive_file: &Path,
     ) -> miette::Result<TarUnpacker<xz2::read::XzDecoder<File>>> {
         TarUnpacker::new(
-            source_root,
+            output_dir,
             xz2::read::XzDecoder::new(fs::open_file(archive_file)?),
         )
     }
@@ -176,7 +176,7 @@ impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
             }
 
             // Unpack the file if different than destination
-            let output_path = self.source_root.join(path);
+            let output_path = self.output_dir.join(path);
 
             if let Some(parent_dir) = output_path.parent() {
                 fs::create_dir_all(parent_dir)?;

@@ -27,7 +27,7 @@ pub struct Archiver<'owner> {
     // Glob to finds files with -> Relative file prefix in archive
     source_globs: FxHashMap<String, String>,
 
-    source_root: &'owner Path,
+    pub source_root: &'owner Path,
 }
 
 impl<'owner> Archiver<'owner> {
@@ -47,12 +47,15 @@ impl<'owner> Archiver<'owner> {
         custom_name: Option<&str>,
     ) -> &mut Self {
         let source = source.as_ref();
-        let name = custom_name
-            .map(|n| n.to_owned())
-            .unwrap_or_else(|| source.to_string_lossy().to_string());
+        let source = source.strip_prefix(self.source_root).unwrap_or(source);
 
-        self.source_files
-            .insert(self.source_root.join(source), name);
+        self.source_files.insert(
+            self.source_root.join(source),
+            custom_name
+                .map(|n| n.to_owned())
+                .unwrap_or_else(|| source.to_string_lossy().to_string()),
+        );
+
         self
     }
 
@@ -139,7 +142,11 @@ impl<'owner> Archiver<'owner> {
             "Unpacking archive",
         );
 
-        let mut differ = TreeDiffer::load(self.source_root, ["**/*"])?; // TODO
+        let mut lookup_paths = vec![];
+        lookup_paths.extend(self.source_files.values());
+        lookup_paths.extend(self.source_globs.keys());
+
+        let mut differ = TreeDiffer::load(self.source_root, lookup_paths)?;
         let mut archive = unpacker(self.source_root, self.archive_file)?;
         let result = archive.unpack(self.prefix, &mut differ);
 
