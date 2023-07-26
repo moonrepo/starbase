@@ -17,6 +17,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
     let args = EventArgs::from_derive_input(&input).expect("Failed to parse arguments.");
 
     let struct_name = input.ident;
+    let generics = input.generics;
     let data_type = match args.dataset {
         Some(value) => quote! { #value },
         None => quote! { () },
@@ -24,7 +25,7 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
 
     quote! {
         #[automatically_derived]
-        impl starbase::Event for #struct_name {
+        impl #generics starbase::Event for #struct_name #generics {
             type Data = #data_type;
         }
     }

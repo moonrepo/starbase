@@ -60,7 +60,7 @@ async fn analyze_one(state: StateMut<TestState>, em: EmitterRef<TestEvent>) {
 
     let event = TestEvent;
     // dbg!(&event);
-    let (_, _data) = em.emit(event).await.unwrap();
+    let _data = em.emit(event).await.unwrap();
     // dbg!(event);
 }
 

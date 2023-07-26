@@ -68,9 +68,8 @@ async fn subscriber() {
     emitter.subscribe(TestSubscriber { inc: 2 }).await;
     emitter.subscribe(TestSubscriber { inc: 3 }).await;
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 6);
 }
 
@@ -81,9 +80,8 @@ async fn subscriber_stop() {
     emitter.subscribe(TestStopSubscriber { inc: 2 }).await;
     emitter.subscribe(TestSubscriber { inc: 3 }).await;
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 3);
 }
 
@@ -96,15 +94,13 @@ async fn subscriber_once() {
 
     assert_eq!(emitter.len().await, 3);
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 9);
     assert_eq!(emitter.len().await, 0);
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 0);
     assert_eq!(emitter.len().await, 0);
 }
@@ -152,9 +148,8 @@ async fn callbacks() {
     emitter.on(callback_two).await;
     emitter.on(callback_three).await;
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 6);
 }
 
@@ -165,9 +160,8 @@ async fn callbacks_stop() {
     emitter.on(callback_stop).await;
     emitter.on(callback_three).await;
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 3);
 }
 
@@ -180,15 +174,13 @@ async fn callbacks_once() {
 
     assert_eq!(emitter.len().await, 3);
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 9);
     assert_eq!(emitter.len().await, 0);
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 0);
     assert_eq!(emitter.len().await, 0);
 }
@@ -204,16 +196,44 @@ async fn preserves_onces_that_didnt_run() {
 
     assert_eq!(emitter.len().await, 5);
 
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 8);
     assert_eq!(emitter.len().await, 3);
 
     // Will stop immediately
-    let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
+    let data = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 0);
     assert_eq!(data, 2);
     assert_eq!(emitter.len().await, 3);
 }
+
+// #[derive(Event)]
+// #[event(dataset = String)]
+// struct TestRefEvent<'e> {
+//     pub name: &'e str,
+//     pub path: &'e Path,
+// }
+
+// #[subscriber]
+// async fn ref_callback(data: &mut TestRefEvent<'_>) -> EventResult {
+//     (*data).push_str(event.name);
+//     Ok(EventState::Continue)
+// }
+
+// #[tokio::test]
+// async fn supports_lifetime_references() {
+//     let emitter = Emitter::<TestRefEvent>::new();
+//     emitter.on(ref_callback).await;
+
+//     let name = String::from("foo");
+//     let path = PathBuf::from("/");
+//     let event = TestRefEvent {
+//         name: &name,
+//         path: &path,
+//     };
+
+//     let data = emitter.emit(event).await.unwrap();
+
+//     assert_eq!(data, "foo");
+// }
