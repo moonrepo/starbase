@@ -1,6 +1,6 @@
 [package]
 name = "starbase_utils"
-version = "0.2.14"
+version = "0.2.15"
 edition = "2021"
 license = "MIT"
 description = "General fs, io, serde, etc, utilities."

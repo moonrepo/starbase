@@ -1260,7 +1260,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -1285,7 +1285,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.2.14"
+version = "0.2.15"
 dependencies = [
  "dirs",
  "ec4rs",
