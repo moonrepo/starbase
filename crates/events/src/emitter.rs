@@ -51,24 +51,27 @@ impl<E: Event + 'static> Emitter<E> {
     ///
     /// When complete, the provided event will be returned along with the value returned
     /// by the subscriber that returned [`EventState::Return`], or [`None`] if not occurred.
-    pub async fn emit(&self, event: E) -> miette::Result<(E, Option<E::Value>)> {
-        let mut result = None;
+    pub async fn emit(&self, event: E) -> miette::Result<EmitResult<E>> {
+        let mut return_value = None;
         let mut remove_indices = HashSet::new();
-        let event = Arc::new(RwLock::new(event));
         let mut subscribers = self.subscribers.write().await;
+
+        let event = Arc::new(event);
+        let data = Arc::new(RwLock::new(E::Data::default()));
 
         for (index, subscriber) in subscribers.iter_mut().enumerate() {
             let event = Arc::clone(&event);
+            let data = Arc::clone(&data);
 
             if subscriber.is_once() {
                 remove_indices.insert(index);
             }
 
-            match subscriber.on_emit(event).await? {
+            match subscriber.on_emit(event, data).await? {
                 EventState::Continue => continue,
                 EventState::Stop => break,
                 EventState::Return(value) => {
-                    result = Some(value);
+                    return_value = Some(value);
                     break;
                 }
             }
@@ -83,8 +86,10 @@ impl<E: Event + 'static> Emitter<E> {
             !remove
         });
 
-        let event = Arc::into_inner(event).unwrap().into_inner();
-
-        Ok((event, result))
+        Ok(EmitResult {
+            event: Arc::into_inner(event).unwrap(),
+            data: Arc::into_inner(data).unwrap().into_inner(),
+            value: return_value,
+        })
     }
 }

@@ -1,5 +1,6 @@
 pub trait Event: Send + Sync {
-    type Value;
+    type Data: Send + Sync + Default;
+    type ReturnValue;
 }
 
 pub enum EventState<V> {
@@ -8,4 +9,10 @@ pub enum EventState<V> {
     Return(V),
 }
 
-pub type EventResult<E> = miette::Result<EventState<<E as Event>::Value>>;
+pub type EventResult<E> = miette::Result<EventState<<E as Event>::ReturnValue>>;
+
+pub struct EmitResult<E: Event> {
+    pub event: E,
+    pub data: E::Data,
+    pub value: Option<E::ReturnValue>,
+}

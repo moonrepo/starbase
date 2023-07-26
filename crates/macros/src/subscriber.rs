@@ -132,7 +132,8 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #attributes
         async fn #func_name(
-            #event_name: std::sync::Arc<tokio::sync::RwLock<#event_type>>
+            event: std::sync::Arc<#event_type>,
+            #event_name: std::sync::Arc<tokio::sync::RwLock<<#event_type as starbase::Event>::Data>>
         ) -> starbase::EventResult<#event_type> {
             #acquire_lock
             #func_body

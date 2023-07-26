@@ -5,7 +5,9 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub use starbase_events::{Emitter, Event, EventResult, EventState, Subscriber, SubscriberFunc};
+pub use starbase_events::{
+    EmitResult, Emitter, Event, EventResult, EventState, Subscriber, SubscriberFunc,
+};
 
 create_instance_manager!(EmitterManager, EmitterInstance);
 
@@ -20,10 +22,7 @@ impl EmitterManager {
     ///
     /// When complete, the provided event will be returned along with the value returned
     /// by the subscriber that returned [`EventState::Return`], or [`None`] if not occurred.
-    pub async fn emit<E: Event + 'static>(
-        &self,
-        event: E,
-    ) -> miette::Result<(E, Option<E::Value>)> {
+    pub async fn emit<E: Event + 'static>(&self, event: E) -> miette::Result<EmitResult<E>> {
         self.get::<Emitter<E>>().emit(event).await
     }
 }
