@@ -213,7 +213,7 @@ async fn preserves_onces_that_didnt_run() {
     // Will stop immediately
     let (event, data) = emitter.emit(TestEvent(0)).await.unwrap();
 
-    assert_eq!(event.0, 2);
-    assert_eq!(data, 0);
+    assert_eq!(event.0, 0);
+    assert_eq!(data, 2);
     assert_eq!(emitter.len().await, 3);
 }

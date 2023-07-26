@@ -10,7 +10,7 @@ mod events {
 
     #[subscriber]
     async fn callback_one(mut data: TestEvent) -> EventResult<TestEvent> {
-        *data += 5;
+        *data += 5 + event.0;
         Ok(EventState::Continue)
     }
 
@@ -22,9 +22,10 @@ mod events {
         let em = ctx.get_mut::<Emitter<TestEvent>>();
         em.on(callback_one).await;
 
-        let (event, _) = em.emit(TestEvent(5)).await.unwrap();
+        let (event, data) = em.emit(TestEvent(5)).await.unwrap();
 
-        assert_eq!(event.0, 10);
+        assert_eq!(event.0, 5);
+        assert_eq!(data, 10);
     }
 }
 
