@@ -2,6 +2,28 @@ use starbase_archive::Archiver;
 use starbase_sandbox::{create_empty_sandbox, create_sandbox};
 
 #[test]
+#[should_panic(expected = "unsupported format wat")]
+fn errors_unknown_ext() {
+    let sandbox = create_sandbox("archives");
+    let tarball = sandbox.path().join("out.wat");
+
+    let mut archiver = Archiver::new(sandbox.path(), &tarball);
+    archiver.add_source_file("file.txt", None);
+    archiver.pack_from_ext().unwrap();
+}
+
+#[test]
+#[should_panic(expected = "could not determine format")]
+fn errors_no_ext() {
+    let sandbox = create_sandbox("archives");
+    let tarball = sandbox.path().join("out");
+
+    let mut archiver = Archiver::new(sandbox.path(), &tarball);
+    archiver.add_source_file("file.txt", None);
+    archiver.pack_from_ext().unwrap();
+}
+
+#[test]
 fn can_add_files() {
     let sandbox = create_sandbox("archives");
     let tarball = sandbox.path().join("out.zip");
