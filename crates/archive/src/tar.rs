@@ -3,7 +3,6 @@ use crate::tree_differ::TreeDiffer;
 use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
 use starbase_utils::fs::{self, FsError};
-use std::fs::File;
 use std::io::{prelude::*, Write};
 use std::path::{Path, PathBuf};
 use tar::{Archive as TarArchive, Builder as TarBuilder};
@@ -120,13 +119,13 @@ impl ArchivePacker for TarPacker {
     }
 }
 
-pub struct TarUnpacker<R: Read> {
-    archive: TarArchive<R>,
+pub struct TarUnpacker {
+    archive: TarArchive<Box<dyn Read>>,
     output_dir: PathBuf,
 }
 
-impl<R: Read> TarUnpacker<R> {
-    pub fn new(output_dir: &Path, reader: R) -> miette::Result<Self> {
+impl TarUnpacker {
+    pub fn create(output_dir: &Path, reader: Box<dyn Read>) -> miette::Result<Self> {
         fs::create_dir_all(output_dir)?;
 
         Ok(TarUnpacker {
@@ -135,34 +134,28 @@ impl<R: Read> TarUnpacker<R> {
         })
     }
 
-    pub fn new_raw(output_dir: &Path, input_file: &Path) -> miette::Result<TarUnpacker<File>> {
-        TarUnpacker::new(output_dir, fs::open_file(input_file)?)
+    pub fn new_raw(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+        TarUnpacker::create(output_dir, Box::new(fs::open_file(input_file)?))
     }
 
     #[cfg(feature = "tar-gz")]
-    pub fn new_gz(
-        output_dir: &Path,
-        input_file: &Path,
-    ) -> miette::Result<TarUnpacker<flate2::read::GzDecoder<File>>> {
-        TarUnpacker::new(
+    pub fn new_gz(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+        TarUnpacker::create(
             output_dir,
-            flate2::read::GzDecoder::new(fs::open_file(input_file)?),
+            Box::new(flate2::read::GzDecoder::new(fs::open_file(input_file)?)),
         )
     }
 
     #[cfg(feature = "tar-xz")]
-    pub fn new_xz(
-        output_dir: &Path,
-        input_file: &Path,
-    ) -> miette::Result<TarUnpacker<xz2::read::XzDecoder<File>>> {
-        TarUnpacker::new(
+    pub fn new_xz(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+        TarUnpacker::create(
             output_dir,
-            xz2::read::XzDecoder::new(fs::open_file(input_file)?),
+            Box::new(xz2::read::XzDecoder::new(fs::open_file(input_file)?)),
         )
     }
 }
 
-impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
+impl ArchiveUnpacker for TarUnpacker {
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
         self.archive.set_overwrite(true);
 

@@ -53,9 +53,9 @@ pub struct ZipPacker {
 }
 
 impl ZipPacker {
-    pub fn new(archive_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_file: &Path) -> miette::Result<Self> {
         Ok(ZipPacker {
-            archive: ZipWriter::new(fs::create_file(archive_file)?),
+            archive: ZipWriter::new(fs::create_file(output_file)?),
         })
     }
 }
@@ -132,11 +132,11 @@ pub struct ZipUnpacker {
 }
 
 impl ZipUnpacker {
-    pub fn new(output_dir: &Path, archive_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
         fs::create_dir_all(output_dir)?;
 
         Ok(ZipUnpacker {
-            archive: ZipArchive::new(fs::open_file(archive_file)?)
+            archive: ZipArchive::new(fs::open_file(input_file)?)
                 .map_err(|error| ZipError::UnpackFailure { error })?,
             output_dir: output_dir.to_path_buf(),
         })
