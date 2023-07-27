@@ -78,7 +78,7 @@ impl<'owner> Archiver<'owner> {
 
     pub fn pack<F, P>(&self, packer: F) -> miette::Result<()>
     where
-        F: FnOnce(&Path, &Path) -> miette::Result<P>,
+        F: FnOnce(&Path) -> miette::Result<P>,
         P: ArchivePacker,
     {
         trace!(
@@ -87,7 +87,7 @@ impl<'owner> Archiver<'owner> {
             "Packing archive",
         );
 
-        let mut archive = packer(self.source_root, self.archive_file)?;
+        let mut archive = packer(self.archive_file)?;
 
         for (source, file) in &self.source_files {
             if !source.exists() {

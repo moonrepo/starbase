@@ -13,10 +13,6 @@ use zip::{result::ZipError as BaseZipError, CompressionMethod, ZipArchive, ZipWr
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ZipError {
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    Fs(#[from] FsError),
-
     #[diagnostic(code(zip::pack::add))]
     #[error("Failed to add source {} to archive.", .source.style(Style::Path))]
     AddFailure {
@@ -53,9 +49,9 @@ pub struct ZipPacker {
 }
 
 impl ZipPacker {
-    pub fn new(archive_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_file: &Path) -> miette::Result<Self> {
         Ok(ZipPacker {
-            archive: ZipWriter::new(fs::create_file(archive_file)?),
+            archive: ZipWriter::new(fs::create_file(output_file)?),
         })
     }
 }
@@ -81,11 +77,9 @@ impl ArchivePacker for ZipPacker {
 
         self.archive
             .write_all(fs::read_file(file)?.as_bytes())
-            .map_err(|error| {
-                ZipError::Fs(FsError::Write {
-                    path: file.to_path_buf(),
-                    error,
-                })
+            .map_err(|error| FsError::Write {
+                path: file.to_path_buf(),
+                error,
             })?;
 
         Ok(())
@@ -132,11 +126,11 @@ pub struct ZipUnpacker {
 }
 
 impl ZipUnpacker {
-    pub fn new(output_dir: &Path, archive_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
         fs::create_dir_all(output_dir)?;
 
         Ok(ZipUnpacker {
-            archive: ZipArchive::new(fs::open_file(archive_file)?)
+            archive: ZipArchive::new(fs::open_file(input_file)?)
                 .map_err(|error| ZipError::UnpackFailure { error })?,
             output_dir: output_dir.to_path_buf(),
         })

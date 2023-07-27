@@ -15,7 +15,7 @@ fn can_add_files() {
         sandbox.path().join("folder/nested.json"),
         Some("folder/nested-renamed.json"),
     );
-    archiver.pack(|_, o| ZipPacker::new(o)).unwrap();
+    archiver.pack(ZipPacker::new).unwrap();
 
     let out = create_empty_sandbox();
 
@@ -39,7 +39,7 @@ fn can_add_files_with_prefix() {
     archiver.set_prefix("prefix");
     archiver.add_source_file("file.txt", None);
     archiver.add_source_file("data.json", Some("data-renamed.json"));
-    archiver.pack(|_, o| ZipPacker::new(o)).unwrap();
+    archiver.pack(ZipPacker::new).unwrap();
 
     let out = create_empty_sandbox();
 
@@ -61,7 +61,7 @@ fn can_add_files_with_prefix_and_remove_when_unpacking() {
     archiver.set_prefix("prefix");
     archiver.add_source_file("file.txt", None);
     archiver.add_source_file("data.json", Some("data-renamed.json"));
-    archiver.pack(|_, o| ZipPacker::new(o)).unwrap();
+    archiver.pack(ZipPacker::new).unwrap();
 
     let out = create_empty_sandbox();
 
@@ -80,7 +80,7 @@ fn can_add_globs() {
 
     let mut archiver = Archiver::new(sandbox.path(), &tarball);
     archiver.add_source_glob("**/*.json", None);
-    archiver.pack(|_, o| ZipPacker::new(o)).unwrap();
+    archiver.pack(ZipPacker::new).unwrap();
 
     let out = create_empty_sandbox();
 
@@ -101,7 +101,7 @@ fn can_add_globs_with_group() {
 
     let mut archiver = Archiver::new(sandbox.path(), &tarball);
     archiver.add_source_glob("**/*.json", Some("group"));
-    archiver.pack(|_, o| ZipPacker::new(o)).unwrap();
+    archiver.pack(ZipPacker::new).unwrap();
 
     let out = create_empty_sandbox();
 
@@ -123,7 +123,7 @@ fn can_add_globs_with_group_and_prefix() {
     let mut archiver = Archiver::new(sandbox.path(), &tarball);
     archiver.set_prefix("prefix");
     archiver.add_source_glob("**/*.json", Some("group"));
-    archiver.pack(|_, o| ZipPacker::new(o)).unwrap();
+    archiver.pack(ZipPacker::new).unwrap();
 
     let out = create_empty_sandbox();
 
@@ -149,7 +149,7 @@ fn can_add_globs_with_prefix_and_remove_when_unpacking() {
     let mut archiver = Archiver::new(sandbox.path(), &tarball);
     archiver.set_prefix("prefix");
     archiver.add_source_glob("**/*.json", None);
-    archiver.pack(|_, o| ZipPacker::new(o)).unwrap();
+    archiver.pack(ZipPacker::new).unwrap();
 
     let out = create_empty_sandbox();
 
@@ -171,7 +171,7 @@ fn can_add_globs_with_group_and_prefix_and_remove_when_unpacking() {
     let mut archiver = Archiver::new(sandbox.path(), &tarball);
     archiver.set_prefix("prefix");
     archiver.add_source_glob("**/*.json", Some("group"));
-    archiver.pack(|_, o| ZipPacker::new(o)).unwrap();
+    archiver.pack(ZipPacker::new).unwrap();
 
     let out = create_empty_sandbox();
 
