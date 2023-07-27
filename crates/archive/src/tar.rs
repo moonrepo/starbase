@@ -2,7 +2,7 @@ use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::tree_differ::TreeDiffer;
 use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
-use starbase_utils::fs::{self, FsError};
+use starbase_utils::fs;
 use std::io::{prelude::*, Write};
 use std::path::{Path, PathBuf};
 use tar::{Archive as TarArchive, Builder as TarBuilder};
@@ -10,10 +10,6 @@ use thiserror::Error;
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum TarError {
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    Fs(#[from] FsError),
-
     #[diagnostic(code(tar::pack::add))]
     #[error("Failed to add source {} to archive.", .source.style(Style::Path))]
     AddFailure {

@@ -13,10 +13,6 @@ use zip::{result::ZipError as BaseZipError, CompressionMethod, ZipArchive, ZipWr
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum ZipError {
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    Fs(#[from] FsError),
-
     #[diagnostic(code(zip::pack::add))]
     #[error("Failed to add source {} to archive.", .source.style(Style::Path))]
     AddFailure {
@@ -81,11 +77,9 @@ impl ArchivePacker for ZipPacker {
 
         self.archive
             .write_all(fs::read_file(file)?.as_bytes())
-            .map_err(|error| {
-                ZipError::Fs(FsError::Write {
-                    path: file.to_path_buf(),
-                    error,
-                })
+            .map_err(|error| FsError::Write {
+                path: file.to_path_buf(),
+                error,
             })?;
 
         Ok(())
