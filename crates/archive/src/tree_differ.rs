@@ -5,6 +5,9 @@ use std::io::{self, BufReader, Read, Seek};
 use std::path::{Path, PathBuf};
 use tracing::trace;
 
+/// The `TreeDiffer` will compare files within in archive to files
+/// at the destination, and only unpack files that differ, and also
+/// remove files from the destination that are not in the archive.
 pub struct TreeDiffer {
     /// A mapping of all files in the destination directory.
     pub files: FxHashSet<PathBuf>,

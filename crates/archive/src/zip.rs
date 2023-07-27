@@ -44,11 +44,13 @@ pub enum ZipError {
     },
 }
 
+/// Creates zip archives.
 pub struct ZipPacker {
     archive: ZipWriter<File>,
 }
 
 impl ZipPacker {
+    /// Create a new `.zip` packer.
     pub fn new(output_file: &Path) -> miette::Result<Self> {
         Ok(ZipPacker {
             archive: ZipWriter::new(fs::create_file(output_file)?),
@@ -120,12 +122,14 @@ impl ArchivePacker for ZipPacker {
     }
 }
 
+/// Opens zip archives.
 pub struct ZipUnpacker {
     archive: ZipArchive<File>,
     output_dir: PathBuf,
 }
 
 impl ZipUnpacker {
+    /// Create a new `.zip` unpacker.
     pub fn new(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
         fs::create_dir_all(output_dir)?;
 
