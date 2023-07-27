@@ -128,7 +128,7 @@ impl TreeDiffer {
         let mut dest = fs::open_file(dest_path)?;
 
         if self.are_files_equal(source, &mut dest) {
-            return Ok(true);
+            return Ok(false);
         }
 
         // Reset read pointer to the start of the buffer
