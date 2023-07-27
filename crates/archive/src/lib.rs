@@ -1,6 +1,8 @@
+/// Handle `.tar`, `.tar.gz`, and `.tar.xz` files.
 #[cfg(feature = "tar")]
 pub mod tar;
 
+/// Handle `.zip` files.
 #[cfg(feature = "zip")]
 pub mod zip;
 

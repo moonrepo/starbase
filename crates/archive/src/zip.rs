@@ -49,6 +49,7 @@ pub struct ZipPacker {
 }
 
 impl ZipPacker {
+    /// Create a new `.zip` packer.
     pub fn new(output_file: &Path) -> miette::Result<Self> {
         Ok(ZipPacker {
             archive: ZipWriter::new(fs::create_file(output_file)?),
@@ -126,6 +127,7 @@ pub struct ZipUnpacker {
 }
 
 impl ZipUnpacker {
+    /// Create a new `.zip` unpacker.
     pub fn new(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
         fs::create_dir_all(output_dir)?;
 

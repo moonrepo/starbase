@@ -5,32 +5,43 @@ use starbase_utils::{fs, glob};
 use std::path::{Path, PathBuf};
 use tracing::trace;
 
+/// Abstraction for packing archives.
 pub trait ArchivePacker {
     fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()>;
     fn add_dir(&mut self, name: &str, dir: &Path) -> miette::Result<()>;
     fn pack(&mut self) -> miette::Result<()>;
 }
 
+/// Abstract for unpacking archives.
 pub trait ArchiveUnpacker {
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()>;
 }
 
+/// An `Archiver` is an abstraction for packing and unpacking archives,
+/// that utilizes the same set of sources for both operations. For packing,
+/// the sources are the files that will be included in the archive. For unpacking,
+/// the sources are used for file tree diffing when extracting the archive.
 #[derive(Debug)]
 pub struct Archiver<'owner> {
+    /// The archive file itself (`.zip`, etc).
     archive_file: &'owner Path,
 
+    /// Prefix to append to all files.
     prefix: &'owner str,
 
-    // Absolute file path to source -> Relative file path in archive
+    /// Absolute file path to source, to relative file path in archive.
     source_files: FxHashMap<PathBuf, String>,
 
-    // Glob to finds files with -> Relative file prefix in archive
+    /// Glob to finds files with, to relative file prefix in archive.
     source_globs: FxHashMap<String, String>,
 
+    /// For packing, the root to prefix source files with.
+    /// For unpacking, the root to extract files relative to.
     pub source_root: &'owner Path,
 }
 
 impl<'owner> Archiver<'owner> {
+    /// Create a new archiver.
     pub fn new(source_root: &'owner Path, archive_file: &'owner Path) -> Self {
         Archiver {
             archive_file,
@@ -41,6 +52,13 @@ impl<'owner> Archiver<'owner> {
         }
     }
 
+    /// Add a source file to be used in the archiving process. The file path
+    /// can be relative from the source root, or absolute. A custom file path
+    /// can be used within the archive, otherwise the file will be placed
+    /// relative from the source root.
+    ///
+    /// For packing, this includes the file in the archive.
+    /// For unpacking, this diffs the file when extracting.
     pub fn add_source_file<F: AsRef<Path>>(
         &mut self,
         source: F,
@@ -59,6 +77,12 @@ impl<'owner> Archiver<'owner> {
         self
     }
 
+    /// Add a glob that'll find files, relative from the source root, to be
+    /// used in the archiving process. A custom prefix can be passed that'll be
+    /// appended to all files within the archive.
+    ///
+    /// For packing, this finds files to include in the archive.
+    /// For unpacking, this finds files to diff against when extracting.
     pub fn add_source_glob<G: AsRef<str>>(
         &mut self,
         glob: G,
@@ -71,11 +95,16 @@ impl<'owner> Archiver<'owner> {
         self
     }
 
+    /// Set the prefix to prepend to files wth when packing,
+    /// and to remove when unpacking.
     pub fn set_prefix(&mut self, prefix: &'owner str) -> &mut Self {
         self.prefix = prefix;
         self
     }
 
+    /// Pack and create the archive with the added source, using the
+    /// provided packer factory. The factory is passed an absolute
+    /// path to the destination archive file.
     pub fn pack<F, P>(&self, packer: F) -> miette::Result<()>
     where
         F: FnOnce(&Path) -> miette::Result<P>,
@@ -131,6 +160,14 @@ impl<'owner> Archiver<'owner> {
         Ok(())
     }
 
+    /// Unpack the archive to the destination root, using the provided
+    /// unpacker factory. The factory is passed an absolute path
+    /// to the output directory, and the input archive file.
+    ///
+    /// When unpacking, we compare files at the destination to those
+    /// in the archive, and only unpack the files if they differ.
+    /// Furthermore, files at the destination that are not in the
+    /// archive are removed entirely.
     pub fn unpack<F, P>(&self, unpacker: F) -> miette::Result<()>
     where
         F: FnOnce(&Path, &Path) -> miette::Result<P>,
