@@ -8,5 +8,5 @@ use std::path::Path;
 mod zip {
     use super::*;
 
-    generate_tests!("out.zip", |_, file| ZipPacker::new(file), ZipUnpacker::new);
+    generate_tests!("out.zip", ZipPacker::new, ZipUnpacker::new);
 }
