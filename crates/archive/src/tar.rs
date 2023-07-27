@@ -130,7 +130,7 @@ impl TarUnpacker {
         })
     }
 
-    pub fn new_raw(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
         TarUnpacker::create(output_dir, Box::new(fs::open_file(input_file)?))
     }
 
