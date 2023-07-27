@@ -41,6 +41,7 @@ pub enum TarError {
     },
 }
 
+/// Creates tar archives.
 pub struct TarPacker {
     archive: TarBuilder<Box<dyn Write>>,
 }
@@ -121,6 +122,7 @@ impl ArchivePacker for TarPacker {
     }
 }
 
+/// Opens tar archives.
 pub struct TarUnpacker {
     archive: TarArchive<Box<dyn Read>>,
     output_dir: PathBuf,

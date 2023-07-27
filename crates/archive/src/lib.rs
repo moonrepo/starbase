@@ -7,9 +7,11 @@ pub mod tar;
 pub mod zip;
 
 mod archive;
+mod archive_error;
 mod tree_differ;
 
 pub use archive::*;
+pub use archive_error::*;
 pub use tree_differ::*;
 
 // Use native path utils to join the paths, so we can ensure

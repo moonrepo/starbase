@@ -1,3 +1,4 @@
+use crate::archive_error::ArchiveError;
 use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
 use rustc_hash::FxHashMap;
@@ -7,13 +8,20 @@ use tracing::trace;
 
 /// Abstraction for packing archives.
 pub trait ArchivePacker {
+    /// Add the source file to the archive.
     fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()>;
+
+    /// Add the source directory to the archive.
     fn add_dir(&mut self, name: &str, dir: &Path) -> miette::Result<()>;
+
+    /// Create the archive and write all contents to disk.
     fn pack(&mut self) -> miette::Result<()>;
 }
 
 /// Abstract for unpacking archives.
 pub trait ArchiveUnpacker {
+    /// Unpack the archive to the destination directory. If a prefix is provided,
+    /// remove it from the start of all file paths within the archive.
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()>;
 }
 
@@ -35,7 +43,7 @@ pub struct Archiver<'owner> {
     /// Glob to finds files with, to relative file prefix in archive.
     source_globs: FxHashMap<String, String>,
 
-    /// For packing, the root to prefix source files with.
+    /// For packing, the root to join source files with.
     /// For unpacking, the root to extract files relative to.
     pub source_root: &'owner Path,
 }
@@ -160,6 +168,72 @@ impl<'owner> Archiver<'owner> {
         Ok(())
     }
 
+    /// Determine the packer to use based on the archive file extension,
+    /// then pack the archive using [`pack`].
+    pub fn pack_from_ext(&self) -> miette::Result<()> {
+        match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
+            Some("tar") => {
+                #[cfg(feature = "tar")]
+                self.pack(crate::tar::TarPacker::new)?;
+
+                #[cfg(not(feature = "tar"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some("tgz" | "gz") => {
+                #[cfg(feature = "tar-gz")]
+                self.pack(crate::tar::TarPacker::new_gz)?;
+
+                #[cfg(not(feature = "tar-gz"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-gz".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some("txz" | "xz") => {
+                #[cfg(feature = "tar-xz")]
+                self.pack(crate::tar::TarPacker::new_xz)?;
+
+                #[cfg(not(feature = "tar-xz"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-xz".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some("zip") => {
+                #[cfg(feature = "zip")]
+                self.pack(crate::zip::ZipPacker::new)?;
+
+                #[cfg(not(feature = "zip"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "zip".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some(ext) => {
+                return Err(ArchiveError::UnsupportedFormat {
+                    format: ext.into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            None => {
+                return Err(ArchiveError::UnknownFormat {
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+        };
+
+        Ok(())
+    }
+
     /// Unpack the archive to the destination root, using the provided
     /// unpacker factory. The factory is passed an absolute path
     /// to the output directory, and the input archive file.
@@ -199,5 +273,71 @@ impl<'owner> Archiver<'owner> {
         differ.remove_stale_tracked_files();
 
         result
+    }
+
+    /// Determine the unpacker to use based on the archive file extension,
+    /// then unpack the archive using [`unpack`].
+    pub fn unpack_from_ext(&self) -> miette::Result<()> {
+        match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
+            Some("tar") => {
+                #[cfg(feature = "tar")]
+                self.unpack(crate::tar::TarUnpacker::new)?;
+
+                #[cfg(not(feature = "tar"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some("tgz" | "gz") => {
+                #[cfg(feature = "tar-gz")]
+                self.unpack(crate::tar::TarUnpacker::new_gz)?;
+
+                #[cfg(not(feature = "tar-gz"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-gz".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some("txz" | "xz") => {
+                #[cfg(feature = "tar-xz")]
+                self.unpack(crate::tar::TarUnpacker::new_xz)?;
+
+                #[cfg(not(feature = "tar-xz"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-xz".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some("zip") => {
+                #[cfg(feature = "zip")]
+                self.unpack(crate::zip::ZipUnpacker::new)?;
+
+                #[cfg(not(feature = "zip"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "zip".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some(ext) => {
+                return Err(ArchiveError::UnsupportedFormat {
+                    format: ext.into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            None => {
+                return Err(ArchiveError::UnknownFormat {
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+        };
+
+        Ok(())
     }
 }

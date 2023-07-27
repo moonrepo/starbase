@@ -44,6 +44,7 @@ pub enum ZipError {
     },
 }
 
+/// Creates zip archives.
 pub struct ZipPacker {
     archive: ZipWriter<File>,
 }
@@ -121,6 +122,7 @@ impl ArchivePacker for ZipPacker {
     }
 }
 
+/// Opens zip archives.
 pub struct ZipUnpacker {
     archive: ZipArchive<File>,
     output_dir: PathBuf,
