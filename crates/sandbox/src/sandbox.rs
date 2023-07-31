@@ -5,6 +5,8 @@ use assert_cmd::Command;
 use assert_fs::prelude::*;
 use assert_fs::TempDir;
 use starbase_utils::fs;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::Path;
 use std::process::{Command as StdCommand, Output};
 
@@ -16,6 +18,27 @@ impl Sandbox {
     /// Return a path to the sandbox root.
     pub fn path(&self) -> &Path {
         self.fixture.path()
+    }
+
+    /// Append a file at the defined path with the provided content.
+    /// If the file does not exist, it will be created.
+    pub fn append_file<N: AsRef<str>, T: AsRef<str>>(&self, name: N, content: T) -> &Self {
+        let name = name.as_ref();
+        let path = self.path().join(name);
+
+        if path.exists() {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .append(true)
+                .open(path)
+                .unwrap();
+
+            writeln!(file, "\n\n{}", content.as_ref()).unwrap();
+        } else {
+            self.create_file(name, content);
+        }
+
+        self
     }
 
     /// Create a file at the defined path with the provided content.
