@@ -1301,7 +1301,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "flate2",
  "miette",
