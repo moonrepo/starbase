@@ -2,7 +2,7 @@ use crate::archive_error::ArchiveError;
 use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
 use rustc_hash::FxHashMap;
-use starbase_utils::{fs, glob};
+use starbase_utils::glob;
 use std::path::{Path, PathBuf};
 use tracing::trace;
 
@@ -259,20 +259,11 @@ impl<'owner> Archiver<'owner> {
 
         let mut differ = TreeDiffer::load(self.source_root, lookup_paths)?;
         let mut archive = unpacker(self.source_root, self.archive_file)?;
-        let result = archive.unpack(self.prefix, &mut differ);
 
-        if result.is_err() {
-            trace!(
-                output_dir = ?self.source_root,
-                "Failed to unpack archive, removing partially extracted files",
-            );
-
-            fs::remove_dir_all(self.source_root)?;
-        }
-
+        archive.unpack(self.prefix, &mut differ)?;
         differ.remove_stale_tracked_files();
 
-        result
+        Ok(())
     }
 
     /// Determine the unpacker to use based on the archive file extension,
