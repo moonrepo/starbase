@@ -64,7 +64,7 @@ impl ArchivePacker for ZipPacker {
         trace!(source = name, input = ?file, "Packing file");
 
         #[allow(unused_mut)] // windows
-        let mut options = FileOptions::default().compression_method(CompressionMethod::Stored);
+        let mut options = FileOptions::default().compression_method(CompressionMethod::Deflated);
 
         #[cfg(unix)]
         {
@@ -81,7 +81,7 @@ impl ArchivePacker for ZipPacker {
             })?;
 
         self.archive
-            .write_all(&fs::read_file_bytes(file)?)
+            .write_all(&std::fs::read(file).unwrap())
             .map_err(|error| FsError::Write {
                 path: file.to_path_buf(),
                 error,
@@ -96,7 +96,7 @@ impl ArchivePacker for ZipPacker {
         self.archive
             .add_directory(
                 name,
-                FileOptions::default().compression_method(CompressionMethod::Stored),
+                FileOptions::default().compression_method(CompressionMethod::Deflated),
             )
             .map_err(|error| ZipError::AddFailure {
                 source: dir.to_path_buf(),
