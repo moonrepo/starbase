@@ -36,20 +36,20 @@ impl TreeDiffer {
 
         let mut globs = vec![];
 
-        for path in lookup_paths {
-            let path = path.as_ref();
+        for lookup in lookup_paths {
+            let lookup = lookup.as_ref();
 
-            if glob::is_glob(path) {
-                globs.push(path.to_owned());
+            if glob::is_glob(lookup) {
+                globs.push(lookup.to_owned());
             } else {
-                let path = dest_root.join(path);
+                let path = dest_root.join(lookup);
 
                 if path.is_file() {
-                    trace!(file = ?path, "Tracking file");
+                    trace!(source = lookup, file = ?path, "Tracking file");
 
                     track(path);
                 } else if path.is_dir() {
-                    trace!(dir = ?path, "Tracking directory");
+                    trace!(source = lookup, dir = ?path, "Tracking directory");
 
                     for file in fs::read_dir_all(path)? {
                         track(file.path());

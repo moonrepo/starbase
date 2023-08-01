@@ -7,6 +7,7 @@ use std::io::{prelude::*, Write};
 use std::path::{Path, PathBuf};
 use tar::{Archive as TarArchive, Builder as TarBuilder};
 use thiserror::Error;
+use tracing::trace;
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum TarError {
@@ -92,6 +93,8 @@ impl TarPacker {
 
 impl ArchivePacker for TarPacker {
     fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()> {
+        trace!(source = name, input = ?file, "Packing file");
+
         self.archive
             .append_file(name, &mut fs::open_file(file)?)
             .map_err(|error| TarError::AddFailure {
@@ -103,6 +106,8 @@ impl ArchivePacker for TarPacker {
     }
 
     fn add_dir(&mut self, name: &str, dir: &Path) -> miette::Result<()> {
+        trace!(source = name, input = ?dir, "Packing directory");
+
         self.archive
             .append_dir_all(name, dir)
             .map_err(|error| TarError::AddFailure {
@@ -114,6 +119,8 @@ impl ArchivePacker for TarPacker {
     }
 
     fn pack(&mut self) -> miette::Result<()> {
+        trace!("Creating tarball");
+
         self.archive
             .finish()
             .map_err(|error| TarError::PackFailure { error })?;
@@ -167,6 +174,8 @@ impl ArchiveUnpacker for TarUnpacker {
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
         self.archive.set_overwrite(true);
 
+        trace!("Opening tarball");
+
         for entry in self
             .archive
             .entries()
@@ -181,11 +190,13 @@ impl ArchiveUnpacker for TarUnpacker {
             }
 
             // Unpack the file if different than destination
-            let output_path = self.output_dir.join(path);
+            let output_path = self.output_dir.join(&path);
 
             if let Some(parent_dir) = output_path.parent() {
                 fs::create_dir_all(parent_dir)?;
             }
+
+            trace!(source = ?path, output = ?output_path, "Unpacking file");
 
             // NOTE: gzip doesn't support seeking, so we can't use the following util then!
             // if differ.should_write_source(entry.size(), &mut entry, &output_path)? {

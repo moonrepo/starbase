@@ -136,12 +136,8 @@ impl<'owner> Archiver<'owner> {
             let name = join_file_name([self.prefix, file]);
 
             if source.is_file() {
-                trace!(source = ?source, "Packing file");
-
                 archive.add_file(&name, source)?;
             } else {
-                trace!(source = ?source, "Packing directory");
-
                 archive.add_dir(&name, source)?;
             }
         }
