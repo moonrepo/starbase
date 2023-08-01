@@ -81,7 +81,7 @@ impl ArchivePacker for ZipPacker {
             })?;
 
         self.archive
-            .write_all(&std::fs::read(file).unwrap())
+            .write_all(&fs::read_file_bytes(file)?)
             .map_err(|error| FsError::Write {
                 path: file.to_path_buf(),
                 error,
