@@ -528,7 +528,7 @@ pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), Fs
     let path = path.as_ref();
     let mode = mode.unwrap_or(0o755);
 
-    trace!(file = ?path, mode, "Updating file permissions");
+    trace!(file = ?path, mode = format!("{:#02o}", mode), "Updating file permissions");
 
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|error| {
         FsError::Perms {
