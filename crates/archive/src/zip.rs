@@ -156,7 +156,7 @@ impl ZipUnpacker {
 
 impl ArchiveUnpacker for ZipUnpacker {
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
-        trace!("Opening zip");
+        trace!(output_dir = ?self.output_dir, "Opening zip");
 
         for i in 0..self.archive.len() {
             let mut file = self
@@ -184,7 +184,7 @@ impl ArchiveUnpacker for ZipUnpacker {
             // If a file, copy it to the output dir
             // if file.is_file() && differ.should_write_source(file.size(), &mut file, &output_path)? {
             if file.is_file() {
-                trace!(source = ?path, output = ?output_path, "Unpacking file");
+                trace!(source = ?path, "Unpacking file");
 
                 let mut out = fs::create_file(&output_path)?;
 

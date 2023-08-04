@@ -174,7 +174,7 @@ impl ArchiveUnpacker for TarUnpacker {
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
         self.archive.set_overwrite(true);
 
-        trace!("Opening tarball");
+        trace!(output_dir = ?self.output_dir, "Opening tarball");
 
         for entry in self
             .archive
@@ -196,7 +196,7 @@ impl ArchiveUnpacker for TarUnpacker {
                 fs::create_dir_all(parent_dir)?;
             }
 
-            trace!(source = ?path, output = ?output_path, "Unpacking file");
+            trace!(source = ?path, "Unpacking file");
 
             // NOTE: gzip doesn't support seeking, so we can't use the following util then!
             // if differ.should_write_source(entry.size(), &mut entry, &output_path)? {

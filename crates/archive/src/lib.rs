@@ -14,6 +14,8 @@ pub use archive::*;
 pub use archive_error::*;
 pub use tree_differ::*;
 
+use std::path::Path;
+
 // Use native path utils to join the paths, so we can ensure
 // the parts are joined correctly within the archive!
 pub fn join_file_name<I, V>(parts: I) -> String
@@ -34,4 +36,19 @@ where
         })
         .collect::<Vec<_>>()
         .join("/")
+}
+
+/// Return true if the file path has a supported archive extension.
+/// This does not check against feature flags!
+pub fn is_supported_archive_extension(path: &Path) -> bool {
+    path.extension()
+        .map(|ext| {
+            ext == "tar"
+                || ext == "tgz"
+                || ext == "gz"
+                || ext == "txz"
+                || ext == "xz"
+                || ext == "zip"
+        })
+        .unwrap_or(false)
 }
