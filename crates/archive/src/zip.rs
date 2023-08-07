@@ -61,8 +61,6 @@ impl ZipPacker {
 
 impl ArchivePacker for ZipPacker {
     fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()> {
-        trace!(source = name, input = ?file, "Packing file");
-
         #[allow(unused_mut)] // windows
         let mut options = FileOptions::default().compression_method(CompressionMethod::Deflated);
 
@@ -81,7 +79,7 @@ impl ArchivePacker for ZipPacker {
             })?;
 
         self.archive
-            .write_all(&std::fs::read(file).unwrap())
+            .write_all(&fs::read_file_bytes(file)?)
             .map_err(|error| FsError::Write {
                 path: file.to_path_buf(),
                 error,
@@ -161,7 +159,7 @@ impl ArchiveUnpacker for ZipUnpacker {
         for i in 0..self.archive.len() {
             let mut file = self
                 .archive
-                .by_index_raw(i)
+                .by_index(i)
                 .map_err(|error| ZipError::UnpackFailure { error })?;
 
             let mut path = match file.enclosed_name() {
@@ -184,8 +182,6 @@ impl ArchiveUnpacker for ZipUnpacker {
             // If a file, copy it to the output dir
             // if file.is_file() && differ.should_write_source(file.size(), &mut file, &output_path)? {
             if file.is_file() {
-                trace!(source = ?path, "Unpacking file");
-
                 let mut out = fs::create_file(&output_path)?;
 
                 io::copy(&mut file, &mut out).map_err(|error| ZipError::ExtractFailure {

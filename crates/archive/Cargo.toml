@@ -22,7 +22,7 @@ thiserror = { workspace = true }
 flate2 = { version = "1.0.26", optional = true }
 
 # tar
-tar = { version = "0.4.39", optional = true }
+tar = { version = "0.4.40", optional = true }
 xz2 = { version = "0.1.7", optional = true }
 
 # zip

@@ -93,8 +93,6 @@ impl TarPacker {
 
 impl ArchivePacker for TarPacker {
     fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()> {
-        trace!(source = name, input = ?file, "Packing file");
-
         self.archive
             .append_file(name, &mut fs::open_file(file)?)
             .map_err(|error| TarError::AddFailure {
