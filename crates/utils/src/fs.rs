@@ -226,7 +226,7 @@ where
     }
 
     match dir.parent() {
-        Some(parent_dir) => find_upwards(name, parent_dir),
+        Some(parent_dir) => find_upwards_root(name, parent_dir),
         None => None,
     }
 }
