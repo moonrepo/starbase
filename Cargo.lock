@@ -1366,7 +1366,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.2.17"
+version = "0.2.18"
 dependencies = [
  "dirs",
  "ec4rs",
