@@ -10,7 +10,7 @@ repository = "https://github.com/moonrepo/starbase"
 all-features = true
 
 [dependencies]
-starbase_styles = { version = "0.1.12", path = "../styles" }
+starbase_styles = { version = "0.1.13", path = "../styles" }
 dirs = "5.0.1"
 miette = { workspace = true }
 once_cell = { workspace = true }
