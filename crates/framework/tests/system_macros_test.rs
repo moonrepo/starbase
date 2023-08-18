@@ -39,7 +39,7 @@ async fn read_state_arg(arg: StateRef<State1>) {
     dbg!(arg);
 }
 
-#[system]
+#[system(instrument = false)]
 async fn read_state_arg_multi(arg1: StateRef<State1>, arg2: StateRef<State2>) {
     dbg!(arg1);
     dbg!(arg2);
@@ -116,7 +116,7 @@ async fn write_resources(resources: ResourcesMut) {
     resources.set(Resource1 { field: 123 });
 }
 
-#[system]
+#[system(instrument = false)]
 async fn write_resources_renamed(other: ResourcesMut) {
     dbg!(other);
 }
@@ -156,7 +156,7 @@ fn default_params_renamed(a: States, b: Resources, c: Emitters) {
     dbg!(a, b, c);
 }
 
-#[system]
+#[system(instrument = false)]
 fn no_args() {
     dbg!("none");
 }

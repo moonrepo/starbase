@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 use std::any::{type_name, Any, TypeId};
 use std::fmt::Debug;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 pub use starbase_events::{Emitter, Event, EventResult, EventState, Subscriber, SubscriberFunc};
 
@@ -28,3 +28,9 @@ impl EmitterManager {
 impl<E: Event + 'static> EmitterInstance for Emitter<E> {}
 
 pub type Emitters = Arc<RwLock<EmitterManager>>;
+
+// Not used directly but provides types for #[system] macro
+pub type EmittersRef = RwLockReadGuard<'static, EmitterManager>;
+pub type EmittersMut = RwLockWriteGuard<'static, EmitterManager>;
+pub type EmitterRef<T> = &'static T;
+pub type EmitterMut<T> = &'static mut T;
