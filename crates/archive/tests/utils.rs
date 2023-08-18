@@ -416,5 +416,39 @@ macro_rules! generate_tests {
                 &output.join("folder/nested/other.txt")
             ));
         }
+
+        #[test]
+        fn dir_with_negated_glob() {
+            let sandbox = create_sandbox("archives");
+
+            // Pack
+            let input = sandbox.path();
+            let archive = sandbox.path().join($filename);
+
+            let mut archiver = Archiver::new(input, &archive);
+            archiver.add_source_glob("folder/**/*.txt");
+            archiver.add_source_glob("!folder/nested.txt");
+            archiver.pack($packer).unwrap();
+
+            assert!(archive.exists());
+            assert_ne!(archive.metadata().unwrap().len(), 0);
+
+            // Unpack
+            let output = sandbox.path().join("out");
+
+            let archiver = Archiver::new(&output, &archive);
+            archiver.unpack($unpacker).unwrap();
+
+            assert!(output.exists());
+            assert!(!output.join("file.txt").exists());
+            assert!(!output.join("folder/nested.txt").exists());
+            assert!(output.join("folder/nested/other.txt").exists());
+
+            // Compare
+            assert!(file_contents_match(
+                &input.join("folder/nested/other.txt"),
+                &output.join("folder/nested/other.txt")
+            ));
+        }
     };
 }
