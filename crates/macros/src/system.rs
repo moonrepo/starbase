@@ -1,3 +1,5 @@
+use darling::export::NestedMeta;
+use darling::FromMeta;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::BTreeMap;
@@ -188,8 +190,23 @@ impl<'l> InstanceTracker<'l> {
     }
 }
 
+#[derive(Debug, FromMeta)]
+struct SystemArgs {
+    instrument: Option<bool>,
+}
+
+impl Default for SystemArgs {
+    fn default() -> Self {
+        Self {
+            instrument: Some(true),
+        }
+    }
+}
+
 // #[system]
-pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
+pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
+    let attr_args = NestedMeta::parse_meta_list(base_args.into()).unwrap();
+    let args = SystemArgs::from_list(&attr_args).unwrap();
     let func = parse_macro_input!(item as syn::ItemFn);
     let func_name = func.sig.ident;
     let func_body = func.block;
@@ -303,7 +320,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let emitter_param = emitters.generate_param_name();
     let emitter_quotes = emitters.generate_quotes();
 
-    let attributes = if cfg!(feature = "tracing") {
+    let attributes = if cfg!(feature = "tracing") && args.instrument.is_some_and(|v| v) {
         quote! {
             #[tracing::instrument(skip_all)]
         }
