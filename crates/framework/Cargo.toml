@@ -1,6 +1,6 @@
 [package]
 name = "starbase"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "MIT"
 description = "Framework for building performant command line applications and developer tools."
@@ -12,7 +12,7 @@ all-features = true
 
 [dependencies]
 starbase_events = { version = "0.2.0", path = "../events" }
-starbase_macros = { version = "0.2.0", path = "../macros" }
+starbase_macros = { version = "0.2.1", path = "../macros" }
 starbase_styles = { version = "0.1.12", path = "../styles", features = ["theme"] }
 async-trait = { workspace = true }
 chrono = { version = "0.4.26", default-features = false, features = ["clock", "std"] }
