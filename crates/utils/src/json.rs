@@ -150,7 +150,7 @@ where
 /// This function is used for consumer facing files, like configs.
 #[cfg(feature = "editor-config")]
 #[inline]
-pub fn write_with_config<P: AsRef<Path>>(
+pub fn write_file_with_config<P: AsRef<Path>>(
     path: P,
     json: JsonValue,
     pretty: bool,
