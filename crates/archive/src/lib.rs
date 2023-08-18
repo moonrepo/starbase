@@ -16,13 +16,14 @@ pub use tree_differ::*;
 
 use std::path::Path;
 
-// Use native path utils to join the paths, so we can ensure
-// the parts are joined correctly within the archive!
+/// Join a file name from a list of parts, removing any empty parts.
 pub fn join_file_name<I, V>(parts: I) -> String
 where
     I: IntoIterator<Item = V>,
     V: AsRef<str>,
 {
+    // Use native path utils to join the paths, so we can ensure
+    // the parts are joined correctly within the archive!
     parts
         .into_iter()
         .filter_map(|p| {

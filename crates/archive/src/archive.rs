@@ -1,7 +1,7 @@
 use crate::archive_error::ArchiveError;
 use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use starbase_utils::glob;
 use std::path::{Path, PathBuf};
 use tracing::trace;
@@ -18,7 +18,7 @@ pub trait ArchivePacker {
     fn pack(&mut self) -> miette::Result<()>;
 }
 
-/// Abstract for unpacking archives.
+/// Abstraction for unpacking archives.
 pub trait ArchiveUnpacker {
     /// Unpack the archive to the destination directory. If a prefix is provided,
     /// remove it from the start of all file paths within the archive.
@@ -40,8 +40,8 @@ pub struct Archiver<'owner> {
     /// Absolute file path to source, to relative file path in archive.
     source_files: FxHashMap<PathBuf, String>,
 
-    /// Glob to finds files with, to relative file prefix in archive.
-    source_globs: FxHashMap<String, String>,
+    /// Glob to finds files with.
+    source_globs: FxHashSet<String>,
 
     /// For packing, the root to join source files with.
     /// For unpacking, the root to extract files relative to.
@@ -55,7 +55,7 @@ impl<'owner> Archiver<'owner> {
             archive_file,
             prefix: "",
             source_files: FxHashMap::default(),
-            source_globs: FxHashMap::default(),
+            source_globs: FxHashSet::default(),
             source_root,
         }
     }
@@ -86,20 +86,12 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Add a glob that'll find files, relative from the source root, to be
-    /// used in the archiving process. A custom prefix can be passed that'll be
-    /// appended to all files within the archive.
+    /// used in the archiving process.
     ///
     /// For packing, this finds files to include in the archive.
     /// For unpacking, this finds files to diff against when extracting.
-    pub fn add_source_glob<G: AsRef<str>>(
-        &mut self,
-        glob: G,
-        custom_prefix: Option<&str>,
-    ) -> &mut Self {
-        self.source_globs.insert(
-            glob.as_ref().to_owned(),
-            custom_prefix.unwrap_or_default().to_owned(),
-        );
+    pub fn add_source_glob<G: AsRef<str>>(&mut self, glob: G) -> &mut Self {
+        self.source_globs.insert(glob.as_ref().to_owned());
         self
     }
 
@@ -142,20 +134,17 @@ impl<'owner> Archiver<'owner> {
             }
         }
 
-        for (glob, file_prefix) in &self.source_globs {
-            trace!(glob, prefix = file_prefix, "Packing files using glob");
+        if !self.source_globs.is_empty() {
+            trace!(globs = ?self.source_globs, "Packing files using glob");
 
-            for file in glob::walk_files(self.source_root, &[glob]).unwrap() {
+            for file in glob::walk_files(self.source_root, &self.source_globs)? {
                 let file_name = file
                     .strip_prefix(self.source_root)
                     .unwrap()
                     .to_str()
                     .unwrap();
 
-                archive.add_file(
-                    &join_file_name([self.prefix, file_prefix, file_name]),
-                    &file,
-                )?;
+                archive.add_file(&join_file_name([self.prefix, file_name]), &file)?;
             }
         }
 
@@ -165,7 +154,7 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Determine the packer to use based on the archive file extension,
-    /// then pack the archive using [`pack`].
+    /// then pack the archive using [`Archiver.pack`].
     pub fn pack_from_ext(&self) -> miette::Result<()> {
         match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
             Some("tar") => {
@@ -251,7 +240,7 @@ impl<'owner> Archiver<'owner> {
 
         let mut lookup_paths = vec![];
         lookup_paths.extend(self.source_files.values());
-        lookup_paths.extend(self.source_globs.keys());
+        lookup_paths.extend(&self.source_globs);
 
         let mut differ = TreeDiffer::load(self.source_root, lookup_paths)?;
         let mut archive = unpacker(self.source_root, self.archive_file)?;
@@ -263,7 +252,7 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Determine the unpacker to use based on the archive file extension,
-    /// then unpack the archive using [`unpack`].
+    /// then unpack the archive using [`Archiver.unpack`].
     pub fn unpack_from_ext(&self) -> miette::Result<()> {
         match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
             Some("tar") => {

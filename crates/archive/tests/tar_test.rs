@@ -5,6 +5,12 @@ use starbase_archive::Archiver;
 use starbase_sandbox::create_sandbox;
 use std::path::Path;
 
+mod tar {
+    use super::*;
+
+    generate_tests!("out.tar", TarPacker::new, TarUnpacker::new);
+}
+
 mod tar_gz {
     use super::*;
 

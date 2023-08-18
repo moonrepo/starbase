@@ -45,7 +45,7 @@ macro_rules! generate_tests {
             let archive = sandbox.path().join($filename);
 
             let mut archiver = Archiver::new(input, &archive);
-            archiver.add_source_glob("file.*", None);
+            archiver.add_source_glob("file.*");
             archiver.pack($packer).unwrap();
 
             assert!(archive.exists());
@@ -108,7 +108,7 @@ macro_rules! generate_tests {
             let archive = sandbox.path().join($filename);
 
             let mut archiver = Archiver::new(input, &archive);
-            archiver.add_source_glob("file.*", Some("group"));
+            archiver.add_source_glob("file.*");
             archiver.set_prefix("some/prefix");
             archiver.pack($packer).unwrap();
 
@@ -122,12 +122,12 @@ macro_rules! generate_tests {
             archiver.unpack($unpacker).unwrap();
 
             assert!(output.exists());
-            assert!(output.join("some/prefix/group/file.txt").exists());
+            assert!(output.join("some/prefix/file.txt").exists());
 
             // Compare
             assert!(file_contents_match(
                 &input.join("file.txt"),
-                &output.join("some/prefix/group/file.txt")
+                &output.join("some/prefix/file.txt")
             ));
         }
 
@@ -278,7 +278,7 @@ macro_rules! generate_tests {
             let archive = sandbox.path().join($filename);
 
             let mut archiver = Archiver::new(input, &archive);
-            archiver.add_source_glob("folder/**/*.txt", None);
+            archiver.add_source_glob("folder/**/*.txt");
             archiver.pack($packer).unwrap();
 
             assert!(archive.exists());
@@ -351,7 +351,7 @@ macro_rules! generate_tests {
             let archive = sandbox.path().join($filename);
 
             let mut archiver = Archiver::new(input, &archive);
-            archiver.add_source_glob("folder/**/*.txt", None);
+            archiver.add_source_glob("folder/**/*.txt");
             archiver.set_prefix("some/prefix");
             archiver.pack($packer).unwrap();
 
@@ -411,6 +411,40 @@ macro_rules! generate_tests {
                 &input.join("folder/nested.txt"),
                 &output.join("folder/nested.txt")
             ));
+            assert!(file_contents_match(
+                &input.join("folder/nested/other.txt"),
+                &output.join("folder/nested/other.txt")
+            ));
+        }
+
+        #[test]
+        fn dir_with_negated_glob() {
+            let sandbox = create_sandbox("archives");
+
+            // Pack
+            let input = sandbox.path();
+            let archive = sandbox.path().join($filename);
+
+            let mut archiver = Archiver::new(input, &archive);
+            archiver.add_source_glob("folder/**/*.txt");
+            archiver.add_source_glob("!folder/nested.txt");
+            archiver.pack($packer).unwrap();
+
+            assert!(archive.exists());
+            assert_ne!(archive.metadata().unwrap().len(), 0);
+
+            // Unpack
+            let output = sandbox.path().join("out");
+
+            let archiver = Archiver::new(&output, &archive);
+            archiver.unpack($unpacker).unwrap();
+
+            assert!(output.exists());
+            assert!(!output.join("file.txt").exists());
+            assert!(!output.join("folder/nested.txt").exists());
+            assert!(output.join("folder/nested/other.txt").exists());
+
+            // Compare
             assert!(file_contents_match(
                 &input.join("folder/nested/other.txt"),
                 &output.join("folder/nested/other.txt")

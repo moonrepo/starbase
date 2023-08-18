@@ -48,21 +48,34 @@ pub enum ZipError {
 /// Creates zip archives.
 pub struct ZipPacker {
     archive: ZipWriter<File>,
+    compression: CompressionMethod,
 }
 
 impl ZipPacker {
-    /// Create a new `.zip` packer.
-    pub fn new(output_file: &Path) -> miette::Result<Self> {
+    /// Create a new packer with a custom compression level.
+    pub fn create(output_file: &Path, compression: CompressionMethod) -> miette::Result<Self> {
         Ok(ZipPacker {
             archive: ZipWriter::new(fs::create_file(output_file)?),
+            compression,
         })
+    }
+
+    /// Create a new `.zip` packer.
+    pub fn new(output_file: &Path) -> miette::Result<Self> {
+        Self::create(output_file, CompressionMethod::Stored)
+    }
+
+    /// Create a new compressed `.zip` packer using `deflate`.
+    #[cfg(feature = "zip-deflate")]
+    pub fn new_deflate(output_file: &Path) -> miette::Result<Self> {
+        Self::create(output_file, CompressionMethod::Deflated)
     }
 }
 
 impl ArchivePacker for ZipPacker {
     fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()> {
         #[allow(unused_mut)] // windows
-        let mut options = FileOptions::default().compression_method(CompressionMethod::Deflated);
+        let mut options = FileOptions::default().compression_method(self.compression);
 
         #[cfg(unix)]
         {
@@ -94,7 +107,7 @@ impl ArchivePacker for ZipPacker {
         self.archive
             .add_directory(
                 name,
-                FileOptions::default().compression_method(CompressionMethod::Deflated),
+                FileOptions::default().compression_method(self.compression),
             )
             .map_err(|error| ZipError::AddFailure {
                 source: dir.to_path_buf(),
@@ -149,6 +162,12 @@ impl ZipUnpacker {
                 .map_err(|error| ZipError::UnpackFailure { error })?,
             output_dir: output_dir.to_path_buf(),
         })
+    }
+
+    /// Create a new `.zip` unpacker for `deflate`.
+    #[cfg(feature = "zip-deflate")]
+    pub fn new_deflate(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+        Self::new(output_dir, input_file)
     }
 }
 
