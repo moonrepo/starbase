@@ -104,13 +104,20 @@ where
     ) -> std::fmt::Result {
         let meta: &Metadata = event.metadata();
         let level: &Level = meta.level();
+        let level_label = format!("{: >5}", level.as_str());
 
         // [level timestamp]
         write!(writer, "{}", color::muted("["))?;
         write!(
             writer,
             "{} ",
-            color::muted(format!("{: >5}", level.as_str()))
+            if *level == LevelFilter::ERROR {
+                color::failure(level_label)
+            } else if *level == LevelFilter::WARN {
+                color::invalid(level_label)
+            } else {
+                color::muted(level_label)
+            }
         )?;
 
         self.format_time(&mut writer)?;

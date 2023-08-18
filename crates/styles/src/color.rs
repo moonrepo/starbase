@@ -6,6 +6,7 @@ use owo_colors::{OwoColorize, XtermColors};
 use std::env;
 use std::path::Path;
 
+pub use owo_colors as owo;
 pub use owo_colors::Style as OwoStyle;
 
 pub enum Color {
