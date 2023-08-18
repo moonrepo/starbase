@@ -26,12 +26,15 @@ tar = { version = "0.4.40", optional = true }
 xz2 = { version = "0.1.7", optional = true }
 
 # zip
-zip = { version = "0.6.6", default-features = false, features = [
-	"deflate",
-], optional = true }
+zip = { version = "0.6.6", default-features = false, optional = true }
 
 [dev-dependencies]
-starbase_archive = { path = ".", features = ["tar-gz", "tar-xz", "zip"] }
+starbase_archive = { path = ".", features = [
+	"tar-gz",
+	"tar-xz",
+	"zip",
+	"zip-deflate",
+] }
 starbase_sandbox = { path = "../sandbox" }
 
 [features]
@@ -39,4 +42,5 @@ default = ["tar-gz"]
 tar = ["dep:tar"]
 tar-gz = ["dep:flate2", "tar"]
 tar-xz = ["dep:xz2", "tar"]
-zip = ["dep:zip", "dep:flate2"]
+zip = ["dep:zip"]
+zip-deflate = ["dep:flate2", "zip", "zip/deflate"]
