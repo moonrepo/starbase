@@ -149,7 +149,7 @@ impl TarUnpacker {
         TarUnpacker::create(output_dir, Box::new(fs::open_file(input_file)?))
     }
 
-    /// Create a new `.tar.ga` unpacker.
+    /// Create a new `.tar.gz` unpacker.
     #[cfg(feature = "tar-gz")]
     pub fn new_gz(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
         TarUnpacker::create(

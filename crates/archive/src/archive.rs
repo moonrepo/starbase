@@ -18,7 +18,7 @@ pub trait ArchivePacker {
     fn pack(&mut self) -> miette::Result<()>;
 }
 
-/// Abstract for unpacking archives.
+/// Abstraction for unpacking archives.
 pub trait ArchiveUnpacker {
     /// Unpack the archive to the destination directory. If a prefix is provided,
     /// remove it from the start of all file paths within the archive.
@@ -86,8 +86,7 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Add a glob that'll find files, relative from the source root, to be
-    /// used in the archiving process. A custom prefix can be passed that'll be
-    /// appended to all files within the archive.
+    /// used in the archiving process.
     ///
     /// For packing, this finds files to include in the archive.
     /// For unpacking, this finds files to diff against when extracting.
@@ -155,7 +154,7 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Determine the packer to use based on the archive file extension,
-    /// then pack the archive using [`pack`].
+    /// then pack the archive using [`Archiver.pack`].
     pub fn pack_from_ext(&self) -> miette::Result<()> {
         match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
             Some("tar") => {
@@ -253,7 +252,7 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Determine the unpacker to use based on the archive file extension,
-    /// then unpack the archive using [`unpack`].
+    /// then unpack the archive using [`Archiver.unpack`].
     pub fn unpack_from_ext(&self) -> miette::Result<()> {
         match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
             Some("tar") => {

@@ -19,7 +19,7 @@ rustc-hash = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
-flate2 = { version = "1.0.26", optional = true }
+flate2 = { version = "1.0.27", optional = true }
 
 # tar
 tar = { version = "0.4.40", optional = true }
