@@ -117,7 +117,7 @@ where
 /// This function is used for consumer facing files, like configs.
 #[cfg(feature = "editor-config")]
 #[inline]
-pub fn write_with_config<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
+pub fn write_file_with_config<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
 where
     P: AsRef<Path>,
     D: ?Sized + Serialize,
