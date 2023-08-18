@@ -45,7 +45,7 @@ macro_rules! generate_tests {
             let archive = sandbox.path().join($filename);
 
             let mut archiver = Archiver::new(input, &archive);
-            archiver.add_source_glob("file.*", None);
+            archiver.add_source_glob("file.*");
             archiver.pack($packer).unwrap();
 
             assert!(archive.exists());
@@ -108,7 +108,7 @@ macro_rules! generate_tests {
             let archive = sandbox.path().join($filename);
 
             let mut archiver = Archiver::new(input, &archive);
-            archiver.add_source_glob("file.*", Some("group"));
+            archiver.add_source_glob("file.*");
             archiver.set_prefix("some/prefix");
             archiver.pack($packer).unwrap();
 
@@ -122,12 +122,12 @@ macro_rules! generate_tests {
             archiver.unpack($unpacker).unwrap();
 
             assert!(output.exists());
-            assert!(output.join("some/prefix/group/file.txt").exists());
+            assert!(output.join("some/prefix/file.txt").exists());
 
             // Compare
             assert!(file_contents_match(
                 &input.join("file.txt"),
-                &output.join("some/prefix/group/file.txt")
+                &output.join("some/prefix/file.txt")
             ));
         }
 
@@ -278,7 +278,7 @@ macro_rules! generate_tests {
             let archive = sandbox.path().join($filename);
 
             let mut archiver = Archiver::new(input, &archive);
-            archiver.add_source_glob("folder/**/*.txt", None);
+            archiver.add_source_glob("folder/**/*.txt");
             archiver.pack($packer).unwrap();
 
             assert!(archive.exists());
@@ -351,7 +351,7 @@ macro_rules! generate_tests {
             let archive = sandbox.path().join($filename);
 
             let mut archiver = Archiver::new(input, &archive);
-            archiver.add_source_glob("folder/**/*.txt", None);
+            archiver.add_source_glob("folder/**/*.txt");
             archiver.set_prefix("some/prefix");
             archiver.pack($packer).unwrap();
 

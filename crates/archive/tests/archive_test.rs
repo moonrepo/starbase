@@ -100,7 +100,7 @@ fn can_add_globs() {
     let tarball = sandbox.path().join("out.tar.xz");
 
     let mut archiver = Archiver::new(sandbox.path(), &tarball);
-    archiver.add_source_glob("**/*.json", None);
+    archiver.add_source_glob("**/*.json");
     archiver.pack_from_ext().unwrap();
 
     let out = create_empty_sandbox();
@@ -116,60 +116,13 @@ fn can_add_globs() {
 }
 
 #[test]
-fn can_add_globs_with_group() {
-    let sandbox = create_sandbox("archives");
-    let tarball = sandbox.path().join("out.zip");
-
-    let mut archiver = Archiver::new(sandbox.path(), &tarball);
-    archiver.add_source_glob("**/*.json", Some("group"));
-    archiver.pack_from_ext().unwrap();
-
-    let out = create_empty_sandbox();
-
-    archiver.source_root = out.path();
-    archiver.unpack_from_ext().unwrap();
-
-    assert!(!out.path().join("group/file.txt").exists());
-    assert!(!out.path().join("group/folder/nested/other.txt").exists());
-
-    assert!(out.path().join("group/data.json").exists());
-    assert!(out.path().join("group/folder/nested.json").exists());
-}
-
-#[test]
-fn can_add_globs_with_group_and_prefix() {
-    let sandbox = create_sandbox("archives");
-    let tarball = sandbox.path().join("out.tar");
-
-    let mut archiver = Archiver::new(sandbox.path(), &tarball);
-    archiver.set_prefix("prefix");
-    archiver.add_source_glob("**/*.json", Some("group"));
-    archiver.pack_from_ext().unwrap();
-
-    let out = create_empty_sandbox();
-
-    archiver.source_root = out.path();
-    archiver.set_prefix(""); // Remove so we can see it unpacked
-    archiver.unpack_from_ext().unwrap();
-
-    assert!(!out.path().join("prefix/group/file.txt").exists());
-    assert!(!out
-        .path()
-        .join("prefix/group/folder/nested/other.txt")
-        .exists());
-
-    assert!(out.path().join("prefix/group/data.json").exists());
-    assert!(out.path().join("prefix/group/folder/nested.json").exists());
-}
-
-#[test]
 fn can_add_globs_with_prefix_and_remove_when_unpacking() {
     let sandbox = create_sandbox("archives");
     let tarball = sandbox.path().join("out.tgz");
 
     let mut archiver = Archiver::new(sandbox.path(), &tarball);
     archiver.set_prefix("prefix");
-    archiver.add_source_glob("**/*.json", None);
+    archiver.add_source_glob("**/*.json");
     archiver.pack_from_ext().unwrap();
 
     let out = create_empty_sandbox();
@@ -185,13 +138,13 @@ fn can_add_globs_with_prefix_and_remove_when_unpacking() {
 }
 
 #[test]
-fn can_add_globs_with_group_and_prefix_and_remove_when_unpacking() {
+fn can_use_negated_globs() {
     let sandbox = create_sandbox("archives");
-    let tarball = sandbox.path().join("out.txz");
+    let tarball = sandbox.path().join("out.tar.xz");
 
     let mut archiver = Archiver::new(sandbox.path(), &tarball);
-    archiver.set_prefix("prefix");
-    archiver.add_source_glob("**/*.json", Some("group"));
+    archiver.add_source_glob("**/*.json");
+    archiver.add_source_glob("!data.json");
     archiver.pack_from_ext().unwrap();
 
     let out = create_empty_sandbox();
@@ -199,9 +152,9 @@ fn can_add_globs_with_group_and_prefix_and_remove_when_unpacking() {
     archiver.source_root = out.path();
     archiver.unpack_from_ext().unwrap();
 
-    assert!(!out.path().join("group/file.txt").exists());
-    assert!(!out.path().join("group/folder/nested/other.txt").exists());
+    assert!(!out.path().join("file.txt").exists());
+    assert!(!out.path().join("folder/nested/other.txt").exists());
+    assert!(!out.path().join("data.json").exists());
 
-    assert!(out.path().join("group/data.json").exists());
-    assert!(out.path().join("group/folder/nested.json").exists());
+    assert!(out.path().join("folder/nested.json").exists());
 }

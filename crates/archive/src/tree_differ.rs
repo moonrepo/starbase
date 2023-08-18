@@ -26,7 +26,7 @@ impl TreeDiffer {
         let mut files = FxHashSet::default();
         let dest_root = dest_root.as_ref();
 
-        trace!(dir = ?dest_root, "Creating a tree differ for destination directory");
+        trace!(dir = ?dest_root, "Creating a file tree differ for destination directory");
 
         let mut track = |file: PathBuf| {
             if file.exists() {
