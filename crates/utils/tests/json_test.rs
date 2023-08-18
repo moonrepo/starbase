@@ -75,7 +75,7 @@ mod editor_config {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.json");
 
-        json::write_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -85,7 +85,7 @@ mod editor_config {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.json");
 
-        json::write_with_config(&path, json::read_file(&path).unwrap(), false).unwrap();
+        json::write_file_with_config(&path, json::read_file(&path).unwrap(), false).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -97,7 +97,7 @@ mod editor_config {
 
         append_editor_config(sandbox.path(), "[*.json]\nindent_size = 8");
 
-        json::write_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -109,7 +109,7 @@ mod editor_config {
 
         append_editor_config(sandbox.path(), "[*.json]\nindent_style = tab");
 
-        json::write_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -121,7 +121,7 @@ mod editor_config {
 
         append_editor_config(sandbox.path(), "[*.json]\ninsert_final_newline = true");
 
-        json::write_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
 
         assert!(fs::read_file(&path).unwrap().ends_with('\n'));
     }
@@ -133,7 +133,7 @@ mod editor_config {
 
         append_editor_config(sandbox.path(), "[*.json]\ninsert_final_newline = false");
 
-        json::write_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
 
         assert!(!fs::read_file(&path).unwrap().ends_with('\n'));
     }

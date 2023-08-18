@@ -24,7 +24,7 @@ mod editor_config {
         let path = sandbox.path().join("file.yaml");
         let data: Value = yaml::read_file(&path).unwrap();
 
-        yaml::write_with_config(&path, &data).unwrap();
+        yaml::write_file_with_config(&path, &data).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -38,7 +38,7 @@ mod editor_config {
 
         let data: Value = yaml::read_file(&path).unwrap();
 
-        yaml::write_with_config(&path, &data).unwrap();
+        yaml::write_file_with_config(&path, &data).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -52,7 +52,7 @@ mod editor_config {
 
         let data: Value = yaml::read_file(&path).unwrap();
 
-        yaml::write_with_config(&path, &data).unwrap();
+        yaml::write_file_with_config(&path, &data).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -66,7 +66,7 @@ mod editor_config {
 
         let data: Value = yaml::read_file(&path).unwrap();
 
-        yaml::write_with_config(&path, &data).unwrap();
+        yaml::write_file_with_config(&path, &data).unwrap();
 
         assert!(fs::read_file(&path).unwrap().ends_with('\n'));
     }
@@ -80,7 +80,7 @@ mod editor_config {
 
         let data: Value = yaml::read_file(&path).unwrap();
 
-        yaml::write_with_config(&path, &data).unwrap();
+        yaml::write_file_with_config(&path, &data).unwrap();
 
         assert!(!fs::read_file(&path).unwrap().ends_with('\n'));
     }
