@@ -190,17 +190,14 @@ impl<'l> InstanceTracker<'l> {
     }
 }
 
-#[derive(Debug, FromMeta)]
-struct SystemArgs {
-    instrument: Option<bool>,
+fn default_true() -> bool {
+    true
 }
 
-impl Default for SystemArgs {
-    fn default() -> Self {
-        Self {
-            instrument: Some(true),
-        }
-    }
+#[derive(Debug, FromMeta)]
+struct SystemArgs {
+    #[darling(default = "default_true")]
+    instrument: bool,
 }
 
 // #[system]
@@ -320,7 +317,7 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
     let emitter_param = emitters.generate_param_name();
     let emitter_quotes = emitters.generate_quotes();
 
-    let attributes = if cfg!(feature = "tracing") && args.instrument.is_some_and(|v| v) {
+    let attributes = if cfg!(feature = "tracing") && args.instrument {
         quote! {
             #[tracing::instrument(skip_all)]
         }
