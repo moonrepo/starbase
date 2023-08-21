@@ -299,6 +299,33 @@ pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
     }
 }
 
+/// Lock the provided file with exclusive access and execute the operation.
+#[cfg(feature = "fs-lock")]
+#[inline]
+pub fn lock_exclusive<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
+where
+    T: AsRef<Path>,
+    F: FnOnce(&mut File) -> Result<V, FsError>,
+{
+    use fs4::FileExt;
+
+    let path = path.as_ref();
+
+    file.lock_exclusive().map_err(|error| FsError::Lock {
+        path: path.to_path_buf(),
+        error,
+    })?;
+
+    let result = op(&mut file)?;
+
+    file.unlock().map_err(|error| FsError::Unlock {
+        path: path.to_path_buf(),
+        error,
+    })?;
+
+    Ok(result)
+}
+
 /// Lock the provided file with shared access and execute the operation.
 #[cfg(feature = "fs-lock")]
 #[inline]
@@ -640,7 +667,6 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
     path: T,
     data: D,
 ) -> Result<(), FsError> {
-    use fs4::FileExt;
     use std::io::{prelude::*, SeekFrom};
 
     let path = path.as_ref();
@@ -658,20 +684,20 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
     // Don't use create_file() as it truncates, which will cause
     // other processes to crash if they attempt to read it while
     // the lock is active!
-    let mut file = std::fs::OpenOptions::new()
+    let file = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .open(path)
         .map_err(handle_error)?;
 
-    file.lock_exclusive().map_err(handle_error)?;
+    lock_exclusive(path, file, |file| {
+        // Truncate then write file
+        file.set_len(0).map_err(handle_error)?;
+        file.seek(SeekFrom::Start(0)).map_err(handle_error)?;
+        file.write(data.as_ref()).map_err(handle_error)?;
 
-    // Truncate then write file
-    file.set_len(0).map_err(handle_error)?;
-    file.seek(SeekFrom::Start(0)).map_err(handle_error)?;
-    file.write(data.as_ref()).map_err(handle_error)?;
-
-    file.unlock().map_err(handle_error)?;
+        Ok(())
+    })?;
 
     Ok(())
 }
