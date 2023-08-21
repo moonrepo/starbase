@@ -716,7 +716,7 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
     // Don't use create_file() as it truncates, which will cause
     // other processes to crash if they attempt to read it while
     // the lock is active!
-    let file = std::fs::OpenOptions::new()
+    let file = OpenOptions::new()
         .write(true)
         .create(true)
         .open(path)
