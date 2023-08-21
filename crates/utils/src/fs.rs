@@ -1,7 +1,7 @@
 use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
 use std::ffi::OsStr;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use thiserror::Error;
@@ -82,6 +82,38 @@ pub enum FsError {
         #[source]
         error: std::io::Error,
     },
+}
+
+/// Append a file with the provided content. If the parent directory does not exist,
+/// or the file to append does not exist, they will be created.
+#[inline]
+pub fn append_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
+    use std::io::Write;
+
+    let path = path.as_ref();
+
+    if let Some(parent) = path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    trace!(file = ?path, "Appending file");
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| FsError::Write {
+            path: path.to_path_buf(),
+            error,
+        })?;
+
+    file.write_all(data.as_ref())
+        .map_err(|error| FsError::Write {
+            path: path.to_path_buf(),
+            error,
+        })?;
+
+    Ok(())
 }
 
 /// Copy a file from source to destination. If the destination directory does not exist,
