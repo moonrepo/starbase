@@ -26,6 +26,14 @@ pub enum FsError {
         error: std::io::Error,
     },
 
+    #[diagnostic(code(fs::lock))]
+    #[error("Failed to lock {}.", .path.style(Style::Path))]
+    Lock {
+        path: PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
     #[diagnostic(code(fs::perms))]
     #[error("Failed to update permissions for {}.", .path.style(Style::Path))]
     Perms {
@@ -55,6 +63,14 @@ pub enum FsError {
     Rename {
         from: PathBuf,
         to: PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[diagnostic(code(fs::unlock))]
+    #[error("Failed to unlock {}.", .path.style(Style::Path))]
+    Unlock {
+        path: PathBuf,
         #[source]
         error: std::io::Error,
     },
@@ -283,6 +299,33 @@ pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
     }
 }
 
+/// Lock the provided file with shared access and execute the operation.
+#[cfg(feature = "fs-lock")]
+#[inline]
+pub fn lock_shared<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
+where
+    T: AsRef<Path>,
+    F: FnOnce(&mut File) -> Result<V, FsError>,
+{
+    use fs4::FileExt;
+
+    let path = path.as_ref();
+
+    file.lock_shared().map_err(|error| FsError::Lock {
+        path: path.to_path_buf(),
+        error,
+    })?;
+
+    let result = op(&mut file)?;
+
+    file.unlock().map_err(|error| FsError::Unlock {
+        path: path.to_path_buf(),
+        error,
+    })?;
+
+    Ok(result)
+}
+
 /// Return metadata for the provided path. The path must already exist.
 #[inline]
 pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
@@ -396,25 +439,23 @@ pub fn read_file_bytes<T: AsRef<Path>>(path: T) -> Result<Vec<u8>, FsError> {
 #[cfg(feature = "fs-lock")]
 #[inline]
 pub fn read_file_with_lock<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
-    use fs4::FileExt;
     use std::io::prelude::*;
 
     let path = path.as_ref();
-    let handle_error = |error: std::io::Error| FsError::Read {
-        path: path.to_path_buf(),
-        error,
-    };
 
     trace!(file = ?path, "Reading file with shared lock");
 
-    let mut file = open_file(path)?;
-    let mut buffer = String::new();
+    lock_shared(path, open_file(path)?, |file| {
+        let mut buffer = String::new();
 
-    file.lock_shared().map_err(handle_error)?;
-    file.read_to_string(&mut buffer).map_err(handle_error)?;
-    file.unlock().map_err(handle_error)?;
+        file.read_to_string(&mut buffer)
+            .map_err(|error| FsError::Read {
+                path: path.to_path_buf(),
+                error,
+            })?;
 
-    Ok(buffer)
+        Ok(buffer)
+    })
 }
 
 /// Remove a file or directory (recursively) at the provided path.
