@@ -187,15 +187,29 @@ impl<'l> InstanceTracker<'l> {
                     }
                 }
                 SystemParam::ParamRefWithExtract(ty, extract_ty) => {
-                    quotes.push(quote! {
-                        let #name = #manager_var_name.get::<#ty>().extract::<#extract_ty>();
-                    });
+                    if Self::is_type_with_name(ty, "ExecuteArgs") {
+                        // Unwrap so args are easily usable
+                        quotes.push(quote! {
+                            let #name = #manager_var_name.get::<#ty>().extract::<#extract_ty>().unwrap();
+                        });
+                    } else {
+                        quotes.push(quote! {
+                            let #name = #manager_var_name.get::<#ty>().extract::<#extract_ty>();
+                        });
+                    }
                 }
                 _ => unimplemented!(),
             };
         }
 
         quotes
+    }
+
+    fn is_type_with_name(ty: &Type, name: &str) -> bool {
+        match ty {
+            Type::Path(p) => p.path.is_ident(name),
+            _ => false,
+        }
     }
 }
 

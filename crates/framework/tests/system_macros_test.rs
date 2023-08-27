@@ -55,8 +55,8 @@ async fn read_state_same_arg(arg1: StateRef<State1>, arg2: StateRef<State1>) {
 }
 
 #[system]
-async fn read_sub_state(arg: StateRef<ExecuteArgs, SomeArgs>) {
-    dbg!(arg);
+async fn read_sub_state(args: StateRef<ExecuteArgs, SomeArgs>) {
+    dbg!(args);
 }
 
 #[system]
