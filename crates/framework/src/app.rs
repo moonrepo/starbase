@@ -98,8 +98,9 @@ impl App {
         system: S,
         args: A,
     ) -> &mut Self {
-        self.args.set(args);
-        self.add_system(Phase::Execute, CallbackSystem::new(system))
+        self.set_args(args);
+        self.execute(system);
+        self
     }
 
     /// Add a system function that runs during the shutdown phase.

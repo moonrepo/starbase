@@ -10,7 +10,7 @@ pub struct ArgsMap {
 
 impl ArgsMap {
     /// Get an immutable args reference for the provided type.
-    /// If the args does not exist, a panic will be triggered.
+    /// If the args does not exist, a [`None`] is returned.
     pub fn get<T: Any + Send + Sync>(&self) -> Option<&T> {
         if let Some(value) = self.cache.get(&TypeId::of::<T>()) {
             return value.downcast_ref::<T>();
@@ -25,12 +25,6 @@ impl ArgsMap {
         self.cache.insert(TypeId::of::<T>(), Box::new(args));
         self
     }
-}
-
-// This is a hack for starbase macros to work from within
-// the starbase crate itself!
-mod starbase {
-    pub use crate::*;
 }
 
 #[derive(Debug)]
