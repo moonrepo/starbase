@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use miette::{bail, IntoDiagnostic};
-use starbase::{App, AppState, Emitters, Resources, States, SystemResult};
+use starbase::{App, AppPhase, Emitters, Resources, States, SystemResult};
 use starbase_macros::*;
 use std::time::Duration;
 use tokio::task;
@@ -599,7 +599,7 @@ mod shutdown {
 
 #[system]
 fn extract_app_state(states: StatesMut) {
-    let phase = { format!("{:?}", states.get::<AppState>().phase) };
+    let phase = { format!("{:?}", states.get::<AppPhase>().phase) };
 
     let order = states.get_mut::<RunOrder>();
     order.push(phase);
