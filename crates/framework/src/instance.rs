@@ -5,7 +5,12 @@
 #[macro_export]
 macro_rules! create_instance_manager {
     ($manager:ident, $type:ident) => {
-        pub trait $type: Any {}
+        create_instance_manager!($manager, $type, {
+            // No impl
+        });
+    };
+    ($manager:ident, $type:ident, $impl:tt) => {
+        pub trait $type: Any $impl
 
         #[derive(Debug, Default)]
         pub struct $manager {

@@ -1,6 +1,6 @@
+use crate::states::StateInstance;
 use rustc_hash::FxHashMap;
-use starbase_macros::State;
-use std::any::{type_name, Any, TypeId};
+use std::any::{Any, TypeId};
 use std::fmt::Debug;
 
 #[derive(Debug, Default)]
@@ -11,12 +11,12 @@ pub struct ArgsMap {
 impl ArgsMap {
     /// Get an immutable args reference for the provided type.
     /// If the args does not exist, a panic will be triggered.
-    pub fn get<T: Any + Send + Sync>(&self) -> &T {
+    pub fn get<T: Any + Send + Sync>(&self) -> Option<&T> {
         if let Some(value) = self.cache.get(&TypeId::of::<T>()) {
-            return value.downcast_ref::<T>().unwrap();
+            return value.downcast_ref::<T>();
         }
 
-        panic!("{} does not exist!", type_name::<T>())
+        None
     }
 
     /// Set the args into the registry with the provided type.
@@ -33,5 +33,11 @@ mod starbase {
     pub use crate::*;
 }
 
-#[derive(Debug, State)]
+#[derive(Debug)]
 pub struct ExecuteArgs(pub ArgsMap);
+
+impl StateInstance for ExecuteArgs {
+    fn extract<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.0.get::<T>()
+    }
+}

@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_must_use)]
 
-use starbase::{App, Emitter};
+use starbase::{App, Emitter, ExecuteArgs};
 use starbase_macros::*;
 
 #[derive(Debug, Event)]
@@ -21,6 +21,9 @@ struct Resource1 {
 struct Resource2 {
     pub field: usize,
 }
+
+#[derive(Debug)]
+struct SomeArgs {}
 
 // READ
 
@@ -49,6 +52,11 @@ async fn read_state_arg_multi(arg1: StateRef<State1>, arg2: StateRef<State2>) {
 async fn read_state_same_arg(arg1: StateRef<State1>, arg2: StateRef<State1>) {
     dbg!(arg1);
     dbg!(arg2);
+}
+
+#[system]
+async fn read_sub_state(arg: StateRef<ExecuteArgs, SomeArgs>) {
+    dbg!(arg);
 }
 
 #[system]
