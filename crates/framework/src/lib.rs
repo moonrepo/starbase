@@ -1,5 +1,6 @@
 mod app;
 mod app_state;
+mod args;
 pub mod diagnostics;
 mod emitters;
 mod instance;
@@ -12,6 +13,7 @@ pub mod tracing;
 
 pub use app::*;
 pub use app_state::AppState;
+pub use args::*;
 pub use emitters::*;
 pub use resources::*;
 pub use starbase_macros::*;
