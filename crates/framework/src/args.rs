@@ -33,5 +33,5 @@ mod starbase {
     pub use crate::*;
 }
 
-#[derive(State)]
-pub struct Args(pub ArgsMap);
+#[derive(Debug, State)]
+pub struct ExecuteArgs(pub ArgsMap);

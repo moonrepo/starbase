@@ -1,5 +1,5 @@
 use crate::app_state::*;
-use crate::args::{Args, ArgsMap};
+use crate::args::{ArgsMap, ExecuteArgs};
 use crate::emitters::{EmitterInstance, EmitterManager, Emitters};
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
@@ -160,7 +160,7 @@ impl App {
     /// Start the application and run all registered systems grouped into phases.
     pub async fn run(&mut self) -> miette::Result<StateManager> {
         let mut state_manager = mem::take(&mut self.states);
-        state_manager.set(Args(mem::take(&mut self.args)));
+        state_manager.set(ExecuteArgs(mem::take(&mut self.args)));
 
         let emitters = Arc::new(RwLock::new(mem::take(&mut self.emitters)));
         let resources = Arc::new(RwLock::new(mem::take(&mut self.resources)));
