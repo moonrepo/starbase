@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_must_use)]
 
-use starbase::{App, Emitter, ExecuteArgs};
+use starbase::{App, Emitter};
 use starbase_macros::*;
 
 #[derive(Debug, Event)]
@@ -56,6 +56,11 @@ async fn read_state_same_arg(arg1: StateRef<State1>, arg2: StateRef<State1>) {
 
 #[system]
 async fn read_sub_state(args: StateRef<ExecuteArgs, SomeArgs>) {
+    dbg!(args);
+}
+
+#[system]
+async fn read_args_ref(args: ArgsRef<SomeArgs>) {
     dbg!(args);
 }
 

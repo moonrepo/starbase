@@ -162,18 +162,18 @@ app.execute_with_args(system_func, MyArgs {
 ```
 
 To access the arguments within the system itself, you can use the `#[system]` macro, coupled with
-the `StateRef<ExecuteArgs, T>` system parameter.
+the `ArgsRef<T>` system parameter.
 
 ```rust
 #[system]
-async fn system_func(args: StateRef<ExecuteArgs, MyArgs>) {
+async fn system_func(args: ArgsRef<MyArgs>) {
   args.flag; // false
   args.option; // "value"
 }
 ```
 
 > If not using the macro, you can access the arguments like so:
-> `states.get::<ExecuteArgs>().extract::<T>();`
+> `states.get::<starbase::ExecuteArgs>().extract::<T>();`
 
 ### Shutdown systems
 
