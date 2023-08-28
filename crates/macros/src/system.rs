@@ -174,6 +174,8 @@ impl<'l> InstanceTracker<'l> {
         calls.extend(&self.mut_calls);
         calls.extend(&self.ref_calls);
 
+        let mut use_state_import = false;
+
         for (name, param) in calls {
             match param {
                 SystemParam::ParamMut(ty) => {
@@ -204,7 +206,10 @@ impl<'l> InstanceTracker<'l> {
                     });
                 }
                 SystemParam::ArgsRef(ty) => {
-                    quotes.push(quote! { use starbase::StateInstance; });
+                    if !use_state_import {
+                        quotes.push(quote! { use starbase::StateInstance; });
+                        use_state_import = true;
+                    }
 
                     // Unwrap so args are easily usable
                     quotes.push(quote! {
@@ -242,7 +247,6 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
     let mut states = InstanceTracker::new(InstanceType::State);
     let mut resources = InstanceTracker::new(InstanceType::Resource);
     let mut emitters = InstanceTracker::new(InstanceType::Emitter);
-    // let mut use_statements: Vec<proc_macro2::TokenStream> = vec![];
 
     // Convert inputs to system param enums
     for i in &func.sig.inputs {
@@ -378,7 +382,6 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
             #resource_param: starbase::Resources,
             #emitter_param: starbase::Emitters
         ) -> starbase::SystemResult {
-            // #(#use_statements)*
             #(#state_quotes)*
             #(#resource_quotes)*
             #(#emitter_quotes)*
