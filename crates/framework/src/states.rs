@@ -4,14 +4,15 @@ use std::{
     any::{type_name, Any, TypeId},
     sync::Arc,
 };
-use tokio::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::RwLock;
 
-create_instance_manager!(StateManager, StateInstance);
+create_instance_manager!(StateManager, StateInstance, {
+    /// Extract the provided type from the state instance.
+    /// If the type does not exist, or the state does not support
+    /// extraction, [`None`] will be returned.
+    fn extract<T: Any + Send + Sync>(&self) -> Option<&T> {
+        None
+    }
+});
 
 pub type States = Arc<RwLock<StateManager>>;
-
-// Not used directly but provides types for #[system] macro
-pub type StatesRef = RwLockReadGuard<'static, StateManager>;
-pub type StatesMut = RwLockWriteGuard<'static, StateManager>;
-pub type StateRef<T> = &'static T;
-pub type StateMut<T> = &'static mut T;

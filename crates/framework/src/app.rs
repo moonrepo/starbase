@@ -1,4 +1,5 @@
 use crate::app_state::*;
+use crate::args::{ArgsMap, ExecuteArgs};
 use crate::emitters::{EmitterInstance, EmitterManager, Emitters};
 use crate::resources::{ResourceInstance, ResourceManager, Resources};
 use crate::states::{StateInstance, StateManager, States};
@@ -26,6 +27,7 @@ pub enum Phase {
 #[derive(Debug)]
 pub struct App {
     // Data
+    args: ArgsMap,
     emitters: EmitterManager,
     resources: ResourceManager,
     states: StateManager,
@@ -43,6 +45,7 @@ impl App {
     pub fn new() -> App {
         let mut app = App {
             analyzers: vec![],
+            args: ArgsMap::default(),
             emitters: EmitterManager::default(),
             executors: vec![],
             shutdowns: vec![],
@@ -89,6 +92,17 @@ impl App {
         self.add_system(Phase::Execute, CallbackSystem::new(system))
     }
 
+    /// Add a system function with the provided arguments that runs during the execute phase.
+    pub fn execute_with_args<S: SystemFunc + 'static, A: Any + Send + Sync>(
+        &mut self,
+        system: S,
+        args: A,
+    ) -> &mut Self {
+        self.set_args(args);
+        self.execute(system);
+        self
+    }
+
     /// Add a system function that runs during the shutdown phase.
     pub fn shutdown<S: SystemFunc + 'static>(&mut self, system: S) -> &mut Self {
         self.add_system(Phase::Shutdown, CallbackSystem::new(system))
@@ -111,6 +125,12 @@ impl App {
             }
         };
 
+        self
+    }
+
+    /// Add an args instance to the application context.
+    pub fn set_args<A: Any + Send + Sync>(&mut self, args: A) -> &mut Self {
+        self.args.set(args);
         self
     }
 
@@ -140,9 +160,12 @@ impl App {
 
     /// Start the application and run all registered systems grouped into phases.
     pub async fn run(&mut self) -> miette::Result<StateManager> {
+        let mut state_manager = mem::take(&mut self.states);
+        state_manager.set(ExecuteArgs(mem::take(&mut self.args)));
+
         let emitters = Arc::new(RwLock::new(mem::take(&mut self.emitters)));
         let resources = Arc::new(RwLock::new(mem::take(&mut self.resources)));
-        let states = Arc::new(RwLock::new(mem::take(&mut self.states)));
+        let states = Arc::new(RwLock::new(state_manager));
 
         // Startup
         if let Err(error) = self

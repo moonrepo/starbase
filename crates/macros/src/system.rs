@@ -10,6 +10,7 @@ enum SystemParam<'a> {
     ManagerRef,
     ParamMut(&'a Type),
     ParamRef(&'a Type),
+    ParamRefWithExtract(&'a Type, &'a Type),
 }
 
 enum InstanceType {
@@ -92,6 +93,9 @@ impl<'l> InstanceTracker<'l> {
                 self.mut_calls.insert(name, param);
             }
             SystemParam::ParamRef(_) => {
+                self.ref_calls.insert(name, param);
+            }
+            SystemParam::ParamRefWithExtract(_, _) => {
                 self.ref_calls.insert(name, param);
             }
             _ => unimplemented!(),
@@ -182,11 +186,30 @@ impl<'l> InstanceTracker<'l> {
                         });
                     }
                 }
+                SystemParam::ParamRefWithExtract(ty, extract_ty) => {
+                    if Self::is_type_with_name(ty, "ExecuteArgs") {
+                        // Unwrap so args are easily usable
+                        quotes.push(quote! {
+                            let #name = #manager_var_name.get::<#ty>().extract::<#extract_ty>().unwrap();
+                        });
+                    } else {
+                        quotes.push(quote! {
+                            let #name = #manager_var_name.get::<#ty>().extract::<#extract_ty>();
+                        });
+                    }
+                }
                 _ => unimplemented!(),
             };
         }
 
         quotes
+    }
+
+    fn is_type_with_name(ty: &Type, name: &str) -> bool {
+        match ty {
+            Type::Path(p) => p.path.is_ident(name),
+            _ => false,
+        }
     }
 }
 
@@ -213,6 +236,7 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
     let mut states = InstanceTracker::new(InstanceType::State);
     let mut resources = InstanceTracker::new(InstanceType::Resource);
     let mut emitters = InstanceTracker::new(InstanceType::Emitter);
+    let mut use_statements: Vec<proc_macro2::TokenStream> = vec![];
 
     // Convert inputs to system param enums
     for i in &func.sig.inputs {
@@ -276,8 +300,10 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
                         panic!("Required a generic parameter type for {}.", type_wrapper);
                     };
 
+                    let mut segment_iter = segment_args.args.iter();
+
                     // InnerType
-                    let GenericArgument::Type(inner_type) = segment_args.args.first().unwrap() else {
+                    let GenericArgument::Type(inner_type) = segment_iter.next().unwrap() else {
                         panic!("Required a generic parameter type for {}.", type_wrapper);
                     };
 
@@ -298,7 +324,16 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
                             states.add_call(var_name, SystemParam::ParamMut(inner_type));
                         }
                         "StateRef" => {
-                            states.add_call(var_name, SystemParam::ParamRef(inner_type));
+                            if let Some(GenericArgument::Type(extract_type)) = segment_iter.next() {
+                                use_statements.push(quote! { use starbase::StateInstance; });
+
+                                states.add_call(
+                                    var_name,
+                                    SystemParam::ParamRefWithExtract(inner_type, extract_type),
+                                );
+                            } else {
+                                states.add_call(var_name, SystemParam::ParamRef(inner_type));
+                            }
                         }
                         wrapper => {
                             panic!("Unknown parameter type {} for {}.", wrapper, var_name);
@@ -332,6 +367,7 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
             #resource_param: starbase::Resources,
             #emitter_param: starbase::Emitters
         ) -> starbase::SystemResult {
+            #(#use_statements)*
             #(#state_quotes)*
             #(#resource_quotes)*
             #(#emitter_quotes)*

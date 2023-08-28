@@ -1,5 +1,7 @@
+#![allow(dead_code)]
+
 use miette::{bail, IntoDiagnostic};
-use starbase::{App, AppState, Emitters, Resources, States, SystemResult};
+use starbase::{App, AppPhase, Emitters, Resources, States, SystemResult};
 use starbase_macros::*;
 use std::time::Duration;
 use tokio::task;
@@ -400,6 +402,47 @@ mod execute {
     }
 }
 
+mod execute_with_args {
+    use super::*;
+    use starbase::{ExecuteArgs, StateInstance};
+
+    #[derive(Debug, Clone)]
+    struct TestArgs {
+        pub value: u32,
+    }
+
+    #[tokio::test]
+    async fn can_access_args() {
+        let mut app = App::new();
+        app.startup(setup_state);
+        app.execute_with_args(
+            |states: States, _resources: Resources, _emitters: Emitters| async move {
+                let args = {
+                    let states = states.read().await;
+                    states
+                        .get::<ExecuteArgs>()
+                        .extract::<TestArgs>()
+                        .unwrap()
+                        .to_owned()
+                };
+
+                states
+                    .write()
+                    .await
+                    .get_mut::<RunOrder>()
+                    .push(format!("{:?}", args));
+
+                Ok(())
+            },
+            TestArgs { value: 1 },
+        );
+
+        let states = app.run().await.unwrap();
+
+        assert_eq!(states.get::<RunOrder>().0, vec!["TestArgs { value: 1 }"]);
+    }
+}
+
 mod shutdown {
     use super::*;
 
@@ -556,7 +599,7 @@ mod shutdown {
 
 #[system]
 fn extract_app_state(states: StatesMut) {
-    let phase = { format!("{:?}", states.get::<AppState>().phase) };
+    let phase = { format!("{:?}", states.get::<AppPhase>().phase) };
 
     let order = states.get_mut::<RunOrder>();
     order.push(phase);

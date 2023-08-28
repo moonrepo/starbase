@@ -13,9 +13,14 @@ all-features = true
 [dependencies]
 starbase_events = { version = "0.2.0", path = "../events" }
 starbase_macros = { version = "0.2.2", path = "../macros" }
-starbase_styles = { version = "0.1.13", path = "../styles", features = ["theme"] }
+starbase_styles = { version = "0.1.13", path = "../styles", features = [
+	"theme",
+] }
 async-trait = { workspace = true }
-chrono = { version = "0.4.26", default-features = false, features = ["clock", "std"] }
+chrono = { version = "0.4.26", default-features = false, features = [
+	"clock",
+	"std",
+] }
 miette = { workspace = true, features = ["fancy"] }
 num_cpus = "1.16.0"
 rustc-hash = { workspace = true }
@@ -23,9 +28,21 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["tracing"] }
 tracing = { workspace = true, optional = true }
 tracing-appender = { version = "0.2.2", optional = true }
-tracing-log = { version = "0.1.3", optional = true, default-features = false, features = ["log-tracer", "std"] }
-tracing-subscriber = { version = "0.3.17", optional = true, default-features = false, features = ["env-filter", "fmt"] }
+tracing-log = { version = "0.1.3", optional = true, default-features = false, features = [
+	"log-tracer",
+	"std",
+] }
+tracing-subscriber = { version = "0.3.17", optional = true, default-features = false, features = [
+	"env-filter",
+	"fmt",
+] }
 
 [features]
 default = ["tracing"]
-tracing = ["dep:tracing", "dep:tracing-appender", "dep:tracing-log", "dep:tracing-subscriber", "starbase_macros/tracing"]
+tracing = [
+	"dep:tracing",
+	"dep:tracing-appender",
+	"dep:tracing-log",
+	"dep:tracing-subscriber",
+	"starbase_macros/tracing",
+]

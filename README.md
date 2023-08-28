@@ -144,6 +144,37 @@ app.execute(system_func);
 app.add_system(Phase::Execute, system_instance);
 ```
 
+#### Arguments
+
+Additionally, execute systems can be associated with arguments. This is useful for functionality
+like CLI commands.
+
+```rust
+struct MyArgs {
+  flag: bool,
+  option: String,
+}
+
+app.execute_with_args(system_func, MyArgs {
+  flag: false,
+  option: "value".into(),
+});
+```
+
+To access the arguments within the system itself, you can use the `#[system]` macro, coupled with
+the `StateRef<ExecuteArgs, T>` system parameter.
+
+```rust
+#[system]
+async fn system_func(args: StateRef<ExecuteArgs, MyArgs>) {
+  args.flag; // false
+  args.option; // "value"
+}
+```
+
+> If not using the macro, you can access the arguments like so:
+> `states.get::<ExecuteArgs>().extract::<T>();`
+
 ### Shutdown systems
 
 Shutdown runs on successful execution, or on a failure from any phase, and can be used to clean or

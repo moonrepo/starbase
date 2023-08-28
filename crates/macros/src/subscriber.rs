@@ -79,7 +79,8 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
         .sig
         .inputs
         .first()
-        .expect("Requires an event as the only parameter.") else {
+        .expect("Requires an event as the only parameter.")
+    else {
         panic!("Unsupported param type.");
     };
 
