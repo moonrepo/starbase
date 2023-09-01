@@ -1,5 +1,8 @@
 pub mod fs;
 
+#[cfg(feature = "fs-lock")]
+mod fs_lock; // Exported from fs
+
 #[cfg(feature = "glob")]
 pub mod glob;
 
