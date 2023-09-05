@@ -2,7 +2,7 @@ use crate::archive_error::ArchiveError;
 use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
 use rustc_hash::{FxHashMap, FxHashSet};
-use starbase_utils::{fs, glob};
+use starbase_utils::glob;
 use std::path::{Path, PathBuf};
 use tracing::trace;
 
@@ -248,8 +248,6 @@ impl<'owner> Archiver<'owner> {
             input_file = ?self.archive_file,
             "Unpacking archive",
         );
-
-        let _unpack_lock = fs::lock_directory(self.source_root)?;
 
         let mut lookup_paths = vec![];
         lookup_paths.extend(self.source_files.values());

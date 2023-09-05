@@ -93,7 +93,7 @@ impl TarPacker {
     /// Create a new `.tar.zstd` packer.
     #[cfg(feature = "tar-zstd")]
     pub fn new_zstd(output_file: &Path) -> miette::Result<Self> {
-        Self::new_zstd_with_level(output_file, 3)
+        Self::new_zstd_with_level(output_file, 3) // Default in lib
     }
 
     /// Create a new `.tar.zstd` packer with a custom compression level.

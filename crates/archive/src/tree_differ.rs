@@ -103,7 +103,7 @@ impl TreeDiffer {
 
         for file in self.files.drain() {
             // Don't delete our internal directory lock
-            if file.file_name().is_some_and(|n| n == fs::LOCK_FILE) {
+            if file.file_name().is_some_and(|n| n == ".lock") {
                 continue;
             } else {
                 let _ = fs::remove_file(file);
