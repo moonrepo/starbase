@@ -102,7 +102,12 @@ impl TreeDiffer {
         trace!("Removing stale and invalid files");
 
         for file in self.files.drain() {
-            let _ = fs::remove_file(file);
+            // Don't delete our internal directory lock
+            if file.file_name().is_some_and(|n| n == fs::LOCK_FILE) {
+                continue;
+            } else {
+                let _ = fs::remove_file(file);
+            }
         }
     }
 

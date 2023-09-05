@@ -12,6 +12,7 @@ all-features = true
 [dependencies]
 starbase_styles = { version = "0.1.13", path = "../styles" }
 starbase_utils = { version = "0.2.21", path = "../utils", default-features = false, features = [
+	"fs-lock",
 	"glob",
 ] }
 miette = { workspace = true }
