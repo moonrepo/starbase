@@ -11,6 +11,7 @@ use std::mem;
 use std::sync::Arc;
 use tokio::sync::{RwLock, Semaphore};
 use tokio::task;
+use tracing::trace;
 
 pub type AppResult<T = ()> = miette::Result<T>;
 pub type MainResult = miette::Result<()>;
@@ -220,6 +221,8 @@ impl App {
     ) -> AppResult {
         let systems = mem::take(&mut self.startups);
 
+        trace!("Running startup phase with {} systems", systems.len());
+
         self.run_systems_in_serial(systems, states, resources, emitters)
             .await?;
 
@@ -233,6 +236,8 @@ impl App {
         emitters: Emitters,
     ) -> AppResult {
         let systems = mem::take(&mut self.analyzers);
+
+        trace!("Running analyze phase with {} systems", systems.len());
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;
@@ -248,6 +253,8 @@ impl App {
     ) -> AppResult {
         let systems = mem::take(&mut self.executors);
 
+        trace!("Running execute phase with {} systems", systems.len());
+
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;
 
@@ -261,6 +268,8 @@ impl App {
         emitters: Emitters,
     ) -> AppResult {
         let systems = mem::take(&mut self.shutdowns);
+
+        trace!("Running shutdown phase with {} systems", systems.len());
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;
