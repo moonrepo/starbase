@@ -49,6 +49,8 @@ pub fn is_supported_archive_extension(path: &Path) -> bool {
                 || ext == "gz"
                 || ext == "txz"
                 || ext == "xz"
+                || ext == "zstd"
+                || ext == "zst"
                 || ext == "zip"
         })
         .unwrap_or(false)

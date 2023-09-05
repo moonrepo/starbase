@@ -22,3 +22,9 @@ mod tar_xz {
 
     generate_tests!("out.tar.xz", TarPacker::new_xz, TarUnpacker::new_xz);
 }
+
+mod tar_zstd {
+    use super::*;
+
+    generate_tests!("out.tar.zst", TarPacker::new_zstd, TarUnpacker::new_zstd);
+}
