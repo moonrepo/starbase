@@ -24,6 +24,7 @@ flate2 = { version = "1.0.27", optional = true }
 # tar
 tar = { version = "0.4.40", optional = true }
 xz2 = { version = "0.1.7", optional = true }
+zstd = { version = "0.12.4", optional = true }
 
 # zip
 zip = { version = "0.6.6", default-features = false, optional = true }
@@ -32,6 +33,7 @@ zip = { version = "0.6.6", default-features = false, optional = true }
 starbase_archive = { path = ".", features = [
 	"tar-gz",
 	"tar-xz",
+	"tar-zstd",
 	"zip",
 	"zip-deflate",
 ] }
@@ -42,5 +44,6 @@ default = ["tar-gz"]
 tar = ["dep:tar"]
 tar-gz = ["dep:flate2", "tar"]
 tar-xz = ["dep:xz2", "tar"]
+tar-zstd = ["dep:zstd", "tar"]
 zip = ["dep:zip"]
 zip-deflate = ["dep:flate2", "zip", "zip/deflate"]

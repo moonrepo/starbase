@@ -5,6 +5,8 @@ use std::thread;
 use std::time::Duration;
 use tracing::trace;
 
+pub const LOCK_FILE: &str = ".lock";
+
 pub struct DirLock {
     lock: PathBuf,
 }
@@ -44,7 +46,7 @@ pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
         });
     }
 
-    let lock = path.join(".lock");
+    let lock = path.join(LOCK_FILE);
     let pid = std::process::id();
 
     trace!(dir = ?path, pid, "Locking directory");

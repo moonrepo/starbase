@@ -190,6 +190,17 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
+            Some("zst" | "zstd") => {
+                #[cfg(feature = "tar-zstd")]
+                self.pack(crate::tar::TarPacker::new_zstd)?;
+
+                #[cfg(not(feature = "tar-zstd"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-zstd".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
             Some("zip") => {
                 #[cfg(feature = "zip")]
                 self.pack(crate::zip::ZipPacker::new)?;
@@ -284,6 +295,17 @@ impl<'owner> Archiver<'owner> {
                 #[cfg(not(feature = "tar-xz"))]
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-xz".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some("zst" | "zstd") => {
+                #[cfg(feature = "tar-zstd")]
+                self.unpack(crate::tar::TarUnpacker::new_zstd)?;
+
+                #[cfg(not(feature = "tar-zstd"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-zstd".into(),
                     path: self.archive_file.to_path_buf(),
                 }
                 .into());
