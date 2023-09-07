@@ -22,8 +22,13 @@ impl DirLock {
 
 impl Drop for DirLock {
     fn drop(&mut self) {
-        self.unlock()
-            .unwrap_or_else(|_| panic!("Failed to remove directory lock {}", self.lock.display()));
+        self.unlock().unwrap_or_else(|error| {
+            panic!(
+                "Failed to remove directory lock {} ({})",
+                self.lock.display(),
+                error.to_string()
+            )
+        });
     }
 }
 

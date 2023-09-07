@@ -12,15 +12,16 @@ mod fs_lock {
         let dir = sandbox.path().join("dir");
         let mut futures = vec![];
 
-        for _ in 0..10 {
+        for i in 0..10 {
             let dir_clone = dir.clone();
 
             futures.push(tokio::spawn(async move {
-                let lock = fs::lock_directory(dir_clone).await.unwrap();
+                // Stagger
+                tokio::time::sleep(Duration::from_millis(i * 25)).await;
 
-                tokio::time::sleep(Duration::from_millis(500)).await;
+                let _lock = fs::lock_directory(dir_clone).await.unwrap();
 
-                lock.unlock().unwrap();
+                tokio::time::sleep(Duration::from_millis(250)).await;
             }));
         }
 
@@ -35,15 +36,16 @@ mod fs_lock {
         let dir = sandbox.path().join("dir");
         let mut handles = vec![];
 
-        for _ in 0..10 {
+        for i in 0..10 {
             let dir_clone = dir.clone();
 
-            handles.push(thread::spawn(|| {
-                let lock = fs::lock_directory_blocking(dir_clone).unwrap();
+            handles.push(thread::spawn(move || {
+                // Stagger
+                thread::sleep(Duration::from_millis(i * 25));
 
-                thread::sleep(Duration::from_millis(500));
+                let _lock = fs::lock_directory_blocking(dir_clone).unwrap();
 
-                lock.unlock().unwrap();
+                thread::sleep(Duration::from_millis(250));
             }));
         }
 
