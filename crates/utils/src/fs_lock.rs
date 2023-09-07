@@ -26,7 +26,7 @@ impl Drop for DirLock {
             panic!(
                 "Failed to remove directory lock {} ({})",
                 self.lock.display(),
-                error.to_string()
+                error
             )
         });
     }
