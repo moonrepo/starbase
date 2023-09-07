@@ -16,9 +16,9 @@ mod fs_lock {
             let dir_clone = dir.clone();
 
             futures.push(tokio::spawn(async move {
-                let lock = fs::lock_directory(dir_clone).unwrap();
+                let lock = fs::lock_directory(dir_clone).await.unwrap();
 
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_millis(500)).await;
 
                 lock.unlock().unwrap();
             }));
@@ -33,22 +33,22 @@ mod fs_lock {
     fn sync_lock_directory_all_wait() {
         let sandbox = create_empty_sandbox();
         let dir = sandbox.path().join("dir");
-        let mut futures = vec![];
+        let mut handles = vec![];
 
         for _ in 0..10 {
             let dir_clone = dir.clone();
 
-            futures.push(thread::spawn(|| {
-                let lock = fs::lock_directory(dir_clone).unwrap();
+            handles.push(thread::spawn(|| {
+                let lock = fs::lock_directory_blocking(dir_clone).unwrap();
 
-                thread::sleep(Duration::from_secs(1));
+                thread::sleep(Duration::from_millis(500));
 
                 lock.unlock().unwrap();
             }));
         }
 
-        for future in futures {
-            future.join().unwrap();
+        for handle in handles {
+            handle.join().unwrap();
         }
     }
 }

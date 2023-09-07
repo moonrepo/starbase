@@ -60,7 +60,50 @@ pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
 /// This function returns a `DirLock` instance that will automatically unlock
 /// when being dropped.
 #[inline]
-pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
+pub async fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
+    let path = path.as_ref();
+
+    fs::create_dir_all(path)?;
+
+    if !path.is_dir() {
+        return Err(FsError::RequireDir {
+            path: path.to_path_buf(),
+        });
+    }
+
+    let lock = path.join(LOCK_FILE);
+    let pid = std::process::id();
+
+    trace!(dir = ?path, pid, "Locking directory");
+
+    loop {
+        if lock.exists() {
+            let lock_pid = if enabled!(Level::TRACE) {
+                fs::read_file(&lock).ok()
+            } else {
+                None
+            };
+
+            trace!(
+                lock = ?lock,
+                lock_pid,
+                "Lock already exists on directory, waiting 250ms for it to unlock",
+            );
+
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        } else {
+            break;
+        }
+    }
+
+    fs::write_file_with_lock(&lock, format!("{}", pid))?;
+
+    Ok(DirLock { lock })
+}
+
+/// Like [`lock_directory`] but blocks synchronously. Should be used in non-async contexts.
+#[inline]
+pub fn lock_directory_blocking<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
     let path = path.as_ref();
 
     fs::create_dir_all(path)?;
