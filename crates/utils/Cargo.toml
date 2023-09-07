@@ -58,3 +58,4 @@ starbase_utils = { path = ".", features = [
 	"yaml",
 ] }
 starbase_sandbox = { path = "../sandbox" }
+tokio = { workspace = true }

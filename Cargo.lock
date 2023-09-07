@@ -1431,6 +1431,7 @@ dependencies = [
  "starbase_styles",
  "starbase_utils",
  "thiserror",
+ "tokio",
  "toml",
  "tracing",
  "wax",
