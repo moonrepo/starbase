@@ -17,8 +17,9 @@ once_cell = { workspace = true }
 relative-path = { workspace = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
-tracing = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
 
 # editor-config
 ec4rs = { version = "1.0.2", optional = true }
@@ -42,13 +43,14 @@ serde_yaml = { workspace = true, optional = true }
 [features]
 default = []
 editor-config = ["dep:ec4rs"]
-fs-lock = ["dep:fs4"]
+fs-lock = ["dep:fs4", "dep:tokio"]
 glob = ["dep:wax"]
 json = ["dep:json_comments", "dep:regex", "dep:serde", "dep:serde_json"]
 toml = ["dep:toml", "dep:serde"]
 yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
 
 [dev-dependencies]
+starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [
 	"editor-config",
 	"fs-lock",
@@ -57,4 +59,3 @@ starbase_utils = { path = ".", features = [
 	"toml",
 	"yaml",
 ] }
-starbase_sandbox = { path = "../sandbox" }

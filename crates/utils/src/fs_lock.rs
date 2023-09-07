@@ -1,9 +1,10 @@
 use crate::fs::{self, FsError};
+use fs4::FileExt;
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use tracing::trace;
+use tracing::{enabled, trace, Level};
 
 pub const LOCK_FILE: &str = ".lock";
 
@@ -21,8 +22,37 @@ impl DirLock {
 
 impl Drop for DirLock {
     fn drop(&mut self) {
-        self.unlock()
-            .unwrap_or_else(|_| panic!("Failed to remove directory lock {}", self.lock.display()));
+        self.unlock().unwrap_or_else(|error| {
+            panic!(
+                "Failed to remove directory lock {} ({})",
+                self.lock.display(),
+                error
+            )
+        });
+    }
+}
+
+/// Return true if the directory is currently locked (via [`lock_directory`]).
+pub fn is_dir_locked<T: AsRef<Path>>(path: T) -> bool {
+    let dir = path.as_ref();
+
+    dir.exists() && !dir.join(LOCK_FILE).exists()
+}
+
+/// Return true if the file is currently locked (using exclusive).
+/// This function operates by locking the file and checking for
+/// an "is locked/contended" error, which can be brittle.
+pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
+    let Ok(file) = File::open(path) else {
+        return false;
+    };
+
+    match file.try_lock_exclusive() {
+        Ok(()) => {
+            file.unlock().unwrap();
+            false
+        }
+        Err(_) => true,
     }
 }
 
@@ -35,7 +65,7 @@ impl Drop for DirLock {
 /// This function returns a `DirLock` instance that will automatically unlock
 /// when being dropped.
 #[inline]
-pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
+pub async fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
     let path = path.as_ref();
 
     fs::create_dir_all(path)?;
@@ -53,11 +83,54 @@ pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
 
     loop {
         if lock.exists() {
-            let lock_pid = fs::read_file_with_lock(&lock)?.parse::<u32>().ok();
+            let lock_pid = if enabled!(Level::TRACE) {
+                fs::read_file(&lock).ok()
+            } else {
+                None
+            };
 
-            if lock_pid.is_some_and(|lid| lid == pid) {
-                break;
-            }
+            trace!(
+                lock = ?lock,
+                lock_pid,
+                "Lock already exists on directory, waiting 250ms for it to unlock",
+            );
+
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        } else {
+            break;
+        }
+    }
+
+    fs::write_file(&lock, format!("{}", pid))?;
+
+    Ok(DirLock { lock })
+}
+
+/// Like [`lock_directory`] but blocks synchronously. Should be used in non-async contexts.
+#[inline]
+pub fn lock_directory_blocking<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
+    let path = path.as_ref();
+
+    fs::create_dir_all(path)?;
+
+    if !path.is_dir() {
+        return Err(FsError::RequireDir {
+            path: path.to_path_buf(),
+        });
+    }
+
+    let lock = path.join(LOCK_FILE);
+    let pid = std::process::id();
+
+    trace!(dir = ?path, pid, "Locking directory");
+
+    loop {
+        if lock.exists() {
+            let lock_pid = if enabled!(Level::TRACE) {
+                fs::read_file(&lock).ok()
+            } else {
+                None
+            };
 
             trace!(
                 lock = ?lock,
@@ -71,7 +144,7 @@ pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
         }
     }
 
-    fs::write_file_with_lock(&lock, format!("{}", pid))?;
+    fs::write_file(&lock, format!("{}", pid))?;
 
     Ok(DirLock { lock })
 }
@@ -83,8 +156,6 @@ where
     T: AsRef<Path>,
     F: FnOnce(&mut File) -> Result<V, FsError>,
 {
-    use fs4::FileExt;
-
     let path = path.as_ref();
 
     trace!(file = ?path, "Locking file exclusively");
@@ -113,8 +184,6 @@ where
     T: AsRef<Path>,
     F: FnOnce(&mut File) -> Result<V, FsError>,
 {
-    use fs4::FileExt;
-
     let path = path.as_ref();
 
     trace!(file = ?path, "Locking file");
