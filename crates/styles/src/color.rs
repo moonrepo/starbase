@@ -12,21 +12,25 @@ pub use owo_colors::Style as OwoStyle;
 pub enum Color {
     White = 15,
     Black = 16,
-    Green = 35,
     Teal = 36,
     Cyan = 38,
     Blue = 39,
+    Green = 41,
     Purple = 111,
     Lime = 112,
+    Lavender = 147,
     Red = 161,
+    Brown = 172,
     Pink = 183,
     Yellow = 185,
+    Orange = 208,
     Gray = 239,
     GrayLight = 246,
 }
 
 pub enum Style {
     // States
+    Caution,
     Failure,
     Invalid,
     Muted,
@@ -34,20 +38,22 @@ pub enum Style {
     Success,
 
     // Types
-    File,
-    Hash,
-    Id,
-    Label,
-    Path,
-    Shell,
-    Symbol,
-    Url,
+    File,     // rel file paths, file names/exts
+    Hash,     // hashes, shas, commits
+    Id,       // ids, names
+    Label,    // titles, strings
+    Path,     // abs file paths
+    Property, // properties, keys, fields, settings
+    Shell,    // shell, cli, commands
+    Symbol,   // symbols, chars
+    Url,      // urls
 }
 
 impl Style {
     /// Convert the style to a specific [Color].
     pub fn color(&self) -> Color {
         match self {
+            Style::Caution => Color::Orange,
             Style::Failure => Color::Red,
             Style::Invalid => Color::Yellow,
             Style::Muted => Color::Gray,
@@ -58,6 +64,7 @@ impl Style {
             Style::Id => Color::Purple,
             Style::Label => Color::Blue,
             Style::Path => Color::Cyan,
+            Style::Property => Color::Lavender,
             Style::Shell => Color::Pink,
             Style::Symbol => Color::Lime,
             Style::Url => Color::Blue,
@@ -90,6 +97,11 @@ pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
 }
 
 // States
+
+/// Paint a caution state.
+pub fn caution<T: AsRef<str>>(value: T) -> String {
+    paint_style(Style::Caution, value)
+}
 
 /// Paint a failure state.
 pub fn failure<T: AsRef<str>>(value: T) -> String {
@@ -147,6 +159,11 @@ pub fn path<T: AsRef<Path>>(path: T) -> String {
 #[cfg(feature = "relative-path")]
 pub fn rel_path<T: AsRef<relative_path::RelativePath>>(path: T) -> String {
     paint_style(Style::Path, path.as_ref().as_str())
+}
+
+/// Paint a property, key, or setting.
+pub fn property<T: AsRef<str>>(value: T) -> String {
+    paint_style(Style::Property, value)
 }
 
 /// Paint a shell command or input string.
