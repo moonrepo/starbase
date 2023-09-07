@@ -43,6 +43,20 @@ fn removes_stale_files() {
     assert_eq!(differ.files.len(), 0);
 }
 
+#[test]
+fn doesnt_remove_dir_locks() {
+    let sandbox = create_empty_sandbox();
+    sandbox.create_file(".lock", "123");
+    sandbox.create_file("file.txt", "");
+
+    let mut differ = TreeDiffer::load(sandbox.path(), ["**/*"]).unwrap();
+
+    differ.remove_stale_tracked_files();
+
+    assert!(sandbox.path().join(".lock").exists());
+    assert!(!sandbox.path().join("file.txt").exists());
+}
+
 mod equal_check {
     use super::*;
 
