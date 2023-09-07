@@ -34,9 +34,7 @@ impl Drop for DirLock {
 
 /// Return true if the directory is currently locked (via [`lock_directory`]).
 pub fn is_dir_locked<T: AsRef<Path>>(path: T) -> bool {
-    let dir = path.as_ref();
-
-    dir.exists() && !dir.join(LOCK_FILE).exists()
+    path.as_ref().join(LOCK_FILE).exists()
 }
 
 /// Return true if the file is currently locked (using exclusive).
