@@ -101,7 +101,7 @@ pub async fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError>
         }
     }
 
-    fs::write_file_with_lock(&lock, format!("{}", pid))?;
+    fs::write_file(&lock, format!("{}", pid))?;
 
     Ok(DirLock { lock })
 }
@@ -144,7 +144,7 @@ pub fn lock_directory_blocking<T: AsRef<Path>>(path: T) -> Result<DirLock, FsErr
         }
     }
 
-    fs::write_file_with_lock(&lock, format!("{}", pid))?;
+    fs::write_file(&lock, format!("{}", pid))?;
 
     Ok(DirLock { lock })
 }
