@@ -24,7 +24,7 @@ impl Drop for DirLock {
     fn drop(&mut self) {
         self.unlock().unwrap_or_else(|error| {
             panic!(
-                "Failed to remove directory lock {} ({})",
+                "Failed to remove directory lock {}: {}",
                 self.lock.display(),
                 error
             )
