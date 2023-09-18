@@ -480,6 +480,35 @@ pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Remove a file at the provided path if it's older than the provided duration.
+/// If the file does not exist, or is younger than the duration, this is a no-op.
+#[inline]
+pub fn remove_file_if_older_than<T: AsRef<Path>>(
+    path: T,
+    duration: Duration,
+) -> Result<u64, FsError> {
+    let path = path.as_ref();
+
+    if path.exists() {
+        if let Ok(meta) = metadata(path) {
+            let now = SystemTime::now();
+            let last_used = meta
+                .accessed()
+                .or_else(|_| meta.modified())
+                .or_else(|_| meta.created())
+                .unwrap_or_else(|_| now);
+
+            if last_used < (now - duration) {
+                remove_file(path)?;
+
+                return Ok(meta.len());
+            }
+        }
+    }
+
+    Ok(0)
+}
+
 /// Remove a directory, and all of its contents recursively, at the provided path.
 /// If the directory does not exist, this is a no-op.
 #[inline]
@@ -512,7 +541,6 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
 ) -> Result<RemoveDirContentsResult, FsError> {
     let mut files_deleted: usize = 0;
     let mut bytes_saved: u64 = 0;
-    let threshold = SystemTime::now() - duration;
     let dir = dir.as_ref();
 
     trace!(
@@ -524,25 +552,11 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
         let path = entry.path();
 
         if path.is_file() {
-            let mut bytes = 0;
-
-            if let Ok(metadata) = entry.metadata() {
-                bytes = metadata.len();
-
-                if let Ok(filetime) = metadata.accessed().or_else(|_| metadata.created()) {
-                    if filetime > threshold {
-                        // Not stale yet
-                        continue;
-                    }
-                } else {
-                    // Not supported in environment
-                    continue;
+            if let Ok(bytes) = remove_file_if_older_than(path, duration) {
+                if bytes > 0 {
+                    files_deleted += 1;
+                    bytes_saved += bytes;
                 }
-            }
-
-            if remove_file(path).is_ok() {
-                files_deleted += 1;
-                bytes_saved += bytes;
             }
         }
     }
