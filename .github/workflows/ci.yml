@@ -55,6 +55,7 @@ jobs:
           # Requires wasi_ext unstable
           channel: nightly-2023-09-18
           targets: wasm32-wasi
+      - run: rustup target add wasm32-wasi
       - name: Build WASI
         run:
           cargo build --target wasm32-wasi -p starbase_archive -p starbase_events -p starbase -p
