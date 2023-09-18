@@ -58,5 +58,5 @@ jobs:
       - run: rustup target add wasm32-wasi
       - name: Build WASI
         run:
-          cargo build --target wasm32-wasi -p starbase_archive -p starbase_events -p starbase -p
-          starbase_macros -p starbase_styles -p starbase_utils
+          cargo +nightly-2023-09-18 build --target wasm32-wasi -p starbase_archive -p
+          starbase_events -p starbase -p starbase_macros -p starbase_styles -p starbase_utils
