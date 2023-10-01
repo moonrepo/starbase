@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-use wax::{Any, BuildError, LinkBehavior, Negation, Pattern};
+use wax::{Any, BuildError, LinkBehavior, Pattern};
 
 pub use wax::{self, Glob};
 
@@ -18,7 +18,7 @@ pub enum GlobError {
     Create {
         glob: String,
         #[source]
-        error: BuildError<'static>,
+        error: Box<BuildError>,
     },
 
     #[diagnostic(code(glob::invalid_path))]
@@ -104,8 +104,8 @@ impl<'glob> GlobSet<'glob> {
         }
 
         Ok(GlobSet {
-            expressions: wax::any::<Glob<'glob>, _>(ex).unwrap(),
-            negations: wax::any::<Glob<'glob>, _>(ng).unwrap(),
+            expressions: wax::any(ex).unwrap(),
+            negations: wax::any(ng).unwrap(),
             enabled: count > 0,
         })
     }
@@ -143,7 +143,7 @@ impl<'glob> GlobSet<'glob> {
 pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
     Glob::new(pattern).map_err(|error| GlobError::Create {
         glob: pattern.to_owned(),
-        error: error.into_owned(),
+        error: Box::new(error),
     })
 }
 
@@ -254,20 +254,16 @@ where
     let (expressions, mut negations) = split_patterns(patterns);
     negations.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
-    let negation = Negation::try_from_patterns(negations).unwrap();
     let mut paths = vec![];
 
     for expression in expressions {
-        for entry in
-            create_glob(expression)?.walk_with_behavior(base_dir.as_ref(), LinkBehavior::ReadFile)
+        for entry in create_glob(expression)?
+            .walk_with_behavior(base_dir.as_ref(), LinkBehavior::ReadFile)
+            .not(negations.clone())
+            .unwrap()
         {
             match entry {
                 Ok(e) => {
-                    // Filter out negated results
-                    if negation.target(&e).is_some() {
-                        continue;
-                    }
-
                     paths.push(e.into_path());
                 }
                 Err(_) => {
