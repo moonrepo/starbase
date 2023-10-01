@@ -496,7 +496,7 @@ pub fn remove_file_if_older_than<T: AsRef<Path>>(
                 .accessed()
                 .or_else(|_| meta.modified())
                 .or_else(|_| meta.created())
-                .unwrap_or_else(|_| now);
+                .unwrap_or(now);
 
             if last_used < (now - duration) {
                 remove_file(path)?;

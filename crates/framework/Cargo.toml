@@ -17,7 +17,7 @@ starbase_styles = { version = "0.1.15", path = "../styles", features = [
 	"theme",
 ] }
 async-trait = { workspace = true }
-chrono = { version = "0.4.29", default-features = false, features = [
+chrono = { version = "0.4.31", default-features = false, features = [
 	"clock",
 	"std",
 ] }
