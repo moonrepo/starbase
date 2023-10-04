@@ -5,6 +5,15 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
 
+mod clean {
+    use super::*;
+
+    #[test]
+    pub fn bypasses_empty_string() {
+        assert_eq!(json::clean(""), "");
+    }
+}
+
 mod merge {
     use super::*;
 

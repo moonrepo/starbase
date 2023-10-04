@@ -54,12 +54,19 @@ static CLEAN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r",(?P<valid>\s*})").u
 pub fn clean<D: AsRef<str>>(json: D) -> String {
     let json = json.as_ref();
 
+    if json.is_empty() {
+        return json.to_owned();
+    }
+
     // Remove comments
     let mut stripped = String::with_capacity(json.len());
 
-    StripComments::new(json.as_bytes())
+    if StripComments::new(json.as_bytes())
         .read_to_string(&mut stripped)
-        .unwrap();
+        .is_err()
+    {
+        stripped = json.to_owned();
+    }
 
     // Remove trailing commas
     CLEAN_REGEX.replace_all(&stripped, "$valid").to_string()
