@@ -291,10 +291,9 @@ impl App {
             let states = Arc::clone(&states);
             let resources = Arc::clone(&resources);
             let emitters = Arc::clone(&emitters);
-            let semaphore = Arc::clone(&semaphore);
+            let permit = semaphore.clone().acquire_owned().await.into_diagnostic()?;
 
             futures.push(task::spawn(async move {
-                let permit = semaphore.acquire().await.into_diagnostic()?;
                 let result = system.run(states, resources, emitters).await;
                 drop(permit);
                 result
