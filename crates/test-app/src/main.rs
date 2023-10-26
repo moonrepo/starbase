@@ -79,7 +79,7 @@ async fn create_file() {
 
     let _lock = fs::lock_directory(env::current_dir().unwrap().join("foo"))?;
 
-    sleep(Duration::new(5, 0)).await;
+    sleep(Duration::new(10, 0)).await;
 }
 
 #[system]

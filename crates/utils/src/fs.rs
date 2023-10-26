@@ -195,9 +195,10 @@ pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     })
 }
 
-/// Like [`create_file`] but does not truncate existing file contents.
+/// Like [`create_file`] but does not truncate existing file contents,
+/// and only creates if the file is missing.
 #[inline]
-pub fn create_file_safe<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+pub fn create_file_if_missing<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
 
     if let Some(parent) = path.parent() {

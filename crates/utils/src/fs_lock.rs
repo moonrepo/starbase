@@ -91,7 +91,12 @@ pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
     //
     // Context: https://www.reddit.com/r/rust/comments/14hlx8u/comment/jpbmsh2/?utm_source=reddit&utm_medium=web2x&context=3
     let lock = path.join(LOCK_FILE);
-    let mut file = fs::create_file_safe(&lock)?;
+    let mut file = fs::create_file_if_missing(&lock)?;
+
+    trace!(
+        lock = ?lock,
+        "Waiting to acquire lock on directory",
+    );
 
     // This blocks if another process has access!
     file.lock_exclusive().map_err(|error| FsError::Lock {
@@ -212,7 +217,7 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
     // Don't use create_file() as it truncates, which will cause
     // other processes to crash if they attempt to read it while
     // the lock is active!
-    lock_file_exclusive(path, fs::create_file_safe(path)?, |file| {
+    lock_file_exclusive(path, fs::create_file_if_missing(path)?, |file| {
         trace!(file = ?path, "Writing file");
 
         // Truncate then write file
