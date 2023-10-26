@@ -15,9 +15,13 @@ impl DirLock {
     pub fn unlock(&self) -> Result<(), FsError> {
         trace!(dir = ?self.lock.parent().unwrap(), "Unlocking directory");
 
-        self.file.unlock().map_err(|error| FsError::Unlock {
-            path: self.lock.to_path_buf(),
-            error,
+        self.file.unlock().map_err(|error| {
+            dbg!(&error);
+
+            FsError::Unlock {
+                path: self.lock.to_path_buf(),
+                error,
+            }
         })?;
 
         fs::remove_file(&self.lock)
@@ -27,6 +31,8 @@ impl DirLock {
 impl Drop for DirLock {
     fn drop(&mut self) {
         self.unlock().unwrap_or_else(|error| {
+            dbg!(&error);
+
             panic!(
                 "Failed to remove directory lock {}: {}",
                 self.lock.display(),
