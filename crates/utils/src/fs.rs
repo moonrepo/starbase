@@ -272,7 +272,7 @@ where
     let findable = dir.join(name);
 
     trace!(
-        needle = ?findable,
+        root = ?findable,
         "Traversing upwards to find a root"
     );
 

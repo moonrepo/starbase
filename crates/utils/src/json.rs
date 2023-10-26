@@ -11,8 +11,9 @@ use std::{io::Read, path::PathBuf};
 use thiserror::Error;
 use tracing::trace;
 
+pub use serde_json;
 pub use serde_json::{
-    from_str, from_value, json, to_string, to_string_pretty, to_value, Map as JsonMap,
+    from_slice, from_str, from_value, json, to_string, to_string_pretty, to_value, Map as JsonMap,
     Number as JsonNumber, Value as JsonValue,
 };
 
