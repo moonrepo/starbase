@@ -195,6 +195,27 @@ pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
     })
 }
 
+/// Like [`create_file`] but does not truncate existing file contents.
+#[inline]
+pub fn create_file_safe<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+    let path = path.as_ref();
+
+    if let Some(parent) = path.parent() {
+        create_dir_all(parent)?;
+    }
+
+    trace!(file = ?path, "Creating file without truncating");
+
+    OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(path)
+        .map_err(|error| FsError::Create {
+            path: path.to_path_buf(),
+            error,
+        })
+}
+
 /// Create a directory and all parent directories if they do not exist.
 /// If the directory already exists, this is a no-op.
 #[inline]

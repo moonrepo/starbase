@@ -3,7 +3,10 @@ use starbase::style::{Style, Stylize};
 use starbase::tracing::{debug, info, warn};
 use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
 use starbase_utils::{fs, glob};
+use std::env;
 use std::path::PathBuf;
+use std::time::Duration;
+use tokio::time::sleep;
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {
@@ -73,6 +76,10 @@ async fn finish(state: StateRef<TestState>) {
 #[system]
 async fn create_file() {
     test_lib::create_file()?;
+
+    let _lock = fs::lock_directory(env::current_dir().unwrap().join("foo"))?;
+
+    sleep(Duration::new(5, 0)).await;
 }
 
 #[system]
