@@ -1,6 +1,6 @@
 [package]
 name = "starbase"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 license = "MIT"
 description = "Framework for building performant command line applications and developer tools."
@@ -11,8 +11,8 @@ readme = "../../README.md"
 all-features = true
 
 [dependencies]
-starbase_events = { version = "0.2.1", path = "../events" }
-starbase_macros = { version = "0.2.6", path = "../macros" }
+starbase_events = { version = "0.2.2", path = "../events" }
+starbase_macros = { version = "0.2.7", path = "../macros" }
 starbase_styles = { version = "0.1.16", path = "../styles", features = [
 	"theme",
 ] }
