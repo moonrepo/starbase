@@ -2,55 +2,41 @@ use starbase_sandbox::create_empty_sandbox;
 use starbase_utils::fs;
 use std::thread;
 use std::time::Duration;
+use std::time::Instant;
 
 mod fs_lock {
     use super::*;
 
-    #[tokio::test]
-    async fn async_lock_directory_all_wait() {
-        let sandbox = create_empty_sandbox();
-        let dir = sandbox.path().join("dir");
-        let mut futures = vec![];
+    mod lock_directory {
+        use super::*;
 
-        for i in 0..10 {
-            let dir_clone = dir.clone();
+        #[test]
+        fn all_wait() {
+            let sandbox = create_empty_sandbox();
+            let dir = sandbox.path().join("dir");
+            let mut handles = vec![];
+            let start = Instant::now();
 
-            futures.push(tokio::spawn(async move {
-                // Stagger
-                tokio::time::sleep(Duration::from_millis(i * 25)).await;
+            for i in 0..10 {
+                let dir_clone = dir.clone();
 
-                let _lock = fs::lock_directory(dir_clone).await.unwrap();
+                handles.push(thread::spawn(move || {
+                    // Stagger
+                    thread::sleep(Duration::from_millis(i * 25));
 
-                tokio::time::sleep(Duration::from_millis(250)).await;
-            }));
-        }
+                    let _lock = fs::lock_directory(dir_clone).unwrap();
 
-        for future in futures {
-            future.await.unwrap();
-        }
-    }
+                    thread::sleep(Duration::from_millis(250));
+                }));
+            }
 
-    #[test]
-    fn sync_lock_directory_all_wait() {
-        let sandbox = create_empty_sandbox();
-        let dir = sandbox.path().join("dir");
-        let mut handles = vec![];
+            for handle in handles {
+                handle.join().unwrap();
+            }
 
-        for i in 0..10 {
-            let dir_clone = dir.clone();
+            let elapsed = start.elapsed();
 
-            handles.push(thread::spawn(move || {
-                // Stagger
-                thread::sleep(Duration::from_millis(i * 25));
-
-                let _lock = fs::lock_directory_blocking(dir_clone).unwrap();
-
-                thread::sleep(Duration::from_millis(250));
-            }));
-        }
-
-        for handle in handles {
-            handle.join().unwrap();
+            assert!(elapsed >= Duration::from_millis(2500));
         }
     }
 }

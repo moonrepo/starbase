@@ -1,20 +1,24 @@
 use crate::fs::{self, FsError};
 use fs4::FileExt;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::time::Duration;
-use tracing::{enabled, trace, Level};
+use tracing::trace;
 
 pub const LOCK_FILE: &str = ".lock";
 
 pub struct DirLock {
     lock: PathBuf,
+    file: File,
 }
 
 impl DirLock {
     pub fn unlock(&self) -> Result<(), FsError> {
         trace!(dir = ?self.lock.parent().unwrap(), "Unlocking directory");
+
+        self.file.unlock().map_err(|error| FsError::Unlock {
+            path: self.lock.to_path_buf(),
+            error,
+        })?;
 
         fs::remove_file(&self.lock)
     }
@@ -63,7 +67,9 @@ pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
 /// This function returns a `DirLock` instance that will automatically unlock
 /// when being dropped.
 #[inline]
-pub async fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
+pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
+    use std::io::prelude::*;
+
     let path = path.as_ref();
 
     fs::create_dir_all(path)?;
@@ -74,77 +80,46 @@ pub async fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError>
         });
     }
 
+    trace!(dir = ?path, "Locking directory");
+
+    // We can't rely on the existence of the `.lock` file, because if the
+    // process is killed, the `DirLock` is not dropped, and the file is not removed!
+    // Subsequent processes would hang thinking the directory is locked.
+    //
+    // Instead, we can use system-level file locking, which blocks waiting
+    // for write access, and will be "unlocked" automatically by the kernel.
+    //
+    // Context: https://www.reddit.com/r/rust/comments/14hlx8u/comment/jpbmsh2/?utm_source=reddit&utm_medium=web2x&context=3
     let lock = path.join(LOCK_FILE);
+    let mut file = fs::create_file_if_missing(&lock)?;
+
+    trace!(
+        lock = ?lock,
+        "Waiting to acquire lock on directory",
+    );
+
+    // This blocks if another process has access!
+    file.lock_exclusive().map_err(|error| FsError::Lock {
+        path: path.to_path_buf(),
+        error,
+    })?;
+
     let pid = std::process::id();
 
-    trace!(dir = ?path, pid, "Locking directory");
+    trace!(
+        lock = ?lock,
+        pid,
+        "Acquired lock on directory, writing PID",
+    );
 
-    loop {
-        if lock.exists() {
-            let lock_pid = if enabled!(Level::TRACE) {
-                fs::read_file(&lock).ok()
-            } else {
-                None
-            };
-
-            trace!(
-                lock = ?lock,
-                lock_pid,
-                "Lock already exists on directory, waiting 250ms for it to unlock",
-            );
-
-            tokio::time::sleep(Duration::from_millis(250)).await;
-        } else {
-            break;
-        }
-    }
-
-    fs::write_file(&lock, format!("{}", pid))?;
-
-    Ok(DirLock { lock })
-}
-
-/// Like [`lock_directory`] but blocks synchronously. Should be used in non-async contexts.
-#[inline]
-pub fn lock_directory_blocking<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
-    let path = path.as_ref();
-
-    fs::create_dir_all(path)?;
-
-    if !path.is_dir() {
-        return Err(FsError::RequireDir {
+    // Let other processes know that we have locked it
+    file.write(format!("{}", pid).as_ref())
+        .map_err(|error| FsError::Write {
             path: path.to_path_buf(),
-        });
-    }
+            error,
+        })?;
 
-    let lock = path.join(LOCK_FILE);
-    let pid = std::process::id();
-
-    trace!(dir = ?path, pid, "Locking directory");
-
-    loop {
-        if lock.exists() {
-            let lock_pid = if enabled!(Level::TRACE) {
-                fs::read_file(&lock).ok()
-            } else {
-                None
-            };
-
-            trace!(
-                lock = ?lock,
-                lock_pid,
-                "Lock already exists on directory, waiting 250ms for it to unlock",
-            );
-
-            thread::sleep(Duration::from_millis(250));
-        } else {
-            break;
-        }
-    }
-
-    fs::write_file(&lock, format!("{}", pid))?;
-
-    Ok(DirLock { lock })
+    Ok(DirLock { lock, file })
 }
 
 /// Lock the provided file with exclusive access and execute the operation.
@@ -239,20 +214,10 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
         error,
     };
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
     // Don't use create_file() as it truncates, which will cause
     // other processes to crash if they attempt to read it while
     // the lock is active!
-    let file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(path)
-        .map_err(handle_error)?;
-
-    lock_file_exclusive(path, file, |file| {
+    lock_file_exclusive(path, fs::create_file_if_missing(path)?, |file| {
         trace!(file = ?path, "Writing file");
 
         // Truncate then write file
