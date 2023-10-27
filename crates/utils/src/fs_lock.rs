@@ -15,10 +15,25 @@ impl DirLock {
     pub fn unlock(&self) -> Result<(), FsError> {
         trace!(dir = ?self.lock.parent().unwrap(), "Unlocking directory");
 
-        self.file.unlock().map_err(|error| FsError::Unlock {
+        let handle_error = |error: std::io::Error| FsError::Unlock {
             path: self.lock.to_path_buf(),
             error,
-        })?;
+        };
+
+        // On Windows this may have already been unlocked,
+        // and will trigger a "already unlocked" error,
+        // so account for it instead of panicing!
+        #[cfg(windows)]
+        if let Err(error) = self.file.unlock() {
+            if error.raw_os_error().is_some_and(|os| os == 158) {
+                // Ignore uncategorized: The segment is already unlocked.
+            } else {
+                return Err(handle_error(error));
+            }
+        }
+
+        #[cfg(not(windows))]
+        self.file.unlock().map_err(handle_error)?;
 
         fs::remove_file(&self.lock)
     }
