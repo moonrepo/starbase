@@ -12,6 +12,28 @@ mod clean {
     pub fn bypasses_empty_string() {
         assert_eq!(json::clean(""), "");
     }
+
+    #[test]
+    pub fn removes_comments() {
+        assert_eq!(
+            json::clean(r#"{ "foo": true } // comment"#),
+            r#"{ "foo": true }           "#
+        );
+        assert_eq!(
+            json::clean(r#"{ "foo": true /* comment */ }"#),
+            r#"{ "foo": true               }"#
+        );
+
+        assert_eq!(
+            json::clean(r#"{ "foo": true /** comment */ }"#),
+            r#"{ "foo": true                }"#
+        );
+
+        assert_eq!(
+            json::clean(r#"{ "foo": true /** comment **/ }"#),
+            r#"{ "foo": true                 }"#
+        );
+    }
 }
 
 mod merge {
