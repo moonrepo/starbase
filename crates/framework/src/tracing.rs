@@ -78,7 +78,7 @@ impl FormatTime for EventFormatter {
         let current_hour = current_timestamp.hour() as u8;
 
         if current_hour == LAST_HOUR.load(Ordering::Acquire) {
-            date_format = "%H:%M:%S";
+            date_format = "%M:%S%.3f";
         } else {
             LAST_HOUR.store(current_hour, Ordering::Release);
         }
