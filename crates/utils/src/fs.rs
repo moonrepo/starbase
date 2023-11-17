@@ -255,27 +255,44 @@ pub fn file_name<T: AsRef<Path>>(path: T) -> String {
 /// and traverse upwards until one is found. If no file is found,
 /// returns [`None`].
 #[inline]
-pub fn find_upwards<F, P>(name: F, starting_dir: P) -> Option<PathBuf>
+pub fn find_upwards<F, P>(name: F, start_dir: P) -> Option<PathBuf>
 where
     F: AsRef<OsStr>,
     P: AsRef<Path>,
 {
-    let dir = starting_dir.as_ref();
+    find_upwards_until(name, start_dir, PathBuf::from("/"))
+}
+
+/// Find a file with the provided name in the starting directory,
+/// and traverse upwards until one is found, or stop traversing
+/// if we hit the ending directory. If no file is found, returns [`None`].
+#[inline]
+pub fn find_upwards_until<F, S, E>(name: F, start_dir: S, end_dir: E) -> Option<PathBuf>
+where
+    F: AsRef<OsStr>,
+    S: AsRef<Path>,
+    E: AsRef<Path>,
+{
+    let dir = start_dir.as_ref();
     let name = name.as_ref();
     let findable = dir.join(name);
 
     trace!(
         file = name.to_str(),
         dir = ?dir,
-        "Traversing upwards to find a file"
+        "Traversing upwards to find a file/root"
     );
 
     if findable.exists() {
         return Some(findable);
     }
 
+    if dir == end_dir.as_ref() {
+        return None;
+    }
+
     match dir.parent() {
-        Some(parent_dir) => find_upwards(name, parent_dir),
+        Some(parent_dir) => find_upwards_until(name, parent_dir, end_dir),
         None => None,
     }
 }
@@ -284,28 +301,26 @@ where
 /// from the starting directory, and traverse upwards until one is found.
 /// If no root is found, returns [`None`].
 #[inline]
-pub fn find_upwards_root<F, P>(name: F, starting_dir: P) -> Option<PathBuf>
+pub fn find_upwards_root<F, P>(name: F, start_dir: P) -> Option<PathBuf>
 where
     F: AsRef<OsStr>,
     P: AsRef<Path>,
 {
-    let dir = starting_dir.as_ref();
-    let name = name.as_ref();
-    let findable = dir.join(name);
+    find_upwards_root_until(name, start_dir, PathBuf::from("/"))
+}
 
-    trace!(
-        root = ?findable,
-        "Traversing upwards to find a root"
-    );
-
-    if findable.exists() {
-        return Some(dir.to_path_buf());
-    }
-
-    match dir.parent() {
-        Some(parent_dir) => find_upwards_root(name, parent_dir),
-        None => None,
-    }
+/// Find the root directory that contains the file with the provided name,
+/// from the starting directory, and traverse upwards until one is found,
+/// or stop traversing if we hit the ending directory. If no root is found,
+/// returns [`None`].
+#[inline]
+pub fn find_upwards_root_until<F, S, E>(name: F, start_dir: S, end_dir: E) -> Option<PathBuf>
+where
+    F: AsRef<OsStr>,
+    S: AsRef<Path>,
+    E: AsRef<Path>,
+{
+    find_upwards_until(name, start_dir, end_dir).map(|p| p.parent().unwrap().to_path_buf())
 }
 
 #[cfg(feature = "editor-config")]
@@ -392,14 +407,13 @@ pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
 #[inline]
 pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     let path = path.as_ref();
-
-    trace!(dir = ?path, "Reading directory");
-
     let mut results = vec![];
 
     if !path.exists() {
         return Ok(results);
     }
+
+    trace!(dir = ?path, "Reading directory");
 
     let entries = fs::read_dir(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
