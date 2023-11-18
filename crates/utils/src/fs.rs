@@ -489,10 +489,36 @@ pub fn remove<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if path.exists() {
-        if path.is_file() {
+        if path.is_symlink() {
+            remove_link(path)?;
+        } else if path.is_file() {
             remove_file(path)?;
         } else if path.is_dir() {
             remove_dir_all(path)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Remove a symlink at the provided path. If the file does not exist, or is not a
+/// symlink, this is a no-op.
+#[inline]
+pub fn remove_link<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
+    let path = path.as_ref();
+
+    // We can't use an `exists` check as it will return false if the source file
+    // no longer exists, but the symlink does exist (broken link). To actually
+    // remove the symlink when in a broken state, we need to read the metadata
+    // and infer the state ourself.
+    if let Ok(metadata) = path.symlink_metadata() {
+        if metadata.is_symlink() {
+            trace!(file = ?path, "Removing symlink");
+
+            fs::remove_file(path).map_err(|error| FsError::Remove {
+                path: path.to_path_buf(),
+                error,
+            })?;
         }
     }
 
