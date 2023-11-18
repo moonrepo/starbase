@@ -77,6 +77,7 @@ mod fs_base {
 
             assert!(!src.exists());
             assert!(!link.exists());
+            assert!(link.symlink_metadata().is_err()); // extra check
         }
 
         #[test]
