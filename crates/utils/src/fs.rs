@@ -488,12 +488,10 @@ pub fn read_file_bytes<T: AsRef<Path>>(path: T) -> Result<Vec<u8>, FsError> {
 pub fn remove<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    if path.exists() {
-        if path.is_file() {
-            remove_file(path)?;
-        } else if path.is_dir() {
-            remove_dir_all(path)?;
-        }
+    if path.is_dir() {
+        remove_dir_all(path)?;
+    } else {
+        remove_file(path)?;
     }
 
     Ok(())
@@ -504,7 +502,9 @@ pub fn remove<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    if path.exists() {
+    // Use `try_exists` so that broken symbolic links still return true
+    // https://doc.rust-lang.org/std/fs/fn.try_exists.html
+    if path.try_exists().is_ok() {
         trace!(file = ?path, "Removing file");
 
         fs::remove_file(path).map_err(|error| FsError::Remove {
@@ -525,7 +525,7 @@ pub fn remove_file_if_older_than<T: AsRef<Path>>(
 ) -> Result<u64, FsError> {
     let path = path.as_ref();
 
-    if path.exists() {
+    if path.try_exists().is_ok() {
         if let Ok(meta) = metadata(path) {
             let now = SystemTime::now();
             let last_used = meta
@@ -551,7 +551,7 @@ pub fn remove_file_if_older_than<T: AsRef<Path>>(
 pub fn remove_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    if path.exists() {
+    if path.try_exists().is_ok() {
         trace!(dir = ?path, "Removing directory");
 
         fs::remove_dir_all(path).map_err(|error| FsError::Remove {

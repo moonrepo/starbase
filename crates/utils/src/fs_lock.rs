@@ -35,7 +35,10 @@ impl DirLock {
         #[cfg(not(windows))]
         self.file.unlock().map_err(handle_error)?;
 
-        fs::remove_file(&self.lock)
+        // Ignore the error, as only the lock is really important
+        let _ = fs::remove_file(&self.lock);
+
+        Ok(())
     }
 }
 
