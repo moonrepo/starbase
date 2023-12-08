@@ -111,6 +111,8 @@ impl TarPacker {
 
 impl ArchivePacker for TarPacker {
     fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()> {
+        trace!(source = name, input = ?file, "Packing file");
+
         self.archive
             .append_file(name, &mut fs::open_file(file)?)
             .map_err(|error| TarError::AddFailure {
@@ -203,6 +205,8 @@ impl ArchiveUnpacker for TarUnpacker {
 
         trace!(output_dir = ?self.output_dir, "Opening tarball");
 
+        let mut count = 0;
+
         for entry in self
             .archive
             .entries()
@@ -223,7 +227,7 @@ impl ArchiveUnpacker for TarUnpacker {
                 fs::create_dir_all(parent_dir)?;
             }
 
-            trace!(source = ?path, "Unpacking file");
+            // trace!(source = ?path, "Unpacking file");
 
             // NOTE: gzip doesn't support seeking, so we can't use the following util then!
             // if differ.should_write_source(entry.size(), &mut entry, &output_path)? {
@@ -236,7 +240,10 @@ impl ArchiveUnpacker for TarUnpacker {
             // }
 
             differ.untrack_file(&output_path);
+            count += 1;
         }
+
+        trace!("Unpacked {} files", count);
 
         Ok(())
     }

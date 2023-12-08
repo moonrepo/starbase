@@ -175,6 +175,8 @@ impl ArchiveUnpacker for ZipUnpacker {
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
         trace!(output_dir = ?self.output_dir, "Opening zip");
 
+        let mut count = 0;
+
         for i in 0..self.archive.len() {
             let mut file = self
                 .archive
@@ -212,7 +214,10 @@ impl ArchiveUnpacker for ZipUnpacker {
             }
 
             differ.untrack_file(&output_path);
+            count += 1;
         }
+
+        trace!("Unpacked {} files", count);
 
         Ok(())
     }
