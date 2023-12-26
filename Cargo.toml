@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.dependencies]
-async-trait = "0.1.74"
+async-trait = "0.1.75"
 miette = "5.10.0"
 once_cell = "1.19.0"
 regex = { version = "1.10.2", default-features = false }
@@ -11,9 +11,9 @@ relative-path = "1.9.0"
 rustc-hash = "1.1.0"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
-serde_yaml = "0.9.27"
-thiserror = "1.0.50"
-tokio = { version = "1.34.0", default-features = false, features = [
+serde_yaml = "0.9.29"
+thiserror = "1.0.52"
+tokio = { version = "1.35.1", default-features = false, features = [
 	"io-util",
 	"rt",
 	"sync",
