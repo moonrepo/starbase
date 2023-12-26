@@ -73,7 +73,7 @@ impl FormatTime for EventFormatter {
             return write!(writer, "YYYY-MM-DD");
         }
 
-        let mut date_format = "%Y-%m-%d %H:%M:%S.3f";
+        let mut date_format = "%Y-%m-%d %H:%M:%S%.3f";
         let current_timestamp = Local::now();
         let current_hour = current_timestamp.hour() as u8;
 
