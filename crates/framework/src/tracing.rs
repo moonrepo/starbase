@@ -73,12 +73,12 @@ impl FormatTime for EventFormatter {
             return write!(writer, "YYYY-MM-DD");
         }
 
-        let mut date_format = "%Y-%m-%d %H:%M:%S";
+        let mut date_format = "%Y-%m-%d %H:%M:%S.3f";
         let current_timestamp = Local::now();
         let current_hour = current_timestamp.hour() as u8;
 
         if current_hour == LAST_HOUR.load(Ordering::Acquire) {
-            date_format = "%M:%S%.3f";
+            date_format = "%H:%M:%S%.3f";
         } else {
             LAST_HOUR.store(current_hour, Ordering::Release);
         }
