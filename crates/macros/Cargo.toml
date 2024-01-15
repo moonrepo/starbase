@@ -11,9 +11,9 @@ proc-macro = true
 
 [dependencies]
 darling = "0.20.3"
-proc-macro2 = "1.0.71"
-quote = "1.0.33"
-syn = { version = "2.0.43", features = ["full"] }
+proc-macro2 = "1.0.76"
+quote = "1.0.35"
+syn = { version = "2.0.48", features = ["full"] }
 
 [features]
 tracing = []

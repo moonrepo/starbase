@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput};
+use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
 // #[derive(Resource)]
 pub fn macro_impl(item: TokenStream) -> TokenStream {
@@ -14,17 +14,57 @@ pub fn macro_impl(item: TokenStream) -> TokenStream {
     };
 
     match input.data {
-        Data::Struct(_) => quote! {
-            #shared_impl
+        Data::Struct(data) => {
+            let mut impls = vec![
+                shared_impl,
+                quote! {
+                    #[automatically_derived]
+                    impl AsRef<#struct_name> for #struct_name {
+                        fn as_ref(&self) -> &#struct_name {
+                            self
+                        }
+                    }
+                },
+            ];
 
-            #[automatically_derived]
-            impl AsRef<#struct_name> for #struct_name {
-                fn as_ref(&self) -> &#struct_name {
-                    self
+            match &data.fields {
+                Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
+                    let inner = fields.unnamed.first().unwrap();
+                    let inner_type = &inner.ty;
+
+                    impls.push(quote! {
+                        #[automatically_derived]
+                        impl std::ops::Deref for #struct_name {
+                            type Target = #inner_type;
+
+                            fn deref(&self) -> &Self::Target {
+                                &self.0
+                            }
+                        }
+
+                        #[automatically_derived]
+                        impl std::ops::DerefMut for #struct_name {
+                            fn deref_mut(&mut self) -> &mut Self::Target {
+                                &mut self.0
+                            }
+                        }
+
+                        #[automatically_derived]
+                        impl AsRef<#inner_type> for #struct_name {
+                            fn as_ref(&self) -> &#inner_type {
+                                &self.0
+                            }
+                        }
+                    });
                 }
+                _ => {}
             }
+
+            quote! {
+                #(#impls)*
+            }
+            .into()
         }
-        .into(),
         Data::Enum(_) => shared_impl.into(),
         Data::Union(_) => panic!("#[derive(Resource)] is not supported for unions."),
     }
