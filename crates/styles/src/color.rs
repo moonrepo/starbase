@@ -28,6 +28,7 @@ pub enum Color {
     GrayLight = 246,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum Style {
     // States
     Caution,
@@ -94,6 +95,50 @@ pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
     } else {
         paint(style.color() as u8, value)
     }
+}
+
+/// Apply styles to a string by replacing style specific tags.
+/// For example, `<file>starbase.json</file>`.
+pub fn apply_style_tags<T: AsRef<str>>(value: T) -> String {
+    let mut message = value.as_ref().to_owned();
+
+    for style in [
+        Style::Caution,
+        Style::Failure,
+        Style::File,
+        Style::Hash,
+        Style::Id,
+        Style::Invalid,
+        Style::Label,
+        Style::Muted,
+        Style::MutedLight,
+        Style::Path,
+        Style::Property,
+        Style::Shell,
+        Style::Success,
+        Style::Symbol,
+        Style::Url,
+    ] {
+        let tag_name = format!("{:?}", style).to_lowercase();
+        let open_tag = format!("<{}>", tag_name);
+        let close_tag = format!("</{}>", tag_name);
+
+        while let Some(open_index) = message.find(&open_tag) {
+            if let Some(close_index) = message.find(&close_tag) {
+                let inner = &message[open_index + open_tag.len()..close_index];
+
+                message = message.replace(
+                    &format!("{}{}{}", open_tag, inner, close_tag),
+                    &paint_style(style, inner),
+                );
+            } else {
+                // No closing? Just remove the opening...
+                message = message.replace(&open_tag, "");
+            }
+        }
+    }
+
+    message
 }
 
 // States
