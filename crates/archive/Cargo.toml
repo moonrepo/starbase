@@ -10,7 +10,7 @@ repository = "https://github.com/moonrepo/starbase"
 all-features = true
 
 [dependencies]
-starbase_styles = { version = "0.1.16", path = "../styles" }
+starbase_styles = { version = "0.1.17", path = "../styles" }
 starbase_utils = { version = "0.3.11", path = "../utils", default-features = false, features = [
 	"glob",
 ] }

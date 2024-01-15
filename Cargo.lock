@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "starbase"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1327,7 +1327,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_macros"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -1337,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -1351,7 +1351,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_styles"
-version = "0.1.16"
+version = "0.1.17"
 dependencies = [
  "dirs",
  "miette",
