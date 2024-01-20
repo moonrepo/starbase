@@ -102,6 +102,10 @@ pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
 pub fn apply_style_tags<T: AsRef<str>>(value: T) -> String {
     let mut message = value.as_ref().to_owned();
 
+    if !message.contains('<') {
+        return message;
+    }
+
     for style in [
         Style::Caution,
         Style::Failure,

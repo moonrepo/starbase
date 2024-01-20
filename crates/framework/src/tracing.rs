@@ -1,5 +1,6 @@
 use chrono::{Local, Timelike};
 use starbase_styles::color;
+use starbase_styles::color::apply_style_tags;
 use std::env;
 use std::io;
 use std::path::PathBuf;
@@ -28,7 +29,7 @@ struct FieldVisitor<'writer> {
 impl<'writer> Visit for FieldVisitor<'writer> {
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         if field.name() == "message" {
-            self.record_debug(field, &format_args!("{}", value))
+            self.record_debug(field, &format_args!("{}", apply_style_tags(value)))
         } else {
             self.record_debug(field, &value)
         }
@@ -37,7 +38,6 @@ impl<'writer> Visit for FieldVisitor<'writer> {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
             write!(self.writer, "  {:?} ", value).unwrap()
-        // } else if !TEST_ENV.load(Ordering::Relaxed) {
         } else {
             write!(
                 self.writer,
