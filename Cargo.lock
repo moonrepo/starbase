@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "starbase"
-version = "0.2.13"
+version = "0.2.14"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1351,7 +1351,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_styles"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "dirs",
  "miette",
