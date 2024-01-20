@@ -94,7 +94,7 @@ async fn fail() {
             panic!("This paniced!");
         }
 
-        warn!("fail");
+        warn!("<caution>fail</caution>");
         return Err(AppError::Test)?;
     }
 }
