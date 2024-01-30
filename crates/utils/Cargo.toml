@@ -1,6 +1,6 @@
 [package]
 name = "starbase_utils"
-version = "0.3.11"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 description = "General fs, io, serde, etc, utilities."
@@ -10,7 +10,7 @@ repository = "https://github.com/moonrepo/starbase"
 all-features = true
 
 [dependencies]
-starbase_styles = { version = "0.1.18", path = "../styles" }
+starbase_styles = { version = "0.2.0", path = "../styles" }
 dirs = "5.0.1"
 miette = { workspace = true, optional = true }
 once_cell = { workspace = true }
