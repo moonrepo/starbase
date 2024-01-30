@@ -1,46 +1,12 @@
-use crate::archive::{ArchivePacker, ArchiveUnpacker};
+use crate::archive::{ArchivePacker, ArchiveResult, ArchiveUnpacker};
 use crate::tree_differ::TreeDiffer;
-use miette::Diagnostic;
-use starbase_styles::{Style, Stylize};
 use starbase_utils::fs;
 use std::io::{prelude::*, Write};
 use std::path::{Path, PathBuf};
 use tar::{Archive as TarArchive, Builder as TarBuilder};
-use thiserror::Error;
 use tracing::trace;
 
-#[derive(Error, Diagnostic, Debug)]
-pub enum TarError {
-    #[diagnostic(code(tar::pack::add))]
-    #[error("Failed to add source {} to archive.", .source.style(Style::Path))]
-    AddFailure {
-        source: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(tar::unpack::extract))]
-    #[error("Failed to extract {} from archive.", .source.style(Style::Path))]
-    ExtractFailure {
-        source: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(tar::pack))]
-    #[error("Failed to pack archive.")]
-    PackFailure {
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(tar::unpack))]
-    #[error("Failed to unpack archive.")]
-    UnpackFailure {
-        #[source]
-        error: std::io::Error,
-    },
-}
+pub use crate::tar_error::TarError;
 
 /// Creates tar archives.
 pub struct TarPacker {
@@ -49,26 +15,26 @@ pub struct TarPacker {
 
 impl TarPacker {
     /// Create a new packer with a custom writer.
-    pub fn create(writer: Box<dyn Write>) -> miette::Result<Self> {
+    pub fn create(writer: Box<dyn Write>) -> ArchiveResult<Self> {
         Ok(TarPacker {
             archive: TarBuilder::new(writer),
         })
     }
 
     /// Create a new `.tar` packer.
-    pub fn new(output_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_file: &Path) -> ArchiveResult<Self> {
         TarPacker::create(Box::new(fs::create_file(output_file)?))
     }
 
     /// Create a new `.tar.gz` packer.
     #[cfg(feature = "tar-gz")]
-    pub fn new_gz(output_file: &Path) -> miette::Result<Self> {
+    pub fn new_gz(output_file: &Path) -> ArchiveResult<Self> {
         Self::new_gz_with_level(output_file, 4)
     }
 
     /// Create a new `.tar.gz` packer with a custom compression level.
     #[cfg(feature = "tar-gz")]
-    pub fn new_gz_with_level(output_file: &Path, level: u32) -> miette::Result<Self> {
+    pub fn new_gz_with_level(output_file: &Path, level: u32) -> ArchiveResult<Self> {
         TarPacker::create(Box::new(flate2::write::GzEncoder::new(
             fs::create_file(output_file)?,
             flate2::Compression::new(level),
@@ -77,13 +43,13 @@ impl TarPacker {
 
     /// Create a new `.tar.xz` packer.
     #[cfg(feature = "tar-xz")]
-    pub fn new_xz(output_file: &Path) -> miette::Result<Self> {
+    pub fn new_xz(output_file: &Path) -> ArchiveResult<Self> {
         Self::new_xz_with_level(output_file, 4)
     }
 
     /// Create a new `.tar.xz` packer with a custom compression level.
     #[cfg(feature = "tar-xz")]
-    pub fn new_xz_with_level(output_file: &Path, level: u32) -> miette::Result<Self> {
+    pub fn new_xz_with_level(output_file: &Path, level: u32) -> ArchiveResult<Self> {
         TarPacker::create(Box::new(xz2::write::XzEncoder::new(
             fs::create_file(output_file)?,
             level,
@@ -92,25 +58,21 @@ impl TarPacker {
 
     /// Create a new `.tar.zstd` packer.
     #[cfg(feature = "tar-zstd")]
-    pub fn new_zstd(output_file: &Path) -> miette::Result<Self> {
+    pub fn new_zstd(output_file: &Path) -> ArchiveResult<Self> {
         Self::new_zstd_with_level(output_file, 3) // Default in lib
     }
 
     /// Create a new `.tar.zstd` packer with a custom compression level.
     #[cfg(feature = "tar-zstd")]
-    pub fn new_zstd_with_level(output_file: &Path, level: u32) -> miette::Result<Self> {
-        use miette::IntoDiagnostic;
-
+    pub fn new_zstd_with_level(output_file: &Path, level: u32) -> ArchiveResult<Self> {
         TarPacker::create(Box::new(
-            zstd::stream::Encoder::new(fs::create_file(output_file)?, level as i32)
-                .into_diagnostic()?
-                .auto_finish(),
+            zstd::stream::Encoder::new(fs::create_file(output_file)?, level as i32)?.auto_finish(),
         ))
     }
 }
 
 impl ArchivePacker for TarPacker {
-    fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()> {
+    fn add_file(&mut self, name: &str, file: &Path) -> ArchiveResult<()> {
         trace!(source = name, input = ?file, "Packing file");
 
         self.archive
@@ -123,7 +85,7 @@ impl ArchivePacker for TarPacker {
         Ok(())
     }
 
-    fn add_dir(&mut self, name: &str, dir: &Path) -> miette::Result<()> {
+    fn add_dir(&mut self, name: &str, dir: &Path) -> ArchiveResult<()> {
         trace!(source = name, input = ?dir, "Packing directory");
 
         self.archive
@@ -136,7 +98,7 @@ impl ArchivePacker for TarPacker {
         Ok(())
     }
 
-    fn pack(&mut self) -> miette::Result<()> {
+    fn pack(&mut self) -> ArchiveResult<()> {
         trace!("Creating tarball");
 
         self.archive
@@ -155,7 +117,7 @@ pub struct TarUnpacker {
 
 impl TarUnpacker {
     /// Create a new unpacker with a custom reader.
-    pub fn create(output_dir: &Path, reader: Box<dyn Read>) -> miette::Result<Self> {
+    pub fn create(output_dir: &Path, reader: Box<dyn Read>) -> ArchiveResult<Self> {
         fs::create_dir_all(output_dir)?;
 
         Ok(TarUnpacker {
@@ -165,13 +127,13 @@ impl TarUnpacker {
     }
 
     /// Create a new `.tar` unpacker.
-    pub fn new(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
         TarUnpacker::create(output_dir, Box::new(fs::open_file(input_file)?))
     }
 
     /// Create a new `.tar.gz` unpacker.
     #[cfg(feature = "tar-gz")]
-    pub fn new_gz(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+    pub fn new_gz(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
         TarUnpacker::create(
             output_dir,
             Box::new(flate2::read::GzDecoder::new(fs::open_file(input_file)?)),
@@ -180,7 +142,7 @@ impl TarUnpacker {
 
     /// Create a new `.tar.xz` unpacker.
     #[cfg(feature = "tar-xz")]
-    pub fn new_xz(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+    pub fn new_xz(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
         TarUnpacker::create(
             output_dir,
             Box::new(xz2::read::XzDecoder::new(fs::open_file(input_file)?)),
@@ -189,18 +151,16 @@ impl TarUnpacker {
 
     /// Create a new `.tar.zstd` unpacker.
     #[cfg(feature = "tar-zstd")]
-    pub fn new_zstd(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
-        use miette::IntoDiagnostic;
-
+    pub fn new_zstd(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
         TarUnpacker::create(
             output_dir,
-            Box::new(zstd::stream::Decoder::new(fs::open_file(input_file)?).into_diagnostic()?),
+            Box::new(zstd::stream::Decoder::new(fs::open_file(input_file)?)?),
         )
     }
 }
 
 impl ArchiveUnpacker for TarUnpacker {
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<()> {
         self.archive.set_overwrite(true);
 
         trace!(output_dir = ?self.output_dir, "Opening tarball");
