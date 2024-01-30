@@ -5,7 +5,7 @@ use thiserror::Error;
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
 pub enum FsError {
-    #[error("Failed to copy {} to {}.", .from.style(Style::Path), .to.style(Style::Path))]
+    #[error("Failed to copy {} to {}.\n{error}", .from.style(Style::Path), .to.style(Style::Path))]
     Copy {
         from: PathBuf,
         to: PathBuf,
@@ -13,35 +13,35 @@ pub enum FsError {
         error: std::io::Error,
     },
 
-    #[error("Failed to create {}.", .path.style(Style::Path))]
+    #[error("Failed to create {}.\n{error}", .path.style(Style::Path))]
     Create {
         path: PathBuf,
         #[source]
         error: std::io::Error,
     },
 
-    #[error("Failed to lock {}.", .path.style(Style::Path))]
+    #[error("Failed to lock {}.\n{error}", .path.style(Style::Path))]
     Lock {
         path: PathBuf,
         #[source]
         error: std::io::Error,
     },
 
-    #[error("Failed to update permissions for {}.", .path.style(Style::Path))]
+    #[error("Failed to update permissions for {}.\n{error}", .path.style(Style::Path))]
     Perms {
         path: PathBuf,
         #[source]
         error: std::io::Error,
     },
 
-    #[error("Failed to read path {}.", .path.style(Style::Path))]
+    #[error("Failed to read path {}.\n{error}", .path.style(Style::Path))]
     Read {
         path: PathBuf,
         #[source]
         error: std::io::Error,
     },
 
-    #[error("Failed to remove path {}.", .path.style(Style::Path))]
+    #[error("Failed to remove path {}.\n{error}", .path.style(Style::Path))]
     Remove {
         path: PathBuf,
         #[source]
@@ -51,7 +51,7 @@ pub enum FsError {
     #[error("A directory is required for path {}.", .path.style(Style::Path))]
     RequireDir { path: PathBuf },
 
-    #[error("Failed to rename {} to {}.", .from.style(Style::Path), .to.style(Style::Path))]
+    #[error("Failed to rename {} to {}.\n{error}", .from.style(Style::Path), .to.style(Style::Path))]
     Rename {
         from: PathBuf,
         to: PathBuf,
@@ -59,14 +59,14 @@ pub enum FsError {
         error: std::io::Error,
     },
 
-    #[error("Failed to unlock {}.", .path.style(Style::Path))]
+    #[error("Failed to unlock {}.\n{error}", .path.style(Style::Path))]
     Unlock {
         path: PathBuf,
         #[source]
         error: std::io::Error,
     },
 
-    #[error("Failed to write {}.", .path.style(Style::Path))]
+    #[error("Failed to write {}.\n{error}", .path.style(Style::Path))]
     Write {
         path: PathBuf,
         #[source]
