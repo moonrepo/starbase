@@ -1,95 +1,12 @@
-use miette::Diagnostic;
-use starbase_styles::{Style, Stylize};
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use thiserror::Error;
 use tracing::trace;
 
+pub use crate::fs_error::FsError;
 #[cfg(feature = "fs-lock")]
 pub use crate::fs_lock::*;
-
-#[derive(Error, Diagnostic, Debug)]
-pub enum FsError {
-    #[diagnostic(code(fs::copy), help("Does the source file exist?"))]
-    #[error("Failed to copy {} to {}.", .from.style(Style::Path), .to.style(Style::Path))]
-    Copy {
-        from: PathBuf,
-        to: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(fs::create))]
-    #[error("Failed to create {}.", .path.style(Style::Path))]
-    Create {
-        path: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(fs::lock))]
-    #[error("Failed to lock {}.", .path.style(Style::Path))]
-    Lock {
-        path: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(fs::perms))]
-    #[error("Failed to update permissions for {}.", .path.style(Style::Path))]
-    Perms {
-        path: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(fs::read))]
-    #[error("Failed to read path {}.", .path.style(Style::Path))]
-    Read {
-        path: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(fs::remove))]
-    #[error("Failed to remove path {}.", .path.style(Style::Path))]
-    Remove {
-        path: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(fs::require_dir))]
-    #[error("A directory is required for path {}.", .path.style(Style::Path))]
-    RequireDir { path: PathBuf },
-
-    #[diagnostic(code(fs::rename), help("Does the source file exist?"))]
-    #[error("Failed to rename {} to {}.", .from.style(Style::Path), .to.style(Style::Path))]
-    Rename {
-        from: PathBuf,
-        to: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(fs::unlock))]
-    #[error("Failed to unlock {}.", .path.style(Style::Path))]
-    Unlock {
-        path: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(fs::write), help("Does the parent directory exist?"))]
-    #[error("Failed to write {}.", .path.style(Style::Path))]
-    Write {
-        path: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-}
 
 /// Append a file with the provided content. If the parent directory does not exist,
 /// or the file to append does not exist, they will be created.

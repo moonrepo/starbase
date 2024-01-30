@@ -1,4 +1,5 @@
 pub mod fs;
+mod fs_error;
 
 #[cfg(feature = "fs-lock")]
 mod fs_lock; // Exported from fs
