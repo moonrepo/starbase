@@ -14,7 +14,7 @@ starbase_styles = { version = "0.1.18", path = "../styles" }
 starbase_utils = { version = "0.3.11", path = "../utils", default-features = false, features = [
 	"glob",
 ] }
-miette = { workspace = true }
+miette = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
@@ -31,6 +31,7 @@ zip = { version = "0.6.6", default-features = false, optional = true }
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = [
+	"miette",
 	"tar-gz",
 	"tar-xz",
 	"tar-zstd",
@@ -41,6 +42,7 @@ starbase_sandbox = { path = "../sandbox" }
 
 [features]
 default = ["tar-gz"]
+miette = ["dep:miette"]
 tar = ["dep:tar"]
 tar-gz = ["dep:flate2", "tar"]
 tar-xz = ["dep:xz2", "tar"]

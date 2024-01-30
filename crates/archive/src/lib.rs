@@ -1,10 +1,14 @@
 /// Handle `.tar`, `.tar.gz`, and `.tar.xz` files.
 #[cfg(feature = "tar")]
 pub mod tar;
+#[cfg(feature = "tar")]
+mod tar_error;
 
 /// Handle `.zip` files.
 #[cfg(feature = "zip")]
 pub mod zip;
+#[cfg(feature = "zip")]
+mod zip_error;
 
 mod archive;
 mod archive_error;

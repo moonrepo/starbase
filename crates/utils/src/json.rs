@@ -1,51 +1,19 @@
-use crate::fs::{self, FsError};
+use crate::fs;
 use json_comments::StripComments;
-use miette::Diagnostic;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use starbase_styles::{Style, Stylize};
+use std::io::Read;
 use std::path::Path;
-use std::{io::Read, path::PathBuf};
-use thiserror::Error;
 use tracing::trace;
 
+pub use crate::json_error::JsonError;
 pub use serde_json;
 pub use serde_json::{
     from_slice, from_str, from_value, json, to_string, to_string_pretty, to_value, Map as JsonMap,
     Number as JsonNumber, Value as JsonValue,
 };
-
-#[derive(Error, Diagnostic, Debug)]
-pub enum JsonError {
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    Fs(#[from] FsError),
-
-    #[diagnostic(code(json::parse_file))]
-    #[error("Failed to parse JSON file {}.", .path.style(Style::Path))]
-    ReadFile {
-        path: PathBuf,
-        #[source]
-        error: serde_json::Error,
-    },
-
-    #[diagnostic(code(json::stringify))]
-    #[error("Failed to stringify JSON.")]
-    Stringify {
-        #[source]
-        error: serde_json::Error,
-    },
-
-    #[diagnostic(code(json::stringify_file))]
-    #[error("Failed to stringify JSON for file {}.", .path.style(Style::Path))]
-    StringifyFile {
-        path: PathBuf,
-        #[source]
-        error: serde_json::Error,
-    },
-}
 
 static CLEAN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r",(?P<valid>\s*})").unwrap());
 

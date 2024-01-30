@@ -1,49 +1,17 @@
-use crate::fs::{self, FsError};
-use miette::Diagnostic;
+use crate::fs;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use starbase_styles::{Style, Stylize};
-use std::path::{Path, PathBuf};
-use thiserror::Error;
+use std::path::Path;
 use tracing::trace;
 
+pub use crate::yaml_error::YamlError;
 pub use serde_yaml;
 pub use serde_yaml::{
     from_slice, from_str, from_value, to_string, to_value, Mapping as YamlMapping,
     Number as YamlNumber, Sequence as YamlSequence, Value as YamlValue,
 };
-
-#[derive(Error, Diagnostic, Debug)]
-pub enum YamlError {
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    Fs(#[from] FsError),
-
-    #[diagnostic(code(yaml::parse_file))]
-    #[error("Failed to parse YAML file {}.", .path.style(Style::Path))]
-    ReadFile {
-        path: PathBuf,
-        #[source]
-        error: serde_yaml::Error,
-    },
-
-    #[diagnostic(code(yaml::stringify))]
-    #[error("Failed to stringify YAML.")]
-    Stringify {
-        #[source]
-        error: serde_yaml::Error,
-    },
-
-    #[diagnostic(code(yaml::stringify_file))]
-    #[error("Failed to stringify YAML for file {}.", .path.style(Style::Path))]
-    StringifyFile {
-        path: PathBuf,
-        #[source]
-        error: serde_yaml::Error,
-    },
-}
 
 static WHITESPACE_PREFIX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\s+)").unwrap());
 

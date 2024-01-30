@@ -1,4 +1,4 @@
-use miette::IntoDiagnostic;
+use crate::archive::ArchiveResult;
 use rustc_hash::FxHashSet;
 use starbase_utils::{fs, glob};
 use std::io::{self, BufReader, Read, Seek};
@@ -17,7 +17,7 @@ impl TreeDiffer {
     /// Load the tree at the defined destination root and scan the file system
     /// using the defined lists of paths, either files, folders, or globs. If a folder,
     /// recursively scan all files and create an internal manifest to track diffing.
-    pub fn load<P, I, V>(dest_root: P, lookup_paths: I) -> miette::Result<Self>
+    pub fn load<P, I, V>(dest_root: P, lookup_paths: I) -> ArchiveResult<Self>
     where
         P: AsRef<Path>,
         I: IntoIterator<Item = V>,
@@ -119,7 +119,7 @@ impl TreeDiffer {
         source_size: u64,
         source: &mut T,
         dest_path: &Path,
-    ) -> miette::Result<bool> {
+    ) -> ArchiveResult<bool> {
         // If the destination doesn't exist, always use the source
         if !dest_path.exists() || !self.files.contains(dest_path) {
             return Ok(true);
@@ -140,7 +140,17 @@ impl TreeDiffer {
         }
 
         // Reset read pointer to the start of the buffer
-        source.seek(io::SeekFrom::Start(0)).into_diagnostic()?;
+        #[cfg(feature = "miette")]
+        {
+            use miette::IntoDiagnostic;
+
+            source.seek(io::SeekFrom::Start(0)).into_diagnostic()?;
+        }
+
+        #[cfg(not(feature = "miette"))]
+        {
+            source.seek(io::SeekFrom::Start(0))?;
+        }
 
         Ok(true)
     }

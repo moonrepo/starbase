@@ -77,14 +77,14 @@ async fn finish(state: StateRef<TestState>) {
 async fn create_file() {
     test_lib::create_file()?;
 
-    let _lock = fs::lock_directory(env::current_dir().unwrap().join("foo"))?;
+    let _lock = fs::lock_directory(env::current_dir().unwrap().join("foo")).unwrap();
 
     sleep(Duration::new(10, 0)).await;
 }
 
 #[system]
 async fn missing_file() {
-    fs::read_file(PathBuf::from("fake.file"))?;
+    fs::read_file(PathBuf::from("fake.file")).unwrap();
 }
 
 #[system]

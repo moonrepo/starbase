@@ -6,23 +6,29 @@ use starbase_utils::glob;
 use std::path::{Path, PathBuf};
 use tracing::trace;
 
+#[cfg(not(feature = "miette"))]
+pub type ArchiveResult<T> = Result<T, Box<dyn std::error::Error>>;
+
+#[cfg(feature = "miette")]
+pub type ArchiveResult<T> = miette::Result<T>;
+
 /// Abstraction for packing archives.
 pub trait ArchivePacker {
     /// Add the source file to the archive.
-    fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()>;
+    fn add_file(&mut self, name: &str, file: &Path) -> ArchiveResult<()>;
 
     /// Add the source directory to the archive.
-    fn add_dir(&mut self, name: &str, dir: &Path) -> miette::Result<()>;
+    fn add_dir(&mut self, name: &str, dir: &Path) -> ArchiveResult<()>;
 
     /// Create the archive and write all contents to disk.
-    fn pack(&mut self) -> miette::Result<()>;
+    fn pack(&mut self) -> ArchiveResult<()>;
 }
 
 /// Abstraction for unpacking archives.
 pub trait ArchiveUnpacker {
     /// Unpack the archive to the destination directory. If a prefix is provided,
     /// remove it from the start of all file paths within the archive.
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()>;
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<()>;
 }
 
 /// An `Archiver` is an abstraction for packing and unpacking archives,
@@ -105,9 +111,9 @@ impl<'owner> Archiver<'owner> {
     /// Pack and create the archive with the added source, using the
     /// provided packer factory. The factory is passed an absolute
     /// path to the destination archive file.
-    pub fn pack<F, P>(&self, packer: F) -> miette::Result<()>
+    pub fn pack<F, P>(&self, packer: F) -> ArchiveResult<()>
     where
-        F: FnOnce(&Path) -> miette::Result<P>,
+        F: FnOnce(&Path) -> ArchiveResult<P>,
         P: ArchivePacker,
     {
         trace!(
@@ -155,7 +161,7 @@ impl<'owner> Archiver<'owner> {
 
     /// Determine the packer to use based on the archive file extension,
     /// then pack the archive using [`Archiver.pack`].
-    pub fn pack_from_ext(&self) -> miette::Result<()> {
+    pub fn pack_from_ext(&self) -> ArchiveResult<()> {
         match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
             Some("tar") => {
                 #[cfg(feature = "tar")]
@@ -238,9 +244,9 @@ impl<'owner> Archiver<'owner> {
     /// in the archive, and only unpack the files if they differ.
     /// Furthermore, files at the destination that are not in the
     /// archive are removed entirely.
-    pub fn unpack<F, P>(&self, unpacker: F) -> miette::Result<()>
+    pub fn unpack<F, P>(&self, unpacker: F) -> ArchiveResult<()>
     where
-        F: FnOnce(&Path, &Path) -> miette::Result<P>,
+        F: FnOnce(&Path, &Path) -> ArchiveResult<P>,
         P: ArchiveUnpacker,
     {
         trace!(
@@ -264,7 +270,7 @@ impl<'owner> Archiver<'owner> {
 
     /// Determine the unpacker to use based on the archive file extension,
     /// then unpack the archive using [`Archiver.unpack`].
-    pub fn unpack_from_ext(&self) -> miette::Result<()> {
+    pub fn unpack_from_ext(&self) -> ArchiveResult<()> {
         match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
             Some("tar") => {
                 #[cfg(feature = "tar")]

@@ -1,30 +1,13 @@
-use miette::Diagnostic;
 use once_cell::sync::Lazy;
-use starbase_styles::{Style, Stylize};
 use std::sync::RwLock;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
-use thiserror::Error;
-use wax::{Any, BuildError, LinkBehavior, Pattern};
+use wax::{Any, LinkBehavior, Pattern};
 
+pub use crate::glob_error::GlobError;
 pub use wax::{self, Glob};
-
-#[derive(Error, Diagnostic, Debug)]
-pub enum GlobError {
-    #[diagnostic(code(glob::create))]
-    #[error("Failed to create glob from pattern {}.", .glob.style(Style::File))]
-    Create {
-        glob: String,
-        #[source]
-        error: Box<BuildError>,
-    },
-
-    #[diagnostic(code(glob::invalid_path))]
-    #[error("Failed to normalize glob path {}.", .path.style(Style::Path))]
-    InvalidPath { path: PathBuf },
-}
 
 static GLOBAL_NEGATIONS: Lazy<RwLock<Vec<&'static str>>> = Lazy::new(|| {
     RwLock::new(vec![

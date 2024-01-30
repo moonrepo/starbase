@@ -7,7 +7,7 @@ pub fn create_file() -> miette::Result<()> {
 
     debug!(file = file.to_str(), "Creating file...");
 
-    fs::write_file(&file, "some contents")?;
+    fs::write_file(&file, "some contents").unwrap();
 
     debug!(file = file.to_str(), "Created file!");
 

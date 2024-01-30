@@ -1,49 +1,15 @@
-use crate::archive::{ArchivePacker, ArchiveUnpacker};
+use crate::archive::{ArchivePacker, ArchiveResult, ArchiveUnpacker};
 use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
-use miette::Diagnostic;
-use starbase_styles::{Style, Stylize};
 use starbase_utils::fs::{self, FsError};
 use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
-use thiserror::Error;
 use tracing::trace;
 use zip::write::FileOptions;
-use zip::{result::ZipError as BaseZipError, CompressionMethod, ZipArchive, ZipWriter};
+use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-#[derive(Error, Diagnostic, Debug)]
-pub enum ZipError {
-    #[diagnostic(code(zip::pack::add))]
-    #[error("Failed to add source {} to archive.", .source.style(Style::Path))]
-    AddFailure {
-        source: PathBuf,
-        #[source]
-        error: BaseZipError,
-    },
-
-    #[diagnostic(code(zip::unpack::extract))]
-    #[error("Failed to extract {} from archive.", .source.style(Style::Path))]
-    ExtractFailure {
-        source: PathBuf,
-        #[source]
-        error: std::io::Error,
-    },
-
-    #[diagnostic(code(zip::pack::finish))]
-    #[error("Failed to pack archive.")]
-    PackFailure {
-        #[source]
-        error: BaseZipError,
-    },
-
-    #[diagnostic(code(zip::unpack::finish))]
-    #[error("Failed to unpack archive.")]
-    UnpackFailure {
-        #[source]
-        error: BaseZipError,
-    },
-}
+pub use crate::zip_error::ZipError;
 
 /// Creates zip archives.
 pub struct ZipPacker {
@@ -53,7 +19,7 @@ pub struct ZipPacker {
 
 impl ZipPacker {
     /// Create a new packer with a custom compression level.
-    pub fn create(output_file: &Path, compression: CompressionMethod) -> miette::Result<Self> {
+    pub fn create(output_file: &Path, compression: CompressionMethod) -> ArchiveResult<Self> {
         Ok(ZipPacker {
             archive: ZipWriter::new(fs::create_file(output_file)?),
             compression,
@@ -61,19 +27,19 @@ impl ZipPacker {
     }
 
     /// Create a new `.zip` packer.
-    pub fn new(output_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_file: &Path) -> ArchiveResult<Self> {
         Self::create(output_file, CompressionMethod::Stored)
     }
 
     /// Create a new compressed `.zip` packer using `deflate`.
     #[cfg(feature = "zip-deflate")]
-    pub fn new_deflate(output_file: &Path) -> miette::Result<Self> {
+    pub fn new_deflate(output_file: &Path) -> ArchiveResult<Self> {
         Self::create(output_file, CompressionMethod::Deflated)
     }
 }
 
 impl ArchivePacker for ZipPacker {
-    fn add_file(&mut self, name: &str, file: &Path) -> miette::Result<()> {
+    fn add_file(&mut self, name: &str, file: &Path) -> ArchiveResult<()> {
         #[allow(unused_mut)] // windows
         let mut options = FileOptions::default().compression_method(self.compression);
 
@@ -101,7 +67,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
-    fn add_dir(&mut self, name: &str, dir: &Path) -> miette::Result<()> {
+    fn add_dir(&mut self, name: &str, dir: &Path) -> ArchiveResult<()> {
         trace!(source = name, input = ?dir, "Packing directory");
 
         self.archive
@@ -135,7 +101,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
-    fn pack(&mut self) -> miette::Result<()> {
+    fn pack(&mut self) -> ArchiveResult<()> {
         trace!("Creating zip");
 
         self.archive
@@ -154,7 +120,7 @@ pub struct ZipUnpacker {
 
 impl ZipUnpacker {
     /// Create a new `.zip` unpacker.
-    pub fn new(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+    pub fn new(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
         fs::create_dir_all(output_dir)?;
 
         Ok(ZipUnpacker {
@@ -166,13 +132,13 @@ impl ZipUnpacker {
 
     /// Create a new `.zip` unpacker for `deflate`.
     #[cfg(feature = "zip-deflate")]
-    pub fn new_deflate(output_dir: &Path, input_file: &Path) -> miette::Result<Self> {
+    pub fn new_deflate(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
         Self::new(output_dir, input_file)
     }
 }
 
 impl ArchiveUnpacker for ZipUnpacker {
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> miette::Result<()> {
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<()> {
         trace!(output_dir = ?self.output_dir, "Opening zip");
 
         let mut count = 0;
