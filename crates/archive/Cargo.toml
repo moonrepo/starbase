@@ -31,6 +31,7 @@ zip = { version = "0.6.6", default-features = false, optional = true }
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = [
+	"miette",
 	"tar-gz",
 	"tar-xz",
 	"tar-zstd",

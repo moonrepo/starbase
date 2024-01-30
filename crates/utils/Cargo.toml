@@ -57,6 +57,8 @@ starbase_utils = { path = ".", features = [
 	"editor-config",
 	"fs-lock",
 	"glob",
+	"glob-miette",
+	"miette",
 	"json",
 	"toml",
 	"yaml",

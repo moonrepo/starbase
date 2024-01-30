@@ -140,7 +140,17 @@ impl TreeDiffer {
         }
 
         // Reset read pointer to the start of the buffer
-        source.seek(io::SeekFrom::Start(0))?;
+        #[cfg(feature = "miette")]
+        {
+            use miette::IntoDiagnostic;
+
+            source.seek(io::SeekFrom::Start(0)).into_diagnostic()?;
+        }
+
+        #[cfg(not(feature = "miette"))]
+        {
+            source.seek(io::SeekFrom::Start(0))?;
+        }
 
         Ok(true)
     }

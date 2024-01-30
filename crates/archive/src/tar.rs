@@ -65,9 +65,19 @@ impl TarPacker {
     /// Create a new `.tar.zstd` packer with a custom compression level.
     #[cfg(feature = "tar-zstd")]
     pub fn new_zstd_with_level(output_file: &Path, level: u32) -> ArchiveResult<Self> {
-        TarPacker::create(Box::new(
-            zstd::stream::Encoder::new(fs::create_file(output_file)?, level as i32)?.auto_finish(),
-        ))
+        let encoder = zstd::stream::Encoder::new(fs::create_file(output_file)?, level as i32);
+
+        #[cfg(feature = "miette")]
+        {
+            use miette::IntoDiagnostic;
+
+            TarPacker::create(Box::new(encoder.into_diagnostic()?.auto_finish()))
+        }
+
+        #[cfg(not(feature = "miette"))]
+        {
+            TarPacker::create(Box::new(encoder?.auto_finish()))
+        }
     }
 }
 
@@ -152,10 +162,19 @@ impl TarUnpacker {
     /// Create a new `.tar.zstd` unpacker.
     #[cfg(feature = "tar-zstd")]
     pub fn new_zstd(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
-        TarUnpacker::create(
-            output_dir,
-            Box::new(zstd::stream::Decoder::new(fs::open_file(input_file)?)?),
-        )
+        let decoder = zstd::stream::Decoder::new(fs::open_file(input_file)?);
+
+        #[cfg(feature = "miette")]
+        {
+            use miette::IntoDiagnostic;
+
+            TarUnpacker::create(output_dir, Box::new(decoder.into_diagnostic()?))
+        }
+
+        #[cfg(not(feature = "miette"))]
+        {
+            TarUnpacker::create(output_dir, Box::new(decoder?))
+        }
     }
 }
 
