@@ -5,6 +5,8 @@ pub mod tar;
 /// Handle `.zip` files.
 #[cfg(feature = "zip")]
 pub mod zip;
+#[cfg(feature = "zip")]
+mod zip_error;
 
 mod archive;
 mod archive_error;
