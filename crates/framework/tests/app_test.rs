@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use miette::{bail, IntoDiagnostic};
-use starbase::{App, AppPhase, Emitters, Resources, States, SystemResult};
+use starbase::{App, AppExtension, AppPhase, Emitters, Resources, States, SystemResult};
 use starbase_macros::*;
 use std::time::Duration;
 use tokio::task;
@@ -615,6 +615,33 @@ async fn tracks_app_state() {
     app.analyze(extract_app_state);
     app.execute(extract_app_state);
     app.shutdown(extract_app_state);
+
+    let states = app.run().await.unwrap();
+
+    assert_eq!(
+        states.get::<RunOrder>().0,
+        vec!["Startup", "Analyze", "Execute", "Shutdown"]
+    );
+}
+
+struct TestExtension;
+
+impl AppExtension for TestExtension {
+    fn extend(self, app: &mut App) -> miette::Result<()> {
+        app.startup(extract_app_state);
+        app.analyze(extract_app_state);
+        app.execute(extract_app_state);
+        app.shutdown(extract_app_state);
+
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn extension_can_register_systems() {
+    let mut app = App::new();
+    app.startup(setup_state);
+    app.extend(TestExtension).unwrap();
 
     let states = app.run().await.unwrap();
 

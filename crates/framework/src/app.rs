@@ -26,7 +26,7 @@ pub enum Phase {
 }
 
 pub trait AppExtension {
-    fn extend(self, app: &mut App) -> miette::Result<()>;
+    fn extend(self, app: &mut App) -> AppResult<()>;
 }
 
 #[derive(Debug)]
@@ -83,7 +83,7 @@ impl App {
     }
 
     /// Extend the app with an extension that contains a set of systems.
-    pub fn extend(&mut self, extension: impl AppExtension) -> miette::Result<()> {
+    pub fn extend(&mut self, extension: impl AppExtension) -> AppResult<()> {
         extension.extend(self)
     }
 
