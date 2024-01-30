@@ -1,7 +1,6 @@
 // Colors based on 4th column, except for gray:
 // https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg
 
-use dirs::home_dir;
 use owo_colors::{OwoColorize, XtermColors};
 use std::env;
 use std::path::Path;
@@ -236,11 +235,12 @@ pub fn url<T: AsRef<str>>(url: T) -> String {
 pub fn clean_path<T: AsRef<str>>(path: T) -> String {
     let path = path.as_ref();
 
-    if let Some(home) = home_dir() {
-        path.replace(home.to_str().unwrap_or_default(), "~")
-    } else {
-        path.to_string()
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(home) = dirs::home_dir() {
+        return path.replace(home.to_str().unwrap_or_default(), "~");
     }
+
+    path.to_string()
 }
 
 /// Dynamically apply a color to the log target/module/namespace based
@@ -266,8 +266,14 @@ pub fn log_target<T: AsRef<str>>(value: T) -> String {
 }
 
 /// Return true if color has been disabled for the `stderr` stream.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn no_color() -> bool {
     env::var("NO_COLOR").is_ok() || supports_color::on(supports_color::Stream::Stderr).is_none()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn no_color() -> bool {
+    true
 }
 
 /// Return a color level support for the `stderr` stream. 0 = no support, 1 = basic support,
