@@ -25,6 +25,10 @@ pub enum Phase {
     Shutdown,
 }
 
+pub trait AppExtension {
+    fn extend(self, app: &mut App) -> miette::Result<()>;
+}
+
 #[derive(Debug)]
 pub struct App {
     // Data
@@ -76,6 +80,11 @@ impl App {
     #[cfg(feature = "tracing")]
     pub fn setup_tracing_with_options(options: TracingOptions) {
         crate::tracing::setup_tracing(options);
+    }
+
+    /// Extend the app with an extension that contains a set of systems.
+    pub fn extend(&mut self, extension: impl AppExtension) -> miette::Result<()> {
+        extension.extend(self)
     }
 
     /// Add a system function that runs during the startup phase.
