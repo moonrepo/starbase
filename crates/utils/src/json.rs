@@ -14,15 +14,15 @@ pub use serde_json::{
 /// Clean a JSON string by removing comments and trailing commas.
 #[inline]
 #[track_caller]
-pub fn clean<D: AsRef<str>>(json: D) -> String {
+pub fn clean<D: AsRef<str>>(json: D) -> Result<String, std::io::Error> {
     let mut json = json.as_ref().to_owned();
 
     // Remove comments and trailing commas
     if !json.is_empty() {
-        json_strip_comments::strip(&mut json).unwrap();
+        json_strip_comments::strip(&mut json)?;
     }
 
-    json
+    Ok(json)
 }
 
 /// Recursively merge [`JsonValue`] objects, with values from next overwriting previous.
@@ -69,7 +69,12 @@ where
 /// The path must already exist.
 #[inline]
 pub fn read_to_string<T: AsRef<Path>>(path: T) -> Result<String, JsonError> {
-    Ok(clean(fs::read_file(path.as_ref())?))
+    let path = path.as_ref();
+
+    clean(fs::read_file(path)?).map_err(|error| JsonError::Clean {
+        path: path.to_owned(),
+        error,
+    })
 }
 
 /// Write a file and serialize the provided data to the provided path. If the parent directory

@@ -10,30 +10,29 @@ mod clean {
 
     #[test]
     pub fn bypasses_empty_string() {
-        assert_eq!(json::clean(""), "");
+        assert_eq!(json::clean("").unwrap(), "");
     }
 
     #[test]
     pub fn removes_comments() {
         assert_eq!(
-            json::clean(r#"{ "foo": true } // comment"#),
+            json::clean(r#"{ "foo": true } // comment"#).unwrap(),
             r#"{ "foo": true }           "#
         );
         assert_eq!(
-            json::clean(r#"{ "foo": true /* comment */ }"#),
+            json::clean(r#"{ "foo": true /* comment */ }"#).unwrap(),
             r#"{ "foo": true               }"#
         );
 
         assert_eq!(
-            json::clean(r#"{ "foo": true /** comment */ }"#),
+            json::clean(r#"{ "foo": true /** comment */ }"#).unwrap(),
             r#"{ "foo": true                }"#
         );
 
-        // TODO
-        // assert_eq!(
-        //     json::clean(r#"{ "foo": true /** comment **/ }"#),
-        //     r#"{ "foo": true                 }"#
-        // );
+        assert_eq!(
+            json::clean(r#"{ "foo": true /** comment **/ }"#).unwrap(),
+            r#"{ "foo": true                 }"#
+        );
     }
 }
 

@@ -9,6 +9,13 @@ pub enum JsonError {
     #[error(transparent)]
     Fs(#[from] FsError),
 
+    #[error("Failed to clean comments and trailing commas in JSON file {}.\n{error}", .path.style(Style::Path))]
+    Clean {
+        path: PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
+
     #[error("Failed to parse JSON file {}.\n{error}", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
@@ -36,6 +43,14 @@ pub enum JsonError {
     #[diagnostic(transparent)]
     #[error(transparent)]
     Fs(#[from] FsError),
+
+    #[diagnostic(code(json::clean))]
+    #[error("Failed to clean comments and trailing commas in JSON file {}.", .path.style(Style::Path))]
+    Clean {
+        path: PathBuf,
+        #[source]
+        error: std::io::Error,
+    },
 
     #[diagnostic(code(json::parse_file))]
     #[error("Failed to parse JSON file {}.", .path.style(Style::Path))]
