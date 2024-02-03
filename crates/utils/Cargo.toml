@@ -31,7 +31,7 @@ fs4 = { version = "0.7.0", optional = true }
 wax = { version = "0.6.0", optional = true, features = ["walk"] }
 
 # json
-json_comments = { version = "0.2.2", optional = true }
+json-strip-comments = { version = "1.0.1", optional = true }
 serde_json = { workspace = true, optional = true }
 
 # toml
@@ -47,7 +47,7 @@ fs-lock = ["dep:fs4", "dep:tokio"]
 glob = ["dep:wax"]
 glob-miette = ["glob", "miette", "wax/miette"]
 miette = ["dep:miette"]
-json = ["dep:json_comments", "dep:regex", "dep:serde", "dep:serde_json"]
+json = ["dep:json-strip-comments", "dep:serde", "dep:serde_json"]
 toml = ["dep:toml", "dep:serde"]
 yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
 

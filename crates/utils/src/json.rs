@@ -1,10 +1,6 @@
 use crate::fs;
-use json_comments::StripComments;
-use once_cell::sync::Lazy;
-use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::io::Read;
 use std::path::Path;
 use tracing::trace;
 
@@ -15,30 +11,18 @@ pub use serde_json::{
     Number as JsonNumber, Value as JsonValue,
 };
 
-static CLEAN_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r",(?P<valid>\s*})").unwrap());
-
 /// Clean a JSON string by removing comments and trailing commas.
 #[inline]
 #[track_caller]
 pub fn clean<D: AsRef<str>>(json: D) -> String {
-    let json = json.as_ref();
+    let mut json = json.as_ref().to_owned();
 
-    if json.is_empty() {
-        return json.to_owned();
+    // Remove comments and trailing commas
+    if !json.is_empty() {
+        json_strip_comments::strip(&mut json).unwrap();
     }
 
-    // Remove comments
-    let mut stripped = String::with_capacity(json.len());
-
-    if StripComments::new(json.as_bytes())
-        .read_to_string(&mut stripped)
-        .is_err()
-    {
-        stripped = json.to_owned();
-    }
-
-    // Remove trailing commas
-    CLEAN_REGEX.replace_all(&stripped, "$valid").to_string()
+    json
 }
 
 /// Recursively merge [`JsonValue`] objects, with values from next overwriting previous.

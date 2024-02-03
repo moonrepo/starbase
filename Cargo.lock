@@ -712,10 +712,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "json_comments"
-version = "0.2.2"
+name = "json-strip-comments"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
+checksum = "6a138532317bbcfd1bb99baab0fd89f4391b4975b3c0a4e1ccb074912e940ee1"
 
 [[package]]
 name = "lazy_static"
@@ -1366,7 +1366,7 @@ dependencies = [
  "dirs",
  "ec4rs",
  "fs4",
- "json_comments",
+ "json-strip-comments",
  "miette",
  "once_cell",
  "regex",
