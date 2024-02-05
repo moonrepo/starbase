@@ -1,6 +1,6 @@
 [package]
 name = "starbase_archive"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 license = "MIT"
 description = "Utilities for packing and unpacking archives. Supports tar and zip."
@@ -10,8 +10,8 @@ repository = "https://github.com/moonrepo/starbase"
 all-features = true
 
 [dependencies]
-starbase_styles = { version = "0.2.0", path = "../styles" }
-starbase_utils = { version = "0.4.2", path = "../utils", default-features = false, features = [
+starbase_styles = { version = "0.3.0", path = "../styles" }
+starbase_utils = { version = "0.5.0", path = "../utils", default-features = false, features = [
 	"glob",
 ] }
 miette = { workspace = true, optional = true }
