@@ -5,7 +5,7 @@ mod settings;
 
 pub use bin::*;
 pub use fixture::*;
-pub use insta::{assert_debug_snapshot, assert_display_snapshot, assert_snapshot};
+pub use insta::{assert_debug_snapshot, assert_snapshot};
 pub use sandbox::*;
 pub use settings::*;
 

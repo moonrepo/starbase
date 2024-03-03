@@ -10,10 +10,10 @@ repository = "https://github.com/moonrepo/starbase"
 proc-macro = true
 
 [dependencies]
-darling = "0.20.5"
+darling = "0.20.8"
 proc-macro2 = "1.0.78"
 quote = "1.0.35"
-syn = { version = "2.0.48", features = ["full"] }
+syn = { version = "2.0.52", features = ["full"] }
 
 [features]
 tracing = []
