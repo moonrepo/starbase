@@ -18,6 +18,7 @@ pub use archive::*;
 pub use archive_error::*;
 pub use tree_differ::*;
 
+use starbase_utils::fs;
 use std::path::Path;
 
 /// Join a file name from a list of parts, removing any empty parts.
@@ -43,16 +44,29 @@ where
         .join("/")
 }
 
+/// Extract the full extension from a file path, like `tar.gz`,
+/// instead of just `gz`. If no file extension is found, returns `None`.`
+pub fn get_full_file_extension(path: &Path) -> Option<String> {
+    let file_name = fs::file_name(path);
+
+    // Std lib `extension()` just returns the final part
+    if let Some(i) = file_name.find('.') {
+        return Some(file_name[i + 1..].to_owned());
+    }
+
+    None
+}
+
 /// Return true if the file path has a supported archive extension.
 /// This does not check against feature flags!
 pub fn is_supported_archive_extension(path: &Path) -> bool {
-    path.extension()
+    get_full_file_extension(path)
         .map(|ext| {
             ext == "tar"
                 || ext == "tgz"
-                || ext == "gz"
+                || ext == "tar.gz"
                 || ext == "txz"
-                || ext == "xz"
+                || ext == "tar.xz"
                 || ext == "zstd"
                 || ext == "zst"
                 || ext == "zip"

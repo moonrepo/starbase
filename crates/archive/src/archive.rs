@@ -1,6 +1,6 @@
 use crate::archive_error::ArchiveError;
-use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
+use crate::{get_full_file_extension, join_file_name};
 use rustc_hash::{FxHashMap, FxHashSet};
 use starbase_utils::glob;
 use std::path::{Path, PathBuf};
@@ -162,7 +162,7 @@ impl<'owner> Archiver<'owner> {
     /// Determine the packer to use based on the archive file extension,
     /// then pack the archive using [`Archiver.pack`].
     pub fn pack_from_ext(&self) -> ArchiveResult<()> {
-        match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
+        match get_full_file_extension(self.archive_file).as_deref() {
             Some("tar") => {
                 #[cfg(feature = "tar")]
                 self.pack(crate::tar::TarPacker::new)?;
@@ -174,7 +174,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("tgz" | "gz") => {
+            Some("tar.gz" | "tgz") => {
                 #[cfg(feature = "tar-gz")]
                 self.pack(crate::tar::TarPacker::new_gz)?;
 
@@ -185,7 +185,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("txz" | "xz") => {
+            Some("tar.xz" | "txz") => {
                 #[cfg(feature = "tar-xz")]
                 self.pack(crate::tar::TarPacker::new_xz)?;
 
@@ -271,7 +271,7 @@ impl<'owner> Archiver<'owner> {
     /// Determine the unpacker to use based on the archive file extension,
     /// then unpack the archive using [`Archiver.unpack`].
     pub fn unpack_from_ext(&self) -> ArchiveResult<()> {
-        match self.archive_file.extension().map(|e| e.to_str().unwrap()) {
+        match get_full_file_extension(self.archive_file).as_deref() {
             Some("tar") => {
                 #[cfg(feature = "tar")]
                 self.unpack(crate::tar::TarUnpacker::new)?;
@@ -283,7 +283,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("tgz" | "gz") => {
+            Some("tar.gz" | "tgz") => {
                 #[cfg(feature = "tar-gz")]
                 self.unpack(crate::tar::TarUnpacker::new_gz)?;
 
@@ -294,7 +294,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("txz" | "xz") => {
+            Some("tar.xz" | "txz") => {
                 #[cfg(feature = "tar-xz")]
                 self.unpack(crate::tar::TarUnpacker::new_xz)?;
 
