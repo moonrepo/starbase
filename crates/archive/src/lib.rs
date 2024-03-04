@@ -1,10 +1,16 @@
-/// Handle `.tar`, `.tar.gz`, and `.tar.xz` files.
+/// Handles standard `.gz` files.
+#[cfg(feature = "gz")]
+pub mod gz;
+#[cfg(feature = "gz")]
+mod gz_error;
+
+/// Handles `.tar`, `.tar.gz`, and `.tar.xz` files.
 #[cfg(feature = "tar")]
 pub mod tar;
 #[cfg(feature = "tar")]
 mod tar_error;
 
-/// Handle `.zip` files.
+/// Handles `.zip` files.
 #[cfg(feature = "zip")]
 pub mod zip;
 #[cfg(feature = "zip")]

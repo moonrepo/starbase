@@ -10,7 +10,6 @@ mod editor_config {
 
     pub fn append_editor_config(root: &Path, data: &str) {
         let mut file = OpenOptions::new()
-            .write(true)
             .append(true)
             .open(root.join(".editorconfig"))
             .unwrap();

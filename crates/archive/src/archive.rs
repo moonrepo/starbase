@@ -163,6 +163,17 @@ impl<'owner> Archiver<'owner> {
     /// then pack the archive using [`Archiver.pack`].
     pub fn pack_from_ext(&self) -> ArchiveResult<()> {
         match get_full_file_extension(self.archive_file).as_deref() {
+            Some("gz") => {
+                #[cfg(feature = "gz")]
+                self.pack(crate::gz::GzPacker::new)?;
+
+                #[cfg(not(feature = "gz"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "gz".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
             Some("tar") => {
                 #[cfg(feature = "tar")]
                 self.pack(crate::tar::TarPacker::new)?;
@@ -272,6 +283,17 @@ impl<'owner> Archiver<'owner> {
     /// then unpack the archive using [`Archiver.unpack`].
     pub fn unpack_from_ext(&self) -> ArchiveResult<()> {
         match get_full_file_extension(self.archive_file).as_deref() {
+            Some("gz") => {
+                #[cfg(feature = "gz")]
+                self.unpack(crate::gz::GzUnpacker::new)?;
+
+                #[cfg(not(feature = "gz"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "gz".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
             Some("tar") => {
                 #[cfg(feature = "tar")]
                 self.unpack(crate::tar::TarUnpacker::new)?;

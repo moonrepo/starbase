@@ -27,11 +27,7 @@ impl Sandbox {
         let path = self.path().join(name);
 
         if path.exists() {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .append(true)
-                .open(path)
-                .unwrap();
+            let mut file = OpenOptions::new().append(true).open(path).unwrap();
 
             writeln!(file, "\n\n{}", content.as_ref()).unwrap();
         } else {
