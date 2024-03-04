@@ -56,9 +56,19 @@ where
 pub fn get_full_file_extension(path: &Path) -> Option<String> {
     let file_name = fs::file_name(path);
 
-    get_supported_archive_extensions()
+    if let Some(found) = get_supported_archive_extensions()
         .into_iter()
         .find(|ext| file_name.ends_with(ext))
+    {
+        return Some(found);
+    }
+
+    // This is to handle "unsupported format" scenarios
+    if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
+        return Some(format!(".{ext}"));
+    }
+
+    None
 }
 
 /// Return a list of all supported archive file extensions,
