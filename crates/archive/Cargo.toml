@@ -22,7 +22,8 @@ thiserror = { workspace = true }
 flate2 = { version = "1.0.28", optional = true }
 
 # tar
-tar = { version = "0.4.40", optional = true }
+# https://github.com/moonrepo/starbase/issues/56
+binstall-tar = { version = "0.4.39", optional = true }
 xz2 = { version = "0.1.7", optional = true }
 zstd = { version = "0.13.0", optional = true }
 
@@ -45,7 +46,7 @@ starbase_sandbox = { path = "../sandbox" }
 default = ["tar-gz"]
 gz = ["dep:flate2"]
 miette = ["dep:miette"]
-tar = ["dep:tar"]
+tar = ["dep:binstall-tar"]
 tar-gz = ["dep:flate2", "tar"]
 tar-xz = ["dep:xz2", "tar"]
 tar-zstd = ["dep:zstd", "tar"]

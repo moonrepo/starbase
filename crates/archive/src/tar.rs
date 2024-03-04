@@ -1,9 +1,9 @@
 use crate::archive::{ArchivePacker, ArchiveResult, ArchiveUnpacker};
 use crate::tree_differ::TreeDiffer;
+use binstall_tar::{Archive as TarArchive, Builder as TarBuilder};
 use starbase_utils::fs;
 use std::io::{prelude::*, Write};
 use std::path::{Path, PathBuf};
-use tar::{Archive as TarArchive, Builder as TarBuilder};
 use tracing::trace;
 
 pub use crate::tar_error::TarError;
