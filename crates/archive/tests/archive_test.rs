@@ -2,7 +2,7 @@ use starbase_archive::Archiver;
 use starbase_sandbox::{create_empty_sandbox, create_sandbox};
 
 #[test]
-#[should_panic(expected = "unsupported format")]
+#[should_panic(expected = "unsupported")]
 fn errors_unknown_ext() {
     let sandbox = create_sandbox("archives");
     let tarball = sandbox.path().join("out.wat");

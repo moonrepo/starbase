@@ -163,7 +163,7 @@ impl<'owner> Archiver<'owner> {
     /// then pack the archive using [`Archiver.pack`].
     pub fn pack_from_ext(&self) -> ArchiveResult<()> {
         match get_full_file_extension(self.archive_file).as_deref() {
-            Some("gz") => {
+            Some(".gz") => {
                 #[cfg(feature = "gz")]
                 self.pack(crate::gz::GzPacker::new)?;
 
@@ -174,7 +174,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("tar") => {
+            Some(".tar") => {
                 #[cfg(feature = "tar")]
                 self.pack(crate::tar::TarPacker::new)?;
 
@@ -185,7 +185,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("tar.gz" | "tgz") => {
+            Some(".tar.gz" | ".tgz") => {
                 #[cfg(feature = "tar-gz")]
                 self.pack(crate::tar::TarPacker::new_gz)?;
 
@@ -196,7 +196,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("tar.xz" | "txz") => {
+            Some(".tar.xz" | ".txz") => {
                 #[cfg(feature = "tar-xz")]
                 self.pack(crate::tar::TarPacker::new_xz)?;
 
@@ -207,7 +207,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("zst" | "zstd") => {
+            Some(".zst" | ".zstd") => {
                 #[cfg(feature = "tar-zstd")]
                 self.pack(crate::tar::TarPacker::new_zstd)?;
 
@@ -218,7 +218,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("zip") => {
+            Some(".zip") => {
                 #[cfg(feature = "zip")]
                 self.pack(crate::zip::ZipPacker::new)?;
 
@@ -283,7 +283,7 @@ impl<'owner> Archiver<'owner> {
     /// then unpack the archive using [`Archiver.unpack`].
     pub fn unpack_from_ext(&self) -> ArchiveResult<()> {
         match get_full_file_extension(self.archive_file).as_deref() {
-            Some("gz") => {
+            Some(".gz") => {
                 #[cfg(feature = "gz")]
                 self.unpack(crate::gz::GzUnpacker::new)?;
 
@@ -294,7 +294,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("tar") => {
+            Some(".tar") => {
                 #[cfg(feature = "tar")]
                 self.unpack(crate::tar::TarUnpacker::new)?;
 
@@ -305,7 +305,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("tar.gz" | "tgz") => {
+            Some(".tar.gz" | ".tgz") => {
                 #[cfg(feature = "tar-gz")]
                 self.unpack(crate::tar::TarUnpacker::new_gz)?;
 
@@ -316,7 +316,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("tar.xz" | "txz") => {
+            Some(".tar.xz" | ".txz") => {
                 #[cfg(feature = "tar-xz")]
                 self.unpack(crate::tar::TarUnpacker::new_xz)?;
 
@@ -327,7 +327,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("zst" | "zstd") => {
+            Some(".zst" | ".zstd") => {
                 #[cfg(feature = "tar-zstd")]
                 self.unpack(crate::tar::TarUnpacker::new_zstd)?;
 
@@ -338,7 +338,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some("zip") => {
+            Some(".zip") => {
                 #[cfg(feature = "zip")]
                 self.unpack(crate::zip::ZipUnpacker::new)?;
 

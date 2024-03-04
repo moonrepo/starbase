@@ -50,32 +50,53 @@ where
         .join("/")
 }
 
-/// Extract the full extension from a file path, like `tar.gz`,
-/// instead of just `gz`. If no file extension is found, returns `None`.`
+/// Extract the full extension from a file path with leading dot,
+/// like `.tar.gz`, instead of just `.gz`.  If no file extension
+/// is found, returns `None`.`
 pub fn get_full_file_extension(path: &Path) -> Option<String> {
     let file_name = fs::file_name(path);
 
-    // Std lib `extension()` just returns the final part
-    if let Some(i) = file_name.find('.') {
-        return Some(file_name[i + 1..].to_owned());
+    if let Some(found) = get_supported_archive_extensions()
+        .into_iter()
+        .find(|ext| file_name.ends_with(ext))
+    {
+        return Some(found);
+    }
+
+    // This is to handle "unsupported format" scenarios
+    if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
+        return Some(format!(".{ext}"));
     }
 
     None
 }
 
+/// Return a list of all supported archive file extensions,
+/// regardless of which Cargo features are enabled.
+pub fn get_supported_archive_extensions() -> Vec<String> {
+    // Order is important here! Must be from most
+    // specific to least specific!
+    vec![
+        ".tar.gz".into(),
+        ".tar.xz".into(),
+        ".tar".into(),
+        ".tgz".into(),
+        ".txz".into(),
+        ".gz".into(),
+        ".zstd".into(),
+        ".zst".into(),
+        ".zip".into(),
+    ]
+}
+
 /// Return true if the file path has a supported archive extension.
 /// This does not check against feature flags!
 pub fn is_supported_archive_extension(path: &Path) -> bool {
-    get_full_file_extension(path)
-        .map(|ext| {
-            ext == "tar"
-                || ext == "tgz"
-                || ext == "tar.gz"
-                || ext == "txz"
-                || ext == "tar.xz"
-                || ext == "zstd"
-                || ext == "zst"
-                || ext == "zip"
+    path.file_name()
+        .and_then(|file| file.to_str())
+        .map_or(false, |name| {
+            get_supported_archive_extensions()
+                .into_iter()
+                .any(|ext| name.ends_with(&ext))
         })
-        .unwrap_or(false)
 }
