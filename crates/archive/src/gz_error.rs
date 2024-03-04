@@ -19,6 +19,12 @@ pub enum GzError {
         error: std::io::Error,
     },
 
+    #[error("Directories cannot be gzipped. Use {} instead.", "tar".style(Style::Symbol),)]
+    NoDirs,
+
+    #[error("Only 1 file can be gzipped, received more than 1.")]
+    OneFile,
+
     #[error("Failed to pack archive.\n{error}")]
     PackFailure {
         #[source]
@@ -50,6 +56,14 @@ pub enum GzError {
         #[source]
         error: std::io::Error,
     },
+
+    #[diagnostic(code(gz::pack::no_dirs))]
+    #[error("Directories cannot be gzipped. Use {} instead.", "tar".style(Style::Symbol))]
+    NoDirs,
+
+    #[diagnostic(code(gz::pack::one_file))]
+    #[error("Only 1 file can be gzipped, received more than 1.")]
+    OneFile,
 
     #[diagnostic(code(gz::pack::finish))]
     #[error("Failed to pack archive.")]

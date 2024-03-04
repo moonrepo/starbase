@@ -14,6 +14,7 @@ pub use crate::gz_error::GzError;
 /// Applies gzip to a file.
 pub struct GzPacker {
     archive: Option<GzEncoder<File>>,
+    file_count: usize,
 }
 
 impl GzPacker {
@@ -21,6 +22,7 @@ impl GzPacker {
     pub fn create(output_file: &Path, compression: Compression) -> ArchiveResult<Self> {
         Ok(GzPacker {
             archive: Some(GzEncoder::new(fs::create_file(output_file)?, compression)),
+            file_count: 0,
         })
     }
 
@@ -32,6 +34,10 @@ impl GzPacker {
 
 impl ArchivePacker for GzPacker {
     fn add_file(&mut self, _name: &str, file: &Path) -> ArchiveResult<()> {
+        if self.file_count > 0 {
+            return Err(GzError::OneFile.into());
+        }
+
         self.archive
             .as_mut()
             .unwrap()
@@ -41,11 +47,13 @@ impl ArchivePacker for GzPacker {
                 error,
             })?;
 
+        self.file_count += 1;
+
         Ok(())
     }
 
     fn add_dir(&mut self, _name: &str, _dir: &Path) -> ArchiveResult<()> {
-        Ok(())
+        Err(GzError::NoDirs.into())
     }
 
     fn pack(&mut self) -> ArchiveResult<()> {
