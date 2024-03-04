@@ -64,6 +64,7 @@ impl ArchivePacker for GzPacker {
 /// Opens a gzipped file.
 pub struct GzUnpacker {
     archive: GzDecoder<File>,
+    file_name: String,
     output_dir: PathBuf,
 }
 
@@ -74,14 +75,23 @@ impl GzUnpacker {
 
         Ok(GzUnpacker {
             archive: GzDecoder::new(fs::open_file(input_file)?),
+            file_name: fs::file_name(input_file).replace(".gz", ""),
             output_dir: output_dir.to_path_buf(),
         })
     }
 }
 
 impl ArchiveUnpacker for GzUnpacker {
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<()> {
-        trace!(output_dir = ?self.output_dir, "Opening zip");
+    fn unpack(&mut self, _prefix: &str, _differ: &mut TreeDiffer) -> ArchiveResult<()> {
+        trace!(output_dir = ?self.output_dir, "Ungzipping file");
+
+        let mut bytes = vec![];
+
+        self.archive
+            .read_to_end(&mut bytes)
+            .map_err(|error| GzError::UnpackFailure { error })?;
+
+        fs::write_file(self.output_dir.join(&self.file_name), bytes)?;
 
         Ok(())
     }
