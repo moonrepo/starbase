@@ -1190,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "binstall-tar",
  "flate2",
