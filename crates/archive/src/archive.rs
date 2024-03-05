@@ -28,7 +28,7 @@ pub trait ArchivePacker {
 pub trait ArchiveUnpacker {
     /// Unpack the archive to the destination directory. If a prefix is provided,
     /// remove it from the start of all file paths within the archive.
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<()>;
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<PathBuf>;
 }
 
 /// An `Archiver` is an abstraction for packing and unpacking archives,
@@ -110,8 +110,9 @@ impl<'owner> Archiver<'owner> {
 
     /// Pack and create the archive with the added source, using the
     /// provided packer factory. The factory is passed an absolute
-    /// path to the destination archive file.
-    pub fn pack<F, P>(&self, packer: F) -> ArchiveResult<()>
+    /// path to the destination archive file, which is also returned
+    /// from this method.
+    pub fn pack<F, P>(&self, packer: F) -> ArchiveResult<PathBuf>
     where
         F: FnOnce(&Path) -> ArchiveResult<P>,
         P: ArchivePacker,
@@ -156,7 +157,7 @@ impl<'owner> Archiver<'owner> {
 
         archive.pack()?;
 
-        Ok(())
+        Ok(self.archive_file.to_path_buf())
     }
 
     /// Determine the packer to use based on the archive file extension,
@@ -249,7 +250,8 @@ impl<'owner> Archiver<'owner> {
 
     /// Unpack the archive to the destination root, using the provided
     /// unpacker factory. The factory is passed an absolute path
-    /// to the output directory, and the input archive file.
+    /// to the output directory, and the input archive file. The unpacked
+    /// directory or file is returned from this method.
     ///
     /// When unpacking, we compare files at the destination to those
     /// in the archive, and only unpack the files if they differ.

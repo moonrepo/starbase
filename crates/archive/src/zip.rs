@@ -138,7 +138,7 @@ impl ZipUnpacker {
 }
 
 impl ArchiveUnpacker for ZipUnpacker {
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<()> {
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
         trace!(output_dir = ?self.output_dir, "Opening zip");
 
         let mut count = 0;
@@ -185,6 +185,6 @@ impl ArchiveUnpacker for ZipUnpacker {
 
         trace!("Unpacked {} files", count);
 
-        Ok(())
+        Ok(self.output_dir.clone())
     }
 }

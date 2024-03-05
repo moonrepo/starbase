@@ -179,7 +179,7 @@ impl TarUnpacker {
 }
 
 impl ArchiveUnpacker for TarUnpacker {
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<()> {
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
         self.archive.set_overwrite(true);
 
         trace!(output_dir = ?self.output_dir, "Opening tarball");
@@ -224,6 +224,6 @@ impl ArchiveUnpacker for TarUnpacker {
 
         trace!("Unpacked {} files", count);
 
-        Ok(())
+        Ok(self.output_dir.clone())
     }
 }
