@@ -11,7 +11,7 @@ use tracing::trace;
 
 pub use crate::gz_error::GzError;
 
-/// Applies gzip to a file.
+/// Applies gzip to a single file.
 pub struct GzPacker {
     archive: Option<GzEncoder<File>>,
     file_count: usize,
@@ -90,7 +90,7 @@ impl GzUnpacker {
 }
 
 impl ArchiveUnpacker for GzUnpacker {
-    fn unpack(&mut self, _prefix: &str, _differ: &mut TreeDiffer) -> ArchiveResult<()> {
+    fn unpack(&mut self, _prefix: &str, _differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
         trace!(output_dir = ?self.output_dir, "Ungzipping file");
 
         let mut bytes = vec![];
@@ -99,8 +99,10 @@ impl ArchiveUnpacker for GzUnpacker {
             .read_to_end(&mut bytes)
             .map_err(|error| GzError::UnpackFailure { error })?;
 
-        fs::write_file(self.output_dir.join(&self.file_name), bytes)?;
+        let out_file = self.output_dir.join(&self.file_name);
 
-        Ok(())
+        fs::write_file(&out_file, bytes)?;
+
+        Ok(out_file)
     }
 }
