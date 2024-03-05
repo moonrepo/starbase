@@ -50,8 +50,8 @@ where
         .join("/")
 }
 
-/// Extract the full extension from a file path with leading dot,
-/// like `.tar.gz`, instead of just `.gz`.  If no file extension
+/// Extract the full extension from a file path without leading dot,
+/// like `tar.gz`, instead of just `gz`.  If no file extension
 /// is found, returns `None`.`
 pub fn get_full_file_extension(path: &Path) -> Option<String> {
     let file_name = fs::file_name(path);
@@ -65,7 +65,7 @@ pub fn get_full_file_extension(path: &Path) -> Option<String> {
 
     // This is to handle "unsupported format" scenarios
     if let Some(ext) = path.extension().and_then(|ext| ext.to_str()) {
-        return Some(format!(".{ext}"));
+        return Some(ext.to_owned());
     }
 
     None
@@ -77,15 +77,15 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
     // Order is important here! Must be from most
     // specific to least specific!
     vec![
-        ".tar.gz".into(),
-        ".tar.xz".into(),
-        ".tar".into(),
-        ".tgz".into(),
-        ".txz".into(),
-        ".gz".into(),
-        ".zstd".into(),
-        ".zst".into(),
-        ".zip".into(),
+        "tar.gz".into(),
+        "tar.xz".into(),
+        "tar".into(),
+        "tgz".into(),
+        "txz".into(),
+        "zstd".into(),
+        "zst".into(),
+        "zip".into(),
+        "gz".into(),
     ]
 }
 

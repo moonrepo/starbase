@@ -167,7 +167,7 @@ impl<'owner> Archiver<'owner> {
         let out = self.archive_file.to_path_buf();
 
         match ext.as_deref() {
-            Some(".gz") => {
+            Some("gz") => {
                 #[cfg(feature = "gz")]
                 self.pack(crate::gz::GzPacker::new)?;
 
@@ -178,7 +178,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".tar") => {
+            Some("tar") => {
                 #[cfg(feature = "tar")]
                 self.pack(crate::tar::TarPacker::new)?;
 
@@ -189,7 +189,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".tar.gz" | ".tgz") => {
+            Some("tar.gz" | "tgz") => {
                 #[cfg(feature = "tar-gz")]
                 self.pack(crate::tar::TarPacker::new_gz)?;
 
@@ -200,7 +200,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".tar.xz" | ".txz") => {
+            Some("tar.xz" | "txz") => {
                 #[cfg(feature = "tar-xz")]
                 self.pack(crate::tar::TarPacker::new_xz)?;
 
@@ -211,7 +211,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".zst" | ".zstd") => {
+            Some("zst" | "zstd") => {
                 #[cfg(feature = "tar-zstd")]
                 self.pack(crate::tar::TarPacker::new_zstd)?;
 
@@ -222,7 +222,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".zip") => {
+            Some("zip") => {
                 #[cfg(feature = "zip")]
                 self.pack(crate::zip::ZipPacker::new)?;
 
@@ -294,7 +294,7 @@ impl<'owner> Archiver<'owner> {
         let out;
 
         match ext.as_deref() {
-            Some(".gz") => {
+            Some("gz") => {
                 #[cfg(feature = "gz")]
                 {
                     out = self.unpack(crate::gz::GzUnpacker::new)?;
@@ -307,7 +307,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".tar") => {
+            Some("tar") => {
                 #[cfg(feature = "tar")]
                 {
                     out = self.unpack(crate::tar::TarUnpacker::new)?;
@@ -320,7 +320,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".tar.gz" | ".tgz") => {
+            Some("tar.gz" | "tgz") => {
                 #[cfg(feature = "tar-gz")]
                 {
                     out = self.unpack(crate::tar::TarUnpacker::new_gz)?;
@@ -333,7 +333,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".tar.xz" | ".txz") => {
+            Some("tar.xz" | "txz") => {
                 #[cfg(feature = "tar-xz")]
                 {
                     out = self.unpack(crate::tar::TarUnpacker::new_xz)?;
@@ -346,7 +346,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".zst" | ".zstd") => {
+            Some("zst" | "zstd") => {
                 #[cfg(feature = "tar-zstd")]
                 {
                     out = self.unpack(crate::tar::TarUnpacker::new_zstd)?;
@@ -359,7 +359,7 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
-            Some(".zip") => {
+            Some("zip") => {
                 #[cfg(feature = "zip")]
                 {
                     out = self.unpack(crate::zip::ZipUnpacker::new)?;

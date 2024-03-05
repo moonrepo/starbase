@@ -11,7 +11,7 @@ use tracing::trace;
 
 pub use crate::gz_error::GzError;
 
-/// Applies gzip to a file.
+/// Applies gzip to a single file.
 pub struct GzPacker {
     archive: Option<GzEncoder<File>>,
     file_count: usize,
