@@ -162,8 +162,11 @@ impl<'owner> Archiver<'owner> {
 
     /// Determine the packer to use based on the archive file extension,
     /// then pack the archive using [`Archiver.pack`].
-    pub fn pack_from_ext(&self) -> ArchiveResult<()> {
-        match get_full_file_extension(self.archive_file).as_deref() {
+    pub fn pack_from_ext(&self) -> ArchiveResult<(String, PathBuf)> {
+        let ext = get_full_file_extension(self.archive_file);
+        let out = self.archive_file.to_path_buf();
+
+        match ext.as_deref() {
             Some(".gz") => {
                 #[cfg(feature = "gz")]
                 self.pack(crate::gz::GzPacker::new)?;
@@ -245,7 +248,7 @@ impl<'owner> Archiver<'owner> {
             }
         };
 
-        Ok(())
+        Ok((ext.unwrap(), out))
     }
 
     /// Unpack the archive to the destination root, using the provided
@@ -257,7 +260,7 @@ impl<'owner> Archiver<'owner> {
     /// in the archive, and only unpack the files if they differ.
     /// Furthermore, files at the destination that are not in the
     /// archive are removed entirely.
-    pub fn unpack<F, P>(&self, unpacker: F) -> ArchiveResult<()>
+    pub fn unpack<F, P>(&self, unpacker: F) -> ArchiveResult<PathBuf>
     where
         F: FnOnce(&Path, &Path) -> ArchiveResult<P>,
         P: ArchiveUnpacker,
@@ -275,19 +278,27 @@ impl<'owner> Archiver<'owner> {
         let mut differ = TreeDiffer::load(self.source_root, lookup_paths)?;
         let mut archive = unpacker(self.source_root, self.archive_file)?;
 
-        archive.unpack(self.prefix, &mut differ)?;
+        let out = archive.unpack(self.prefix, &mut differ)?;
         differ.remove_stale_tracked_files();
 
-        Ok(())
+        Ok(out)
     }
 
     /// Determine the unpacker to use based on the archive file extension,
     /// then unpack the archive using [`Archiver.unpack`].
-    pub fn unpack_from_ext(&self) -> ArchiveResult<()> {
-        match get_full_file_extension(self.archive_file).as_deref() {
+    ///
+    /// Returns an absolute path to the directory or file that was created,
+    /// and the extension that was extracted from the input archive file.
+    pub fn unpack_from_ext(&self) -> ArchiveResult<(String, PathBuf)> {
+        let ext = get_full_file_extension(self.archive_file);
+        let out;
+
+        match ext.as_deref() {
             Some(".gz") => {
                 #[cfg(feature = "gz")]
-                self.unpack(crate::gz::GzUnpacker::new)?;
+                {
+                    out = self.unpack(crate::gz::GzUnpacker::new)?;
+                }
 
                 #[cfg(not(feature = "gz"))]
                 return Err(ArchiveError::FeatureNotEnabled {
@@ -298,7 +309,9 @@ impl<'owner> Archiver<'owner> {
             }
             Some(".tar") => {
                 #[cfg(feature = "tar")]
-                self.unpack(crate::tar::TarUnpacker::new)?;
+                {
+                    out = self.unpack(crate::tar::TarUnpacker::new)?;
+                }
 
                 #[cfg(not(feature = "tar"))]
                 return Err(ArchiveError::FeatureNotEnabled {
@@ -309,7 +322,9 @@ impl<'owner> Archiver<'owner> {
             }
             Some(".tar.gz" | ".tgz") => {
                 #[cfg(feature = "tar-gz")]
-                self.unpack(crate::tar::TarUnpacker::new_gz)?;
+                {
+                    out = self.unpack(crate::tar::TarUnpacker::new_gz)?;
+                }
 
                 #[cfg(not(feature = "tar-gz"))]
                 return Err(ArchiveError::FeatureNotEnabled {
@@ -320,7 +335,9 @@ impl<'owner> Archiver<'owner> {
             }
             Some(".tar.xz" | ".txz") => {
                 #[cfg(feature = "tar-xz")]
-                self.unpack(crate::tar::TarUnpacker::new_xz)?;
+                {
+                    out = self.unpack(crate::tar::TarUnpacker::new_xz)?;
+                }
 
                 #[cfg(not(feature = "tar-xz"))]
                 return Err(ArchiveError::FeatureNotEnabled {
@@ -331,7 +348,9 @@ impl<'owner> Archiver<'owner> {
             }
             Some(".zst" | ".zstd") => {
                 #[cfg(feature = "tar-zstd")]
-                self.unpack(crate::tar::TarUnpacker::new_zstd)?;
+                {
+                    out = self.unpack(crate::tar::TarUnpacker::new_zstd)?;
+                }
 
                 #[cfg(not(feature = "tar-zstd"))]
                 return Err(ArchiveError::FeatureNotEnabled {
@@ -342,7 +361,9 @@ impl<'owner> Archiver<'owner> {
             }
             Some(".zip") => {
                 #[cfg(feature = "zip")]
-                self.unpack(crate::zip::ZipUnpacker::new)?;
+                {
+                    out = self.unpack(crate::zip::ZipUnpacker::new)?;
+                }
 
                 #[cfg(not(feature = "zip"))]
                 return Err(ArchiveError::FeatureNotEnabled {
@@ -366,6 +387,6 @@ impl<'owner> Archiver<'owner> {
             }
         };
 
-        Ok(())
+        Ok((ext.unwrap(), out))
     }
 }
