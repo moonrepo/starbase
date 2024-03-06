@@ -3,41 +3,28 @@ use starbase_styles::{Style, Stylize};
 use std::path::PathBuf;
 use thiserror::Error;
 
-#[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
+#[cfg_attr(feature = "miette", derive(miette::Diagnostic))]
 pub enum YamlError {
+    #[cfg_attr(feature = "miette", diagnostic(transparent))]
     #[error(transparent)]
     Fs(#[from] FsError),
 
-    #[error("Failed to parse YAML file {}.\n{error}", .path.style(Style::Path))]
-    ReadFile {
-        path: PathBuf,
+    #[cfg_attr(feature = "miette", diagnostic(code(yaml::format)))]
+    #[error("Failed to format YAML.")]
+    Format {
         #[source]
         error: serde_yaml::Error,
     },
 
-    #[error("Failed to stringify YAML.\n{error}")]
-    Stringify {
+    #[cfg_attr(feature = "miette", diagnostic(code(yaml::parse)))]
+    #[error("Failed to parse YAML.")]
+    Parse {
         #[source]
         error: serde_yaml::Error,
     },
 
-    #[error("Failed to stringify YAML for file {}.\n{error}", .path.style(Style::Path))]
-    StringifyFile {
-        path: PathBuf,
-        #[source]
-        error: serde_yaml::Error,
-    },
-}
-
-#[cfg(feature = "miette")]
-#[derive(Error, Debug, miette::Diagnostic)]
-pub enum YamlError {
-    #[diagnostic(transparent)]
-    #[error(transparent)]
-    Fs(#[from] FsError),
-
-    #[diagnostic(code(yaml::parse_file))]
+    #[cfg_attr(feature = "miette", diagnostic(code(yaml::parse_file)))]
     #[error("Failed to parse YAML file {}.", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
@@ -45,16 +32,9 @@ pub enum YamlError {
         error: serde_yaml::Error,
     },
 
-    #[diagnostic(code(yaml::stringify))]
-    #[error("Failed to stringify YAML.")]
-    Stringify {
-        #[source]
-        error: serde_yaml::Error,
-    },
-
-    #[diagnostic(code(yaml::stringify_file))]
-    #[error("Failed to stringify YAML for file {}.", .path.style(Style::Path))]
-    StringifyFile {
+    #[cfg_attr(feature = "miette", diagnostic(code(yaml::format_file)))]
+    #[error("Failed to format YAML for file {}.", .path.style(Style::Path))]
+    WriteFile {
         path: PathBuf,
         #[source]
         error: serde_yaml::Error,

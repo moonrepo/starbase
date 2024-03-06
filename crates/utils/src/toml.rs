@@ -6,10 +6,34 @@ use tracing::trace;
 
 pub use crate::toml_error::TomlError;
 pub use toml as serde_toml;
-pub use toml::{
-    from_str, to_string, to_string_pretty,
-    value::{Datetime as TomlDatetime, Table as TomlTable, Value as TomlValue},
-};
+pub use toml::value::{Datetime as TomlDatetime, Table as TomlTable, Value as TomlValue};
+
+/// Parse a string and deserialize into the required type.
+#[inline]
+pub fn parse<T, D>(data: T) -> Result<D, TomlError>
+where
+    T: AsRef<str>,
+    D: DeserializeOwned,
+{
+    trace!("Parsing TOML");
+
+    toml::from_str(data.as_ref()).map_err(|error| TomlError::Parse { error })
+}
+
+/// Format and serialize the provided value into a string.
+#[inline]
+pub fn format<D>(data: &D, pretty: bool) -> Result<String, TomlError>
+where
+    D: ?Sized + Serialize,
+{
+    trace!("Formatting TOML");
+
+    if pretty {
+        toml::to_string_pretty(&data).map_err(|error| TomlError::Format { error })
+    } else {
+        toml::to_string(&data).map_err(|error| TomlError::Format { error })
+    }
+}
 
 /// Read a file at the provided path and deserialize into the required type.
 /// The path must already exist.
@@ -22,7 +46,7 @@ where
     let path = path.as_ref();
     let contents = fs::read_file(path)?;
 
-    trace!(file = ?path, "Parsing TOML");
+    trace!(file = ?path, "Reading TOML file");
 
     toml::from_str(&contents).map_err(|error| TomlError::ReadFile {
         path: path.to_path_buf(),
@@ -40,15 +64,15 @@ where
 {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Stringifying TOML");
+    trace!(file = ?path, "Writing TOML file");
 
     let data = if pretty {
-        toml::to_string_pretty(&toml).map_err(|error| TomlError::StringifyFile {
+        toml::to_string_pretty(&toml).map_err(|error| TomlError::WriteFile {
             path: path.to_path_buf(),
             error,
         })?
     } else {
-        toml::to_string(&toml).map_err(|error| TomlError::StringifyFile {
+        toml::to_string(&toml).map_err(|error| TomlError::WriteFile {
             path: path.to_path_buf(),
             error,
         })?

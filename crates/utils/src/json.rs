@@ -6,18 +6,13 @@ use tracing::trace;
 
 pub use crate::json_error::JsonError;
 pub use serde_json;
-pub use serde_json::{
-    from_slice, from_str, from_value, json, to_string, to_string_pretty, to_value, Map as JsonMap,
-    Number as JsonNumber, Value as JsonValue,
-};
+pub use serde_json::{json, Map as JsonMap, Number as JsonNumber, Value as JsonValue};
 
 /// Clean a JSON string by removing comments and trailing commas.
 #[inline]
-#[track_caller]
-pub fn clean<D: AsRef<str>>(json: D) -> Result<String, std::io::Error> {
+pub fn clean<T: AsRef<str>>(json: T) -> Result<String, std::io::Error> {
     let mut json = json.as_ref().to_owned();
 
-    // Remove comments and trailing commas
     if !json.is_empty() {
         json_strip_comments::strip(&mut json)?;
     }
@@ -46,6 +41,35 @@ pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
     }
 }
 
+/// Parse a string and deserialize into the required type.
+#[inline]
+pub fn parse<T, D>(data: T) -> Result<D, JsonError>
+where
+    T: AsRef<str>,
+    D: DeserializeOwned,
+{
+    trace!("Parsing JSON");
+
+    let contents = clean(data.as_ref()).map_err(|error| JsonError::Clean { error })?;
+
+    serde_json::from_str(&contents).map_err(|error| JsonError::Parse { error })
+}
+
+/// Format and serialize the provided value into a string.
+#[inline]
+pub fn format<D>(data: &D, pretty: bool) -> Result<String, JsonError>
+where
+    D: ?Sized + Serialize,
+{
+    trace!("Formatting JSON");
+
+    if pretty {
+        serde_json::to_string_pretty(&data).map_err(|error| JsonError::Format { error })
+    } else {
+        serde_json::to_string(&data).map_err(|error| JsonError::Format { error })
+    }
+}
+
 /// Read a file at the provided path and deserialize into the required type.
 /// The path must already exist.
 #[inline]
@@ -55,24 +79,15 @@ where
     D: DeserializeOwned,
 {
     let path = path.as_ref();
-    let contents = read_to_string(path)?;
+    let contents = clean(fs::read_file(path)?).map_err(|error| JsonError::CleanFile {
+        path: path.to_owned(),
+        error,
+    })?;
 
-    trace!(file = ?path, "Parsing JSON");
+    trace!(file = ?path, "Reading JSON file");
 
     serde_json::from_str(&contents).map_err(|error| JsonError::ReadFile {
         path: path.to_path_buf(),
-        error,
-    })
-}
-
-/// Read a file at the provided path into a string, without deserializing it.
-/// The path must already exist.
-#[inline]
-pub fn read_to_string<T: AsRef<Path>>(path: T) -> Result<String, JsonError> {
-    let path = path.as_ref();
-
-    clean(fs::read_file(path)?).map_err(|error| JsonError::Clean {
-        path: path.to_owned(),
         error,
     })
 }
@@ -89,15 +104,15 @@ where
 {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Stringifying JSON");
+    trace!(file = ?path, "Writing JSON file");
 
     let data = if pretty {
-        serde_json::to_string_pretty(&json).map_err(|error| JsonError::StringifyFile {
+        serde_json::to_string_pretty(&json).map_err(|error| JsonError::WriteFile {
             path: path.to_path_buf(),
             error,
         })?
     } else {
-        serde_json::to_string(&json).map_err(|error| JsonError::StringifyFile {
+        serde_json::to_string(&json).map_err(|error| JsonError::WriteFile {
             path: path.to_path_buf(),
             error,
         })?
@@ -130,7 +145,7 @@ pub fn write_file_with_config<P: AsRef<Path>>(
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path);
 
-    trace!(file = ?path, "Stringifying JSON with .editorconfig");
+    trace!(file = ?path, "Writing JSON file with .editorconfig");
 
     // Based on serde_json::to_string_pretty!
     let mut writer = Vec::with_capacity(128);
@@ -140,7 +155,7 @@ pub fn write_file_with_config<P: AsRef<Path>>(
     );
 
     json.serialize(&mut serializer)
-        .map_err(|error| JsonError::StringifyFile {
+        .map_err(|error| JsonError::WriteFile {
             path: path.to_path_buf(),
             error,
         })?;
