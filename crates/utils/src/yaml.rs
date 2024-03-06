@@ -9,8 +9,7 @@ use tracing::trace;
 pub use crate::yaml_error::YamlError;
 pub use serde_yaml;
 pub use serde_yaml::{
-    from_slice, from_str, from_value, to_string, to_value, Mapping as YamlMapping,
-    Number as YamlNumber, Sequence as YamlSequence, Value as YamlValue,
+    Mapping as YamlMapping, Number as YamlNumber, Sequence as YamlSequence, Value as YamlValue,
 };
 
 static WHITESPACE_PREFIX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\s+)").unwrap());
@@ -36,6 +35,29 @@ pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
     }
 }
 
+/// Parse a string and deserialize into the required type.
+#[inline]
+pub fn parse<T, D>(data: T) -> Result<D, YamlError>
+where
+    T: AsRef<str>,
+    D: DeserializeOwned,
+{
+    trace!("Parsing YAML");
+
+    serde_yaml::from_str(data.as_ref()).map_err(|error| YamlError::Parse { error })
+}
+
+/// Format and serialize the provided value into a string.
+#[inline]
+pub fn format<D>(data: &D) -> Result<String, YamlError>
+where
+    D: ?Sized + Serialize,
+{
+    trace!("Formatting YAML");
+
+    serde_yaml::to_string(&data).map_err(|error| YamlError::Format { error })
+}
+
 /// Read a file at the provided path and deserialize into the required type.
 /// The path must already exist.
 #[inline]
@@ -47,7 +69,7 @@ where
     let path = path.as_ref();
     let contents = fs::read_file(path)?;
 
-    trace!(file = ?path, "Parsing YAML");
+    trace!(file = ?path, "Reading YAML file");
 
     serde_yaml::from_str(&contents).map_err(|error| YamlError::ReadFile {
         path: path.to_path_buf(),
@@ -67,9 +89,9 @@ where
 {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Stringifying YAML");
+    trace!(file = ?path, "Writing YAML file");
 
-    let data = serde_yaml::to_string(&yaml).map_err(|error| YamlError::StringifyFile {
+    let data = serde_yaml::to_string(&yaml).map_err(|error| YamlError::WriteFile {
         path: path.to_path_buf(),
         error,
     })?;
@@ -94,10 +116,10 @@ where
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path);
 
-    trace!(file = ?path, "Stringifying YAML with .editorconfig");
+    trace!(file = ?path, "Writing YAML file with .editorconfig");
 
     let mut data = serde_yaml::to_string(&yaml)
-        .map_err(|error| YamlError::StringifyFile {
+        .map_err(|error| YamlError::WriteFile {
             path: path.to_path_buf(),
             error,
         })?
