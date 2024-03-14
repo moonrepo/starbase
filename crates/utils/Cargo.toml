@@ -3,7 +3,7 @@ name = "starbase_utils"
 version = "0.6.0"
 edition = "2021"
 license = "MIT"
-description = "General fs, io, serde, etc, utilities."
+description = "General fs, io, serde, net, etc, utilities."
 repository = "https://github.com/moonrepo/starbase"
 
 [package.metadata.docs.rs]

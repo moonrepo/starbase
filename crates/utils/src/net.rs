@@ -33,16 +33,14 @@ pub async fn download_from_url_with_client<S: AsRef<str>, D: AsRef<Path>>(
     if status.as_u16() == 404 {
         return Err(NetError::UrlNotFound {
             url: source_url.to_owned(),
-        }
-        .into());
+        });
     }
 
     if !status.is_success() {
         return Err(NetError::DownloadFailed {
             url: source_url.to_owned(),
             status: status.to_string(),
-        }
-        .into());
+        });
     }
 
     // Write the bytes to our file
