@@ -57,6 +57,7 @@ toml = ["dep:toml", "dep:serde"]
 yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
 
 [dev-dependencies]
+reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [
 	"editor-config",
