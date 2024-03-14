@@ -14,6 +14,11 @@ pub mod json;
 #[cfg(feature = "json")]
 mod json_error;
 
+#[cfg(feature = "net")]
+pub mod net;
+#[cfg(feature = "net")]
+mod net_error;
+
 #[cfg(feature = "toml")]
 pub mod toml;
 #[cfg(feature = "toml")]
