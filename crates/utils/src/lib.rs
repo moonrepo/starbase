@@ -16,6 +16,7 @@ pub mod json;
 #[cfg(feature = "json")]
 mod json_error;
 
+/// Utilities for common network patterns.
 #[cfg(feature = "net")]
 pub mod net;
 #[cfg(feature = "net")]
