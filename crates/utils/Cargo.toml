@@ -3,7 +3,7 @@ name = "starbase_utils"
 version = "0.6.0"
 edition = "2021"
 license = "MIT"
-description = "General fs, io, serde, etc, utilities."
+description = "General fs, io, serde, net, etc, utilities."
 repository = "https://github.com/moonrepo/starbase"
 
 [package.metadata.docs.rs]
@@ -40,6 +40,10 @@ toml = { version = "0.8.10", optional = true }
 # yaml
 serde_yaml = { workspace = true, optional = true }
 
+# net
+reqwest = { workspace = true, optional = true }
+url = { version = "2.5.0", optional = true }
+
 [features]
 default = []
 editor-config = ["dep:ec4rs"]
@@ -47,11 +51,13 @@ fs-lock = ["dep:fs4", "dep:tokio"]
 glob = ["dep:wax"]
 glob-miette = ["glob", "miette", "wax/miette"]
 miette = ["dep:miette"]
+net = ["dep:reqwest", "dep:url"]
 json = ["dep:json-strip-comments", "dep:serde", "dep:serde_json"]
 toml = ["dep:toml", "dep:serde"]
 yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
 
 [dev-dependencies]
+reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [
 	"editor-config",
@@ -59,6 +65,7 @@ starbase_utils = { path = ".", features = [
 	"glob",
 	# "glob-miette",
 	"miette",
+	"net",
 	"json",
 	"toml",
 	"yaml",
