@@ -527,7 +527,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
         "Removing stale contents from directory"
     );
 
-    for entry in read_dir(dir)? {
+    for entry in read_dir_all(dir)? {
         let path = entry.path();
 
         if path.is_file() {
