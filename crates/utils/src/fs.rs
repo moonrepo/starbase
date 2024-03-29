@@ -124,6 +124,7 @@ pub fn create_file_if_missing<T: AsRef<Path>>(path: T) -> Result<File, FsError> 
 
     trace!(file = ?path, "Creating file without truncating");
 
+    #[allow(clippy::suspicious_open_options)]
     OpenOptions::new()
         .write(true)
         .create(true)
