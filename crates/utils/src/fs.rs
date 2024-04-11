@@ -78,12 +78,14 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
     );
 
     for entry in read_dir(from)? {
-        let path = entry.path();
+        if let Ok(file_type) = entry.file_type() {
+            if file_type.is_file() {
+                let path = entry.path();
 
-        if path.is_file() {
-            copy_file(&path, to_root.join(path.strip_prefix(from_root).unwrap()))?;
-        } else if path.is_dir() {
-            dirs.push(path);
+                copy_file(&path, to_root.join(path.strip_prefix(from_root).unwrap()))?;
+            } else if file_type.is_dir() {
+                dirs.push(entry.path());
+            }
         }
     }
 
@@ -572,10 +574,8 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
     );
 
     for entry in read_dir_all(dir)? {
-        let path = entry.path();
-
-        if path.is_file() {
-            if let Ok(bytes) = remove_file_if_stale(path, duration, now) {
+        if entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
+            if let Ok(bytes) = remove_file_if_stale(entry.path(), duration, now) {
                 if bytes > 0 {
                     files_deleted += 1;
                     bytes_saved += bytes;

@@ -83,14 +83,16 @@ impl ArchivePacker for ZipPacker {
         let mut dirs = vec![];
 
         for entry in fs::read_dir(dir)? {
-            let path = entry.path();
-            let path_suffix = path.strip_prefix(dir).unwrap();
-            let name = join_file_name([name, path_suffix.to_str().unwrap()]);
+            if let Ok(file_type) = entry.file_type() {
+                let path = entry.path();
+                let path_suffix = path.strip_prefix(dir).unwrap();
+                let name = join_file_name([name, path_suffix.to_str().unwrap()]);
 
-            if path.is_dir() {
-                dirs.push((name, path));
-            } else {
-                self.add_file(&name, &path)?;
+                if file_type.is_dir() {
+                    dirs.push((name, path));
+                } else {
+                    self.add_file(&name, &path)?;
+                }
             }
         }
 
