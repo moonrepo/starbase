@@ -463,6 +463,7 @@ pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 /// Remove a file at the provided path if it's older than the provided duration.
 /// If the file does not exist, or is younger than the duration, this is a no-op.
 #[inline]
+#[deprecated(note = "Use `remove_file_if_stale` instead.")]
 pub fn remove_file_if_older_than<T: AsRef<Path>>(
     path: T,
     duration: Duration,
@@ -479,7 +480,48 @@ pub fn remove_file_if_older_than<T: AsRef<Path>>(
                 .unwrap_or(now);
 
             if last_used < (now - duration) {
-                remove_file(path)?;
+                trace!(file = ?path, "Removing stale file");
+
+                fs::remove_file(path).map_err(|error| FsError::Remove {
+                    path: path.to_path_buf(),
+                    error,
+                })?;
+
+                return Ok(meta.len());
+            }
+        }
+    }
+
+    Ok(0)
+}
+
+/// Remove a file at the provided path if it's older than the provided duration.
+/// If the file does not exist, or is younger than the duration, this is a no-op.
+#[inline]
+pub fn remove_file_if_stale<T: AsRef<Path>>(
+    path: T,
+    duration: Duration,
+    current: SystemTime,
+) -> Result<u64, FsError> {
+    let path = path.as_ref();
+
+    if path.exists() {
+        if let Ok(meta) = metadata(path) {
+            let Ok(last_used) = meta
+                .accessed()
+                .or_else(|_| meta.modified())
+                .or_else(|_| meta.created())
+            else {
+                return Ok(0);
+            };
+
+            if last_used < (current - duration) {
+                trace!(file = ?path, "Removing stale file");
+
+                fs::remove_file(path).map_err(|error| FsError::Remove {
+                    path: path.to_path_buf(),
+                    error,
+                })?;
 
                 return Ok(meta.len());
             }
@@ -522,6 +564,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
     let mut files_deleted: usize = 0;
     let mut bytes_saved: u64 = 0;
     let dir = dir.as_ref();
+    let now = SystemTime::now();
 
     trace!(
         dir = ?dir,
@@ -532,7 +575,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
         let path = entry.path();
 
         if path.is_file() {
-            if let Ok(bytes) = remove_file_if_older_than(path, duration) {
+            if let Ok(bytes) = remove_file_if_stale(path, duration, now) {
                 if bytes > 0 {
                     files_deleted += 1;
                     bytes_saved += bytes;
