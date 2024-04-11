@@ -1627,6 +1627,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "starbase_shell"
+version = "0.0.1"
+
+[[package]]
 name = "starbase_styles"
 version = "0.3.2"
 dependencies = [
