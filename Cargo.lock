@@ -1629,6 +1629,9 @@ dependencies = [
 [[package]]
 name = "starbase_shell"
 version = "0.0.1"
+dependencies = [
+ "dirs",
+]
 
 [[package]]
 name = "starbase_styles"
