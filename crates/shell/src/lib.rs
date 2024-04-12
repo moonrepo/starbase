@@ -1,4 +1,3 @@
-use dirs::config_dir;
 use std::collections::HashSet;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -22,6 +21,8 @@ impl Shell {
             Self::Bash => home_dir.join(".bash_profile"),
             Self::Elvish => get_config_dir(home_dir).join("elvish").join("rc.elv"),
             Self::Fish => get_config_dir(home_dir).join("fish").join("config.fish"),
+            Self::Ion => get_config_dir(home_dir).join("ion").join("initrc"),
+            Self::Nushell => get_config_dir(home_dir).join("nushell").join("config.nu"),
             _ => todo!(),
         }
     }
@@ -61,15 +62,27 @@ impl Shell {
             }
             // https://fishshell.com/docs/current/language.html#configuration
             Self::Fish => {
-                // No others
+                profiles.extend([
+                    get_config_dir(home_dir).join("fish").join("config.fish"),
+                    home_dir.join(".config").join("fish").join("config.fish"),
+                ]);
+            }
+            // https://doc.redox-os.org/ion-manual/general.html#xdg-app-dirs-support
+            Self::Ion => {
+                profiles.extend([
+                    get_config_dir(home_dir).join("ion").join("initrc"),
+                    home_dir.join(".config").join("ion").join("initrc"),
+                ]);
+            }
+            // https://www.nushell.sh/book/configuration.html
+            Self::Nushell => {
+                profiles.extend([
+                    get_config_dir(home_dir).join("nushell").join("config.nu"),
+                    home_dir.join(".config").join("nushell").join("config.nu"),
+                ]);
             }
             _ => {}
         };
-
-        #[cfg(unix)]
-        {
-            profiles.insert(home_dir.join(".profile"));
-        }
 
         profiles.into_iter().collect()
     }

@@ -9,8 +9,5 @@ repository = "https://github.com/moonrepo/starbase"
 [package.metadata.docs.rs]
 all-features = true
 
-[dependencies]
-dirs = { workspace = true }
-
 [features]
 default = []
