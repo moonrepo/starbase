@@ -1629,6 +1629,11 @@ dependencies = [
 [[package]]
 name = "starbase_shell"
 version = "0.0.1"
+dependencies = [
+ "miette 7.2.0",
+ "starbase_styles",
+ "thiserror",
+]
 
 [[package]]
 name = "starbase_styles"
