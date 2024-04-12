@@ -1631,6 +1631,7 @@ name = "starbase_shell"
 version = "0.0.1"
 dependencies = [
  "miette 7.2.0",
+ "regex",
  "starbase_styles",
  "thiserror",
 ]

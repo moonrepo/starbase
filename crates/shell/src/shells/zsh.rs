@@ -8,6 +8,14 @@ pub struct Zsh;
 
 // https://zsh.sourceforge.io/Doc/Release/Files.html#Files
 impl Shell for Zsh {
+    fn format_env_export(&self, key: &str, value: &str) -> String {
+        format!(r#"export {key}="{value}""#)
+    }
+
+    fn format_path_export(&self, paths: &[String]) -> String {
+        format!(r#"export PATH="{}:$PATH""#, paths.join(":"))
+    }
+
     fn get_main_profile_path(&self, home_dir: &Path) -> PathBuf {
         env::var_os("ZDOTDIR")
             .and_then(is_absolute_dir)

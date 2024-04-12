@@ -8,6 +8,14 @@ pub struct Fish;
 
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
+    fn format_env_export(&self, key: &str, value: &str) -> String {
+        format!(r#"set -gx {key} "{value}""#)
+    }
+
+    fn format_path_export(&self, paths: &[String]) -> String {
+        format!(r#"set -gx PATH "{}" $PATH"#, paths.join(":"))
+    }
+
     fn get_main_profile_path(&self, home_dir: &Path) -> PathBuf {
         get_config_dir(home_dir).join("fish").join("config.fish")
     }

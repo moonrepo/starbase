@@ -32,7 +32,7 @@ impl ShellType {
         Self::try_detect().ok()
     }
 
-    pub fn try_detect() -> Result<Self, ()> {
+    pub fn try_detect() -> Result<Self, ShellError> {
         if let Some(env_shell) = env::var_os("SHELL") {
             // Don't error if nothing found, continue to the more
             // advanced detection instead
@@ -41,7 +41,9 @@ impl ShellType {
             }
         }
 
-        Err(())
+        Err(ShellError::UnknownShell {
+            name: "unknown".into(),
+        })
     }
 
     /// Build a [`Shell`] instance from the current type.
