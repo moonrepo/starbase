@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::env;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -23,7 +24,26 @@ impl Shell {
             Self::Fish => get_config_dir(home_dir).join("fish").join("config.fish"),
             Self::Ion => get_config_dir(home_dir).join("ion").join("initrc"),
             Self::Nushell => get_config_dir(home_dir).join("nushell").join("config.nu"),
-            _ => todo!(),
+            Self::Powershell => {
+                #[cfg(windows)]
+                {
+                    home_dir
+                        .join("Documents")
+                        .join("PowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1")
+                }
+
+                #[cfg(not(windows))]
+                {
+                    get_config_dir(home_dir)
+                        .join("powershell")
+                        .join("Microsoft.PowerShell_profile.ps1")
+                }
+            }
+            Self::Zsh => env::var_os("ZDOTDIR")
+                .and_then(is_absolute_dir)
+                .unwrap_or(home_dir.to_owned())
+                .join(".zprofile"),
         }
     }
 
@@ -36,7 +56,6 @@ impl Shell {
             Self::Bash => {
                 profiles.extend([
                     home_dir.join(".bash_profile"),
-                    home_dir.join(".bash_login"),
                     home_dir.join(".bashrc"),
                     home_dir.join(".profile"),
                 ]);
@@ -81,23 +100,66 @@ impl Shell {
                     home_dir.join(".config").join("nushell").join("config.nu"),
                 ]);
             }
-            _ => {}
+            // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.4
+            Self::Powershell => {
+                #[cfg(windows)]
+                {
+                    let docs_dir = user_dir.join("Documents");
+
+                    profiles.extend([
+                        docs_dir
+                            .join("PowerShell")
+                            .join("Microsoft.PowerShell_profile.ps1"),
+                        docs_dir.join("PowerShell").join("Profile.ps1"),
+                    ]);
+                }
+
+                #[cfg(not(windows))]
+                {
+                    profiles.extend([
+                        get_config_dir(home_dir)
+                            .join("powershell")
+                            .join("Microsoft.PowerShell_profile.ps1"),
+                        home_dir
+                            .join(".config")
+                            .join("powershell")
+                            .join("Microsoft.PowerShell_profile.ps1"),
+                        get_config_dir(home_dir)
+                            .join("powershell")
+                            .join("profile.ps1"),
+                        home_dir
+                            .join(".config")
+                            .join("powershell")
+                            .join("profile.ps1"),
+                    ]);
+                }
+            }
+            // https://zsh.sourceforge.io/Doc/Release/Files.html#Files
+            Shell::Zsh => {
+                let zdot_dir = env::var_os("ZDOTDIR")
+                    .and_then(is_absolute_dir)
+                    .unwrap_or(home_dir.to_owned());
+
+                profiles.extend([zdot_dir.join(".zprofile"), zdot_dir.join(".zshrc")]);
+            }
         };
 
         profiles.into_iter().collect()
     }
 }
 
+fn is_absolute_dir(value: OsString) -> Option<PathBuf> {
+    let dir = PathBuf::from(&value);
+
+    if !value.is_empty() && dir.is_absolute() {
+        Some(dir)
+    } else {
+        None
+    }
+}
+
 fn get_config_dir(home_dir: &Path) -> PathBuf {
     env::var_os("XDG_CONFIG_HOME")
-        .and_then(|xdg| {
-            let dir = PathBuf::from(&xdg);
-
-            if !xdg.is_empty() && dir.is_absolute() {
-                Some(dir)
-            } else {
-                None
-            }
-        })
+        .and_then(is_absolute_dir)
         .unwrap_or_else(|| home_dir.join(".config"))
 }
