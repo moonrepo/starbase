@@ -28,6 +28,17 @@ impl ShellType {
         ]
     }
 
+    /// Return a list of shell types for the current operating system
+    pub fn os_variants() -> Vec<Self> {
+        #[cfg(windows)]
+        {
+            vec![Self::Bash, Self::Elvish, Self::Fish, Self::Nu, Self::Pwsh]
+        }
+
+        #[cfg(not(windows))]
+        Self::variants()
+    }
+
     pub fn detect() -> Option<Self> {
         Self::try_detect().ok()
     }
@@ -55,7 +66,7 @@ impl ShellType {
             Self::Ion => Box::new(Ion),
             Self::Nu => Box::new(Nu),
             Self::Pwsh => Box::new(Pwsh),
-            Self::Zsh => Box::new(Zsh),
+            Self::Zsh => Box::new(Zsh::new()),
         }
     }
 }
@@ -84,7 +95,7 @@ impl FromStr for ShellType {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "bash" => Ok(ShellType::Bash),
-            "elvish" => Ok(ShellType::Elvish),
+            "elv" | "elvish" => Ok(ShellType::Elvish),
             "fish" => Ok(ShellType::Fish),
             "ion" => Ok(ShellType::Ion),
             "nu" | "nushell" => Ok(ShellType::Nu),

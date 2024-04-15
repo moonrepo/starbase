@@ -25,9 +25,11 @@ pub trait Shell {
     /// and be written to a profile file.
     fn format_path_export(&self, paths: &[String]) -> String;
 
-    /// Return the profile path that should be used for interactive shells.
-    /// This is also the profile that environment variables will be written to.
-    fn get_main_profile_path(&self, home_dir: &Path) -> PathBuf;
+    /// Return the path in which commands, aliases, and other settings will be configured.
+    fn get_config_path(&self, home_dir: &Path) -> PathBuf;
+
+    /// Return the path in which environment settings will be defined.
+    fn get_env_path(&self, home_dir: &Path) -> PathBuf;
 
     /// Return a list of all possible interactive profile paths.
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf>;

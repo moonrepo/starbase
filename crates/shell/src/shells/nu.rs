@@ -57,8 +57,12 @@ impl Shell for Nu {
         value
     }
 
-    fn get_main_profile_path(&self, home_dir: &Path) -> PathBuf {
+    fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         get_config_dir(home_dir).join("nushell").join("config.nu")
+    }
+
+    fn get_env_path(&self, home_dir: &Path) -> PathBuf {
+        get_config_dir(home_dir).join("nushell").join("env.nu")
     }
 
     // https://www.nushell.sh/book/configuration.html
@@ -71,5 +75,38 @@ impl Shell for Nu {
         ])
         .into_iter()
         .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_env_var() {
+        assert_eq!(
+            Nu.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            r#"$env.PROTO_HOME = '$HOME/.proto'"#
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Nu.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"$env.PATH = $env.PATH | split row (char esep)
+  | prepend ($env.PROTO_HOME | path join shims)
+  | prepend ($env.PROTO_HOME | path join bin)
+  | uniq"#
+        );
+
+        assert_eq!(
+            Nu.format_path_export(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
+            r#"$env.PATH = $env.PATH | split row (char esep)
+  | prepend ($env.HOME | path join with sub dir)
+  | prepend /some/abs/path/bin
+  | uniq"#
+        );
     }
 }

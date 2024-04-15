@@ -16,8 +16,12 @@ impl Shell for Fish {
         format!(r#"set -gx PATH "{}" $PATH"#, paths.join(":"))
     }
 
-    fn get_main_profile_path(&self, home_dir: &Path) -> PathBuf {
+    fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         get_config_dir(home_dir).join("fish").join("config.fish")
+    }
+
+    fn get_env_path(&self, home_dir: &Path) -> PathBuf {
+        self.get_config_path(home_dir)
     }
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
@@ -27,5 +31,26 @@ impl Shell for Fish {
         ])
         .into_iter()
         .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_env_var() {
+        assert_eq!(
+            Fish.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            r#"set -gx PROTO_HOME "$HOME/.proto""#
+        );
+    }
+
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Fish.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH"#
+        );
     }
 }

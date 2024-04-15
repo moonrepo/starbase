@@ -17,8 +17,12 @@ impl Shell for Ion {
         format!(r#"export PATH = "{}:{}""#, paths.join(":"), "${env::PATH}")
     }
 
-    fn get_main_profile_path(&self, home_dir: &Path) -> PathBuf {
+    fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         get_config_dir(home_dir).join("ion").join("initrc")
+    }
+
+    fn get_env_path(&self, home_dir: &Path) -> PathBuf {
+        self.get_config_path(home_dir)
     }
 
     // https://doc.redox-os.org/ion-manual/general.html#xdg-app-dirs-support
@@ -29,5 +33,26 @@ impl Shell for Ion {
         ])
         .into_iter()
         .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_env_var() {
+        assert_eq!(
+            Ion.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            r#"export PROTO_HOME = "$HOME/.proto""#
+        );
+    }
+
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Ion.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:${env::PATH}""#
+        );
     }
 }

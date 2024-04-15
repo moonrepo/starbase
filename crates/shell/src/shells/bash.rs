@@ -14,7 +14,11 @@ impl Shell for Bash {
         format!(r#"export PATH="{}:$PATH""#, paths.join(":"))
     }
 
-    fn get_main_profile_path(&self, home_dir: &Path) -> PathBuf {
+    fn get_config_path(&self, home_dir: &Path) -> PathBuf {
+        home_dir.join(".bash_profile")
+    }
+
+    fn get_env_path(&self, home_dir: &Path) -> PathBuf {
         home_dir.join(".bash_profile")
     }
 
@@ -24,5 +28,26 @@ impl Shell for Bash {
             home_dir.join(".bashrc"),
             home_dir.join(".profile"),
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_env_var() {
+        assert_eq!(
+            Bash.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            r#"export PROTO_HOME="$HOME/.proto""#
+        );
+    }
+
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Bash.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
+        );
     }
 }
