@@ -1573,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "binstall-tar",
  "flate2",
@@ -1639,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "dirs",
  "ec4rs",
