@@ -11,6 +11,7 @@ pub enum ShellType {
     Ion,
     Nu,
     Pwsh,
+    Xonsh,
     Zsh,
 }
 
@@ -24,6 +25,7 @@ impl ShellType {
             Self::Ion,
             Self::Nu,
             Self::Pwsh,
+            Self::Xonsh,
             Self::Zsh,
         ]
     }
@@ -32,7 +34,14 @@ impl ShellType {
     pub fn os_variants() -> Vec<Self> {
         #[cfg(windows)]
         {
-            vec![Self::Bash, Self::Elvish, Self::Fish, Self::Nu, Self::Pwsh]
+            vec![
+                Self::Bash,
+                Self::Elvish,
+                Self::Fish,
+                Self::Nu,
+                Self::Xonsh,
+                Self::Pwsh,
+            ]
         }
 
         #[cfg(not(windows))]
@@ -72,6 +81,7 @@ impl ShellType {
             Self::Ion => Box::new(Ion),
             Self::Nu => Box::new(Nu),
             Self::Pwsh => Box::new(Pwsh),
+            Self::Xonsh => Box::new(Xonsh),
             Self::Zsh => Box::new(Zsh::new()),
         }
     }
@@ -89,6 +99,7 @@ impl fmt::Display for ShellType {
                 Self::Ion => "ion",
                 Self::Nu => "nu",
                 Self::Pwsh => "pwsh",
+                Self::Xonsh => "xonsh",
                 Self::Zsh => "zsh",
             }
         )
@@ -106,6 +117,7 @@ impl FromStr for ShellType {
             "ion" => Ok(ShellType::Ion),
             "nu" | "nushell" => Ok(ShellType::Nu),
             "pwsh" | "powershell" | "powershell_ise" => Ok(ShellType::Pwsh),
+            "xonsh" | "xon.sh" => Ok(ShellType::Xonsh),
             "zsh" => Ok(ShellType::Zsh),
             _ => Err(ShellError::UnknownShell {
                 name: value.to_owned(),

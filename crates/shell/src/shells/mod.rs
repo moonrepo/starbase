@@ -4,6 +4,7 @@ mod fish;
 mod ion;
 mod nu;
 mod pwsh;
+mod xonsh;
 mod zsh;
 
 pub use bash::*;
@@ -12,6 +13,7 @@ pub use fish::*;
 pub use ion::*;
 pub use nu::*;
 pub use pwsh::*;
+pub use xonsh::*;
 pub use zsh::*;
 
 use std::path::{Path, PathBuf};
