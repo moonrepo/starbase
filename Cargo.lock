@@ -1637,7 +1637,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "miette 7.2.0",
  "regex",
