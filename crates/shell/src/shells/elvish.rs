@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::{get_config_dir, get_env_var_regex};
 use std::collections::HashSet;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
@@ -57,6 +58,12 @@ impl Shell for Elvish {
         }
 
         profiles.into_iter().collect()
+    }
+}
+
+impl fmt::Display for Elvish {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "elvish")
     }
 }
 

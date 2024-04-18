@@ -2,6 +2,7 @@ use super::Shell;
 use crate::helpers::{get_config_dir, get_env_var_regex};
 use std::collections::HashSet;
 use std::env::consts;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
@@ -82,6 +83,12 @@ impl Shell for Nu {
         ])
         .into_iter()
         .collect()
+    }
+}
+
+impl fmt::Display for Nu {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "nu")
     }
 }
 

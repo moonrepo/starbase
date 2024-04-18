@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::is_absolute_dir;
 use std::env;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Default)]
@@ -43,6 +44,12 @@ impl Shell for Zsh {
             zdot_dir.join(".zprofile"),
             zdot_dir.join(".zshrc"),
         ]
+    }
+}
+
+impl fmt::Display for Zsh {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "zsh")
     }
 }
 

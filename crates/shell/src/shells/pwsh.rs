@@ -2,6 +2,7 @@ use super::{Shell, ShellCommand};
 use crate::helpers::get_env_var_regex;
 use std::collections::HashSet;
 use std::env::consts;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
@@ -140,6 +141,12 @@ impl Shell for Pwsh {
         }
 
         profiles.into_iter().collect()
+    }
+}
+
+impl fmt::Display for Pwsh {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "pwsh")
     }
 }
 

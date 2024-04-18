@@ -1,4 +1,5 @@
 use super::Shell;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
@@ -35,6 +36,12 @@ impl Shell for Bash {
             home_dir.join(".bashrc"),
             home_dir.join(".profile"),
         ]
+    }
+}
+
+impl fmt::Display for Bash {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "bash")
     }
 }
 

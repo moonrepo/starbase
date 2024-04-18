@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::get_config_dir;
 use std::collections::HashSet;
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
@@ -40,6 +41,12 @@ impl Shell for Xonsh {
         ])
         .into_iter()
         .collect()
+    }
+}
+
+impl fmt::Display for Xonsh {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "xonsh")
     }
 }
 
