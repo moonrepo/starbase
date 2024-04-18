@@ -17,6 +17,7 @@ pub use xonsh::*;
 pub use zsh::*;
 
 use std::ffi::OsString;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 pub struct ShellCommand {
@@ -35,7 +36,7 @@ impl Default for ShellCommand {
     }
 }
 
-pub trait Shell {
+pub trait Shell: Display {
     /// Format an environment variable that will be exported to the entire shell,
     /// and be written to a profile file.
     fn format_env_export(&self, key: &str, value: &str) -> String;
