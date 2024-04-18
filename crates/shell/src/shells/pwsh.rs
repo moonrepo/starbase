@@ -1,5 +1,5 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{get_config_dir, get_env_var_regex};
+use crate::helpers::get_env_var_regex;
 use std::collections::HashSet;
 use std::env::consts;
 use std::path::{Path, PathBuf};
@@ -76,6 +76,8 @@ impl Shell for Pwsh {
 
         #[cfg(not(windows))]
         {
+            use crate::helpers::get_config_dir;
+
             get_config_dir(home_dir)
                 .join("powershell")
                 .join("Microsoft.PowerShell_profile.ps1")
@@ -117,6 +119,8 @@ impl Shell for Pwsh {
 
         #[cfg(not(windows))]
         {
+            use crate::helpers::get_config_dir;
+
             profiles.extend([
                 get_config_dir(home_dir)
                     .join("powershell")
@@ -154,7 +158,8 @@ mod tests {
     #[test]
     fn formats_path() {
         assert_eq!(
-            Pwsh.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Pwsh.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
+                .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   (Join-Path $env:PROTO_HOME "shims"),
   (Join-Path $env:PROTO_HOME "bin"),
