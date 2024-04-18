@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct Fish;
 
 impl Fish {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
     }

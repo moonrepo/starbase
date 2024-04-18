@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 pub struct Bash;
 
 impl Bash {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
     }

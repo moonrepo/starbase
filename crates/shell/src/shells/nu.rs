@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 pub struct Nu;
 
 impl Nu {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
     }

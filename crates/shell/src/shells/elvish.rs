@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct Elvish;
 
 impl Elvish {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
     }

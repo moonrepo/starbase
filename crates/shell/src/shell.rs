@@ -58,9 +58,8 @@ impl ShellType {
     /// and the parent process hierarchy, and return an error if not detected.
     pub fn try_detect() -> Result<Self, ShellError> {
         if let Ok(env_value) = env::var("SHELL") {
-            return parse_shell_from_path(&env_value).ok_or_else(|| ShellError::UnknownShell {
-                name: env_value.into(),
-            });
+            return parse_shell_from_path(&env_value)
+                .ok_or(ShellError::UnknownShell { name: env_value });
         }
 
         if let Some(shell) = detect_from_os() {
@@ -145,7 +144,7 @@ pub fn parse_shell_from_path<P: AsRef<Path>>(path: P) -> Option<ShellType> {
     let name = path.as_ref().file_stem()?.to_str()?;
 
     // Remove login shell leading `-`
-    ShellType::from_str(name.strip_prefix("-").unwrap_or(name)).ok()
+    ShellType::from_str(name.strip_prefix('-').unwrap_or(name)).ok()
 }
 
 fn detect_from_os() -> Option<ShellType> {
@@ -182,7 +181,7 @@ mod unix {
 
         let mut lines = output.stdout.lines();
         let line = lines.nth(1)?.ok()?;
-        let mut parts = line.trim().split_whitespace();
+        let mut parts = line.split_whitespace();
 
         match (parts.next(), parts.next()) {
             (Some(ppid), Some(comm)) => Some(ProcessStatus {

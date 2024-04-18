@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct Xonsh;
 
 impl Xonsh {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
     }

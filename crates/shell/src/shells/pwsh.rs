@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 pub struct Pwsh;
 
 impl Pwsh {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
     }

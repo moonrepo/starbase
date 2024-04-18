@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct Ion;
 
 impl Ion {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
     }
