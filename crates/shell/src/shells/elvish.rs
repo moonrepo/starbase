@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, Debug)]
 pub struct Elvish;
 
+impl Elvish {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 fn format(value: impl AsRef<str>) -> String {
     get_env_var_regex()
         .replace_all(value.as_ref(), "$$E:$name")

@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Shell, ShellCommand};
 use crate::helpers::{get_config_dir, get_env_var_regex};
 use std::collections::HashSet;
 use std::env::consts;
@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Pwsh;
+
+impl Pwsh {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 fn format(value: impl AsRef<str>) -> String {
     get_env_var_regex()
@@ -77,6 +83,20 @@ impl Shell for Pwsh {
 
     fn get_env_path(&self, home_dir: &Path) -> PathBuf {
         self.get_config_path(home_dir)
+    }
+
+    fn get_exec_command(&self) -> ShellCommand {
+        ShellCommand {
+            shell_args: vec![
+                "-NoLogo".into(),
+                "-Command".into(),
+                // We'll pass the command args via stdin, so that paths with special
+                // characters and spaces resolve correctly.
+                // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_pwsh?view=powershell-7.2#-command---c
+                "-".into(),
+            ],
+            pass_args_stdin: true,
+        }
     }
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {

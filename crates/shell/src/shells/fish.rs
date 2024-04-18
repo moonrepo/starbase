@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, Debug)]
 pub struct Fish;
 
+impl Fish {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
     fn format_env_export(&self, key: &str, value: &str) -> String {

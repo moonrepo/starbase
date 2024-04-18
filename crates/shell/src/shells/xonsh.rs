@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, Debug)]
 pub struct Xonsh;
 
+impl Xonsh {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 // https://xon.sh/bash_to_xsh.html
 // https://xon.sh/xonshrc.html
 impl Shell for Xonsh {

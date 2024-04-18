@@ -4,6 +4,12 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, Debug)]
 pub struct Bash;
 
+impl Bash {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 // https://www.baeldung.com/linux/bashrc-vs-bash-profile-vs-profile
 impl Shell for Bash {
     fn format_env_export(&self, key: &str, value: &str) -> String {

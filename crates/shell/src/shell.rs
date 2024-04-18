@@ -73,13 +73,13 @@ impl ShellType {
     /// Build a [`Shell`] instance from the current type.
     pub fn build(&self) -> BoxedShell {
         match self {
-            Self::Bash => Box::new(Bash),
-            Self::Elvish => Box::new(Elvish),
-            Self::Fish => Box::new(Fish),
-            Self::Ion => Box::new(Ion),
-            Self::Nu => Box::new(Nu),
-            Self::Pwsh => Box::new(Pwsh),
-            Self::Xonsh => Box::new(Xonsh),
+            Self::Bash => Box::new(Bash::new()),
+            Self::Elvish => Box::new(Elvish::new()),
+            Self::Fish => Box::new(Fish::new()),
+            Self::Ion => Box::new(Ion::new()),
+            Self::Nu => Box::new(Nu::new()),
+            Self::Pwsh => Box::new(Pwsh::new()),
+            Self::Xonsh => Box::new(Xonsh::new()),
             Self::Zsh => Box::new(Zsh::new()),
         }
     }

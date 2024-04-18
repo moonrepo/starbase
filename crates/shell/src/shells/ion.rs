@@ -6,6 +6,12 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, Debug)]
 pub struct Ion;
 
+impl Ion {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 impl Shell for Ion {
     // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
     fn format_env_export(&self, key: &str, value: &str) -> String {

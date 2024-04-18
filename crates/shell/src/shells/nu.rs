@@ -7,6 +7,12 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, Debug)]
 pub struct Nu;
 
+impl Nu {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 fn join_path(value: impl AsRef<str>) -> String {
     let parts = value
         .as_ref()
