@@ -10,26 +10,26 @@ pub enum ZipError {
     AddFailure {
         source: PathBuf,
         #[source]
-        error: BaseZipError,
+        error: Box<BaseZipError>,
     },
 
     #[error("Failed to extract {} from archive.\n{error}", .source.style(Style::Path))]
     ExtractFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to pack archive.\n{error}")]
     PackFailure {
         #[source]
-        error: BaseZipError,
+        error: Box<BaseZipError>,
     },
 
     #[error("Failed to unpack archive.\n{error}")]
     UnpackFailure {
         #[source]
-        error: BaseZipError,
+        error: Box<BaseZipError>,
     },
 }
 
@@ -41,7 +41,7 @@ pub enum ZipError {
     AddFailure {
         source: PathBuf,
         #[source]
-        error: BaseZipError,
+        error: Box<BaseZipError>,
     },
 
     #[diagnostic(code(zip::unpack::extract))]
@@ -49,20 +49,20 @@ pub enum ZipError {
     ExtractFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(zip::pack::finish))]
     #[error("Failed to pack archive.")]
     PackFailure {
         #[source]
-        error: BaseZipError,
+        error: Box<BaseZipError>,
     },
 
     #[diagnostic(code(zip::unpack::finish))]
     #[error("Failed to unpack archive.")]
     UnpackFailure {
         #[source]
-        error: BaseZipError,
+        error: Box<BaseZipError>,
     },
 }

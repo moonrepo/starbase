@@ -9,26 +9,26 @@ pub enum TarError {
     AddFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to extract {} from archive.\n{error}", .source.style(Style::Path))]
     ExtractFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to pack archive.\n{error}")]
     PackFailure {
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to unpack archive.\n{error}")]
     UnpackFailure {
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 }
 
@@ -40,7 +40,7 @@ pub enum TarError {
     AddFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(tar::unpack::extract))]
@@ -48,20 +48,20 @@ pub enum TarError {
     ExtractFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(tar::pack))]
     #[error("Failed to pack archive.")]
     PackFailure {
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(tar::unpack))]
     #[error("Failed to unpack archive.")]
     UnpackFailure {
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 }

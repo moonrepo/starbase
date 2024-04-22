@@ -9,14 +9,14 @@ pub enum GzError {
     AddFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to extract {} from archive.\n{error}", .source.style(Style::Path))]
     ExtractFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Directories cannot be gzipped. Use {} instead.", "tar".style(Style::Symbol),)]
@@ -28,13 +28,13 @@ pub enum GzError {
     #[error("Failed to pack archive.\n{error}")]
     PackFailure {
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to unpack archive.\n{error}")]
     UnpackFailure {
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 }
 
@@ -46,7 +46,7 @@ pub enum GzError {
     AddFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(gz::unpack::extract))]
@@ -54,7 +54,7 @@ pub enum GzError {
     ExtractFailure {
         source: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(gz::pack::no_dirs))]
@@ -69,13 +69,13 @@ pub enum GzError {
     #[error("Failed to pack archive.")]
     PackFailure {
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(gz::unpack::finish))]
     #[error("Failed to unpack archive.")]
     UnpackFailure {
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 }
