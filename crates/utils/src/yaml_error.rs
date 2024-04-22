@@ -3,40 +3,79 @@ use starbase_styles::{Style, Stylize};
 use std::path::PathBuf;
 use thiserror::Error;
 
+#[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
-#[cfg_attr(feature = "miette", derive(miette::Diagnostic))]
 pub enum YamlError {
-    #[cfg_attr(feature = "miette", diagnostic(transparent))]
     #[error(transparent)]
-    Fs(#[from] FsError),
+    Fs(#[from] Box<FsError>),
 
-    #[cfg_attr(feature = "miette", diagnostic(code(yaml::format)))]
+    #[error("Failed to format YAML.\n{error}")]
+    Format {
+        #[source]
+        error: Box<serde_yaml::Error>,
+    },
+
+    #[error("Failed to parse YAML.\n{error}")]
+    Parse {
+        #[source]
+        error: Box<serde_yaml::Error>,
+    },
+
+    #[error("Failed to parse YAML file {}.\n{error}", .path.style(Style::Path))]
+    ReadFile {
+        path: PathBuf,
+        #[source]
+        error: Box<serde_yaml::Error>,
+    },
+
+    #[error("Failed to format YAML for file {}.\n{error}", .path.style(Style::Path))]
+    WriteFile {
+        path: PathBuf,
+        #[source]
+        error: Box<serde_yaml::Error>,
+    },
+}
+
+#[cfg(feature = "miette")]
+#[derive(Error, Debug, miette::Diagnostic)]
+pub enum YamlError {
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    Fs(#[from] Box<FsError>),
+
+    #[diagnostic(code(yaml::format))]
     #[error("Failed to format YAML.")]
     Format {
         #[source]
-        error: serde_yaml::Error,
+        error: Box<serde_yaml::Error>,
     },
 
-    #[cfg_attr(feature = "miette", diagnostic(code(yaml::parse)))]
+    #[diagnostic(code(yaml::parse))]
     #[error("Failed to parse YAML.")]
     Parse {
         #[source]
-        error: serde_yaml::Error,
+        error: Box<serde_yaml::Error>,
     },
 
-    #[cfg_attr(feature = "miette", diagnostic(code(yaml::parse_file)))]
+    #[diagnostic(code(yaml::parse_file))]
     #[error("Failed to parse YAML file {}.", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
-        error: serde_yaml::Error,
+        error: Box<serde_yaml::Error>,
     },
 
-    #[cfg_attr(feature = "miette", diagnostic(code(yaml::format_file)))]
+    #[diagnostic(code(yaml::format_file))]
     #[error("Failed to format YAML for file {}.", .path.style(Style::Path))]
     WriteFile {
         path: PathBuf,
         #[source]
-        error: serde_yaml::Error,
+        error: Box<serde_yaml::Error>,
     },
+}
+
+impl From<FsError> for YamlError {
+    fn from(e: FsError) -> YamlError {
+        YamlError::Fs(Box::new(e))
+    }
 }

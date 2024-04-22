@@ -3,40 +3,79 @@ use starbase_styles::{Style, Stylize};
 use std::path::PathBuf;
 use thiserror::Error;
 
+#[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
-#[cfg_attr(feature = "miette", derive(miette::Diagnostic))]
 pub enum TomlError {
-    #[cfg_attr(feature = "miette", diagnostic(transparent))]
     #[error(transparent)]
-    Fs(#[from] FsError),
+    Fs(#[from] Box<FsError>),
 
-    #[cfg_attr(feature = "miette", diagnostic(code(toml::format)))]
+    #[error("Failed to format TOML.\n{error}")]
+    Format {
+        #[source]
+        error: Box<toml::ser::Error>,
+    },
+
+    #[error("Failed to parse TOML.\n{error}")]
+    Parse {
+        #[source]
+        error: Box<toml::de::Error>,
+    },
+
+    #[error("Failed to parse TOML file {}.\n{error}", .path.style(Style::Path))]
+    ReadFile {
+        path: PathBuf,
+        #[source]
+        error: Box<toml::de::Error>,
+    },
+
+    #[error("Failed to format TOML for file {}.\n{error}", .path.style(Style::Path))]
+    WriteFile {
+        path: PathBuf,
+        #[source]
+        error: Box<toml::ser::Error>,
+    },
+}
+
+#[cfg(feature = "miette")]
+#[derive(Error, Debug, miette::Diagnostic)]
+pub enum TomlError {
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    Fs(#[from] Box<FsError>),
+
+    #[diagnostic(code(toml::format))]
     #[error("Failed to format TOML.")]
     Format {
         #[source]
-        error: toml::ser::Error,
+        error: Box<toml::ser::Error>,
     },
 
-    #[cfg_attr(feature = "miette", diagnostic(code(toml::parse)))]
+    #[diagnostic(code(toml::parse))]
     #[error("Failed to parse TOML.")]
     Parse {
         #[source]
-        error: toml::de::Error,
+        error: Box<toml::de::Error>,
     },
 
-    #[cfg_attr(feature = "miette", diagnostic(code(toml::parse_file)))]
+    #[diagnostic(code(toml::parse_file))]
     #[error("Failed to parse TOML file {}.", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
-        error: toml::de::Error,
+        error: Box<toml::de::Error>,
     },
 
-    #[cfg_attr(feature = "miette", diagnostic(code(toml::format_file)))]
+    #[diagnostic(code(toml::format_file))]
     #[error("Failed to format TOML for file {}.", .path.style(Style::Path))]
     WriteFile {
         path: PathBuf,
         #[source]
-        error: toml::ser::Error,
+        error: Box<toml::ser::Error>,
     },
+}
+
+impl From<FsError> for TomlError {
+    fn from(e: FsError) -> TomlError {
+        TomlError::Fs(Box::new(e))
+    }
 }

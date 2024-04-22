@@ -28,13 +28,13 @@ pub fn append_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(
         .open(path)
         .map_err(|error| FsError::Write {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?;
 
     file.write_all(data.as_ref())
         .map_err(|error| FsError::Write {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?;
 
     Ok(())
@@ -56,7 +56,7 @@ pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(from: S, to: D) -> Result<(), F
     fs::copy(from, to).map_err(|error| FsError::Copy {
         from: from.to_path_buf(),
         to: to.to_path_buf(),
-        error,
+        error: Box::new(error),
     })?;
 
     Ok(())
@@ -110,7 +110,7 @@ pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
 
     File::create(path).map_err(|error| FsError::Create {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -133,7 +133,7 @@ pub fn create_file_if_missing<T: AsRef<Path>>(path: T) -> Result<File, FsError> 
         .open(path)
         .map_err(|error| FsError::Create {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })
 }
 
@@ -152,7 +152,7 @@ pub fn create_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 
         fs::create_dir_all(path).map_err(|error| FsError::Create {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?;
     }
 
@@ -304,7 +304,7 @@ pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
 
     fs::metadata(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -318,7 +318,7 @@ pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
 
     File::open(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -337,7 +337,7 @@ pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
 
     let entries = fs::read_dir(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })?;
 
     for entry in entries {
@@ -348,7 +348,7 @@ pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
             Err(error) => {
                 return Err(FsError::Read {
                     path: path.to_path_buf(),
-                    error,
+                    error: Box::new(error),
                 });
             }
         }
@@ -385,7 +385,7 @@ pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
 
     fs::read_to_string(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -398,7 +398,7 @@ pub fn read_file_bytes<T: AsRef<Path>>(path: T) -> Result<Vec<u8>, FsError> {
 
     fs::read(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -437,7 +437,7 @@ pub fn remove_link<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 
             fs::remove_file(path).map_err(|error| FsError::Remove {
                 path: path.to_path_buf(),
-                error,
+                error: Box::new(error),
             })?;
         }
     }
@@ -455,7 +455,7 @@ pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 
         fs::remove_file(path).map_err(|error| FsError::Remove {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?;
     }
 
@@ -486,7 +486,7 @@ pub fn remove_file_if_older_than<T: AsRef<Path>>(
 
                 fs::remove_file(path).map_err(|error| FsError::Remove {
                     path: path.to_path_buf(),
-                    error,
+                    error: Box::new(error),
                 })?;
 
                 return Ok(meta.len());
@@ -522,7 +522,7 @@ pub fn remove_file_if_stale<T: AsRef<Path>>(
 
                 fs::remove_file(path).map_err(|error| FsError::Remove {
                     path: path.to_path_buf(),
-                    error,
+                    error: Box::new(error),
                 })?;
 
                 return Ok(meta.len());
@@ -544,7 +544,7 @@ pub fn remove_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 
         fs::remove_dir_all(path).map_err(|error| FsError::Remove {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?;
     }
 
@@ -606,7 +606,7 @@ pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsEr
     fs::rename(from, to).map_err(|error| FsError::Rename {
         from: from.to_path_buf(),
         to: to.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -625,7 +625,7 @@ pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), Fs
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|error| {
         FsError::Perms {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         }
     })?;
 
@@ -653,7 +653,7 @@ pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<()
 
     fs::write(path, data).map_err(|error| FsError::Write {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -679,6 +679,6 @@ pub fn write_file_with_config<T: AsRef<Path>, D: AsRef<[u8]>>(
 
     fs::write(path, data).map_err(|error| FsError::Write {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }

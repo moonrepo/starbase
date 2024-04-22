@@ -44,7 +44,7 @@ impl ArchivePacker for GzPacker {
             .write_all(&fs::read_file_bytes(file)?)
             .map_err(|error| GzError::AddFailure {
                 source: file.to_path_buf(),
-                error,
+                error: Box::new(error),
             })?;
 
         self.file_count += 1;
@@ -63,7 +63,9 @@ impl ArchivePacker for GzPacker {
             .take()
             .unwrap()
             .finish()
-            .map_err(|error| GzError::PackFailure { error })?;
+            .map_err(|error| GzError::PackFailure {
+                error: Box::new(error),
+            })?;
 
         Ok(())
     }
@@ -97,7 +99,9 @@ impl ArchiveUnpacker for GzUnpacker {
 
         self.archive
             .read_to_end(&mut bytes)
-            .map_err(|error| GzError::UnpackFailure { error })?;
+            .map_err(|error| GzError::UnpackFailure {
+                error: Box::new(error),
+            })?;
 
         let out_file = self.output_dir.join(&self.file_name);
 

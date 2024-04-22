@@ -10,42 +10,42 @@ pub enum FsError {
         from: PathBuf,
         to: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to create {}.\n{error}", .path.style(Style::Path))]
     Create {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to lock {}.\n{error}", .path.style(Style::Path))]
     Lock {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to update permissions for {}.\n{error}", .path.style(Style::Path))]
     Perms {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to read path {}.\n{error}", .path.style(Style::Path))]
     Read {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to remove path {}.\n{error}", .path.style(Style::Path))]
     Remove {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("A directory is required for path {}.", .path.style(Style::Path))]
@@ -56,21 +56,21 @@ pub enum FsError {
         from: PathBuf,
         to: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to unlock {}.\n{error}", .path.style(Style::Path))]
     Unlock {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[error("Failed to write {}.\n{error}", .path.style(Style::Path))]
     Write {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 }
 
@@ -83,7 +83,7 @@ pub enum FsError {
         from: PathBuf,
         to: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(fs::create))]
@@ -91,7 +91,7 @@ pub enum FsError {
     Create {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(fs::lock))]
@@ -99,7 +99,7 @@ pub enum FsError {
     Lock {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(fs::perms))]
@@ -107,7 +107,7 @@ pub enum FsError {
     Perms {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(fs::read))]
@@ -115,7 +115,7 @@ pub enum FsError {
     Read {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(fs::remove))]
@@ -123,7 +123,7 @@ pub enum FsError {
     Remove {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(fs::require_dir))]
@@ -136,7 +136,7 @@ pub enum FsError {
         from: PathBuf,
         to: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(fs::unlock))]
@@ -144,7 +144,7 @@ pub enum FsError {
     Unlock {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 
     #[diagnostic(code(fs::write), help("Does the parent directory exist?"))]
@@ -152,6 +152,6 @@ pub enum FsError {
     Write {
         path: PathBuf,
         #[source]
-        error: std::io::Error,
+        error: Box<std::io::Error>,
     },
 }

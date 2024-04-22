@@ -44,7 +44,9 @@ where
 {
     trace!("Parsing YAML");
 
-    serde_yaml::from_str(data.as_ref()).map_err(|error| YamlError::Parse { error })
+    serde_yaml::from_str(data.as_ref()).map_err(|error| YamlError::Parse {
+        error: Box::new(error),
+    })
 }
 
 /// Format and serialize the provided value into a string.
@@ -55,7 +57,9 @@ where
 {
     trace!("Formatting YAML");
 
-    serde_yaml::to_string(&data).map_err(|error| YamlError::Format { error })
+    serde_yaml::to_string(&data).map_err(|error| YamlError::Format {
+        error: Box::new(error),
+    })
 }
 
 /// Read a file at the provided path and deserialize into the required type.
@@ -73,7 +77,7 @@ where
 
     serde_yaml::from_str(&contents).map_err(|error| YamlError::ReadFile {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -93,7 +97,7 @@ where
 
     let data = serde_yaml::to_string(&yaml).map_err(|error| YamlError::WriteFile {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })?;
 
     fs::write_file(path, data)?;
@@ -121,7 +125,7 @@ where
     let mut data = serde_yaml::to_string(&yaml)
         .map_err(|error| YamlError::WriteFile {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?
         .trim()
         .to_string();
