@@ -19,7 +19,7 @@ pub async fn download_from_url_with_client<S: AsRef<str>, D: AsRef<Path>>(
     let source_url = source_url.as_ref();
     let url = Url::parse(source_url).map_err(|error| NetError::UrlParseFailed {
         url: source_url.to_owned(),
-        error,
+        error: Box::new(error),
     })?;
 
     // Fetch the file from the HTTP source
@@ -28,7 +28,7 @@ pub async fn download_from_url_with_client<S: AsRef<str>, D: AsRef<Path>>(
         .send()
         .await
         .map_err(|error| NetError::Http {
-            error,
+            error: Box::new(error),
             url: source_url.to_owned(),
         })?;
 
@@ -51,7 +51,7 @@ pub async fn download_from_url_with_client<S: AsRef<str>, D: AsRef<Path>>(
     fs::write_file(
         dest_file,
         response.bytes().await.map_err(|error| NetError::Http {
-            error,
+            error: Box::new(error),
             url: source_url.to_owned(),
         })?,
     )?;

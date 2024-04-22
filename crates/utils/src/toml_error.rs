@@ -73,3 +73,9 @@ pub enum TomlError {
         error: Box<toml::ser::Error>,
     },
 }
+
+impl From<FsError> for TomlError {
+    fn from(e: FsError) -> TomlError {
+        TomlError::Fs(Box::new(e))
+    }
+}

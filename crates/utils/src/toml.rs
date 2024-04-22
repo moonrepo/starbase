@@ -17,7 +17,9 @@ where
 {
     trace!("Parsing TOML");
 
-    toml::from_str(data.as_ref()).map_err(|error| TomlError::Parse { error })
+    toml::from_str(data.as_ref()).map_err(|error| TomlError::Parse {
+        error: Box::new(error),
+    })
 }
 
 /// Format and serialize the provided value into a string.
@@ -29,9 +31,13 @@ where
     trace!("Formatting TOML");
 
     if pretty {
-        toml::to_string_pretty(&data).map_err(|error| TomlError::Format { error })
+        toml::to_string_pretty(&data).map_err(|error| TomlError::Format {
+            error: Box::new(error),
+        })
     } else {
-        toml::to_string(&data).map_err(|error| TomlError::Format { error })
+        toml::to_string(&data).map_err(|error| TomlError::Format {
+            error: Box::new(error),
+        })
     }
 }
 
@@ -50,7 +56,7 @@ where
 
     toml::from_str(&contents).map_err(|error| TomlError::ReadFile {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -69,12 +75,12 @@ where
     let data = if pretty {
         toml::to_string_pretty(&toml).map_err(|error| TomlError::WriteFile {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?
     } else {
         toml::to_string(&toml).map_err(|error| TomlError::WriteFile {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?
     };
 

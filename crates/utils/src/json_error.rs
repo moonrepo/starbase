@@ -101,3 +101,9 @@ pub enum JsonError {
         error: Box<serde_json::Error>,
     },
 }
+
+impl From<FsError> for JsonError {
+    fn from(e: FsError) -> JsonError {
+        JsonError::Fs(Box::new(e))
+    }
+}

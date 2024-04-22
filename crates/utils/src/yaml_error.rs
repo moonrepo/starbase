@@ -73,3 +73,9 @@ pub enum YamlError {
         error: Box<serde_yaml::Error>,
     },
 }
+
+impl From<FsError> for YamlError {
+    fn from(e: FsError) -> YamlError {
+        YamlError::Fs(Box::new(e))
+    }
+}

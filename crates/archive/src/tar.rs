@@ -89,7 +89,7 @@ impl ArchivePacker for TarPacker {
             .append_file(name, &mut fs::open_file(file)?)
             .map_err(|error| TarError::AddFailure {
                 source: file.to_path_buf(),
-                error,
+                error: Box::new(error),
             })?;
 
         Ok(())
@@ -102,7 +102,7 @@ impl ArchivePacker for TarPacker {
             .append_dir_all(name, dir)
             .map_err(|error| TarError::AddFailure {
                 source: dir.to_path_buf(),
-                error,
+                error: Box::new(error),
             })?;
 
         Ok(())
@@ -113,7 +113,9 @@ impl ArchivePacker for TarPacker {
 
         self.archive
             .finish()
-            .map_err(|error| TarError::PackFailure { error })?;
+            .map_err(|error| TarError::PackFailure {
+                error: Box::new(error),
+            })?;
 
         Ok(())
     }
@@ -189,9 +191,13 @@ impl ArchiveUnpacker for TarUnpacker {
         for entry in self
             .archive
             .entries()
-            .map_err(|error| TarError::UnpackFailure { error })?
+            .map_err(|error| TarError::UnpackFailure {
+                error: Box::new(error),
+            })?
         {
-            let mut entry = entry.map_err(|error| TarError::UnpackFailure { error })?;
+            let mut entry = entry.map_err(|error| TarError::UnpackFailure {
+                error: Box::new(error),
+            })?;
             let mut path: PathBuf = entry.path().unwrap().into_owned();
 
             // Remove the prefix
@@ -214,7 +220,7 @@ impl ArchiveUnpacker for TarUnpacker {
                 .unpack(&output_path)
                 .map_err(|error| TarError::ExtractFailure {
                     source: output_path.clone(),
-                    error,
+                    error: Box::new(error),
                 })?;
             // }
 

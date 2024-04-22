@@ -17,7 +17,7 @@ impl DirLock {
 
         let handle_error = |error: std::io::Error| FsError::Unlock {
             path: self.lock.to_path_buf(),
-            error,
+            error: Box::new(error),
         };
 
         // On Windows this may have already been unlocked,
@@ -116,7 +116,7 @@ pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
     // This blocks if another process has access!
     file.lock_exclusive().map_err(|error| FsError::Lock {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })?;
 
     let pid = std::process::id();
@@ -131,7 +131,7 @@ pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
     file.write(format!("{}", pid).as_ref())
         .map_err(|error| FsError::Write {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?;
 
     Ok(DirLock { lock, file })
@@ -150,14 +150,14 @@ where
 
     file.lock_exclusive().map_err(|error| FsError::Lock {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })?;
 
     let result = op(&mut file)?;
 
     file.unlock().map_err(|error| FsError::Unlock {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })?;
 
     trace!(file = ?path, "Unlocking file exclusively");
@@ -178,14 +178,14 @@ where
 
     file.lock_shared().map_err(|error| FsError::Lock {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })?;
 
     let result = op(&mut file)?;
 
     file.unlock().map_err(|error| FsError::Unlock {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })?;
 
     trace!(file = ?path, "Unlocking file");
@@ -207,7 +207,7 @@ pub fn read_file_with_lock<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
         file.read_to_string(&mut buffer)
             .map_err(|error| FsError::Read {
                 path: path.to_path_buf(),
-                error,
+                error: Box::new(error),
             })?;
 
         Ok(buffer)
@@ -226,7 +226,7 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
     let path = path.as_ref();
     let handle_error = |error: std::io::Error| FsError::Write {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     };
 
     // Don't use create_file() as it truncates, which will cause

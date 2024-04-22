@@ -66,3 +66,9 @@ pub enum NetError {
         error: Box<url::ParseError>,
     },
 }
+
+impl From<FsError> for NetError {
+    fn from(e: FsError) -> NetError {
+        NetError::Fs(Box::new(e))
+    }
+}

@@ -50,9 +50,13 @@ where
 {
     trace!("Parsing JSON");
 
-    let contents = clean(data.as_ref()).map_err(|error| JsonError::Clean { error })?;
+    let contents = clean(data.as_ref()).map_err(|error| JsonError::Clean {
+        error: Box::new(error),
+    })?;
 
-    serde_json::from_str(&contents).map_err(|error| JsonError::Parse { error })
+    serde_json::from_str(&contents).map_err(|error| JsonError::Parse {
+        error: Box::new(error),
+    })
 }
 
 /// Format and serialize the provided value into a string.
@@ -64,9 +68,13 @@ where
     trace!("Formatting JSON");
 
     if pretty {
-        serde_json::to_string_pretty(&data).map_err(|error| JsonError::Format { error })
+        serde_json::to_string_pretty(&data).map_err(|error| JsonError::Format {
+            error: Box::new(error),
+        })
     } else {
-        serde_json::to_string(&data).map_err(|error| JsonError::Format { error })
+        serde_json::to_string(&data).map_err(|error| JsonError::Format {
+            error: Box::new(error),
+        })
     }
 }
 
@@ -81,14 +89,14 @@ where
     let path = path.as_ref();
     let contents = clean(fs::read_file(path)?).map_err(|error| JsonError::CleanFile {
         path: path.to_owned(),
-        error,
+        error: Box::new(error),
     })?;
 
     trace!(file = ?path, "Reading JSON file");
 
     serde_json::from_str(&contents).map_err(|error| JsonError::ReadFile {
         path: path.to_path_buf(),
-        error,
+        error: Box::new(error),
     })
 }
 
@@ -109,12 +117,12 @@ where
     let data = if pretty {
         serde_json::to_string_pretty(&json).map_err(|error| JsonError::WriteFile {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?
     } else {
         serde_json::to_string(&json).map_err(|error| JsonError::WriteFile {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?
     };
 
@@ -157,7 +165,7 @@ pub fn write_file_with_config<P: AsRef<Path>>(
     json.serialize(&mut serializer)
         .map_err(|error| JsonError::WriteFile {
             path: path.to_path_buf(),
-            error,
+            error: Box::new(error),
         })?;
 
     let mut data = unsafe { String::from_utf8_unchecked(writer) };

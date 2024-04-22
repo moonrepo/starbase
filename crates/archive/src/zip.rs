@@ -54,14 +54,14 @@ impl ArchivePacker for ZipPacker {
             .start_file(name, options)
             .map_err(|error| ZipError::AddFailure {
                 source: file.to_path_buf(),
-                error,
+                error: Box::new(error),
             })?;
 
         self.archive
             .write_all(&fs::read_file_bytes(file)?)
             .map_err(|error| FsError::Write {
                 path: file.to_path_buf(),
-                error,
+                error: Box::new(error),
             })?;
 
         Ok(())
@@ -77,7 +77,7 @@ impl ArchivePacker for ZipPacker {
             )
             .map_err(|error| ZipError::AddFailure {
                 source: dir.to_path_buf(),
-                error,
+                error: Box::new(error),
             })?;
 
         let mut dirs = vec![];
@@ -108,7 +108,9 @@ impl ArchivePacker for ZipPacker {
 
         self.archive
             .finish()
-            .map_err(|error| ZipError::PackFailure { error })?;
+            .map_err(|error| ZipError::PackFailure {
+                error: Box::new(error),
+            })?;
 
         Ok(())
     }
@@ -126,8 +128,11 @@ impl ZipUnpacker {
         fs::create_dir_all(output_dir)?;
 
         Ok(ZipUnpacker {
-            archive: ZipArchive::new(fs::open_file(input_file)?)
-                .map_err(|error| ZipError::UnpackFailure { error })?,
+            archive: ZipArchive::new(fs::open_file(input_file)?).map_err(|error| {
+                ZipError::UnpackFailure {
+                    error: Box::new(error),
+                }
+            })?,
             output_dir: output_dir.to_path_buf(),
         })
     }
@@ -149,7 +154,9 @@ impl ArchiveUnpacker for ZipUnpacker {
             let mut file = self
                 .archive
                 .by_index(i)
-                .map_err(|error| ZipError::UnpackFailure { error })?;
+                .map_err(|error| ZipError::UnpackFailure {
+                    error: Box::new(error),
+                })?;
 
             let mut path = match file.enclosed_name() {
                 Some(path) => path.to_owned(),
@@ -175,7 +182,7 @@ impl ArchiveUnpacker for ZipUnpacker {
 
                 io::copy(&mut file, &mut out).map_err(|error| ZipError::ExtractFailure {
                     source: output_path.to_path_buf(),
-                    error,
+                    error: Box::new(error),
                 })?;
 
                 fs::update_perms(&output_path, file.unix_mode())?;
