@@ -45,17 +45,11 @@ Systems are async functions that implement the `System` trait, are added to an a
 and are processed (only once) during the applications run cycle. Systems receive each
 [component type](#components) as a distinct parameter.
 
-> Systems are loosely based on the S in ECS that Bevy and other game engines utilize. The major
-> difference is that our systems are async only, run once, and do not require the entity (E) or
-> component (C) parts.
-
 ```rust
 use starbase::{App, States, Resources, Emitters, MainResult, SystemResult};
 
 async fn load_config(states: States, resources: Resources, emitters: Emitters) -> SystemResult {
-  let states = states.write().await;
-
-  let config: AppConfig = do_load_config();
+  let config: AppConfig = do_load_config().await;
   states.set::<AppConfig>(config);
 
   Ok(())
@@ -72,8 +66,8 @@ async fn main() -> MainResult {
 ```
 
 Each system parameter type (`States`, `Resources`, `Emitters`) is a type alias that wraps the
-underlying component manager in a `Arc<RwLock<T>>`, allowing for distinct read/write locks per
-component type. Separating components across params simplifies borrow semantics.
+underlying component manager in a `Arc<T>`, which uses interior mutability under the hood.
+Separating components across params simplifies borrow semantics.
 
 Furthermore, for better ergonomics and developer experience, we provide a `#[system]` function
 attribute that provides "magic" parameters similar to Axum and Bevy, which we call system
@@ -81,27 +75,9 @@ parameters. For example, the above system can be rewritten as:
 
 ```rust
 #[system]
-async fn load_config(states: StatesMut) {
-  let config: AppConfig = do_load_config();
+async fn load_config(states: States) {
+  let config: AppConfig = do_load_config().await;
   states.set::<AppConfig>(config);
-}
-```
-
-Which compiles down to the following, while taking mutable and immutable borrowship rules into
-account. If a rule is broken, we panic during compilation.
-
-```rust
-async fn load_config(
-  states: starbase::States,
-  resources: starbase::Resources,
-  emitters: starbase::Emitters,
-) -> starbase::SystemResult {
-    let mut states = states.write().await;
-    {
-        let config: AppConfig = do_load_config();
-        states.set::<AppConfig>(config);
-    }
-    Ok(())
 }
 ```
 
@@ -110,7 +86,6 @@ Additional benefits of `#[system]` are:
 - Return type and return statement are both optional, as these are always the same.
 - Parameters can be mixed and matched to suit the system's requirements.
 - Parameters can be entirely ommitted if not required.
-- Avoids writing `read().await` and `write().await` over and over.
 - Avoids importing all necessary types/structs/etc. We compile to fully qualified paths.
 - Functions are automatically wrapped for instrumentation.
 
@@ -191,14 +166,15 @@ Components are values that live for the duration of the application (`'static`) 
 internally as `Any` instances, ensuring strict uniqueness. Components are dividied into 3
 categories:
 
-- States - Granular values.
+- States - Granular values (`newtype` patterns).
 - Resources - Compound values / singleton instances.
 - Emitters - Per-event emitters.
 
 ## States
 
 States are components that represent granular pieces of data, are typically implemented with a tuple
-or unit struct, and must derive `State`. For example, say we want to track the workspace root.
+or unit struct (`newtype`s), and must derive `State`. For example, say we want to track the
+workspace root.
 
 ```rust
 use starbase::State;
@@ -214,7 +190,7 @@ pub struct WorkspaceRoot(PathBuf);
 ### Adding state
 
 States can be added directly to the application instance (before the run cycle has started), or
-through the `StatesMut` system parameter.
+through the `States` system parameter.
 
 ```rust
 app.set_state(WorkspaceRoot(PathBuf::from("/")));
@@ -222,22 +198,17 @@ app.set_state(WorkspaceRoot(PathBuf::from("/")));
 
 ```rust
 #[system]
-async fn detect_root(states: StatesMut) {
+async fn detect_root(states: States) {
   states.set(WorkspaceRoot(PathBuf::from("/")));
+}
+
+#[system]
+async fn read_states(states: States) {
+  let workspace_root = states.get::<WorkspaceRoot>();
 }
 ```
 
 ### Readable state
-
-The `StatesRef` system parameter can be used to acquire read access to the entire states manager. It
-_cannot_ be used alongside `StatesMut`, `StateRef`, or `StateMut`.
-
-```rust
-#[system]
-async fn read_states(states: StatesRef) {
-  let workspace_root = states.get::<WorkspaceRoot>();
-}
-```
 
 Alternatively, the `StateRef` system parameter can be used to immutably read an individual value
 from the states manager. Multiple `StateRef`s can be used together, but cannot be used with
@@ -251,17 +222,6 @@ async fn read_states(workspace_root: StateRef<WorkspaceRoot>, project: StateRef<
 ```
 
 ### Writable state
-
-The `StatesMut` system parameter can be used to acquire write access to the entire states manager.
-It _cannot_ be used alongside `StatesRef`, `StateRef` or `StateMut`.
-
-```rust
-#[system]
-async fn write_states(states: StatesMut) {
-  states.set(SomeState);
-  states.set(AnotherState);
-}
-```
 
 Furthermore, the `StateMut` system parameter can be used to mutably access an individual value,
 allowing for the value (or its inner value) to be modified. Only 1 `StateMut` can be used in a
@@ -299,7 +259,7 @@ pub struct ProjectGraph {
 ### Adding resources
 
 Resources can be added directly to the application instance (before the run cycle has started), or
-through the `ResourcesMut` system parameter.
+through the `Resources` system parameter.
 
 ```rust
 app.set_resource(ProjectGraph::new());
@@ -307,25 +267,20 @@ app.set_resource(ProjectGraph::new());
 
 ```rust
 #[system]
-async fn create_graph(resources: ResourcesMut) {
+async fn create_graph(resources: Resources) {
   resources.set(ProjectGraph::new());
+}
+
+#[system]
+async fn read_resources(resources: Resources) {
+  let project_graph = resources.get::<ProjectGraph>();
 }
 ```
 
 ### Readable resources
 
-The `ResourcesRef` system parameter can be used to acquire read access to the entire resources
-manager. It _cannot_ be used alongside `ResourcesMut`, `ResourceRef`, or `ResourceMut`.
-
-```rust
-#[system]
-async fn read_resources(resources: ResourcesRef) {
-  let project_graph = resources.get::<ProjectGraph>();
-}
-```
-
-Alternatively, the `ResourceRef` system parameter can be used to immutably read an individual value
-from the resources manager. Multiple `ResourceRef`s can be used together, but cannot be used with
+The `ResourceRef` system parameter can be used to immutably read an individual value from the
+resources manager. Multiple `ResourceRef`s can be used together, but cannot be used with
 `ResourceMut`.
 
 ```rust
@@ -336,17 +291,6 @@ async fn read_resources(project_graph: ResourceRef<ProjectGraph>, cache: Resourc
 ```
 
 ### Writable resources
-
-The `ResourcesMut` system parameter can be used to acquire write access to the entire resources
-manager. It _cannot_ be used alongside `ResourcesRef`, `ResourceRef` or `ResourceMut`.
-
-```rust
-#[system]
-async fn write_resources(resources: ResourcesMut) {
-  resources.set(ProjectGraph::new());
-  resources.set(CacheEngine::new());
-}
-```
 
 Furthermore, the `ResourceMut` system parameter can be used to mutably access an individual value.
 Only 1 `ResourceMut` can be used in a system, and no other resource related system parameters can be
@@ -383,7 +327,7 @@ let emitter = Emitter::<ProjectCreatedEvent>::new();
 ### Adding emitters
 
 Emitters can be added directly to the application instance (before the run cycle has started), or
-through the `EmittersMut` system parameter.
+through the `Emitters` system parameter.
 
 Each emitter represents a singular event, so the event type must be explicitly declared as a generic
 when creating a new emitter.
@@ -394,20 +338,7 @@ app.set_emitter(Emitter::<ProjectCreatedEvent>::new());
 
 ```rust
 #[system]
-async fn create_emitter(emitters: EmittersMut) {
-  emitters.set(Emitter::<ProjectCreatedEvent>::new());
-}
-```
-
-### Using emitters
-
-The `EmittersMut` system parameter can be used to acquire write access to the entire emitters
-manager, where new emitters can be registered, or existing emitters can emit an event. It _cannot_
-be used alongside `EmitterMut`.
-
-```rust
-#[system]
-async fn write_emitters(emitters: EmittersMut) {
+async fn use_emitters(emitters: Emitters) {
   // Add emitter
   emitters.set(Emitter::<ProjectCreatedEvent>::new());
 
@@ -418,6 +349,8 @@ async fn write_emitters(emitters: EmittersMut) {
   emitters.emit(ProjectCreatedEvent::new()).await?;
 }
 ```
+
+### Using emitters
 
 Furthermore, the `EmitterRef` (preferred) or `EmitterMut` system parameters can be used to access an
 individual emitter. Only 1 `EmitterMut` can be used in a system, but multiple `EmitterRef` can be

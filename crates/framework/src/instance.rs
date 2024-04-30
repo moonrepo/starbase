@@ -69,9 +69,9 @@ macro_rules! create_instance_manager {
         impl $manager {
             /// Get an instance reference for the provided type.
             /// If the instance does not exist, a panic will be triggered.
-            pub fn get<T: Any + Send + Sync + $type>(&self) -> crate::InstanceGuard<T> {
+            pub fn get<T: Any + Send + Sync + $type>(&self) -> $crate::InstanceGuard<T> {
                 if let Some(entry) = self.cache.get(&TypeId::of::<T>()) {
-                    return crate::InstanceGuard::new(entry);
+                    return $crate::InstanceGuard::new(entry);
                 }
 
                 panic!("{} does not exist!", type_name::<T>())
