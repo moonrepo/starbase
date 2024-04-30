@@ -28,7 +28,7 @@ async fn update_event(mut data: TestEvent) {
 }
 
 #[system]
-async fn start_one(states: StatesMut, emitters: EmittersMut) {
+async fn start_one(states: States, emitters: Emitters) {
     info!("startup 1");
     states.set(TestState("original".into()));
     emitters.set(Emitter::<TestEvent>::new());
@@ -43,7 +43,6 @@ mod sub_mod {
         em.on(update_event).await;
 
         tokio::spawn(async move {
-            let states = states.read().await;
             info!("startup 2");
             let _ = states.get::<TestState>();
 

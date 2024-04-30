@@ -1,5 +1,6 @@
 use scc::hash_map::OccupiedEntry;
 use std::any::{Any, TypeId};
+use std::ops::{Deref, DerefMut};
 
 pub type BoxedAnyInstance = Box<dyn Any + Sync + Send>;
 
@@ -25,6 +26,20 @@ impl<'i, T: 'static> InstanceGuard<'i, T> {
     }
 }
 
+impl<'i, T: 'static> Deref for InstanceGuard<'i, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.read()
+    }
+}
+
+impl<'i, T: 'static> DerefMut for InstanceGuard<'i, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.write()
+    }
+}
+
 // Creates a simple `Any` map registry of objects by type.
 // These methods `panic!` because it immediately bubbles up that
 // the order of operations for application state is wrong, and
@@ -41,7 +56,7 @@ macro_rules! create_instance_manager {
 
         #[derive(Debug, Default)]
         pub struct $manager {
-            cache: scc::HashMap<TypeId, crate::BoxedAnyInstance>,
+            cache: scc::HashMap<TypeId, $crate::BoxedAnyInstance>,
         }
 
         impl $manager {
