@@ -22,18 +22,18 @@ struct Resource2 {
     pub field: usize,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct SomeArgs {}
 
 // READ
 
 #[system]
-async fn read_states(states: StatesRef) {
+async fn read_states(states: States) {
     dbg!(states);
 }
 
 #[system]
-async fn read_states_renamed(other: StatesRef) {
+async fn read_states_renamed(other: States) {
     dbg!(other);
 }
 
@@ -65,12 +65,12 @@ async fn read_args_ref(args: ArgsRef<SomeArgs>) {
 }
 
 #[system]
-async fn read_resources(resources: ResourcesRef) {
+async fn read_resources(resources: Resources) {
     dbg!(resources);
 }
 
 #[system]
-async fn read_resources_renamed(other: ResourcesRef) {
+async fn read_resources_renamed(other: Resources) {
     dbg!(other);
 }
 
@@ -92,7 +92,7 @@ async fn read_resource_same_arg(arg1: ResourceRef<Resource1>, arg2: ResourceRef<
 }
 
 #[system]
-async fn read_emitters(emitters: EmittersRef) {
+async fn read_emitters(emitters: Emitters) {
     emitters.get::<Emitter<Event1>>();
 }
 
@@ -102,19 +102,19 @@ async fn read_emitter(em: EmitterRef<Event1>) {
 }
 
 #[system]
-async fn read_all_managers(states: StatesRef, resources: ResourcesRef, emitters: EmittersMut) {
+async fn read_all_managers(states: States, resources: Resources, emitters: Emitters) {
     dbg!(states, resources, emitters);
 }
 
 // WRITE
 
 #[system]
-async fn write_states(states: StatesMut) {
+async fn write_states(states: States) {
     states.set(State1(123));
 }
 
 #[system]
-async fn write_states_renamed(other: StatesMut) {
+async fn write_states_renamed(other: States) {
     dbg!(other);
 }
 
@@ -125,12 +125,12 @@ async fn write_state(arg: StateMut<State1>) {
 }
 
 #[system]
-async fn write_resources(resources: ResourcesMut) {
+async fn write_resources(resources: Resources) {
     resources.set(Resource1 { field: 123 });
 }
 
 #[system(instrument = false)]
-async fn write_resources_renamed(other: ResourcesMut) {
+async fn write_resources_renamed(other: Resources) {
     dbg!(other);
 }
 
@@ -141,12 +141,12 @@ async fn write_resource(arg: ResourceMut<Resource1>) {
 }
 
 #[system]
-async fn write_emitters(emitters: EmittersMut) {
+async fn write_emitters(emitters: Emitters) {
     emitters.set(Emitter::<Event1>::new());
 }
 
 #[system]
-async fn write_emitters_renamed(other: EmittersMut) {
+async fn write_emitters_renamed(other: Emitters) {
     dbg!(other);
 }
 
@@ -156,7 +156,7 @@ async fn write_emitter(em: EmitterMut<Event1>) {
 }
 
 #[system]
-async fn write_all_managers(states: StatesMut, resources: ResourcesMut, emitters: EmittersMut) {
+async fn write_all_managers(states: States, resources: Resources, emitters: Emitters) {
     states.set(State1(123));
     resources.set(Resource1 { field: 123 });
     emitters.set(Emitter::<Event1>::new());

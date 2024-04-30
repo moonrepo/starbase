@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use syn::{parse_macro_input, FnArg, GenericArgument, Ident, Pat, PathArguments, Type};
 
 enum SystemParam<'a> {
-    ManagerMut,
-    ManagerRef,
+    // ManagerMut,
+    // ManagerRef,
     ParamMut(&'a Type),
     ParamRef(&'a Type),
     ParamRefWithExtract(&'a Type, &'a Type),
@@ -71,20 +71,20 @@ impl<'l> InstanceTracker<'l> {
         self.param_name = Some(name);
     }
 
-    pub fn set_manager(&mut self, name: &'l Ident, param: SystemParam<'l>) {
-        if self.manager_call.is_none() {
-            self.acquire_as = Some(name);
-            self.manager_call = Some(param);
-        } else {
-            let manager_name = self.type_of.manager_name();
+    // pub fn set_manager(&mut self, name: &'l Ident, param: SystemParam<'l>) {
+    //     if self.manager_call.is_none() {
+    //         self.acquire_as = Some(name);
+    //         self.manager_call = Some(param);
+    //     } else {
+    //         let manager_name = self.type_of.manager_name();
 
-            panic!(
-                "Cannot use multiple managers or a mutable and immutable manager together. Use {}Mut or {}Ref distinctly.",
-                manager_name,
-                manager_name,
-            );
-        }
-    }
+    //         panic!(
+    //             "Cannot use multiple managers or a mutable and immutable manager together. Use {}Mut or {}Ref distinctly.",
+    //             manager_name,
+    //             manager_name,
+    //         );
+    //     }
+    // }
 
     pub fn add_call(&mut self, name: &'l Ident, param: SystemParam<'l>) {
         if self.manager_call.is_some() {
@@ -109,8 +109,7 @@ impl<'l> InstanceTracker<'l> {
             }
             SystemParam::ArgsRef(_) => {
                 self.ref_calls.insert(name, param);
-            }
-            _ => unimplemented!(),
+            } // _ => unimplemented!(),
         };
 
         if self.mut_calls.len() > 1 {
@@ -148,25 +147,25 @@ impl<'l> InstanceTracker<'l> {
             .unwrap_or_else(|| manager_param_name.clone());
 
         // Read/write lock acquires for the manager
-        let manager_call = self.manager_call.unwrap_or(if self.mut_calls.is_empty() {
-            SystemParam::ManagerRef
-        } else {
-            SystemParam::ManagerMut
-        });
+        // let manager_call = self.manager_call.unwrap_or(if self.mut_calls.is_empty() {
+        //     SystemParam::ManagerRef
+        // } else {
+        //     SystemParam::ManagerMut
+        // });
 
-        match manager_call {
-            SystemParam::ManagerMut => {
-                quotes.push(quote! {
-                    let mut #manager_var_name = #manager_param_name.write().await;
-                });
-            }
-            SystemParam::ManagerRef => {
-                quotes.push(quote! {
-                    let #manager_var_name = #manager_param_name.read().await;
-                });
-            }
-            _ => unimplemented!(),
-        };
+        // match manager_call {
+        //     SystemParam::ManagerMut => {
+        //         quotes.push(quote! {
+        //             let mut #manager_var_name = #manager_param_name.write().await;
+        //         });
+        //     }
+        //     SystemParam::ManagerRef => {
+        //         quotes.push(quote! {
+        //             let #manager_var_name = #manager_param_name.read().await;
+        //         });
+        //     }
+        //     _ => unimplemented!(),
+        // };
 
         // Get/set calls on the manager
         let is_emitter = matches!(self.type_of, InstanceType::Emitter);
@@ -177,32 +176,39 @@ impl<'l> InstanceTracker<'l> {
         let mut use_state_import = false;
 
         for (name, param) in calls {
+            let base_name = format_ident!("{}_base", name);
+
             match param {
                 SystemParam::ParamMut(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let #name = #manager_var_name.get_mut::<starbase::Emitter<#ty>>();
+                            let mut #base_name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let mut #name = #base_name.write();
                         });
                     } else {
                         quotes.push(quote! {
-                            let #name = #manager_var_name.get_mut::<#ty>();
+                            let mut #base_name = #manager_var_name.get::<#ty>();
+                            let mut #name = #base_name.write();
                         });
                     }
                 }
                 SystemParam::ParamRef(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let #name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let #base_name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let #name = #base_name.read();
                         });
                     } else {
                         quotes.push(quote! {
-                            let #name = #manager_var_name.get::<#ty>();
+                            let #base_name = #manager_var_name.get::<#ty>();
+                            let #name = #base_name.read();
                         });
                     }
                 }
                 SystemParam::ParamRefWithExtract(ty, extract_ty) => {
                     quotes.push(quote! {
-                        let #name = #manager_var_name.get::<#ty>().extract::<#extract_ty>();
+                        let #base_name = #manager_var_name.get::<#ty>();
+                        let #name = #base_name.read().extract::<#extract_ty>().unwrap();
                     });
                 }
                 SystemParam::ArgsRef(ty) => {
@@ -211,12 +217,11 @@ impl<'l> InstanceTracker<'l> {
                         use_state_import = true;
                     }
 
-                    // Unwrap so args are easily usable
                     quotes.push(quote! {
-                        let #name = #manager_var_name.get::<starbase::ExecuteArgs>().extract::<#ty>().unwrap();
+                        let #base_name = #manager_var_name.get::<starbase::ExecuteArgs>();
+                        let #name = #base_name.read().extract::<#ty>().unwrap();
                     });
-                }
-                _ => unimplemented!(),
+                } // _ => unimplemented!(),
             };
         }
 
@@ -276,29 +281,11 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
                         "Emitters" => {
                             emitters.set_param(var_name);
                         }
-                        "EmittersMut" => {
-                            emitters.set_manager(var_name, SystemParam::ManagerMut);
-                        }
-                        "EmittersRef" => {
-                            emitters.set_manager(var_name, SystemParam::ManagerRef);
-                        }
                         "Resources" => {
                             resources.set_param(var_name);
                         }
-                        "ResourcesMut" => {
-                            resources.set_manager(var_name, SystemParam::ManagerMut);
-                        }
-                        "ResourcesRef" => {
-                            resources.set_manager(var_name, SystemParam::ManagerRef);
-                        }
                         "States" => {
                             states.set_param(var_name);
-                        }
-                        "StatesMut" => {
-                            states.set_manager(var_name, SystemParam::ManagerMut);
-                        }
-                        "StatesRef" => {
-                            states.set_manager(var_name, SystemParam::ManagerRef);
                         }
                         wrapper => {
                             panic!("Unknown parameter type {} for {}.", wrapper, var_name);

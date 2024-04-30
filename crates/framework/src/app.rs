@@ -32,7 +32,7 @@ pub trait AppExtension {
 #[derive(Debug)]
 pub struct App {
     // Data
-    args: ArgsMap,
+    args: Arc<ArgsMap>,
     emitters: Emitters,
     resources: Resources,
     states: States,
@@ -50,7 +50,7 @@ impl App {
     pub fn new() -> App {
         let mut app = App {
             analyzers: vec![],
-            args: ArgsMap::default(),
+            args: Arc::new(ArgsMap::default()),
             emitters: Arc::new(EmitterManager::default()),
             executors: vec![],
             shutdowns: vec![],
@@ -171,10 +171,11 @@ impl App {
     /// Start the application and run all registered systems grouped into phases.
     pub async fn run(&mut self) -> miette::Result<Arc<StateManager>> {
         let states = Arc::clone(&self.states);
-        states.set(ExecuteArgs(mem::take(&mut self.args)));
+        states.set(ExecuteArgs(Arc::clone(&self.args)));
+
+        let resources = Arc::clone(&self.resources);
 
         let emitters = Arc::clone(&self.emitters);
-        let resources = Arc::clone(&self.resources);
 
         // Startup
         if let Err(error) = self

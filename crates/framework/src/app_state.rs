@@ -13,7 +13,7 @@ pub struct AppPhase {
 }
 
 #[system]
-pub async fn start_startup_phase(states: StatesMut) {
+pub async fn start_startup_phase(states: States) {
     states.set(AppPhase {
         phase: Phase::Startup,
     });
