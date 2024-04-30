@@ -1,5 +1,6 @@
 use scc::hash_map::OccupiedEntry;
 use std::any::{Any, TypeId};
+use std::fmt;
 use std::ops::{Deref, DerefMut};
 
 pub type BoxedAnyInstance = Box<dyn Any + Sync + Send>;
@@ -37,6 +38,12 @@ impl<'i, T: 'static> Deref for InstanceGuard<'i, T> {
 impl<'i, T: 'static> DerefMut for InstanceGuard<'i, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.write()
+    }
+}
+
+impl<'i, T: fmt::Debug + 'static> fmt::Debug for InstanceGuard<'i, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.read())
     }
 }
 

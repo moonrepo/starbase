@@ -179,6 +179,16 @@ fn non_async() {
     dbg!("none");
 }
 
+#[system]
+async fn manager_with_other_args(manager: States, arg: StateRef<State1>) {
+    dbg!(&manager);
+}
+
+#[system]
+async fn mut_manager_with_other_args(manager: States, arg: StateRef<State1>) {
+    manager.set(State1(123));
+}
+
 // INVALID
 
 // #[system]
@@ -186,7 +196,7 @@ fn non_async() {
 //     return Ok(123);
 // }
 
-// TODO?
+// // TODO?
 // #[system]
 // async fn fail_invalid_return_type() -> Result<usize> {
 //     dbg!("fail");
@@ -205,16 +215,6 @@ fn non_async() {
 // #[system]
 // async fn fail_unknown_wrapper_type(other: OtherRef<State1>) {
 //     dbg!(other);
-// }
-
-// #[system]
-// async fn fail_manager_with_other_args(manager: StatesRef, arg: StateRef<State1>) {
-//     dbg!(manager);
-// }
-
-// #[system]
-// async fn fail_mut_manager_with_other_args(manager: StatesMut, arg: StateRef<State1>) {
-//     manager.add_state(State1(123));
 // }
 
 // #[system]

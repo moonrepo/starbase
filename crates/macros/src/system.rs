@@ -182,33 +182,31 @@ impl<'l> InstanceTracker<'l> {
                 SystemParam::ParamMut(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let mut #base_name = #manager_var_name.get::<starbase::Emitter<#ty>>();
-                            let mut #name = #base_name.write();
+                            let mut #name = #manager_var_name.get::<starbase::Emitter<#ty>>();
                         });
                     } else {
                         quotes.push(quote! {
-                            let mut #base_name = #manager_var_name.get::<#ty>();
-                            let mut #name = #base_name.write();
+                            let mut #name = #manager_var_name.get::<#ty>();
                         });
                     }
                 }
                 SystemParam::ParamRef(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let #base_name = #manager_var_name.get::<starbase::Emitter<#ty>>();
-                            let #name = #base_name.read();
+                            let #name = #manager_var_name.get::<starbase::Emitter<#ty>>();
                         });
                     } else {
                         quotes.push(quote! {
-                            let #base_name = #manager_var_name.get::<#ty>();
-                            let #name = #base_name.read();
+                            let #name = #manager_var_name.get::<#ty>();
                         });
                     }
                 }
                 SystemParam::ParamRefWithExtract(ty, extract_ty) => {
                     quotes.push(quote! {
-                        let #base_name = #manager_var_name.get::<#ty>();
-                        let #name = #base_name.read().extract::<#extract_ty>().unwrap();
+                        let #name = {
+                            let #base_name = #manager_var_name.get::<#ty>();
+                            #base_name.read().extract::<#extract_ty>().unwrap()
+                        };
                     });
                 }
                 SystemParam::ArgsRef(ty) => {
@@ -218,8 +216,10 @@ impl<'l> InstanceTracker<'l> {
                     }
 
                     quotes.push(quote! {
-                        let #base_name = #manager_var_name.get::<starbase::ExecuteArgs>();
-                        let #name = #base_name.read().extract::<#ty>().unwrap();
+                        let #name = {
+                            let #base_name = #manager_var_name.get::<starbase::ExecuteArgs>();
+                            #base_name.read().extract::<#ty>().unwrap()
+                        };
                     });
                 } // _ => unimplemented!(),
             };
