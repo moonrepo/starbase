@@ -180,14 +180,17 @@ fn non_async() {
 }
 
 #[system]
-async fn manager_with_other_args(manager: States, arg: StateRef<State1>) {
+async fn manager_with_other_args(manager: States, _arg: StateRef<State1>) {
     dbg!(&manager);
 }
 
 #[system]
-async fn mut_manager_with_other_args(manager: States, arg: StateRef<State1>) {
+async fn mut_manager_with_other_args(manager: States, _arg: StateRef<State1>) {
     manager.set(State1(123));
 }
+
+#[system]
+async fn raw(_raw1: StateRaw<State2>, _raw2: StateRaw<State2>) {}
 
 // INVALID
 

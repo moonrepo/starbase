@@ -9,6 +9,7 @@ enum SystemParam<'a> {
     // ManagerMut,
     // ManagerRef,
     ParamMut(&'a Type),
+    ParamRaw(&'a Type),
     ParamRef(&'a Type),
     ParamRefWithExtract(&'a Type, &'a Type),
     // Special case
@@ -51,6 +52,7 @@ struct InstanceTracker<'l> {
     acquire_as: Option<&'l Ident>,
     manager_call: Option<SystemParam<'l>>,
     mut_calls: BTreeMap<&'l Ident, SystemParam<'l>>,
+    raw_calls: BTreeMap<&'l Ident, SystemParam<'l>>,
     ref_calls: BTreeMap<&'l Ident, SystemParam<'l>>,
     type_of: InstanceType,
 }
@@ -62,6 +64,7 @@ impl<'l> InstanceTracker<'l> {
             acquire_as: None,
             manager_call: None,
             mut_calls: BTreeMap::new(),
+            raw_calls: BTreeMap::new(),
             ref_calls: BTreeMap::new(),
             type_of,
         }
@@ -101,6 +104,9 @@ impl<'l> InstanceTracker<'l> {
             SystemParam::ParamMut(_) => {
                 self.mut_calls.insert(name, param);
             }
+            SystemParam::ParamRaw(_) => {
+                self.raw_calls.insert(name, param);
+            }
             SystemParam::ParamRef(_) => {
                 self.ref_calls.insert(name, param);
             }
@@ -114,7 +120,7 @@ impl<'l> InstanceTracker<'l> {
 
         if self.mut_calls.len() > 1 {
             panic!(
-                "Only 1 mutable {} parameter is allowed per system function.",
+                "Only 1 mutable {} parameter is allowed per system function. If you need multiple, try using raw parameters.",
                 self.type_of.param_name(),
             );
         }
@@ -136,7 +142,11 @@ impl<'l> InstanceTracker<'l> {
     pub fn generate_quotes(self) -> Vec<proc_macro2::TokenStream> {
         let mut quotes = vec![];
 
-        if self.manager_call.is_none() && self.mut_calls.is_empty() && self.ref_calls.is_empty() {
+        if self.manager_call.is_none()
+            && self.mut_calls.is_empty()
+            && self.raw_calls.is_empty()
+            && self.ref_calls.is_empty()
+        {
             return quotes;
         }
 
@@ -171,6 +181,7 @@ impl<'l> InstanceTracker<'l> {
         let is_emitter = matches!(self.type_of, InstanceType::Emitter);
         let mut calls = vec![];
         calls.extend(&self.mut_calls);
+        calls.extend(&self.raw_calls);
         calls.extend(&self.ref_calls);
 
         let mut use_state_import = false;
@@ -180,6 +191,19 @@ impl<'l> InstanceTracker<'l> {
 
             match param {
                 SystemParam::ParamMut(ty) => {
+                    if is_emitter {
+                        quotes.push(quote! {
+                            let mut #base_name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let #name = #base_name.write();
+                        });
+                    } else {
+                        quotes.push(quote! {
+                            let mut #base_name = #manager_var_name.get::<#ty>();
+                            let #name = #base_name.write();
+                        });
+                    }
+                }
+                SystemParam::ParamRaw(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
                             let mut #name = #manager_var_name.get::<starbase::Emitter<#ty>>();
@@ -193,19 +217,20 @@ impl<'l> InstanceTracker<'l> {
                 SystemParam::ParamRef(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let #name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let #base_name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let #name = #base_name.read();
                         });
                     } else {
                         quotes.push(quote! {
-                            let #name = #manager_var_name.get::<#ty>();
+                            let #base_name = #manager_var_name.get::<#ty>();
+                            let #name = #base_name.read();
                         });
                     }
                 }
                 SystemParam::ParamRefWithExtract(ty, extract_ty) => {
                     quotes.push(quote! {
                         let #name = {
-                            let #base_name = #manager_var_name.get::<#ty>();
-                            #base_name.read().extract::<#extract_ty>().unwrap()
+                            #manager_var_name.get::<#ty>().read().extract::<#extract_ty>()
                         };
                     });
                 }
@@ -217,8 +242,7 @@ impl<'l> InstanceTracker<'l> {
 
                     quotes.push(quote! {
                         let #name = {
-                            let #base_name = #manager_var_name.get::<starbase::ExecuteArgs>();
-                            #base_name.read().extract::<#ty>().unwrap()
+                            #manager_var_name.get::<starbase::ExecuteArgs>().read().extract::<#ty>().unwrap()
                         };
                     });
                 } // _ => unimplemented!(),
@@ -308,17 +332,26 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
                         "EmitterMut" => {
                             emitters.add_call(var_name, SystemParam::ParamMut(inner_type));
                         }
+                        "EmitterRaw" => {
+                            emitters.add_call(var_name, SystemParam::ParamRaw(inner_type));
+                        }
                         "EmitterRef" => {
                             emitters.add_call(var_name, SystemParam::ParamRef(inner_type));
                         }
                         "ResourceMut" => {
                             resources.add_call(var_name, SystemParam::ParamMut(inner_type));
                         }
+                        "ResourceRaw" => {
+                            resources.add_call(var_name, SystemParam::ParamRaw(inner_type));
+                        }
                         "ResourceRef" => {
                             resources.add_call(var_name, SystemParam::ParamRef(inner_type));
                         }
                         "StateMut" => {
                             states.add_call(var_name, SystemParam::ParamMut(inner_type));
+                        }
+                        "StateRaw" => {
+                            states.add_call(var_name, SystemParam::ParamRaw(inner_type));
                         }
                         "StateRef" => {
                             if let Some(GenericArgument::Type(extract_type)) = segment_iter.next() {

@@ -98,6 +98,22 @@ async fn finish(state: StateRef<TestState>) {
 //     }
 // }
 
+// SOMETIMES HANGS!
+#[system]
+async fn raw_write_write(state1: StateRaw<TestState>, state2: StateRaw<TestState2>) {
+    dbg!(&state1);
+    {
+        state1.write().0 = "updated".into();
+    }
+    dbg!(&state1);
+
+    dbg!(&state2);
+    {
+        state2.write().0 = false;
+    }
+    dbg!(&state2);
+}
+
 #[system]
 async fn create_file() {
     test_lib::create_file()?;
@@ -139,6 +155,7 @@ async fn main() -> MainResult {
     // app.execute(missing_file);
     // app.execute(read_write);
     // app.execute(write_write);
+    // app.execute(raw_write_write);
     // app.execute(create_file);
     app.execute(fail);
 
