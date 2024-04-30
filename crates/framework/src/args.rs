@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 // Don't use `create_instance_manager` because we have no trait for
-// values to implement! We also return `None` intstead of panicing.
+// values to implement! We also return `None` instead of panicing.
 #[derive(Debug, Default)]
 pub struct ArgsMap {
     cache: scc::HashMap<TypeId, BoxedAnyInstance>,
