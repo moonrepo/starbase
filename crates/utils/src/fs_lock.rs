@@ -1,8 +1,9 @@
 use crate::fs::{self, FsError};
 use fs4::FileExt;
+use std::fmt::Debug;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use tracing::trace;
+use tracing::{instrument, trace};
 
 pub const LOCK_FILE: &str = ".lock";
 
@@ -82,7 +83,8 @@ pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
 /// This function returns a `DirLock` instance that will automatically unlock
 /// when being dropped.
 #[inline]
-pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
+#[instrument]
+pub fn lock_directory<T: AsRef<Path> + Debug>(path: T) -> Result<DirLock, FsError> {
     use std::io::prelude::*;
 
     let path = path.as_ref();
@@ -139,9 +141,10 @@ pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
 
 /// Lock the provided file with exclusive access and execute the operation.
 #[inline]
+#[instrument(skip(file, op))]
 pub fn lock_file_exclusive<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
 where
-    T: AsRef<Path>,
+    T: AsRef<Path> + Debug,
     F: FnOnce(&mut File) -> Result<V, FsError>,
 {
     let path = path.as_ref();
@@ -167,9 +170,10 @@ where
 
 /// Lock the provided file with shared access and execute the operation.
 #[inline]
+#[instrument(skip(file, op))]
 pub fn lock_file_shared<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
 where
-    T: AsRef<Path>,
+    T: AsRef<Path> + Debug,
     F: FnOnce(&mut File) -> Result<V, FsError>,
 {
     let path = path.as_ref();

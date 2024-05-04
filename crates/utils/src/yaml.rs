@@ -3,8 +3,9 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::fmt::Debug;
 use std::path::Path;
-use tracing::trace;
+use tracing::{instrument, trace};
 
 pub use crate::yaml_error::YamlError;
 pub use serde_yaml;
@@ -16,6 +17,7 @@ static WHITESPACE_PREFIX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\s+)").unwra
 
 /// Recursively merge [`YamlValue`] objects, with values from next overwriting previous.
 #[inline]
+#[instrument(name = "merge_yaml", skip_all)]
 pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
     match (prev, next) {
         (YamlValue::Mapping(prev_object), YamlValue::Mapping(next_object)) => {
@@ -37,6 +39,7 @@ pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
 
 /// Parse a string and deserialize into the required type.
 #[inline]
+#[instrument(name = "parse_yaml", skip(data))]
 pub fn parse<T, D>(data: T) -> Result<D, YamlError>
 where
     T: AsRef<str>,
@@ -51,6 +54,7 @@ where
 
 /// Format and serialize the provided value into a string.
 #[inline]
+#[instrument(name = "format_yaml", skip(data))]
 pub fn format<D>(data: &D) -> Result<String, YamlError>
 where
     D: ?Sized + Serialize,
@@ -65,9 +69,10 @@ where
 /// Read a file at the provided path and deserialize into the required type.
 /// The path must already exist.
 #[inline]
+#[instrument(name = "read_yaml")]
 pub fn read_file<P, D>(path: P) -> Result<D, YamlError>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
     D: DeserializeOwned,
 {
     let path = path.as_ref();
@@ -86,9 +91,10 @@ where
 ///
 /// This function is primarily used internally for non-consumer facing files.
 #[inline]
+#[instrument(name = "write_yaml", skip(yaml))]
 pub fn write_file<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();
@@ -112,9 +118,10 @@ where
 /// This function is used for consumer facing files, like configs.
 #[cfg(feature = "editor-config")]
 #[inline]
+#[instrument(name = "write_yaml_with_config", skip(yaml))]
 pub fn write_file_with_config<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();

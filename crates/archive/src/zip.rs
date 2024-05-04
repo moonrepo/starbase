@@ -5,8 +5,8 @@ use starbase_utils::fs::{self, FsError};
 use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
-use tracing::trace;
-use zip::write::FileOptions;
+use tracing::{instrument, trace};
+use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 pub use crate::zip_error::ZipError;
@@ -41,7 +41,7 @@ impl ZipPacker {
 impl ArchivePacker for ZipPacker {
     fn add_file(&mut self, name: &str, file: &Path) -> ArchiveResult<()> {
         #[allow(unused_mut)] // windows
-        let mut options = FileOptions::default().compression_method(self.compression);
+        let mut options = SimpleFileOptions::default().compression_method(self.compression);
 
         #[cfg(unix)]
         {
@@ -73,7 +73,7 @@ impl ArchivePacker for ZipPacker {
         self.archive
             .add_directory(
                 name,
-                FileOptions::default().compression_method(self.compression),
+                SimpleFileOptions::default().compression_method(self.compression),
             )
             .map_err(|error| ZipError::AddFailure {
                 source: dir.to_path_buf(),
@@ -103,6 +103,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
+    #[instrument(name = "pack_zip", skip_all)]
     fn pack(&mut self) -> ArchiveResult<()> {
         trace!("Creating zip");
 
@@ -145,6 +146,7 @@ impl ZipUnpacker {
 }
 
 impl ArchiveUnpacker for ZipUnpacker {
+    #[instrument(name = "unpack_zip", skip_all)]
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
         trace!(output_dir = ?self.output_dir, "Opening zip");
 
@@ -164,6 +166,7 @@ impl ArchiveUnpacker for ZipUnpacker {
             };
 
             // Remove the prefix
+            #[allow(clippy::assigning_clones)]
             if !prefix.is_empty() && path.starts_with(prefix) {
                 path = path.strip_prefix(prefix).unwrap().to_owned();
             }

@@ -11,7 +11,7 @@ use std::mem;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 use tokio::task;
-use tracing::trace;
+use tracing::{instrument, trace};
 
 pub type AppResult<T = ()> = miette::Result<T>;
 pub type MainResult = miette::Result<()>;
@@ -72,14 +72,14 @@ impl App {
 
     /// Setup `tracing` messages with default options.
     #[cfg(feature = "tracing")]
-    pub fn setup_tracing() {
+    pub fn setup_tracing() -> crate::tracing::TracingGuard {
         Self::setup_tracing_with_options(TracingOptions::default())
     }
 
     /// Setup `tracing` messages with custom options.
     #[cfg(feature = "tracing")]
-    pub fn setup_tracing_with_options(options: TracingOptions) {
-        crate::tracing::setup_tracing(options);
+    pub fn setup_tracing_with_options(options: TracingOptions) -> crate::tracing::TracingGuard {
+        crate::tracing::setup_tracing(options)
     }
 
     /// Extend the app with an extension that contains a set of systems.
@@ -219,6 +219,7 @@ impl App {
 
     // Private
 
+    #[instrument(skip_all)]
     async fn run_startup(
         &mut self,
         states: States,
@@ -235,6 +236,7 @@ impl App {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     async fn run_analyze(
         &mut self,
         states: States,
@@ -251,6 +253,7 @@ impl App {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     async fn run_execute(
         &mut self,
         states: States,
@@ -267,6 +270,7 @@ impl App {
         Ok(())
     }
 
+    #[instrument(skip_all)]
     async fn run_shutdown(
         &mut self,
         states: States,

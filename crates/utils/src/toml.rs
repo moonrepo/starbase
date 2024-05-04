@@ -1,8 +1,9 @@
 use crate::fs;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::fmt::Debug;
 use std::path::Path;
-use tracing::trace;
+use tracing::{instrument, trace};
 
 pub use crate::toml_error::TomlError;
 pub use toml as serde_toml;
@@ -10,6 +11,7 @@ pub use toml::value::{Datetime as TomlDatetime, Table as TomlTable, Value as Tom
 
 /// Parse a string and deserialize into the required type.
 #[inline]
+#[instrument(name = "parse_toml", skip(data))]
 pub fn parse<T, D>(data: T) -> Result<D, TomlError>
 where
     T: AsRef<str>,
@@ -24,6 +26,7 @@ where
 
 /// Format and serialize the provided value into a string.
 #[inline]
+#[instrument(name = "format_toml", skip(data))]
 pub fn format<D>(data: &D, pretty: bool) -> Result<String, TomlError>
 where
     D: ?Sized + Serialize,
@@ -44,9 +47,10 @@ where
 /// Read a file at the provided path and deserialize into the required type.
 /// The path must already exist.
 #[inline]
+#[instrument(name = "read_toml")]
 pub fn read_file<P, D>(path: P) -> Result<D, TomlError>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
     D: DeserializeOwned,
 {
     let path = path.as_ref();
@@ -63,9 +67,10 @@ where
 /// Write a file and serialize the provided data to the provided path. If the parent directory
 /// does not exist, it will be created.
 #[inline]
+#[instrument(name = "write_toml", skip(toml))]
 pub fn write_file<P, D>(path: P, toml: &D, pretty: bool) -> Result<(), TomlError>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();

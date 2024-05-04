@@ -4,7 +4,7 @@ use crate::{get_full_file_extension, join_file_name};
 use rustc_hash::{FxHashMap, FxHashSet};
 use starbase_utils::glob;
 use std::path::{Path, PathBuf};
-use tracing::trace;
+use tracing::{instrument, trace};
 
 #[cfg(not(feature = "miette"))]
 pub type ArchiveResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -112,6 +112,7 @@ impl<'owner> Archiver<'owner> {
     /// provided packer factory. The factory is passed an absolute
     /// path to the destination archive file, which is also returned
     /// from this method.
+    #[instrument(skip_all)]
     pub fn pack<F, P>(&self, packer: F) -> ArchiveResult<PathBuf>
     where
         F: FnOnce(&Path) -> ArchiveResult<P>,
@@ -260,6 +261,7 @@ impl<'owner> Archiver<'owner> {
     /// in the archive, and only unpack the files if they differ.
     /// Furthermore, files at the destination that are not in the
     /// archive are removed entirely.
+    #[instrument(skip_all)]
     pub fn unpack<F, P>(&self, unpacker: F) -> ArchiveResult<PathBuf>
     where
         F: FnOnce(&Path, &Path) -> ArchiveResult<P>,

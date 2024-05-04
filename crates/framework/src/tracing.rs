@@ -2,14 +2,21 @@ use chrono::{Local, Timelike};
 use starbase_styles::color;
 use starbase_styles::color::apply_style_tags;
 use std::env;
+use std::fs::File;
 use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use tracing::metadata::LevelFilter;
-use tracing::{field::Visit, subscriber::set_global_default, Level, Metadata, Subscriber};
+use std::sync::Arc;
+use std::time::SystemTime;
+use tracing::{
+    field::Visit, metadata::LevelFilter, subscriber::set_global_default, Level, Metadata,
+    Subscriber,
+};
+use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
 use tracing_subscriber::{
     field::RecordFields,
     fmt::{self, time::FormatTime, FormatEvent, FormatFields, SubscriberBuilder},
+    prelude::*,
     registry::LookupSpan,
     EnvFilter,
 };
@@ -70,7 +77,9 @@ impl<'writer> FormatFields<'writer> for FieldFormatter {
     }
 }
 
-struct EventFormatter;
+struct EventFormatter {
+    show_spans: bool,
+}
 
 impl FormatTime for EventFormatter {
     fn format_time(&self, writer: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
@@ -132,14 +141,17 @@ where
         // target:spans...
         write!(writer, " {}", color::log_target(meta.target()))?;
 
-        if let Some(scope) = ctx.event_scope() {
-            for span in scope.from_root() {
-                write!(
-                    writer,
-                    "{}{}",
-                    color::muted(":"),
-                    color::muted_light(span.name())
-                )?;
+        if self.show_spans {
+            write!(writer, " ")?;
+
+            if let Some(scope) = ctx.event_scope() {
+                for span in scope.from_root() {
+                    if span.parent().is_some() {
+                        write!(writer, "{}", color::muted(":"))?;
+                    }
+
+                    write!(writer, "{}", color::muted_light(span.name()))?;
+                }
             }
         }
 
@@ -173,6 +185,8 @@ where
 pub struct TracingOptions {
     /// Minimum level of messages to display.
     pub default_level: LevelFilter,
+    /// Dump a trace file that can be viewed in Chrome.
+    pub dump_trace: bool,
     /// List of modules/prefixes to only log.
     pub filter_modules: Vec<String>,
     /// Whether to intercept messages from the global `log` crate.
@@ -181,6 +195,8 @@ pub struct TracingOptions {
     pub log_env: String,
     /// Absolute path to a file to write logs to.
     pub log_file: Option<PathBuf>,
+    /// Show span hierarchy in log output.
+    pub show_spans: bool,
     /// Name of the testing environment variable.
     pub test_env: String,
 }
@@ -189,18 +205,27 @@ impl Default for TracingOptions {
     fn default() -> Self {
         TracingOptions {
             default_level: LevelFilter::INFO,
+            dump_trace: false,
             filter_modules: vec![],
             intercept_log: true,
             log_env: "RUST_LOG".into(),
             log_file: None,
+            show_spans: false,
             test_env: "STARBASE_TEST".into(),
         }
     }
 }
 
-pub fn setup_tracing(options: TracingOptions) {
+pub struct TracingGuard {
+    chrome_guard: Option<FlushGuard>,
+    log_file: Option<Arc<File>>,
+}
+
+#[tracing::instrument(skip_all)]
+pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
     TEST_ENV.store(env::var(options.test_env).is_ok(), Ordering::Release);
 
+    // Determine modules to log
     let set_env_var = |level: String| {
         let env_value = if options.filter_modules.is_empty() {
             level
@@ -216,6 +241,7 @@ pub fn setup_tracing(options: TracingOptions) {
         env::set_var(&options.log_env, env_value);
     };
 
+    // Determine log level
     if let Ok(level) = env::var(&options.log_env) {
         if !level.contains('=') && !level.contains(',') && level != "off" {
             set_env_var(level);
@@ -228,28 +254,52 @@ pub fn setup_tracing(options: TracingOptions) {
         tracing_log::LogTracer::init().expect("Failed to initialize log interceptor.");
     }
 
+    // Build our subscriber
     let subscriber = SubscriberBuilder::default()
-        .event_format(EventFormatter)
+        .event_format(EventFormatter {
+            show_spans: options.show_spans,
+        })
         .fmt_fields(FieldFormatter)
-        .with_env_filter(EnvFilter::from_env(options.log_env));
+        .with_env_filter(EnvFilter::from_env(options.log_env))
+        .with_writer(io::stderr)
+        .finish();
 
-    // Ignore the error in case the subscriber is already set
-    let _ = if let Some(log_file) = options.log_file {
-        env::set_var("NO_COLOR", "1");
-
-        set_global_default(
-            subscriber
-                .with_writer(tracing_appender::rolling::never(
-                    log_file
-                        .parent()
-                        .expect("Missing parent directory for log file."),
-                    log_file
-                        .file_name()
-                        .expect("Missing file name for log file."),
-                ))
-                .finish(),
-        )
-    } else {
-        set_global_default(subscriber.with_writer(io::stderr).finish())
+    // Add layers to our subscriber
+    let mut guard = TracingGuard {
+        chrome_guard: None,
+        log_file: None,
     };
+
+    let _ = set_global_default(
+        subscriber
+            // Write to a log file
+            .with(if let Some(log_file) = options.log_file {
+                let file = Arc::new(File::create(log_file).expect("Failed to create log file."));
+
+                guard.log_file = Some(Arc::clone(&file));
+
+                Some(fmt::layer().with_ansi(false).with_writer(file))
+            } else {
+                None
+            })
+            // Dump a trace profile
+            .with(if options.dump_trace {
+                let (chrome_layer, chrome_guard) = ChromeLayerBuilder::new()
+                    .include_args(true)
+                    .include_locations(true)
+                    .file(format!(
+                        "./dump-{}.json",
+                        SystemTime::UNIX_EPOCH.elapsed().unwrap().as_micros()
+                    ))
+                    .build();
+
+                guard.chrome_guard = Some(chrome_guard);
+
+                Some(chrome_layer)
+            } else {
+                None
+            }),
+    );
+
+    guard
 }

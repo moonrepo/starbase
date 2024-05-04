@@ -94,7 +94,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
 
     match event_param.ty.as_ref() {
         Type::Path(path) => {
-            event_type = path.to_owned();
+            path.clone_into(&mut event_type);
         }
         Type::Reference(refs) => {
             if refs.mutability.is_some() {
@@ -102,7 +102,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             if let Type::Path(ref_path) = refs.elem.as_ref() {
-                event_type = ref_path.to_owned();
+                ref_path.clone_into(&mut event_type);
             }
         }
         _ => {

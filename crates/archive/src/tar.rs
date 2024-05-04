@@ -4,7 +4,7 @@ use binstall_tar::{Archive as TarArchive, Builder as TarBuilder};
 use starbase_utils::fs;
 use std::io::{prelude::*, Write};
 use std::path::{Path, PathBuf};
-use tracing::trace;
+use tracing::{instrument, trace};
 
 pub use crate::tar_error::TarError;
 
@@ -108,6 +108,7 @@ impl ArchivePacker for TarPacker {
         Ok(())
     }
 
+    #[instrument(name = "pack_tar", skip_all)]
     fn pack(&mut self) -> ArchiveResult<()> {
         trace!("Creating tarball");
 
@@ -181,6 +182,7 @@ impl TarUnpacker {
 }
 
 impl ArchiveUnpacker for TarUnpacker {
+    #[instrument(name = "unpack_tar", skip_all)]
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
         self.archive.set_overwrite(true);
 
@@ -201,6 +203,7 @@ impl ArchiveUnpacker for TarUnpacker {
             let mut path: PathBuf = entry.path().unwrap().into_owned();
 
             // Remove the prefix
+            #[allow(clippy::assigning_clones)]
             if !prefix.is_empty() && path.starts_with(prefix) {
                 path = path.strip_prefix(prefix).unwrap().to_owned();
             }

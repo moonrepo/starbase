@@ -1,9 +1,11 @@
 use once_cell::sync::Lazy;
+use std::fmt::Debug;
 use std::sync::RwLock;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
+use tracing::instrument;
 use wax::{Any, LinkBehavior, Pattern};
 
 pub use crate::glob_error::GlobError;
@@ -48,7 +50,7 @@ impl<'glob> GlobSet<'glob> {
     /// Create a new glob set from the list of patterns. Negated patterns must start with `!`.
     pub fn new<I, V>(patterns: I) -> Result<Self, GlobError>
     where
-        I: IntoIterator<Item = &'glob V>,
+        I: IntoIterator<Item = &'glob V> + Debug,
         V: AsRef<str> + 'glob + ?Sized,
     {
         let (expressions, negations) = split_patterns(patterns);
@@ -123,6 +125,7 @@ impl<'glob> GlobSet<'glob> {
 /// Parse and create a [`Glob`] instance from the borrowed string pattern.
 /// If parsing fails, a [`GlobError`] is returned.
 #[inline]
+#[instrument]
 pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
     Glob::new(pattern).map_err(|error| GlobError::Create {
         glob: pattern.to_owned(),
@@ -133,7 +136,8 @@ pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
 /// Return true if the provided string looks like a glob pattern.
 /// This is not exhaustive and may be inaccurate.
 #[inline]
-pub fn is_glob<T: AsRef<str>>(value: T) -> bool {
+#[instrument]
+pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
     let value = value.as_ref();
     let single_values = vec!['*', '?', '!'];
     let paired_values = vec![('{', '}'), ('[', ']')];
@@ -194,9 +198,10 @@ pub fn normalize<T: AsRef<Path>>(path: T) -> Result<String, GlobError> {
 /// Split a list of glob patterns into separate non-negated and negated patterns.
 /// Negated patterns must start with `!`.
 #[inline]
+#[instrument]
 pub fn split_patterns<'glob, I, V>(patterns: I) -> (Vec<&'glob str>, Vec<&'glob str>)
 where
-    I: IntoIterator<Item = &'glob V>,
+    I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
     let mut expressions = vec![];
@@ -228,10 +233,11 @@ where
 /// Walk the file system starting from the provided directory, and return all files and directories
 /// that match the provided glob patterns. Use [`walk_files`] if you only want to return files.
 #[inline]
+#[instrument]
 pub fn walk<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
-    P: AsRef<Path>,
-    I: IntoIterator<Item = &'glob V>,
+    P: AsRef<Path> + Debug,
+    I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
     let (expressions, mut negations) = split_patterns(patterns);
@@ -265,8 +271,8 @@ where
 #[inline]
 pub fn walk_files<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
-    P: AsRef<Path>,
-    I: IntoIterator<Item = &'glob V>,
+    P: AsRef<Path> + Debug,
+    I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
     let paths = walk(base_dir, patterns)?;
