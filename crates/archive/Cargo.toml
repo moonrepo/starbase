@@ -19,7 +19,7 @@ rustc-hash = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
-flate2 = { version = "1.0.28", optional = true }
+flate2 = { version = "1.0.30", optional = true }
 
 # tar
 # https://github.com/moonrepo/starbase/issues/56

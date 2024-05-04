@@ -9,7 +9,7 @@ use miette::IntoDiagnostic;
 use std::any::Any;
 use std::mem;
 use std::sync::Arc;
-use tokio::sync::{RwLock, Semaphore};
+use tokio::sync::Semaphore;
 use tokio::task;
 use tracing::trace;
 
@@ -26,16 +26,16 @@ pub enum Phase {
 }
 
 pub trait AppExtension {
-    fn extend(self, app: &mut App) -> AppResult<()>;
+    fn extend(self, app: &mut App) -> AppResult;
 }
 
 #[derive(Debug)]
 pub struct App {
     // Data
-    args: ArgsMap,
-    emitters: EmitterManager,
-    resources: ResourceManager,
-    states: StateManager,
+    args: Arc<ArgsMap>,
+    emitters: Emitters,
+    resources: Resources,
+    states: States,
 
     // Systems
     startups: Vec<BoxedSystem>,
@@ -50,13 +50,13 @@ impl App {
     pub fn new() -> App {
         let mut app = App {
             analyzers: vec![],
-            args: ArgsMap::default(),
-            emitters: EmitterManager::default(),
+            args: Arc::new(ArgsMap::default()),
+            emitters: Arc::new(EmitterManager::default()),
             executors: vec![],
             shutdowns: vec![],
             startups: vec![],
-            resources: ResourceManager::default(),
-            states: StateManager::default(),
+            resources: Arc::new(ResourceManager::default()),
+            states: Arc::new(StateManager::default()),
         };
         app.startup(start_startup_phase);
         app.analyze(start_analyze_phase);
@@ -169,13 +169,13 @@ impl App {
     }
 
     /// Start the application and run all registered systems grouped into phases.
-    pub async fn run(&mut self) -> miette::Result<StateManager> {
-        let mut state_manager = mem::take(&mut self.states);
-        state_manager.set(ExecuteArgs(mem::take(&mut self.args)));
+    pub async fn run(&mut self) -> miette::Result<Arc<StateManager>> {
+        let states = Arc::clone(&self.states);
+        states.set(ExecuteArgs(Arc::clone(&self.args)));
 
-        let emitters = Arc::new(RwLock::new(mem::take(&mut self.emitters)));
-        let resources = Arc::new(RwLock::new(mem::take(&mut self.resources)));
-        let states = Arc::new(RwLock::new(state_manager));
+        let resources = Arc::clone(&self.resources);
+
+        let emitters = Arc::clone(&self.emitters);
 
         // Startup
         if let Err(error) = self
@@ -213,9 +213,6 @@ impl App {
         // Shutdown
         self.run_shutdown(states.clone(), resources.clone(), emitters.clone())
             .await?;
-
-        let states = Arc::into_inner(states)
-            .expect("Failed to acquire state before closing the application. This typically means that threads are still running that have not been awaited.").into_inner();
 
         Ok(states)
     }

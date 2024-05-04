@@ -15,6 +15,7 @@ pub use app::*;
 pub use app_state::AppPhase;
 pub use args::*;
 pub use emitters::*;
+pub use instance::*;
 pub use resources::*;
 pub use starbase_macros::*;
 pub use states::*;

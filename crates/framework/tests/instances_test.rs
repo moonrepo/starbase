@@ -16,13 +16,13 @@ mod events {
 
     #[tokio::test]
     async fn register_and_emit() {
-        let mut ctx = EmitterManager::default();
+        let ctx = EmitterManager::default();
         ctx.set(Emitter::<TestEvent>::new());
 
-        let em = ctx.get_mut::<Emitter<TestEvent>>();
-        em.on(callback_one).await;
+        let mut em = ctx.get::<Emitter<TestEvent>>();
+        em.write().on(callback_one).await;
 
-        let data = em.emit(TestEvent(5)).await.unwrap();
+        let data = em.write().emit(TestEvent(5)).await.unwrap();
 
         assert_eq!(data, 10);
     }
@@ -38,37 +38,30 @@ mod resources {
 
     #[test]
     fn register_and_read() {
-        let mut ctx = ResourceManager::default();
+        let ctx = ResourceManager::default();
         ctx.set(TestResource { field: 5 });
 
         let resource = ctx.get::<TestResource>();
 
-        assert_eq!(resource.field, 5);
+        assert_eq!(resource.read().field, 5);
     }
 
     #[test]
     fn register_and_write() {
-        let mut ctx = ResourceManager::default();
+        let ctx = ResourceManager::default();
         ctx.set(TestResource { field: 5 });
 
-        let resource = ctx.get_mut::<TestResource>();
-        resource.field += 5;
+        let mut resource = ctx.get::<TestResource>();
+        resource.write().field += 5;
 
-        assert_eq!(resource.field, 10);
+        assert_eq!(resource.read().field, 10);
     }
 
     #[test]
     #[should_panic(expected = "instances_test::resources::TestResource does not exist!")]
-    fn panics_missing_read() {
+    fn panics_missing() {
         let ctx = ResourceManager::default();
         ctx.get::<TestResource>();
-    }
-
-    #[test]
-    #[should_panic(expected = "instances_test::resources::TestResource does not exist!")]
-    fn panics_missing_write() {
-        let mut ctx = ResourceManager::default();
-        ctx.get_mut::<TestResource>();
     }
 }
 
@@ -80,36 +73,29 @@ mod state {
 
     #[test]
     fn register_and_read() {
-        let mut ctx = StateManager::default();
+        let ctx = StateManager::default();
         ctx.set(TestState(5));
 
         let state = ctx.get::<TestState>();
 
-        assert_eq!(state.0, 5);
+        assert_eq!(state.read().0, 5);
     }
 
     #[test]
     fn register_and_write() {
-        let mut ctx = StateManager::default();
+        let ctx = StateManager::default();
         ctx.set(TestState(5));
 
-        let state = ctx.get_mut::<TestState>();
-        (**state) += 5;
+        let mut state = ctx.get::<TestState>();
+        state.write().0 += 5;
 
-        assert_eq!(state.0, 10);
+        assert_eq!(state.read().0, 10);
     }
 
     #[test]
     #[should_panic(expected = "instances_test::state::TestState does not exist!")]
-    fn panics_missing_read() {
+    fn panics_missing() {
         let ctx = StateManager::default();
         ctx.get::<TestState>();
-    }
-
-    #[test]
-    #[should_panic(expected = "instances_test::state::TestState does not exist!")]
-    fn panics_missing_write() {
-        let mut ctx = StateManager::default();
-        ctx.get_mut::<TestState>();
     }
 }

@@ -24,6 +24,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
 miette = { workspace = true, features = ["fancy"] }
 num_cpus = "1.16.0"
 rustc-hash = { workspace = true }
+scc = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["tracing"] }
 tracing = { workspace = true, optional = true }

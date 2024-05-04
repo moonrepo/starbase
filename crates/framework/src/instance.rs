@@ -1,3 +1,52 @@
+use scc::hash_map::OccupiedEntry;
+use std::any::{Any, TypeId};
+use std::fmt;
+use std::ops::{Deref, DerefMut};
+
+pub type BoxedAnyInstance = Box<dyn Any + Sync + Send>;
+
+pub struct InstanceGuard<'i, T> {
+    entry: OccupiedEntry<'i, TypeId, BoxedAnyInstance>,
+    marker: std::marker::PhantomData<&'i T>,
+}
+
+impl<'i, T: 'static> InstanceGuard<'i, T> {
+    pub fn new(entry: OccupiedEntry<'i, TypeId, BoxedAnyInstance>) -> Self {
+        InstanceGuard {
+            entry,
+            marker: std::marker::PhantomData,
+        }
+    }
+
+    pub fn read(&self) -> &T {
+        self.entry.get().downcast_ref::<T>().unwrap()
+    }
+
+    pub fn write(&mut self) -> &mut T {
+        self.entry.get_mut().downcast_mut::<T>().unwrap()
+    }
+}
+
+impl<'i, T: 'static> Deref for InstanceGuard<'i, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.read()
+    }
+}
+
+impl<'i, T: 'static> DerefMut for InstanceGuard<'i, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.write()
+    }
+}
+
+impl<'i, T: fmt::Debug + 'static> fmt::Debug for InstanceGuard<'i, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self.read())
+    }
+}
+
 // Creates a simple `Any` map registry of objects by type.
 // These methods `panic!` because it immediately bubbles up that
 // the order of operations for application state is wrong, and
@@ -14,25 +63,15 @@ macro_rules! create_instance_manager {
 
         #[derive(Debug, Default)]
         pub struct $manager {
-            cache: FxHashMap<TypeId, Box<dyn Any + Sync + Send>>,
+            cache: scc::HashMap<TypeId, $crate::BoxedAnyInstance>,
         }
 
         impl $manager {
-            /// Get an immutable instance reference for the provided type.
+            /// Get an instance reference for the provided type.
             /// If the instance does not exist, a panic will be triggered.
-            pub fn get<T: Any + Send + Sync + $type>(&self) -> &T {
-                if let Some(value) = self.cache.get(&TypeId::of::<T>()) {
-                    return value.downcast_ref::<T>().unwrap();
-                }
-
-                panic!("{} does not exist!", type_name::<T>())
-            }
-
-            /// Get a mutable instance reference for the provided type.
-            /// If the instance does not exist, a panic will be triggered.
-            pub fn get_mut<T: Any + Send + Sync + $type>(&mut self) -> &mut T {
-                if let Some(value) = self.cache.get_mut(&TypeId::of::<T>()) {
-                    return value.downcast_mut::<T>().unwrap();
+            pub fn get<T: Any + Send + Sync + $type>(&self) -> $crate::InstanceGuard<T> {
+                if let Some(entry) = self.cache.get(&TypeId::of::<T>()) {
+                    return $crate::InstanceGuard::new(entry);
                 }
 
                 panic!("{} does not exist!", type_name::<T>())
@@ -40,9 +79,8 @@ macro_rules! create_instance_manager {
 
             /// Set the instance into the registry with the provided type.
             /// If an exact type already exists, it'll be overwritten.
-            pub fn set<T: Any + Send + Sync + $type>(&mut self, instance: T) -> &mut Self {
-                self.cache.insert(TypeId::of::<T>(), Box::new(instance));
-                self
+            pub fn set<T: Any + Send + Sync + $type>(&self, instance: T) {
+               let _ = self.cache.insert(TypeId::of::<T>(), Box::new(instance));
             }
         }
     };
