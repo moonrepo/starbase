@@ -1,6 +1,6 @@
 [package]
 name = "starbase_styles"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 description = "Utilities for styling the terminal."

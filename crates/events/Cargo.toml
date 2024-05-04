@@ -1,13 +1,13 @@
 [package]
 name = "starbase_events"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
 description = "Async and mutable event system."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
-starbase_macros = { version = "0.5.2", path = "../macros" }
+starbase_macros = { version = "0.6.0", path = "../macros" }
 async-trait = { workspace = true }
 miette = { workspace = true }
 tokio = { workspace = true }
