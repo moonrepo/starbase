@@ -1,18 +1,19 @@
 use crate::fs;
 use reqwest::Client;
+use std::fmt::Debug;
 use std::net::{Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
-use tracing::trace;
+use tracing::{instrument, trace};
 use url::Url;
 
 pub use crate::net_error::NetError;
 
 /// Download a file from the provided source URL, to the destination file path,
 /// using a custom `reqwest` [`Client`].
-#[tracing::instrument(skip_all)]
-pub async fn download_from_url_with_client<S: AsRef<str>, D: AsRef<Path>>(
+#[instrument(name = "download_from_url", skip(client))]
+pub async fn download_from_url_with_client<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
     source_url: S,
     dest_file: D,
     client: &Client,
@@ -61,7 +62,7 @@ pub async fn download_from_url_with_client<S: AsRef<str>, D: AsRef<Path>>(
 }
 
 /// Download a file from the provided source URL, to the destination file path.
-pub async fn download_from_url<S: AsRef<str>, D: AsRef<Path>>(
+pub async fn download_from_url<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
     source_url: S,
     dest_file: D,
 ) -> Result<(), NetError> {
@@ -112,7 +113,7 @@ mod offline {
 /// is the fastest approach as they do not need to parse host names.
 /// If all of these fail, then we will ping Google, Mozilla, and custom
 /// hosts, which is slower, so we wrap them in a timeout.
-#[tracing::instrument]
+#[instrument]
 pub fn is_offline(timeout: u64, custom_hosts: Vec<String>) -> bool {
     trace!(timeout, "Checking for an internet connection");
 

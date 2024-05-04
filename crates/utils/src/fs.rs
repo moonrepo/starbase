@@ -1,8 +1,9 @@
 use std::ffi::OsStr;
+use std::fmt::Debug;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use tracing::trace;
+use tracing::{instrument, trace};
 
 pub use crate::fs_error::FsError;
 #[cfg(feature = "fs-lock")]
@@ -11,7 +12,11 @@ pub use crate::fs_lock::*;
 /// Append a file with the provided content. If the parent directory does not exist,
 /// or the file to append does not exist, they will be created.
 #[inline]
-pub fn append_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
+#[instrument(skip(data))]
+pub fn append_file<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(
+    path: T,
+    data: D,
+) -> Result<(), FsError> {
     use std::io::Write;
 
     let path = path.as_ref();
@@ -43,7 +48,11 @@ pub fn append_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(
 /// Copy a file from source to destination. If the destination directory does not exist,
 /// it will be created.
 #[inline]
-pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(from: S, to: D) -> Result<(), FsError> {
+#[instrument]
+pub fn copy_file<S: AsRef<Path> + Debug, D: AsRef<Path> + Debug>(
+    from: S,
+    to: D,
+) -> Result<(), FsError> {
     let from = from.as_ref();
     let to = to.as_ref();
 
@@ -65,8 +74,12 @@ pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(from: S, to: D) -> Result<(), F
 /// Copy a directory and all of its contents from source to destination. If the destination
 /// directory does not exist, it will be created.
 #[inline]
-#[tracing::instrument(skip_all)]
-pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result<(), FsError> {
+#[instrument]
+pub fn copy_dir_all<R: AsRef<Path> + Debug, F: AsRef<Path> + Debug, T: AsRef<Path> + Debug>(
+    from_root: R,
+    from: F,
+    to_root: T,
+) -> Result<(), FsError> {
     let from_root = from_root.as_ref();
     let from = from.as_ref();
     let to_root = to_root.as_ref();
@@ -100,7 +113,8 @@ pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result
 /// Create a file and return a [`File`] instance. If the parent directory does not exist,
 /// it will be created.
 #[inline]
-pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+#[instrument]
+pub fn create_file<T: AsRef<Path> + Debug>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
 
     if let Some(parent) = path.parent() {
@@ -118,7 +132,8 @@ pub fn create_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
 /// Like [`create_file`] but does not truncate existing file contents,
 /// and only creates if the file is missing.
 #[inline]
-pub fn create_file_if_missing<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+#[instrument]
+pub fn create_file_if_missing<T: AsRef<Path> + Debug>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
 
     if let Some(parent) = path.parent() {
@@ -141,8 +156,8 @@ pub fn create_file_if_missing<T: AsRef<Path>>(path: T) -> Result<File, FsError> 
 /// Create a directory and all parent directories if they do not exist.
 /// If the directory already exists, this is a no-op.
 #[inline]
-#[tracing::instrument(skip_all)]
-pub fn create_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
+#[instrument]
+pub fn create_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if path.as_os_str().is_empty() {
@@ -179,8 +194,8 @@ pub fn file_name<T: AsRef<Path>>(path: T) -> String {
 #[inline]
 pub fn find_upwards<F, P>(name: F, start_dir: P) -> Option<PathBuf>
 where
-    F: AsRef<OsStr>,
-    P: AsRef<Path>,
+    F: AsRef<OsStr> + Debug,
+    P: AsRef<Path> + Debug,
 {
     find_upwards_until(name, start_dir, PathBuf::from("/"))
 }
@@ -189,12 +204,12 @@ where
 /// and traverse upwards until one is found, or stop traversing
 /// if we hit the ending directory. If no file is found, returns [`None`].
 #[inline]
-#[tracing::instrument(skip_all)]
+#[instrument]
 pub fn find_upwards_until<F, S, E>(name: F, start_dir: S, end_dir: E) -> Option<PathBuf>
 where
-    F: AsRef<OsStr>,
-    S: AsRef<Path>,
-    E: AsRef<Path>,
+    F: AsRef<OsStr> + Debug,
+    S: AsRef<Path> + Debug,
+    E: AsRef<Path> + Debug,
 {
     let dir = start_dir.as_ref();
     let name = name.as_ref();
@@ -226,8 +241,8 @@ where
 #[inline]
 pub fn find_upwards_root<F, P>(name: F, start_dir: P) -> Option<PathBuf>
 where
-    F: AsRef<OsStr>,
-    P: AsRef<Path>,
+    F: AsRef<OsStr> + Debug,
+    P: AsRef<Path> + Debug,
 {
     find_upwards_root_until(name, start_dir, PathBuf::from("/"))
 }
@@ -239,9 +254,9 @@ where
 #[inline]
 pub fn find_upwards_root_until<F, S, E>(name: F, start_dir: S, end_dir: E) -> Option<PathBuf>
 where
-    F: AsRef<OsStr>,
-    S: AsRef<Path>,
-    E: AsRef<Path>,
+    F: AsRef<OsStr> + Debug,
+    S: AsRef<Path> + Debug,
+    E: AsRef<Path> + Debug,
 {
     find_upwards_until(name, start_dir, end_dir).map(|p| p.parent().unwrap().to_path_buf())
 }
@@ -263,7 +278,8 @@ impl EditorConfigProps {
 
 /// Load properties from the closest `.editorconfig` file.
 #[cfg(feature = "editor-config")]
-pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
+#[instrument]
+pub fn get_editor_config_props<T: AsRef<Path> + Debug>(path: T) -> EditorConfigProps {
     use ec4rs::property::*;
 
     let editor_config = ec4rs::properties_of(path).unwrap_or_default();
@@ -300,7 +316,8 @@ pub fn get_editor_config_props<T: AsRef<Path>>(path: T) -> EditorConfigProps {
 
 /// Return metadata for the provided path. The path must already exist.
 #[inline]
-pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
+#[instrument]
+pub fn metadata<T: AsRef<Path> + Debug>(path: T) -> Result<fs::Metadata, FsError> {
     let path = path.as_ref();
 
     trace!(file = ?path, "Reading file metadata");
@@ -314,7 +331,8 @@ pub fn metadata<T: AsRef<Path>>(path: T) -> Result<fs::Metadata, FsError> {
 /// Open a file at the provided path and return a [`File`] instance.
 /// The path must already exist.
 #[inline]
-pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
+#[instrument]
+pub fn open_file<T: AsRef<Path> + Debug>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
 
     trace!(file = ?path, "Opening file");
@@ -328,7 +346,8 @@ pub fn open_file<T: AsRef<Path>>(path: T) -> Result<File, FsError> {
 /// Read direct contents for the provided directory path. If the directory
 /// does not exist, an empty vector is returned.
 #[inline]
-pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
+#[instrument]
+pub fn read_dir<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     let path = path.as_ref();
     let mut results = vec![];
 
@@ -362,8 +381,8 @@ pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
 
 /// Read all contents recursively for the provided directory path.
 #[inline]
-#[tracing::instrument(skip_all)]
-pub fn read_dir_all<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
+#[instrument]
+pub fn read_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     let entries = read_dir(path)?;
     let mut results = vec![];
 
@@ -382,7 +401,8 @@ pub fn read_dir_all<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsErro
 
 /// Read a file at the provided path into a string. The path must already exist.
 #[inline]
-pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
+#[instrument]
+pub fn read_file<T: AsRef<Path> + Debug>(path: T) -> Result<String, FsError> {
     let path = path.as_ref();
 
     trace!(file = ?path, "Reading file");
@@ -395,7 +415,8 @@ pub fn read_file<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
 
 /// Read a file at the provided path into a bytes vector. The path must already exist.
 #[inline]
-pub fn read_file_bytes<T: AsRef<Path>>(path: T) -> Result<Vec<u8>, FsError> {
+#[instrument]
+pub fn read_file_bytes<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<u8>, FsError> {
     let path = path.as_ref();
 
     trace!(file = ?path, "Reading bytes of file");
@@ -409,7 +430,7 @@ pub fn read_file_bytes<T: AsRef<Path>>(path: T) -> Result<Vec<u8>, FsError> {
 /// Remove a file or directory (recursively) at the provided path.
 /// If the path does not exist, this is a no-op.
 #[inline]
-pub fn remove<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
+pub fn remove<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if path.exists() {
@@ -428,7 +449,8 @@ pub fn remove<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 /// Remove a symlink at the provided path. If the file does not exist, or is not a
 /// symlink, this is a no-op.
 #[inline]
-pub fn remove_link<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
+#[instrument]
+pub fn remove_link<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
     // We can't use an `exists` check as it will return false if the source file
@@ -451,7 +473,8 @@ pub fn remove_link<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 
 /// Remove a file at the provided path. If the file does not exist, this is a no-op.
 #[inline]
-pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
+#[instrument]
+pub fn remove_file<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if path.exists() {
@@ -469,7 +492,8 @@ pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 /// Remove a file at the provided path if it's older than the provided duration.
 /// If the file does not exist, or is younger than the duration, this is a no-op.
 #[inline]
-pub fn remove_file_if_stale<T: AsRef<Path>>(
+#[instrument]
+pub fn remove_file_if_stale<T: AsRef<Path> + Debug>(
     path: T,
     duration: Duration,
     current: SystemTime,
@@ -505,8 +529,8 @@ pub fn remove_file_if_stale<T: AsRef<Path>>(
 /// Remove a directory, and all of its contents recursively, at the provided path.
 /// If the directory does not exist, this is a no-op.
 #[inline]
-#[tracing::instrument(skip_all)]
-pub fn remove_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
+#[instrument]
+pub fn remove_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if path.exists() {
@@ -529,8 +553,8 @@ pub struct RemoveDirContentsResult {
 /// Remove all contents from the provided directory path that are older than the
 /// provided duration, and return a sum of bytes saved and files deleted.
 /// If the directory does not exist, this is a no-op.
-#[tracing::instrument(skip_all)]
-pub fn remove_dir_stale_contents<P: AsRef<Path>>(
+#[instrument]
+pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
     dir: P,
     duration: Duration,
 ) -> Result<RemoveDirContentsResult, FsError> {
@@ -564,7 +588,11 @@ pub fn remove_dir_stale_contents<P: AsRef<Path>>(
 /// Rename a file from source to destination. If the destination directory does not exist,
 /// it will be created.
 #[inline]
-pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsError> {
+#[instrument]
+pub fn rename<F: AsRef<Path> + Debug, T: AsRef<Path> + Debug>(
+    from: F,
+    to: T,
+) -> Result<(), FsError> {
     let from = from.as_ref();
     let to = to.as_ref();
 
@@ -585,7 +613,8 @@ pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), FsEr
 /// the default of 0o755 will be used. The path must already exist.
 #[cfg(unix)]
 #[inline]
-pub fn update_perms<T: AsRef<Path>>(path: T, mode: Option<u32>) -> Result<(), FsError> {
+#[instrument]
+pub fn update_perms<T: AsRef<Path> + Debug>(path: T, mode: Option<u32>) -> Result<(), FsError> {
     use std::os::unix::fs::PermissionsExt;
 
     let path = path.as_ref();
@@ -613,7 +642,8 @@ pub fn update_perms<T: AsRef<Path>>(_path: T, _mode: Option<u32>) -> Result<(), 
 /// Write a file with the provided data to the provided path. If the parent directory
 /// does not exist, it will be created.
 #[inline]
-pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
+#[instrument(skip(data))]
+pub fn write_file<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if let Some(parent) = path.parent() {
@@ -632,8 +662,8 @@ pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<()
 /// closest `.editorconfig` into account
 #[cfg(feature = "editor-config")]
 #[inline]
-#[tracing::instrument(skip_all)]
-pub fn write_file_with_config<T: AsRef<Path>, D: AsRef<[u8]>>(
+#[instrument(skip(data))]
+pub fn write_file_with_config<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(
     path: T,
     data: D,
 ) -> Result<(), FsError> {

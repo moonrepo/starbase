@@ -7,7 +7,7 @@ use starbase_utils::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use tracing::trace;
+use tracing::{instrument, trace};
 
 pub use crate::gz_error::GzError;
 
@@ -56,6 +56,7 @@ impl ArchivePacker for GzPacker {
         Err(GzError::NoDirs.into())
     }
 
+    #[instrument(name = "pack_gz", skip_all)]
     fn pack(&mut self) -> ArchiveResult<()> {
         trace!("Gzipping file");
 
@@ -92,6 +93,7 @@ impl GzUnpacker {
 }
 
 impl ArchiveUnpacker for GzUnpacker {
+    #[instrument(name = "unpack_gz", skip_all)]
     fn unpack(&mut self, _prefix: &str, _differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
         trace!(output_dir = ?self.output_dir, "Ungzipping file");
 

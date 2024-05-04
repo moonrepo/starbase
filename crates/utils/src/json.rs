@@ -1,8 +1,9 @@
 use crate::fs;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::fmt::Debug;
 use std::path::Path;
-use tracing::trace;
+use tracing::{instrument, trace};
 
 pub use crate::json_error::JsonError;
 pub use serde_json;
@@ -10,6 +11,7 @@ pub use serde_json::{json, Map as JsonMap, Number as JsonNumber, Value as JsonVa
 
 /// Clean a JSON string by removing comments and trailing commas.
 #[inline]
+#[instrument(name = "clean_json", skip_all)]
 pub fn clean<T: AsRef<str>>(json: T) -> Result<String, std::io::Error> {
     let mut json = json.as_ref().to_owned();
 
@@ -22,6 +24,7 @@ pub fn clean<T: AsRef<str>>(json: T) -> Result<String, std::io::Error> {
 
 /// Recursively merge [`JsonValue`] objects, with values from next overwriting previous.
 #[inline]
+#[instrument(name = "merge_json", skip_all)]
 pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
     match (prev, next) {
         (JsonValue::Object(prev_object), JsonValue::Object(next_object)) => {
@@ -43,6 +46,7 @@ pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
 
 /// Parse a string and deserialize into the required type.
 #[inline]
+#[instrument(name = "parse_json", skip(data))]
 pub fn parse<T, D>(data: T) -> Result<D, JsonError>
 where
     T: AsRef<str>,
@@ -61,6 +65,7 @@ where
 
 /// Format and serialize the provided value into a string.
 #[inline]
+#[instrument(name = "format_json", skip(data))]
 pub fn format<D>(data: &D, pretty: bool) -> Result<String, JsonError>
 where
     D: ?Sized + Serialize,
@@ -81,9 +86,10 @@ where
 /// Read a file at the provided path and deserialize into the required type.
 /// The path must already exist.
 #[inline]
+#[instrument(name = "read_json")]
 pub fn read_file<P, D>(path: P) -> Result<D, JsonError>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
     D: DeserializeOwned,
 {
     let path = path.as_ref();
@@ -105,9 +111,10 @@ where
 ///
 /// This function is primarily used internally for non-consumer facing files.
 #[inline]
+#[instrument(name = "write_json", skip(json))]
 pub fn write_file<P, D>(path: P, json: &D, pretty: bool) -> Result<(), JsonError>
 where
-    P: AsRef<Path>,
+    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();
@@ -138,7 +145,8 @@ where
 /// This function is used for consumer facing files, like configs.
 #[cfg(feature = "editor-config")]
 #[inline]
-pub fn write_file_with_config<P: AsRef<Path>>(
+#[instrument(name = "write_json_with_config", skip(json))]
+pub fn write_file_with_config<P: AsRef<Path> + Debug>(
     path: P,
     json: JsonValue,
     pretty: bool,

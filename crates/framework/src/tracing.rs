@@ -221,6 +221,7 @@ pub struct TracingGuard {
     log_file: Option<Arc<File>>,
 }
 
+#[tracing::instrument(skip_all)]
 pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
     TEST_ENV.store(env::var(options.test_env).is_ok(), Ordering::Release);
 

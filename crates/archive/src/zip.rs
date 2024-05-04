@@ -5,7 +5,7 @@ use starbase_utils::fs::{self, FsError};
 use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
-use tracing::trace;
+use tracing::{instrument, trace};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
@@ -103,6 +103,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
+    #[instrument(name = "pack_zip", skip_all)]
     fn pack(&mut self) -> ArchiveResult<()> {
         trace!("Creating zip");
 
@@ -145,6 +146,7 @@ impl ZipUnpacker {
 }
 
 impl ArchiveUnpacker for ZipUnpacker {
+    #[instrument(name = "unpack_zip", skip_all)]
     fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
         trace!(output_dir = ?self.output_dir, "Opening zip");
 
