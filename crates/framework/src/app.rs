@@ -72,14 +72,14 @@ impl App {
 
     /// Setup `tracing` messages with default options.
     #[cfg(feature = "tracing")]
-    pub fn setup_tracing() {
+    pub fn setup_tracing() -> crate::tracing::TracingGuard {
         Self::setup_tracing_with_options(TracingOptions::default())
     }
 
     /// Setup `tracing` messages with custom options.
     #[cfg(feature = "tracing")]
-    pub fn setup_tracing_with_options(options: TracingOptions) {
-        crate::tracing::setup_tracing(options);
+    pub fn setup_tracing_with_options(options: TracingOptions) -> crate::tracing::TracingGuard {
+        crate::tracing::setup_tracing(options)
     }
 
     /// Extend the app with an extension that contains a set of systems.

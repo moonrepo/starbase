@@ -1,6 +1,6 @@
 use starbase::diagnostics::{Diagnostic, Error, IntoDiagnostic};
 use starbase::style::{Style, Stylize};
-use starbase::tracing::{debug, info, warn};
+use starbase::tracing::{debug, info, warn, TracingOptions};
 use starbase::{subscriber, system, App, Emitter, Event, MainResult, State};
 use starbase_utils::{fs, glob};
 use std::env;
@@ -145,7 +145,12 @@ async fn main() -> MainResult {
     glob::add_global_negations(["**/target/**"]);
 
     App::setup_diagnostics();
-    App::setup_tracing();
+
+    let _guard = App::setup_tracing_with_options(TracingOptions {
+        log_file: Some(PathBuf::from("test.log")),
+        dump_trace: true,
+        ..Default::default()
+    });
 
     let mut app = App::new();
     app.shutdown(finish);
