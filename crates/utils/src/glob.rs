@@ -228,6 +228,7 @@ where
 /// Walk the file system starting from the provided directory, and return all files and directories
 /// that match the provided glob patterns. Use [`walk_files`] if you only want to return files.
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn walk<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
     P: AsRef<Path>,

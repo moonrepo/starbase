@@ -65,6 +65,7 @@ pub fn copy_file<S: AsRef<Path>, D: AsRef<Path>>(from: S, to: D) -> Result<(), F
 /// Copy a directory and all of its contents from source to destination. If the destination
 /// directory does not exist, it will be created.
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn copy_dir_all<T: AsRef<Path>>(from_root: T, from: T, to_root: T) -> Result<(), FsError> {
     let from_root = from_root.as_ref();
     let from = from.as_ref();
@@ -140,6 +141,7 @@ pub fn create_file_if_missing<T: AsRef<Path>>(path: T) -> Result<File, FsError> 
 /// Create a directory and all parent directories if they do not exist.
 /// If the directory already exists, this is a no-op.
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn create_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
@@ -187,6 +189,7 @@ where
 /// and traverse upwards until one is found, or stop traversing
 /// if we hit the ending directory. If no file is found, returns [`None`].
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn find_upwards_until<F, S, E>(name: F, start_dir: S, end_dir: E) -> Option<PathBuf>
 where
     F: AsRef<OsStr>,
@@ -359,6 +362,7 @@ pub fn read_dir<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
 
 /// Read all contents recursively for the provided directory path.
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn read_dir_all<T: AsRef<Path>>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
     let entries = read_dir(path)?;
     let mut results = vec![];
@@ -465,41 +469,6 @@ pub fn remove_file<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
 /// Remove a file at the provided path if it's older than the provided duration.
 /// If the file does not exist, or is younger than the duration, this is a no-op.
 #[inline]
-#[deprecated(note = "Use `remove_file_if_stale` instead.")]
-pub fn remove_file_if_older_than<T: AsRef<Path>>(
-    path: T,
-    duration: Duration,
-) -> Result<u64, FsError> {
-    let path = path.as_ref();
-
-    if path.exists() {
-        if let Ok(meta) = metadata(path) {
-            let now = SystemTime::now();
-            let last_used = meta
-                .accessed()
-                .or_else(|_| meta.modified())
-                .or_else(|_| meta.created())
-                .unwrap_or(now);
-
-            if last_used < (now - duration) {
-                trace!(file = ?path, "Removing stale file");
-
-                fs::remove_file(path).map_err(|error| FsError::Remove {
-                    path: path.to_path_buf(),
-                    error: Box::new(error),
-                })?;
-
-                return Ok(meta.len());
-            }
-        }
-    }
-
-    Ok(0)
-}
-
-/// Remove a file at the provided path if it's older than the provided duration.
-/// If the file does not exist, or is younger than the duration, this is a no-op.
-#[inline]
 pub fn remove_file_if_stale<T: AsRef<Path>>(
     path: T,
     duration: Duration,
@@ -536,6 +505,7 @@ pub fn remove_file_if_stale<T: AsRef<Path>>(
 /// Remove a directory, and all of its contents recursively, at the provided path.
 /// If the directory does not exist, this is a no-op.
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn remove_dir_all<T: AsRef<Path>>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
@@ -559,6 +529,7 @@ pub struct RemoveDirContentsResult {
 /// Remove all contents from the provided directory path that are older than the
 /// provided duration, and return a sum of bytes saved and files deleted.
 /// If the directory does not exist, this is a no-op.
+#[tracing::instrument(skip_all)]
 pub fn remove_dir_stale_contents<P: AsRef<Path>>(
     dir: P,
     duration: Duration,
@@ -661,6 +632,7 @@ pub fn write_file<T: AsRef<Path>, D: AsRef<[u8]>>(path: T, data: D) -> Result<()
 /// closest `.editorconfig` into account
 #[cfg(feature = "editor-config")]
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn write_file_with_config<T: AsRef<Path>, D: AsRef<[u8]>>(
     path: T,
     data: D,

@@ -11,6 +11,7 @@ pub use crate::net_error::NetError;
 
 /// Download a file from the provided source URL, to the destination file path,
 /// using a custom `reqwest` [`Client`].
+#[tracing::instrument(skip_all)]
 pub async fn download_from_url_with_client<S: AsRef<str>, D: AsRef<Path>>(
     source_url: S,
     dest_file: D,
@@ -111,6 +112,7 @@ mod offline {
 /// is the fastest approach as they do not need to parse host names.
 /// If all of these fail, then we will ping Google, Mozilla, and custom
 /// hosts, which is slower, so we wrap them in a timeout.
+#[tracing::instrument]
 pub fn is_offline(timeout: u64, custom_hosts: Vec<String>) -> bool {
     trace!(timeout, "Checking for an internet connection");
 

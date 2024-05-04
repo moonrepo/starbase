@@ -7,6 +7,7 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
+use std::time::SystemTime;
 use tracing::{
     field::Visit, metadata::LevelFilter, subscriber::set_global_default, Level, Metadata,
     Subscriber,
@@ -45,7 +46,7 @@ impl<'writer> Visit for FieldVisitor<'writer> {
         if field.name() == "message" {
             write!(
                 self.writer,
-                "  {} ",
+                " {} ",
                 apply_style_tags(format!("{:?}", value))
             )
             .unwrap()
@@ -76,7 +77,9 @@ impl<'writer> FormatFields<'writer> for FieldFormatter {
     }
 }
 
-struct EventFormatter;
+struct EventFormatter {
+    show_spans: bool,
+}
 
 impl FormatTime for EventFormatter {
     fn format_time(&self, writer: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
@@ -136,16 +139,17 @@ where
         write!(writer, "{}", color::muted("]"))?;
 
         // target:spans...
-        write!(writer, " {}", color::log_target(meta.target()))?;
+        write!(writer, " {} ", color::log_target(meta.target()))?;
 
-        if let Some(scope) = ctx.event_scope() {
-            for span in scope.from_root() {
-                write!(
-                    writer,
-                    "{}{}",
-                    color::muted(":"),
-                    color::muted_light(span.name())
-                )?;
+        if self.show_spans {
+            if let Some(scope) = ctx.event_scope() {
+                for span in scope.from_root() {
+                    if span.parent().is_some() {
+                        write!(writer, "{}", color::muted(":"))?;
+                    }
+
+                    write!(writer, "{}", color::muted_light(span.name()))?;
+                }
             }
         }
 
@@ -189,6 +193,8 @@ pub struct TracingOptions {
     pub log_env: String,
     /// Absolute path to a file to write logs to.
     pub log_file: Option<PathBuf>,
+    /// Show span hierarchy in log output.
+    pub show_spans: bool,
     /// Name of the testing environment variable.
     pub test_env: String,
 }
@@ -202,6 +208,7 @@ impl Default for TracingOptions {
             intercept_log: true,
             log_env: "RUST_LOG".into(),
             log_file: None,
+            show_spans: false,
             test_env: "STARBASE_TEST".into(),
         }
     }
@@ -246,7 +253,9 @@ pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
 
     // Build our subscriber
     let subscriber = SubscriberBuilder::default()
-        .event_format(EventFormatter)
+        .event_format(EventFormatter {
+            show_spans: options.show_spans,
+        })
         .fmt_fields(FieldFormatter)
         .with_env_filter(EnvFilter::from_env(options.log_env))
         .with_writer(io::stderr)
@@ -272,8 +281,14 @@ pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
             })
             // Dump a trace profile
             .with(if options.dump_trace {
-                let (chrome_layer, chrome_guard) =
-                    ChromeLayerBuilder::new().include_args(true).build();
+                let (chrome_layer, chrome_guard) = ChromeLayerBuilder::new()
+                    .include_args(true)
+                    .include_locations(true)
+                    .file(format!(
+                        "./dump-{}.json",
+                        SystemTime::UNIX_EPOCH.elapsed().unwrap().as_micros()
+                    ))
+                    .build();
 
                 guard.chrome_guard = Some(chrome_guard);
 

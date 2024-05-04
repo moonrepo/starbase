@@ -82,6 +82,7 @@ pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
 /// This function returns a `DirLock` instance that will automatically unlock
 /// when being dropped.
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
     use std::io::prelude::*;
 
@@ -139,6 +140,7 @@ pub fn lock_directory<T: AsRef<Path>>(path: T) -> Result<DirLock, FsError> {
 
 /// Lock the provided file with exclusive access and execute the operation.
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn lock_file_exclusive<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
 where
     T: AsRef<Path>,
@@ -167,6 +169,7 @@ where
 
 /// Lock the provided file with shared access and execute the operation.
 #[inline]
+#[tracing::instrument(skip_all)]
 pub fn lock_file_shared<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
 where
     T: AsRef<Path>,
