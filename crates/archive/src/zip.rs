@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
 use tracing::trace;
-use zip::write::FileOptions;
+use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 pub use crate::zip_error::ZipError;
@@ -41,7 +41,7 @@ impl ZipPacker {
 impl ArchivePacker for ZipPacker {
     fn add_file(&mut self, name: &str, file: &Path) -> ArchiveResult<()> {
         #[allow(unused_mut)] // windows
-        let mut options = FileOptions::default().compression_method(self.compression);
+        let mut options = SimpleFileOptions::default().compression_method(self.compression);
 
         #[cfg(unix)]
         {
@@ -73,7 +73,7 @@ impl ArchivePacker for ZipPacker {
         self.archive
             .add_directory(
                 name,
-                FileOptions::default().compression_method(self.compression),
+                SimpleFileOptions::default().compression_method(self.compression),
             )
             .map_err(|error| ZipError::AddFailure {
                 source: dir.to_path_buf(),
