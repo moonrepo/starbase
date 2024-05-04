@@ -46,7 +46,7 @@ impl<'writer> Visit for FieldVisitor<'writer> {
         if field.name() == "message" {
             write!(
                 self.writer,
-                " {} ",
+                "  {} ",
                 apply_style_tags(format!("{:?}", value))
             )
             .unwrap()
@@ -139,9 +139,11 @@ where
         write!(writer, "{}", color::muted("]"))?;
 
         // target:spans...
-        write!(writer, " {} ", color::log_target(meta.target()))?;
+        write!(writer, " {}", color::log_target(meta.target()))?;
 
         if self.show_spans {
+            write!(writer, " ")?;
+
             if let Some(scope) = ctx.event_scope() {
                 for span in scope.from_root() {
                     if span.parent().is_some() {
