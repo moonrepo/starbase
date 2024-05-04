@@ -201,6 +201,7 @@ impl ArchiveUnpacker for TarUnpacker {
             let mut path: PathBuf = entry.path().unwrap().into_owned();
 
             // Remove the prefix
+            #[allow(clippy::assigning_clones)]
             if !prefix.is_empty() && path.starts_with(prefix) {
                 path = path.strip_prefix(prefix).unwrap().to_owned();
             }
