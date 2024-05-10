@@ -15,7 +15,7 @@ regex = { workspace = true }
 thiserror = { workspace = true }
 
 [target."cfg(windows)".dependencies]
-sysinfo = { version = "0.30.11", default-features = false }
+sysinfo = { version = "0.30.12", default-features = false }
 
 [features]
 default = []
