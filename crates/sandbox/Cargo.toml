@@ -7,7 +7,7 @@ description = "A temporary sandbox for testing file system and process operation
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
-starbase_utils = { version = "0.7.0", path = "../utils", default-features = false }
+starbase_utils = { version = "0.7.1", path = "../utils", default-features = false }
 assert_cmd = "2.0.14"
 assert_fs = "1.1.1"
 clean-path = "0.2.1"
