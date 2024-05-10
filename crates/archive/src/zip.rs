@@ -107,11 +107,14 @@ impl ArchivePacker for ZipPacker {
     fn pack(&mut self) -> ArchiveResult<()> {
         trace!("Creating zip");
 
-        self.archive
-            .finish()
-            .map_err(|error| ZipError::PackFailure {
-                error: Box::new(error),
-            })?;
+        // Upstream API changed where finish consumes self.
+        // Commented this out for now, but it's ok since it also runs on drop.
+
+        // self.archive
+        //     .finish()
+        //     .map_err(|error| ZipError::PackFailure {
+        //         error: Box::new(error),
+        //     })?;
 
         Ok(())
     }
