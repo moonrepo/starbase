@@ -233,6 +233,8 @@ impl App {
         self.run_systems_in_serial(systems, states, resources, emitters)
             .await?;
 
+        trace!("Ran startup phase");
+
         Ok(())
     }
 
@@ -249,6 +251,8 @@ impl App {
 
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;
+
+        trace!("Ran analyze phase");
 
         Ok(())
     }
@@ -267,6 +271,8 @@ impl App {
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;
 
+        trace!("Ran execute phase");
+
         Ok(())
     }
 
@@ -284,6 +290,8 @@ impl App {
         self.run_systems_in_parallel(systems, states, resources, emitters)
             .await?;
 
+        trace!("Ran shutdown phase");
+
         Ok(())
     }
 
@@ -298,10 +306,10 @@ impl App {
         let semaphore = Arc::new(Semaphore::new(num_cpus::get()));
 
         for system in systems {
+            let permit = semaphore.clone().acquire_owned().await.into_diagnostic()?;
             let states = Arc::clone(&states);
             let resources = Arc::clone(&resources);
             let emitters = Arc::clone(&emitters);
-            let permit = semaphore.clone().acquire_owned().await.into_diagnostic()?;
 
             futures.push(task::spawn(async move {
                 let result = system.run(states, resources, emitters).await;

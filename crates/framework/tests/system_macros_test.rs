@@ -190,7 +190,7 @@ async fn mut_manager_with_other_args(manager: States, _arg: StateRef<State1>) {
 }
 
 #[system]
-async fn raw(_raw1: StateRaw<State2>, _raw2: StateRaw<State2>) {}
+async fn raw(_raw1: StateRaw<State1>, _raw2: StateRaw<State2>) {}
 
 // INVALID
 

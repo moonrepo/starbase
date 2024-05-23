@@ -193,12 +193,12 @@ impl<'l> InstanceTracker<'l> {
                 SystemParam::ParamMut(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let mut #base_name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let mut #base_name = #manager_var_name.get_async::<starbase::Emitter<#ty>>().await;
                             let #name = #base_name.write();
                         });
                     } else {
                         quotes.push(quote! {
-                            let mut #base_name = #manager_var_name.get::<#ty>();
+                            let mut #base_name = #manager_var_name.get_async::<#ty>().await;
                             let #name = #base_name.write();
                         });
                     }
@@ -206,23 +206,23 @@ impl<'l> InstanceTracker<'l> {
                 SystemParam::ParamRaw(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let mut #name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let mut #name = #manager_var_name.get_async::<starbase::Emitter<#ty>>().await;
                         });
                     } else {
                         quotes.push(quote! {
-                            let mut #name = #manager_var_name.get::<#ty>();
+                            let mut #name = #manager_var_name.get_async::<#ty>().await;
                         });
                     }
                 }
                 SystemParam::ParamRef(ty) => {
                     if is_emitter {
                         quotes.push(quote! {
-                            let #base_name = #manager_var_name.get::<starbase::Emitter<#ty>>();
+                            let #base_name = #manager_var_name.get_async::<starbase::Emitter<#ty>>().await;
                             let #name = #base_name.read();
                         });
                     } else {
                         quotes.push(quote! {
-                            let #base_name = #manager_var_name.get::<#ty>();
+                            let #base_name = #manager_var_name.get_async::<#ty>().await;
                             let #name = #base_name.read();
                         });
                     }
@@ -230,7 +230,7 @@ impl<'l> InstanceTracker<'l> {
                 SystemParam::ParamRefWithExtract(ty, extract_ty) => {
                     quotes.push(quote! {
                         let #name = {
-                            #manager_var_name.get::<#ty>().read().extract::<#extract_ty>()
+                            #manager_var_name.get_async::<#ty>().await.read().extract::<#extract_ty>()
                         };
                     });
                 }
@@ -242,7 +242,7 @@ impl<'l> InstanceTracker<'l> {
 
                     quotes.push(quote! {
                         let #name = {
-                            #manager_var_name.get::<starbase::ExecuteArgs>().read().extract::<#ty>().unwrap()
+                            #manager_var_name.get_async::<starbase::ExecuteArgs>().await.read().extract::<#ty>().unwrap()
                         };
                     });
                 } // _ => unimplemented!(),
