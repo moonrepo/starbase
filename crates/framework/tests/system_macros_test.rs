@@ -60,7 +60,7 @@ async fn read_sub_state(args: StateRef<ExecuteArgs, SomeArgs>) {
 }
 
 #[system]
-async fn read_args_ref(args: ArgsRef<SomeArgs>) {
+async fn read_args_ref(args: Args<SomeArgs>) {
     dbg!(args);
 }
 

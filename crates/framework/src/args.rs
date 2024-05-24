@@ -40,8 +40,9 @@ impl ArgsMap {
 #[derive(Debug)]
 pub struct ExecuteArgs(pub Arc<ArgsMap>);
 
+#[async_trait::async_trait]
 impl StateInstance for ExecuteArgs {
-    // async fn extract<T: Any + Clone + Send + Sync>(&self) -> Option<T> {
-    //     self.0.get::<T>().await.map(|i| i.read().to_owned())
-    // }
+    async fn extract<T: Any + Clone + Send + Sync>(&self) -> Option<T> {
+        self.0.get::<T>().await.map(|i| i.read().to_owned())
+    }
 }

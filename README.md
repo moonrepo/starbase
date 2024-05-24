@@ -137,11 +137,11 @@ app.execute_with_args(system_func, MyArgs {
 ```
 
 To access the arguments within the system itself, you can use the `#[system]` macro, coupled with
-the `ArgsRef<T>` system parameter.
+the `Args<T>` system parameter.
 
 ```rust
 #[system]
-async fn system_func(args: ArgsRef<MyArgs>) {
+async fn system_func(args: Args<MyArgs>) {
   args.flag; // false
   args.option; // "value"
 }

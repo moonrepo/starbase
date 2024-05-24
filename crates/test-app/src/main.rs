@@ -48,7 +48,7 @@ mod sub_mod {
 
         tokio::spawn(async move {
             info!("startup 2");
-            let _ = states.get::<TestState>();
+            let _ = states.get::<TestState>().await;
 
             // dbg!(state);
 

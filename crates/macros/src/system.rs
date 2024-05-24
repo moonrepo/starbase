@@ -13,7 +13,7 @@ enum SystemParam<'a> {
     ParamRef(&'a Type),
     ParamRefWithExtract(&'a Type, &'a Type),
     // Special case
-    ArgsRef(&'a Type),
+    Args(&'a Type),
 }
 
 enum InstanceType {
@@ -113,7 +113,7 @@ impl<'l> InstanceTracker<'l> {
             SystemParam::ParamRefWithExtract(_, _) => {
                 self.ref_calls.insert(name, param);
             }
-            SystemParam::ArgsRef(_) => {
+            SystemParam::Args(_) => {
                 self.ref_calls.insert(name, param);
             } // _ => unimplemented!(),
         };
@@ -230,11 +230,11 @@ impl<'l> InstanceTracker<'l> {
                 SystemParam::ParamRefWithExtract(ty, extract_ty) => {
                     quotes.push(quote! {
                         let #name = {
-                            #manager_var_name.get::<#ty>().await.read().extract::<#extract_ty>()
+                            #manager_var_name.get::<#ty>().await.read().extract::<#extract_ty>().await
                         };
                     });
                 }
-                SystemParam::ArgsRef(ty) => {
+                SystemParam::Args(ty) => {
                     if !use_state_import {
                         quotes.push(quote! { use starbase::StateInstance; });
                         use_state_import = true;
@@ -242,7 +242,7 @@ impl<'l> InstanceTracker<'l> {
 
                     quotes.push(quote! {
                         let #name = {
-                            #manager_var_name.get::<starbase::ExecuteArgs>().await.read().extract::<#ty>().unwrap()
+                            #manager_var_name.get::<starbase::ExecuteArgs>().await.read().extract::<#ty>().await.expect("Missing Args!")
                         };
                     });
                 } // _ => unimplemented!(),
@@ -356,7 +356,7 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
                         "StateRef" => {
                             if let Some(GenericArgument::Type(extract_type)) = segment_iter.next() {
                                 if is_type_with_name(inner_type, "ExecuteArgs") {
-                                    states.add_call(var_name, SystemParam::ArgsRef(extract_type));
+                                    states.add_call(var_name, SystemParam::Args(extract_type));
                                 } else {
                                     states.add_call(
                                         var_name,
@@ -367,8 +367,8 @@ pub fn macro_impl(base_args: TokenStream, item: TokenStream) -> TokenStream {
                                 states.add_call(var_name, SystemParam::ParamRef(inner_type));
                             }
                         }
-                        "ArgsRef" => {
-                            states.add_call(var_name, SystemParam::ArgsRef(inner_type));
+                        "Args" => {
+                            states.add_call(var_name, SystemParam::Args(inner_type));
                         }
                         wrapper => {
                             panic!("Unknown parameter type {} for {}.", wrapper, var_name);
