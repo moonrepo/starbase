@@ -19,7 +19,7 @@ impl EmitterManager {
     /// When complete, the provided event will be returned along with the value returned
     /// by the subscriber that returned [`EventState::Return`], or [`None`] if not occurred.
     pub async fn emit<E: Event + 'static>(&self, event: E) -> miette::Result<E::Data> {
-        self.get::<Emitter<E>>().read().emit(event).await
+        self.get::<Emitter<E>>().await.read().emit(event).await
     }
 }
 

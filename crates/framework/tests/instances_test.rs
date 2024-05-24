@@ -17,9 +17,9 @@ mod events {
     #[tokio::test]
     async fn register_and_emit() {
         let ctx = EmitterManager::default();
-        ctx.set(Emitter::<TestEvent>::new());
+        ctx.set(Emitter::<TestEvent>::new()).await;
 
-        let mut em = ctx.get::<Emitter<TestEvent>>();
+        let mut em = ctx.get::<Emitter<TestEvent>>().await;
         em.write().on(callback_one).await;
 
         let data = em.write().emit(TestEvent(5)).await.unwrap();
@@ -36,32 +36,32 @@ mod resources {
         pub field: usize,
     }
 
-    #[test]
-    fn register_and_read() {
+    #[tokio::test]
+    async fn register_and_read() {
         let ctx = ResourceManager::default();
-        ctx.set(TestResource { field: 5 });
+        ctx.set(TestResource { field: 5 }).await;
 
-        let resource = ctx.get::<TestResource>();
+        let resource = ctx.get::<TestResource>().await;
 
         assert_eq!(resource.read().field, 5);
     }
 
-    #[test]
-    fn register_and_write() {
+    #[tokio::test]
+    async fn register_and_write() {
         let ctx = ResourceManager::default();
-        ctx.set(TestResource { field: 5 });
+        ctx.set(TestResource { field: 5 }).await;
 
-        let mut resource = ctx.get::<TestResource>();
+        let mut resource = ctx.get::<TestResource>().await;
         resource.write().field += 5;
 
         assert_eq!(resource.read().field, 10);
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "instances_test::resources::TestResource does not exist!")]
-    fn panics_missing() {
+    async fn panics_missing() {
         let ctx = ResourceManager::default();
-        ctx.get::<TestResource>();
+        ctx.get::<TestResource>().await;
     }
 }
 
@@ -71,31 +71,31 @@ mod state {
     #[derive(Debug, State)]
     struct TestState(usize);
 
-    #[test]
-    fn register_and_read() {
+    #[tokio::test]
+    async fn register_and_read() {
         let ctx = StateManager::default();
-        ctx.set(TestState(5));
+        ctx.set(TestState(5)).await;
 
-        let state = ctx.get::<TestState>();
+        let state = ctx.get::<TestState>().await;
 
         assert_eq!(state.read().0, 5);
     }
 
-    #[test]
-    fn register_and_write() {
+    #[tokio::test]
+    async fn register_and_write() {
         let ctx = StateManager::default();
-        ctx.set(TestState(5));
+        ctx.set(TestState(5)).await;
 
-        let mut state = ctx.get::<TestState>();
+        let mut state = ctx.get::<TestState>().await;
         state.write().0 += 5;
 
         assert_eq!(state.read().0, 10);
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "instances_test::state::TestState does not exist!")]
-    fn panics_missing() {
+    async fn panics_missing() {
         let ctx = StateManager::default();
-        ctx.get::<TestState>();
+        ctx.get::<TestState>().await;
     }
 }

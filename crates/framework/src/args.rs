@@ -14,8 +14,8 @@ pub struct ArgsMap {
 impl ArgsMap {
     /// Get an args reference for the provided type.
     /// If the args does not exist, a [`None`] is returned.
-    pub fn get<T: Any + Send + Sync>(&self) -> Option<InstanceGuard<T>> {
-        if let Some(entry) = self.cache.get(&TypeId::of::<T>()) {
+    pub async fn get<T: Any + Send + Sync>(&self) -> Option<InstanceGuard<T>> {
+        if let Some(entry) = self.cache.get_async(&TypeId::of::<T>()).await {
             return Some(InstanceGuard::new(entry));
         }
 
@@ -24,7 +24,15 @@ impl ArgsMap {
 
     /// Set the args into the registry with the provided type.
     /// If an exact type already exists, it'll be overwritten.
-    pub fn set<T: Any + Send + Sync>(&self, args: T) {
+    pub async fn set<T: Any + Send + Sync>(&self, args: T) {
+        let _ = self
+            .cache
+            .insert_async(TypeId::of::<T>(), Box::new(args))
+            .await;
+    }
+
+    #[doc(hidden)]
+    pub(crate) fn set_sync<T: Any + Send + Sync>(&self, args: T) {
         let _ = self.cache.insert(TypeId::of::<T>(), Box::new(args));
     }
 }
@@ -33,7 +41,7 @@ impl ArgsMap {
 pub struct ExecuteArgs(pub Arc<ArgsMap>);
 
 impl StateInstance for ExecuteArgs {
-    fn extract<T: Any + Clone + Send + Sync>(&self) -> Option<T> {
-        self.0.get::<T>().map(|i| i.read().to_owned())
-    }
+    // async fn extract<T: Any + Clone + Send + Sync>(&self) -> Option<T> {
+    //     self.0.get::<T>().await.map(|i| i.read().to_owned())
+    // }
 }

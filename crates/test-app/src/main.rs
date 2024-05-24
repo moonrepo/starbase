@@ -33,9 +33,9 @@ async fn update_event(mut data: TestEvent) {
 #[system]
 async fn start_one(states: States, emitters: Emitters) {
     info!("startup 1");
-    states.set(TestState("original".into()));
-    states.set(TestState2(true));
-    emitters.set(Emitter::<TestEvent>::new());
+    states.set(TestState("original".into())).await;
+    states.set(TestState2(true)).await;
+    emitters.set(Emitter::<TestEvent>::new()).await;
     debug!("startup 1");
 }
 

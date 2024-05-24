@@ -140,7 +140,7 @@ impl App {
 
     /// Add an args instance to the application context.
     pub fn set_args<A: Any + Send + Sync>(&mut self, args: A) -> &mut Self {
-        self.args.set(args);
+        self.args.set_sync(args);
         self
     }
 
@@ -149,7 +149,7 @@ impl App {
         &mut self,
         instance: M,
     ) -> &mut Self {
-        self.emitters.set(instance);
+        self.emitters.set_sync(instance);
         self
     }
 
@@ -158,20 +158,20 @@ impl App {
         &mut self,
         instance: R,
     ) -> &mut Self {
-        self.resources.set(instance);
+        self.resources.set_sync(instance);
         self
     }
 
     /// Add a state instance to the application context.
     pub fn set_state<S: Any + Send + Sync + StateInstance>(&mut self, instance: S) -> &mut Self {
-        self.states.set(instance);
+        self.states.set_sync(instance);
         self
     }
 
     /// Start the application and run all registered systems grouped into phases.
-    pub async fn run(&mut self) -> miette::Result<Arc<StateManager>> {
+    pub async fn run(mut self) -> miette::Result<Arc<StateManager>> {
         let states = Arc::clone(&self.states);
-        states.set(ExecuteArgs(Arc::clone(&self.args)));
+        states.set_sync(ExecuteArgs(Arc::clone(&self.args)));
 
         let resources = Arc::clone(&self.resources);
 

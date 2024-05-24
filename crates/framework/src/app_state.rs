@@ -14,9 +14,11 @@ pub struct AppPhase {
 
 #[system]
 pub async fn start_startup_phase(states: States) {
-    states.set(AppPhase {
-        phase: Phase::Startup,
-    });
+    states
+        .set(AppPhase {
+            phase: Phase::Startup,
+        })
+        .await;
 }
 
 #[system]

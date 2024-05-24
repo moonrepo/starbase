@@ -12,7 +12,7 @@ struct RunOrder(Vec<String>);
 
 #[system]
 async fn setup_state(states: States) {
-    states.set(RunOrder(vec![]));
+    states.set(RunOrder(vec![])).await;
 }
 
 #[system]
@@ -35,6 +35,7 @@ async fn system_with_thread(
     task::spawn(async move {
         states
             .get::<RunOrder>()
+            .await
             .write()
             .push("async-function-thread".into());
     })
@@ -53,27 +54,27 @@ mod startup {
         app.startup(setup_state);
         app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                let mut order = states.get::<RunOrder>();
+                let mut order = states.get::<RunOrder>().await;
                 order.write().push("1".into());
                 Ok(())
             },
         );
         app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("2".into());
+                states.get::<RunOrder>().await.write().push("2".into());
                 Ok(())
             },
         );
         app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().0.push("3".into());
+                states.get::<RunOrder>().await.write().0.push("3".into());
                 Ok(())
             },
         );
 
         let states = app.run().await.unwrap();
 
-        assert_eq!(states.get::<RunOrder>().read().0, vec!["1", "2", "3"]);
+        assert_eq!(states.get::<RunOrder>().await.read().0, vec!["1", "2", "3"]);
     }
 
     #[tokio::test]
@@ -84,7 +85,7 @@ mod startup {
         app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
                 task::spawn(async move {
-                    let mut order = states.get::<RunOrder>();
+                    let mut order = states.get::<RunOrder>().await;
                     order.write().push("async-closure-thread".into());
                 })
                 .await
@@ -98,7 +99,7 @@ mod startup {
         let states = app.run().await.unwrap();
 
         assert_eq!(
-            states.get::<RunOrder>().0,
+            states.get::<RunOrder>().await.0,
             vec![
                 "async-function-thread",
                 "async-closure-thread",
@@ -128,39 +129,42 @@ mod analyze {
         app.startup(setup_state);
         app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                let mut order = states.get::<RunOrder>();
+                let mut order = states.get::<RunOrder>().await;
                 order.push("1".into());
                 Ok(())
             },
         );
         app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("2".into());
+                states.get::<RunOrder>().await.write().push("2".into());
                 Ok(())
             },
         );
         app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().0.push("3".into());
+                states.get::<RunOrder>().await.write().0.push("3".into());
                 Ok(())
             },
         );
         app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("4".into());
+                states.get::<RunOrder>().await.write().push("4".into());
                 Ok(())
             },
         );
         app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().0.push("5".into());
+                states.get::<RunOrder>().await.write().0.push("5".into());
                 Ok(())
             },
         );
 
         let states = app.run().await.unwrap();
 
-        assert_ne!(states.get::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
+        assert_ne!(
+            states.get::<RunOrder>().await.0,
+            vec!["1", "2", "3", "5", "5"]
+        );
     }
 
     #[tokio::test]
@@ -173,7 +177,7 @@ mod analyze {
                 task::spawn(async move {
                     sleep(Duration::from_millis(100)).await;
 
-                    let mut order = states.get::<RunOrder>();
+                    let mut order = states.get::<RunOrder>().await;
                     order.push("async-closure-thread".into());
                 })
                 .await
@@ -187,7 +191,7 @@ mod analyze {
         let states = app.run().await.unwrap();
 
         assert_ne!(
-            states.get::<RunOrder>().0,
+            states.get::<RunOrder>().await.0,
             vec![
                 "async-function-thread",
                 "async-closure-thread",
@@ -202,20 +206,28 @@ mod analyze {
         app.startup(setup_state);
         app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("startup".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("startup".into());
                 Ok(())
             },
         );
         app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("analyze".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("analyze".into());
                 Ok(())
             },
         );
 
         let states = app.run().await.unwrap();
 
-        assert_eq!(states.get::<RunOrder>().0, vec!["startup", "analyze"]);
+        assert_eq!(states.get::<RunOrder>().await.0, vec!["startup", "analyze"]);
     }
 
     #[tokio::test]
@@ -239,39 +251,42 @@ mod execute {
         app.startup(setup_state);
         app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                let mut order = states.get::<RunOrder>();
+                let mut order = states.get::<RunOrder>().await;
                 order.push("1".into());
                 Ok(())
             },
         );
         app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("2".into());
+                states.get::<RunOrder>().await.write().push("2".into());
                 Ok(())
             },
         );
         app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().0.push("3".into());
+                states.get::<RunOrder>().await.write().0.push("3".into());
                 Ok(())
             },
         );
         app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("4".into());
+                states.get::<RunOrder>().await.write().push("4".into());
                 Ok(())
             },
         );
         app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().0.push("5".into());
+                states.get::<RunOrder>().await.write().0.push("5".into());
                 Ok(())
             },
         );
 
         let states = app.run().await.unwrap();
 
-        assert_ne!(states.get::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
+        assert_ne!(
+            states.get::<RunOrder>().await.0,
+            vec!["1", "2", "3", "5", "5"]
+        );
     }
 
     #[tokio::test]
@@ -284,7 +299,7 @@ mod execute {
                 task::spawn(async move {
                     sleep(Duration::from_millis(100)).await;
 
-                    let mut order = states.get::<RunOrder>();
+                    let mut order = states.get::<RunOrder>().await;
                     order.push("async-closure-thread".into());
                 })
                 .await
@@ -298,7 +313,7 @@ mod execute {
         let states = app.run().await.unwrap();
 
         assert_ne!(
-            states.get::<RunOrder>().0,
+            states.get::<RunOrder>().await.0,
             vec![
                 "async-function-thread",
                 "async-closure-thread",
@@ -313,19 +328,31 @@ mod execute {
         app.startup(setup_state);
         app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("startup".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("startup".into());
                 Ok(())
             },
         );
         app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("analyze".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("analyze".into());
                 Ok(())
             },
         );
         app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("execute".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("execute".into());
                 Ok(())
             },
         );
@@ -333,7 +360,7 @@ mod execute {
         let states = app.run().await.unwrap();
 
         assert_eq!(
-            states.get::<RunOrder>().0,
+            states.get::<RunOrder>().await.0,
             vec!["startup", "analyze", "execute"]
         );
     }
@@ -365,9 +392,20 @@ mod execute_with_args {
         app.startup(setup_state);
         app.execute_with_args(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                let args = { states.get::<ExecuteArgs>().extract::<TestArgs>().unwrap() };
+                let args = {
+                    states
+                        .get::<ExecuteArgs>()
+                        .await
+                        .extract::<TestArgs>()
+                        .await
+                        .unwrap()
+                };
 
-                states.get::<RunOrder>().write().push(format!("{:?}", args));
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push(format!("{:?}", args));
 
                 Ok(())
             },
@@ -376,7 +414,10 @@ mod execute_with_args {
 
         let states = app.run().await.unwrap();
 
-        assert_eq!(states.get::<RunOrder>().0, vec!["TestArgs { value: 1 }"]);
+        assert_eq!(
+            states.get::<RunOrder>().await.0,
+            vec!["TestArgs { value: 1 }"]
+        );
     }
 }
 
@@ -389,39 +430,42 @@ mod shutdown {
         app.startup(setup_state);
         app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                let mut order = states.get::<RunOrder>();
+                let mut order = states.get::<RunOrder>().await;
                 order.push("1".into());
                 Ok(())
             },
         );
         app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("2".into());
+                states.get::<RunOrder>().await.write().push("2".into());
                 Ok(())
             },
         );
         app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().0.push("3".into());
+                states.get::<RunOrder>().await.write().0.push("3".into());
                 Ok(())
             },
         );
         app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("4".into());
+                states.get::<RunOrder>().await.write().push("4".into());
                 Ok(())
             },
         );
         app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().0.push("5".into());
+                states.get::<RunOrder>().await.write().0.push("5".into());
                 Ok(())
             },
         );
 
         let states = app.run().await.unwrap();
 
-        assert_ne!(states.get::<RunOrder>().0, vec!["1", "2", "3", "5", "5"]);
+        assert_ne!(
+            states.get::<RunOrder>().await.0,
+            vec!["1", "2", "3", "5", "5"]
+        );
     }
 
     #[tokio::test]
@@ -434,7 +478,7 @@ mod shutdown {
                 task::spawn(async move {
                     sleep(Duration::from_millis(100)).await;
 
-                    let mut order = states.get::<RunOrder>();
+                    let mut order = states.get::<RunOrder>().await;
                     order.push("async-closure-thread".into());
                 })
                 .await
@@ -448,7 +492,7 @@ mod shutdown {
         let states = app.run().await.unwrap();
 
         assert_ne!(
-            states.get::<RunOrder>().0,
+            states.get::<RunOrder>().await.0,
             vec![
                 "async-function-thread",
                 "async-closure-thread",
@@ -463,25 +507,41 @@ mod shutdown {
         app.startup(setup_state);
         app.startup(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("startup".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("startup".into());
                 Ok(())
             },
         );
         app.analyze(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("analyze".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("analyze".into());
                 Ok(())
             },
         );
         app.execute(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("execute".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("execute".into());
                 Ok(())
             },
         );
         app.shutdown(
             |states: States, _resources: Resources, _emitters: Emitters| async move {
-                states.get::<RunOrder>().write().push("shutdown".into());
+                states
+                    .get::<RunOrder>()
+                    .await
+                    .write()
+                    .push("shutdown".into());
                 Ok(())
             },
         );
@@ -489,7 +549,7 @@ mod shutdown {
         let states = app.run().await.unwrap();
 
         assert_eq!(
-            states.get::<RunOrder>().0,
+            states.get::<RunOrder>().await.0,
             vec!["startup", "analyze", "execute", "shutdown"]
         );
     }
@@ -508,9 +568,9 @@ mod shutdown {
 
 #[system]
 fn extract_app_state(states: States) {
-    let phase = { format!("{:?}", states.get::<AppPhase>().read().phase) };
+    let phase = { format!("{:?}", states.get::<AppPhase>().await.read().phase) };
 
-    let mut order = states.get::<RunOrder>();
+    let mut order = states.get::<RunOrder>().await;
     order.write().push(phase);
 }
 
@@ -528,7 +588,7 @@ async fn tracks_app_state() {
     let states = app.run().await.unwrap();
 
     assert_eq!(
-        states.get::<RunOrder>().read().0,
+        states.get::<RunOrder>().await.read().0,
         vec!["Startup", "Analyze", "Execute", "Shutdown"]
     );
 }
@@ -555,7 +615,7 @@ async fn extension_can_register_systems() {
     let states = app.run().await.unwrap();
 
     assert_eq!(
-        states.get::<RunOrder>().read().0,
+        states.get::<RunOrder>().await.read().0,
         vec!["Startup", "Analyze", "Execute", "Shutdown"]
     );
 }

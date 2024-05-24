@@ -78,6 +78,7 @@ macro_rules! create_instance_manager {
         });
     };
     ($manager:ident, $type:ident, $impl:tt) => {
+        #[async_trait::async_trait]
         pub trait $type: Any $impl
 
         #[derive(Debug, Default)]
@@ -86,19 +87,9 @@ macro_rules! create_instance_manager {
         }
 
         impl $manager {
-            /// Get an instance reference for the provided type.
-            /// If the instance does not exist, a panic will be triggered.
-            pub fn get<T: Any + Send + Sync + $type>(&self) -> $crate::InstanceGuard<T> {
-                if let Some(entry) = self.cache.get(&TypeId::of::<T>()) {
-                    return $crate::InstanceGuard::new(entry);
-                }
-
-                panic!("{} does not exist!", type_name::<T>())
-            }
-
             /// Get an instance reference for the provided type asynchronously.
             /// If the instance does not exist, a panic will be triggered.
-            pub async fn get_async<T: Any + Send + Sync + $type>(&self) -> $crate::InstanceGuard<T> {
+            pub async fn get<T: Any + Send + Sync + $type>(&self) -> $crate::InstanceGuard<T> {
                 if let Some(entry) = self.cache.get_async(&TypeId::of::<T>()).await {
                     return $crate::InstanceGuard::new(entry);
                 }
@@ -106,16 +97,16 @@ macro_rules! create_instance_manager {
                 panic!("{} does not exist!", type_name::<T>())
             }
 
-            /// Set the instance into the registry with the provided type.
-            /// If an exact type already exists, it'll be overwritten.
-            pub fn set<T: Any + Send + Sync + $type>(&self, instance: T) {
-               let _ = self.cache.insert(TypeId::of::<T>(), Box::new(instance));
-            }
 
             /// Set the instance into the registry with the provided type asynchronously.
             /// If an exact type already exists, it'll be overwritten.
-            pub async fn set_async<T: Any + Send + Sync + $type>(&self, instance: T) {
+            pub async fn set<T: Any + Send + Sync + $type>(&self, instance: T) {
                let _ = self.cache.insert_async(TypeId::of::<T>(), Box::new(instance)).await;
+            }
+
+            #[doc(hidden)]
+            pub(crate) fn set_sync<T: Any + Send + Sync + $type>(&self, instance: T) {
+               let _ = self.cache.insert(TypeId::of::<T>(), Box::new(instance));
             }
         }
     };
