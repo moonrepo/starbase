@@ -1,13 +1,13 @@
 [package]
 name = "starbase_sandbox"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 license = "MIT"
 description = "A temporary sandbox for testing file system and process operations, with fixtures support."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
-starbase_utils = { version = "0.7.1", path = "../utils", default-features = false }
+starbase_utils = { version = "0.7.2", path = "../utils", default-features = false }
 assert_cmd = "2.0.14"
 assert_fs = "1.1.1"
 clean-path = "0.2.1"
