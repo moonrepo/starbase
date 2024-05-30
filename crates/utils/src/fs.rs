@@ -314,6 +314,39 @@ pub fn get_editor_config_props<T: AsRef<Path> + Debug>(path: T) -> EditorConfigP
     }
 }
 
+/// Check if the provided path is a stale file, by comparing modified, created, or accessed
+/// timestamps against the current timestamp and duration. If stale, return the file size
+/// and timestamp, otherwise return `None`.
+#[inline]
+#[instrument]
+pub fn is_stale<T: AsRef<Path> + Debug>(
+    path: T,
+    accessed: bool,
+    duration: Duration,
+    current_time: SystemTime,
+) -> Result<Option<(u64, SystemTime)>, FsError> {
+    let path = path.as_ref();
+
+    // Avoid bubbling up result errors and just mark as stale
+    if let Ok(meta) = metadata(path) {
+        let mut time = meta.modified().or_else(|_| meta.created());
+
+        if accessed {
+            if let Ok(accessed_time) = meta.accessed() {
+                time = Ok(accessed_time);
+            }
+        }
+
+        if let Ok(check_time) = time {
+            if check_time < (current_time - duration) {
+                return Ok(Some((meta.len(), check_time)));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
 /// Return metadata for the provided path. The path must already exist.
 #[inline]
 #[instrument]
@@ -496,30 +529,20 @@ pub fn remove_file<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
 pub fn remove_file_if_stale<T: AsRef<Path> + Debug>(
     path: T,
     duration: Duration,
-    current: SystemTime,
+    current_time: SystemTime,
 ) -> Result<u64, FsError> {
     let path = path.as_ref();
 
     if path.exists() {
-        if let Ok(meta) = metadata(path) {
-            let Ok(last_used) = meta
-                .accessed()
-                .or_else(|_| meta.modified())
-                .or_else(|_| meta.created())
-            else {
-                return Ok(0);
-            };
+        if let Some((size, _)) = is_stale(path, true, duration, current_time)? {
+            trace!(file = ?path, "Removing stale file");
 
-            if last_used < (current - duration) {
-                trace!(file = ?path, "Removing stale file");
+            fs::remove_file(path).map_err(|error| FsError::Remove {
+                path: path.to_path_buf(),
+                error: Box::new(error),
+            })?;
 
-                fs::remove_file(path).map_err(|error| FsError::Remove {
-                    path: path.to_path_buf(),
-                    error: Box::new(error),
-                })?;
-
-                return Ok(meta.len());
-            }
+            return Ok(size);
         }
     }
 
