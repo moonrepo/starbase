@@ -27,7 +27,7 @@ impl Shell for Elvish {
     }
 
     fn format_path_export(&self, paths: &[String]) -> String {
-        format!("set paths [{} $@paths]", format(paths.join(" ")))
+        format!("set paths = [{} $@paths]", format(paths.join(" ")))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -84,7 +84,7 @@ mod tests {
     fn formats_path() {
         assert_eq!(
             Elvish.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set paths [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths]"#
+            r#"set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths]"#
         );
     }
 }
