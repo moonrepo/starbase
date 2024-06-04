@@ -1605,7 +1605,6 @@ dependencies = [
  "num_cpus",
  "rustc-hash",
  "scc",
- "starbase_events",
  "starbase_macros",
  "starbase_styles",
  "thiserror",
