@@ -1,7 +1,6 @@
 use starbase_styles::theme::create_graphical_theme;
 
 pub use miette::*;
-pub use thiserror::Error;
 
 #[tracing::instrument]
 pub fn setup_miette() {

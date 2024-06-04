@@ -1420,15 +1420,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "scc"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76ad2bbb0ae5100a07b7a6f2ed7ab5fd0045551a4c507989b7a620046ea3efdc"
-dependencies = [
- "sdd",
-]
-
-[[package]]
 name = "schannel"
 version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1442,12 +1433,6 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "sdd"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b84345e4c9bd703274a082fb80caaa99b7612be48dfaa1dd9266577ec412309d"
 
 [[package]]
 name = "security-framework"
@@ -1602,13 +1587,8 @@ dependencies = [
  "async-trait",
  "chrono",
  "miette 7.2.0",
- "num_cpus",
- "rustc-hash",
- "scc",
  "starbase_macros",
  "starbase_styles",
- "thiserror",
- "tokio",
  "tracing",
  "tracing-chrome",
  "tracing-log",
@@ -1825,6 +1805,7 @@ checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 name = "test_app"
 version = "0.5.0"
 dependencies = [
+ "async-trait",
  "log",
  "miette 7.2.0",
  "starbase",

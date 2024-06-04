@@ -9,6 +9,7 @@ test_lib = { path = "../test-lib" }
 starbase = { path = "../framework" }
 starbase_utils = { path = "../utils", features = ["glob", "fs-lock"] }
 log = "0.4.21"
+async-trait = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
