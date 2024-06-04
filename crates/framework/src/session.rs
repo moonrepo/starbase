@@ -12,6 +12,10 @@ pub trait AppSession: Debug + Send + Sync {
         Ok(())
     }
 
+    async fn execute(&self) -> AppResult {
+        Ok(())
+    }
+
     async fn shutdown(&mut self) -> AppResult {
         Ok(())
     }

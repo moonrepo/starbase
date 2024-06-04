@@ -1,12 +1,13 @@
 use async_trait::async_trait;
-use starbase::diagnostics::{Diagnostic, Error, IntoDiagnostic};
+use starbase::diagnostics::{Diagnostic, IntoDiagnostic};
 use starbase::style::{Style, Stylize};
 use starbase::tracing::{info, warn, TracingOptions};
-use starbase::{system, App, AppResult, AppSession, MainResult};
+use starbase::{App, AppResult, AppSession, MainResult};
 use starbase_utils::{fs, glob};
 use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
+use thiserror::Error;
 use tokio::time::sleep;
 
 #[derive(Debug, Diagnostic, Error)]
@@ -97,7 +98,12 @@ async fn main() -> MainResult {
         ..Default::default()
     });
 
-    app.run(TestSession::default()).await?;
+    app.run(TestSession::default(), |session| async {
+        dbg!(session);
+        create_file().await?;
+        Ok(())
+    })
+    .await?;
 
     Ok(())
 }

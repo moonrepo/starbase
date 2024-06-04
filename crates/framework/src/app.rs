@@ -1,5 +1,7 @@
 use crate::session::{AppResult, AppSession};
 use crate::tracing::TracingOptions;
+use futures::try_join;
+use std::future::Future;
 use tracing::{instrument, trace};
 
 pub type MainResult = miette::Result<()>;
@@ -42,7 +44,11 @@ impl<S: AppSession> App<S> {
 
     /// Start the application and run all registered systems grouped into phases.
     #[instrument(skip_all)]
-    pub async fn run(mut self, mut session: S) -> miette::Result<S> {
+    pub async fn run<F, Fut>(mut self, mut session: S, op: F) -> miette::Result<S>
+    where
+        F: FnOnce(&S) -> Fut,
+        Fut: Future<Output = AppResult> + 'static,
+    {
         // Startup
         if let Err(error) = self.run_startup(&mut session).await {
             self.run_shutdown(&mut session).await?;
@@ -58,7 +64,7 @@ impl<S: AppSession> App<S> {
         }
 
         // Execute
-        if let Err(error) = self.run_execute(&session).await {
+        if let Err(error) = self.run_execute(&session, op).await {
             self.run_shutdown(&mut session).await?;
 
             return Err(error);
@@ -93,10 +99,15 @@ impl<S: AppSession> App<S> {
     }
 
     #[instrument(skip_all)]
-    async fn run_execute(&mut self, session: &S) -> AppResult {
+    async fn run_execute<F, Fut>(&mut self, session: &S, op: F) -> AppResult
+    where
+        F: FnOnce(&S) -> Fut,
+        Fut: Future<Output = AppResult> + 'static,
+    {
         trace!("Running execute phase");
 
         self.phase = AppPhase::Execute;
+        try_join!(session.execute(), op(session))?;
 
         Ok(())
     }

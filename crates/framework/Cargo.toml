@@ -20,6 +20,7 @@ chrono = { version = "0.4.38", default-features = false, features = [
 	"clock",
 	"std",
 ] }
+futures = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 tracing = { workspace = true, optional = true }
 tracing-chrome = { version = "0.7.2", optional = true }

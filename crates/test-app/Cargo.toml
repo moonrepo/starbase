@@ -11,5 +11,6 @@ starbase_utils = { path = "../utils", features = ["glob", "fs-lock"] }
 log = "0.4.21"
 async-trait = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
