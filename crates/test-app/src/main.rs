@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use async_trait::async_trait;
 use starbase::diagnostics::{Diagnostic, IntoDiagnostic};
 use starbase::style::{Style, Stylize};
@@ -17,7 +19,7 @@ enum AppError {
     Test,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct TestSession {
     state: String,
     active: bool,
@@ -92,9 +94,9 @@ async fn main() -> MainResult {
     let app = App::default();
     app.setup_diagnostics();
 
-    let _guard = app.setup_tracing_with_options(TracingOptions {
+    let _guard = app.setup_tracing(TracingOptions {
         log_file: Some(PathBuf::from("test.log")),
-        dump_trace: true,
+        dump_trace: false,
         ..Default::default()
     });
 

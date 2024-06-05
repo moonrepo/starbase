@@ -6,7 +6,7 @@ use tracing::{instrument, trace};
 
 pub type MainResult = miette::Result<()>;
 
-#[derive(Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum AppPhase {
     #[default]
     Startup,
@@ -16,12 +16,11 @@ pub enum AppPhase {
 }
 
 #[derive(Debug, Default)]
-pub struct App<S: AppSession> {
+pub struct App {
     pub phase: AppPhase,
-    _marker: std::marker::PhantomData<S>,
 }
 
-impl<S: AppSession> App<S> {
+impl App {
     /// Setup `miette` diagnostics by registering error and panic hooks.
     pub fn setup_diagnostics(&self) {
         crate::diagnostics::setup_miette();
@@ -29,25 +28,24 @@ impl<S: AppSession> App<S> {
 
     /// Setup `tracing` messages with default options.
     #[cfg(feature = "tracing")]
-    pub fn setup_tracing(&self) -> crate::tracing::TracingGuard {
-        self.setup_tracing_with_options(TracingOptions::default())
+    pub fn setup_tracing_with_defaults(&self) -> crate::tracing::TracingGuard {
+        self.setup_tracing(TracingOptions::default())
     }
 
     /// Setup `tracing` messages with custom options.
     #[cfg(feature = "tracing")]
-    pub fn setup_tracing_with_options(
-        &self,
-        options: TracingOptions,
-    ) -> crate::tracing::TracingGuard {
+    pub fn setup_tracing(&self, options: TracingOptions) -> crate::tracing::TracingGuard {
         crate::tracing::setup_tracing(options)
     }
 
-    /// Start the application and run all registered systems grouped into phases.
+    /// Start the application with the provided session and execute all phases
+    /// in order. If a phase fails, always run the shutdown phase.
     #[instrument(skip_all)]
-    pub async fn run<F, Fut>(mut self, mut session: S, op: F) -> miette::Result<S>
+    pub async fn run<S, F, Fut>(mut self, mut session: S, op: F) -> miette::Result<S>
     where
-        F: FnOnce(&S) -> Fut,
-        Fut: Future<Output = AppResult> + 'static,
+        S: AppSession,
+        F: FnOnce(S) -> Fut,
+        Fut: Future<Output = AppResult>,
     {
         // Startup
         if let Err(error) = self.run_startup(&mut session).await {
@@ -64,7 +62,7 @@ impl<S: AppSession> App<S> {
         }
 
         // Execute
-        if let Err(error) = self.run_execute(&session, op).await {
+        if let Err(error) = self.run_execute(&mut session, op).await {
             self.run_shutdown(&mut session).await?;
 
             return Err(error);
@@ -79,7 +77,10 @@ impl<S: AppSession> App<S> {
     // Private
 
     #[instrument(skip_all)]
-    async fn run_startup(&mut self, session: &mut S) -> AppResult {
+    async fn run_startup<S>(&mut self, session: &mut S) -> AppResult
+    where
+        S: AppSession,
+    {
         trace!("Running startup phase");
 
         self.phase = AppPhase::Startup;
@@ -89,7 +90,10 @@ impl<S: AppSession> App<S> {
     }
 
     #[instrument(skip_all)]
-    async fn run_analyze(&mut self, session: &mut S) -> AppResult {
+    async fn run_analyze<S>(&mut self, session: &mut S) -> AppResult
+    where
+        S: AppSession,
+    {
         trace!("Running analyze phase");
 
         self.phase = AppPhase::Analyze;
@@ -99,21 +103,28 @@ impl<S: AppSession> App<S> {
     }
 
     #[instrument(skip_all)]
-    async fn run_execute<F, Fut>(&mut self, session: &S, op: F) -> AppResult
+    async fn run_execute<S, F, Fut>(&mut self, session: &mut S, op: F) -> AppResult
     where
-        F: FnOnce(&S) -> Fut,
-        Fut: Future<Output = AppResult> + 'static,
+        S: AppSession,
+        F: FnOnce(S) -> Fut,
+        Fut: Future<Output = AppResult>,
     {
         trace!("Running execute phase");
 
         self.phase = AppPhase::Execute;
-        try_join!(session.execute(), op(session))?;
+
+        let execute_session = session.clone();
+
+        try_join!(session.execute(), op(execute_session))?;
 
         Ok(())
     }
 
     #[instrument(skip_all)]
-    async fn run_shutdown(&mut self, session: &mut S) -> AppResult {
+    async fn run_shutdown<S>(&mut self, session: &mut S) -> AppResult
+    where
+        S: AppSession,
+    {
         trace!("Running shutdown phase");
 
         self.phase = AppPhase::Shutdown;
