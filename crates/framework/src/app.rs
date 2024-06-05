@@ -41,37 +41,37 @@ impl App {
     /// Start the application with the provided session and execute all phases
     /// in order. If a phase fails, always run the shutdown phase.
     #[instrument(skip_all)]
-    pub async fn run<S, F, Fut>(mut self, mut session: S, op: F) -> miette::Result<S>
+    pub async fn run<S, F, Fut>(mut self, session: &mut S, op: F) -> miette::Result<()>
     where
         S: AppSession,
         F: FnOnce(S) -> Fut,
         Fut: Future<Output = AppResult>,
     {
         // Startup
-        if let Err(error) = self.run_startup(&mut session).await {
-            self.run_shutdown(&mut session).await?;
+        if let Err(error) = self.run_startup(session).await {
+            self.run_shutdown(session).await?;
 
             return Err(error);
         }
 
         // Analyze
-        if let Err(error) = self.run_analyze(&mut session).await {
-            self.run_shutdown(&mut session).await?;
+        if let Err(error) = self.run_analyze(session).await {
+            self.run_shutdown(session).await?;
 
             return Err(error);
         }
 
         // Execute
-        if let Err(error) = self.run_execute(&mut session, op).await {
-            self.run_shutdown(&mut session).await?;
+        if let Err(error) = self.run_execute(session, op).await {
+            self.run_shutdown(session).await?;
 
             return Err(error);
         }
 
         // Shutdown
-        self.run_shutdown(&mut session).await?;
+        self.run_shutdown(session).await?;
 
-        Ok(session)
+        Ok(())
     }
 
     // Private

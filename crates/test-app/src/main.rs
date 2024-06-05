@@ -100,7 +100,9 @@ async fn main() -> MainResult {
         ..Default::default()
     });
 
-    app.run(TestSession::default(), |session| async {
+    let mut session = TestSession::default();
+
+    app.run(&mut session, |session| async {
         dbg!(session);
         create_file().await?;
         Ok(())
