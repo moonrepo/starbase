@@ -9,8 +9,9 @@ of your choice.
 
 A starbase is built with the following modules:
 
-- **Reactor core** - Async-first powered by the `tokio` runtime.
-- **Fusion cells** - Thread-safe concurrent systems for easy processing.
+- **Reactor core** - Async-first session-based application powered by
+  [`starbase`](https://crates.io/crates/starbase).
+- **Fusion cells** - Thread-safe concurrent systems with `tokio`.
 - **Communication array** - Event-driven architecture with
   [`starbase_events`](https://crates.io/crates/starbase_events).
 - **Shield generator** - Native diagnostics and reports with `miette`.

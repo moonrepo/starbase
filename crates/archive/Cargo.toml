@@ -28,7 +28,7 @@ xz2 = { version = "0.1.7", optional = true }
 zstd = { version = "0.13.1", optional = true }
 
 # zip
-zip = { version = "2.1.2", default-features = false, optional = true }
+zip = { version = "2.1.3", default-features = false, optional = true }
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = [
