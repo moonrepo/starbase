@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use tracing::debug;
 
 pub fn create_file() -> miette::Result<()> {
-    let file = PathBuf::from("test");
+    let file = PathBuf::from("temp/test");
 
     debug!(file = file.to_str(), "Creating file...");
 

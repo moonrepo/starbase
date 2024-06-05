@@ -119,7 +119,7 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
     let return_flow = if has_return_statement(&func_body) {
         quote! {}
     } else {
-        quote! { Ok(starbase::EventState::Continue) }
+        quote! { Ok(starbase_events::EventState::Continue) }
     };
 
     let attributes = if cfg!(feature = "tracing") {
@@ -134,8 +134,8 @@ pub fn macro_impl(_args: TokenStream, item: TokenStream) -> TokenStream {
         #attributes
         async fn #func_name(
             event: std::sync::Arc<#event_type>,
-            #data_name: std::sync::Arc<tokio::sync::RwLock<<#event_type as starbase::Event>::Data>>
-        ) -> starbase::EventResult {
+            #data_name: std::sync::Arc<tokio::sync::RwLock<<#event_type as starbase_events::Event>::Data>>
+        ) -> starbase_events::EventResult {
             #acquire_lock
             #func_body
             #return_flow

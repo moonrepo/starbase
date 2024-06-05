@@ -7,7 +7,9 @@ description = "Async and mutable event system."
 repository = "https://github.com/moonrepo/starbase"
 
 [dependencies]
-starbase_macros = { version = "0.6.2", path = "../macros" }
+starbase_macros = { version = "0.6.2", path = "../macros", features = [
+	"events",
+] }
 async-trait = { workspace = true }
 miette = { workspace = true }
 tokio = { workspace = true }
