@@ -1,9 +1,7 @@
-use std::fmt::Debug;
-
 pub type AppResult<T = ()> = miette::Result<T>;
 
 #[async_trait::async_trait]
-pub trait AppSession: Clone + Debug + Send + Sync {
+pub trait AppSession: Clone + Send + Sync {
     /// Run operations at the start of the application process to setup
     /// the initial state of the session.
     async fn startup(&mut self) -> AppResult {
