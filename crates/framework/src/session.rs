@@ -17,7 +17,7 @@ pub trait AppSession: Clone + Debug + Send + Sync {
     }
 
     /// Run operations in the background of the main execution. The main
-    /// execution is passed to `[App#run]`.
+    /// execution is defined in [`App.run`], _not_ here.
     async fn execute(&mut self) -> AppResult {
         Ok(())
     }

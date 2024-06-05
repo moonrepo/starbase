@@ -49,27 +49,27 @@ impl App {
     {
         // Startup
         if let Err(error) = self.run_startup(session).await {
-            self.run_shutdown(session).await?;
+            self.run_shutdown(session, true).await?;
 
             return Err(error);
         }
 
         // Analyze
         if let Err(error) = self.run_analyze(session).await {
-            self.run_shutdown(session).await?;
+            self.run_shutdown(session, true).await?;
 
             return Err(error);
         }
 
         // Execute
         if let Err(error) = self.run_execute(session, op).await {
-            self.run_shutdown(session).await?;
+            self.run_shutdown(session, true).await?;
 
             return Err(error);
         }
 
         // Shutdown
-        self.run_shutdown(session).await?;
+        self.run_shutdown(session, false).await?;
 
         Ok(())
     }
@@ -84,6 +84,7 @@ impl App {
         trace!("Running startup phase");
 
         self.phase = AppPhase::Startup;
+
         session.startup().await?;
 
         Ok(())
@@ -97,6 +98,7 @@ impl App {
         trace!("Running analyze phase");
 
         self.phase = AppPhase::Analyze;
+
         session.analyze().await?;
 
         Ok(())
@@ -113,21 +115,24 @@ impl App {
 
         self.phase = AppPhase::Execute;
 
-        let execute_session = session.clone();
-
-        try_join!(session.execute(), op(execute_session))?;
+        try_join!(op(session.clone()), session.execute(),)?;
 
         Ok(())
     }
 
     #[instrument(skip_all)]
-    async fn run_shutdown<S>(&mut self, session: &mut S) -> AppResult
+    async fn run_shutdown<S>(&mut self, session: &mut S, on_failure: bool) -> AppResult
     where
         S: AppSession,
     {
-        trace!("Running shutdown phase");
+        if on_failure {
+            trace!("Running shutdown phase (because another phase failed)");
+        } else {
+            trace!("Running shutdown phase");
+        }
 
         self.phase = AppPhase::Shutdown;
+
         session.shutdown().await?;
 
         Ok(())
