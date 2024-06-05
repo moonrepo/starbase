@@ -35,7 +35,7 @@ json-strip-comments = { version = "1.0.2", optional = true }
 serde_json = { workspace = true, optional = true }
 
 # toml
-toml = { version = "0.8.13", optional = true }
+toml = { version = "0.8.14", optional = true }
 
 # yaml
 serde_yaml = { workspace = true, optional = true }
