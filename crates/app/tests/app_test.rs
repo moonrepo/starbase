@@ -10,7 +10,7 @@ use tokio::task;
 #[derive(Clone, Debug, Default)]
 struct TestSession {
     pub contexts: Arc<RwLock<Vec<String>>>,
-    pub order: Vec<String>,
+    pub order: Arc<RwLock<Vec<String>>>,
     pub error_in_phase: Option<AppPhase>,
 }
 
@@ -19,12 +19,17 @@ impl TestSession {
         let lock = Arc::into_inner(self.contexts).unwrap();
         lock.into_inner()
     }
+
+    pub fn get_order(self) -> Vec<String> {
+        let lock = Arc::into_inner(self.order).unwrap();
+        lock.into_inner()
+    }
 }
 
 #[async_trait]
 impl AppSession for TestSession {
     async fn startup(&mut self) -> AppResult {
-        self.order.push("startup".into());
+        self.order.write().await.push("startup".into());
 
         if self.error_in_phase == Some(AppPhase::Startup) {
             bail!("error in startup");
@@ -34,7 +39,7 @@ impl AppSession for TestSession {
     }
 
     async fn analyze(&mut self) -> AppResult {
-        self.order.push("analyze".into());
+        self.order.write().await.push("analyze".into());
 
         if self.error_in_phase == Some(AppPhase::Analyze) {
             bail!("error in analyze");
@@ -44,7 +49,7 @@ impl AppSession for TestSession {
     }
 
     async fn execute(&mut self) -> AppResult {
-        self.order.push("execute".into());
+        self.order.write().await.push("execute".into());
 
         if self.error_in_phase == Some(AppPhase::Execute) {
             bail!("error in execute");
@@ -64,7 +69,7 @@ impl AppSession for TestSession {
     }
 
     async fn shutdown(&mut self) -> AppResult {
-        self.order.push("shutdown".into());
+        self.order.write().await.push("shutdown".into());
 
         if self.error_in_phase == Some(AppPhase::Shutdown) {
             bail!("error in shutdown");
@@ -87,7 +92,7 @@ async fn runs_in_order() {
     App::default().run(&mut session, noop).await.unwrap();
 
     assert_eq!(
-        session.order,
+        session.get_order(),
         vec!["startup", "analyze", "execute", "shutdown"]
     );
 }
@@ -118,7 +123,7 @@ mod startup {
 
         assert!(error.is_err());
         assert_eq!(error.unwrap_err().to_string(), "error in startup");
-        assert_eq!(session.order, vec!["startup", "shutdown"]);
+        assert_eq!(session.get_order(), vec!["startup", "shutdown"]);
     }
 }
 
@@ -136,7 +141,7 @@ mod analyze {
 
         assert!(error.is_err());
         assert_eq!(error.unwrap_err().to_string(), "error in analyze");
-        assert_eq!(session.order, vec!["startup", "analyze", "shutdown"]);
+        assert_eq!(session.get_order(), vec!["startup", "analyze", "shutdown"]);
     }
 }
 
@@ -155,7 +160,7 @@ mod execute {
         assert!(error.is_err());
         assert_eq!(error.unwrap_err().to_string(), "error in execute");
         assert_eq!(
-            session.order,
+            session.get_order(),
             vec!["startup", "analyze", "execute", "shutdown"]
         );
     }
@@ -176,7 +181,7 @@ mod shutdown {
         assert!(error.is_err());
         assert_eq!(error.unwrap_err().to_string(), "error in shutdown");
         assert_eq!(
-            session.order,
+            session.get_order(),
             vec!["startup", "analyze", "execute", "shutdown"]
         );
     }
