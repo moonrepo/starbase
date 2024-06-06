@@ -5,11 +5,11 @@ use tracing::debug;
 pub fn create_file() -> miette::Result<()> {
     let file = PathBuf::from("temp/test");
 
-    debug!(file = file.to_str(), "Creating file...");
+    debug!(file = ?file, "Creating file...");
 
     fs::write_file(&file, "some contents").unwrap();
 
-    debug!(file = file.to_str(), "Created file!");
+    debug!(file = ?file, "Created file!");
 
     Ok(())
 }
