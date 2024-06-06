@@ -59,9 +59,12 @@ impl AppSession for TestSession {
 }
 
 async fn create_file() -> AppResult {
-    test_lib::create_file()?;
+    fs::create_dir_all("temp").into_diagnostic()?;
 
-    let _lock = fs::lock_directory(env::current_dir().unwrap().join("temp/dir")).unwrap();
+    example_lib::create_file()?;
+
+    let _lock =
+        fs::lock_directory(env::current_dir().unwrap().join("temp/dir")).into_diagnostic()?;
 
     sleep(Duration::new(10, 0)).await;
 
@@ -69,7 +72,7 @@ async fn create_file() -> AppResult {
 }
 
 async fn missing_file() -> AppResult {
-    fs::read_file(PathBuf::from("temp/fake.file")).unwrap();
+    fs::read_file(PathBuf::from("temp/fake.file")).into_diagnostic()?;
 
     Ok(())
 }
@@ -104,10 +107,7 @@ async fn main() -> MainResult {
 
     app.run(&mut session, |session| async {
         dbg!(session);
-
-        fs::create_dir_all("temp").into_diagnostic()?;
         create_file().await?;
-        test_lib::create_file()?;
 
         Ok(())
     })
