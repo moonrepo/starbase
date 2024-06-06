@@ -1,7 +1,9 @@
 use crate::session::{AppResult, AppSession};
 use crate::tracing::TracingOptions;
-use futures::try_join;
+use miette::IntoDiagnostic;
 use std::future::Future;
+use tokio::spawn;
+use tokio::task::JoinHandle;
 use tracing::{instrument, trace};
 
 pub type MainResult = miette::Result<()>;
@@ -43,9 +45,9 @@ impl App {
     #[instrument(skip_all)]
     pub async fn run<S, F, Fut>(mut self, session: &mut S, op: F) -> miette::Result<()>
     where
-        S: AppSession,
-        F: FnOnce(S) -> Fut,
-        Fut: Future<Output = AppResult>,
+        S: AppSession + 'static,
+        F: FnOnce(S) -> Fut + Send + 'static,
+        Fut: Future<Output = AppResult> + Send + 'static,
     {
         // Startup
         if let Err(error) = self.run_startup(session).await {
@@ -107,15 +109,24 @@ impl App {
     #[instrument(skip_all)]
     async fn run_execute<S, F, Fut>(&mut self, session: &mut S, op: F) -> AppResult
     where
-        S: AppSession,
-        F: FnOnce(S) -> Fut,
-        Fut: Future<Output = AppResult>,
+        S: AppSession + 'static,
+        F: FnOnce(S) -> Fut + Send + 'static,
+        Fut: Future<Output = AppResult> + Send + 'static,
     {
         trace!("Running execute phase");
 
         self.phase = AppPhase::Execute;
 
-        try_join!(op(session.clone()), session.execute(),)?;
+        let fg_session = session.clone();
+        let mut bg_session = session.clone();
+        let mut futures: Vec<JoinHandle<AppResult>> = vec![];
+
+        futures.push(spawn(async move { op(fg_session).await }));
+        futures.push(spawn(async move { bg_session.execute().await }));
+
+        for future in futures {
+            future.await.into_diagnostic()??;
+        }
 
         Ok(())
     }
