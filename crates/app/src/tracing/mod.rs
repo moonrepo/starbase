@@ -2,13 +2,13 @@ mod format;
 mod level;
 
 use crate::tracing::format::*;
-use std::env;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
+use std::{env, fs};
 use tracing::subscriber::set_global_default;
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
 use tracing_subscriber::fmt::{self, SubscriberBuilder};
@@ -112,6 +112,10 @@ pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
         subscriber
             // Write to a log file
             .with(if let Some(log_file) = options.log_file {
+                if let Some(dir) = log_file.parent() {
+                    fs::create_dir_all(dir).expect("Failed to create log directory.");
+                }
+
                 let file = Arc::new(File::create(log_file).expect("Failed to create log file."));
 
                 guard.log_file = Some(Arc::clone(&file));
