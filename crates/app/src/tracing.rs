@@ -2,9 +2,11 @@ use chrono::{Local, Timelike};
 use starbase_styles::color;
 use starbase_styles::color::apply_style_tags;
 use std::env;
+use std::fmt as stdfmt;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -182,14 +184,65 @@ where
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub enum LogLevel {
+    Off,
+    Error,
+    Warn,
+    #[default]
+    Info,
+    Debug,
+    Trace,
+}
+
+impl stdfmt::Display for LogLevel {
+    fn fmt(&self, f: &mut stdfmt::Formatter<'_>) -> Result<(), stdfmt::Error> {
+        write!(
+            f,
+            "{}",
+            match self {
+                LogLevel::Off => "off",
+                LogLevel::Error => "error",
+                LogLevel::Warn => "warn",
+                LogLevel::Info => "info",
+                LogLevel::Debug => "debug",
+                LogLevel::Trace => "trace",
+            }
+        )
+    }
+}
+
+impl From<String> for LogLevel {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "error" => Self::Error,
+            "warn" => Self::Warn,
+            "info" => Self::Info,
+            "debug" => Self::Debug,
+            "trace" => Self::Trace,
+            _ => Self::Off,
+        }
+    }
+}
+
+impl FromStr for LogLevel {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(value.to_owned()))
+    }
+}
+
 pub struct TracingOptions {
     /// Minimum level of messages to display.
-    pub default_level: LevelFilter,
+    pub default_level: LogLevel,
     /// Dump a trace file that can be viewed in Chrome.
     pub dump_trace: bool,
     /// List of modules/prefixes to only log.
     pub filter_modules: Vec<String>,
     /// Whether to intercept messages from the global `log` crate.
+    /// Requires the `log-compat` feature.
+    #[cfg(feature = "log-compat")]
     pub intercept_log: bool,
     /// Name of the logging environment variable.
     pub log_env: String,
@@ -204,11 +257,12 @@ pub struct TracingOptions {
 impl Default for TracingOptions {
     fn default() -> Self {
         TracingOptions {
-            default_level: LevelFilter::INFO,
+            default_level: LogLevel::Info,
             dump_trace: false,
             filter_modules: vec![],
+            #[cfg(feature = "log-compat")]
             intercept_log: true,
-            log_env: "RUST_LOG".into(),
+            log_env: "STARBASE_LOG".into(),
             log_file: None,
             show_spans: false,
             test_env: "STARBASE_TEST".into(),
@@ -226,8 +280,15 @@ pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
     TEST_ENV.store(env::var(options.test_env).is_ok(), Ordering::Release);
 
     // Determine modules to log
-    let set_env_var = |level: String| {
-        let env_value = if options.filter_modules.is_empty() {
+    let level = env::var(&options.log_env).unwrap_or_else(|_| options.default_level.to_string());
+
+    env::set_var(
+        &options.log_env,
+        if options.filter_modules.is_empty()
+            || level == "off"
+            || level.contains(",")
+            || level.contains("=")
+        {
             level
         } else {
             options
@@ -236,20 +297,10 @@ pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
                 .map(|prefix| format!("{prefix}={level}"))
                 .collect::<Vec<_>>()
                 .join(",")
-        };
+        },
+    );
 
-        env::set_var(&options.log_env, env_value);
-    };
-
-    // Determine log level
-    if let Ok(level) = env::var(&options.log_env) {
-        if !level.contains('=') && !level.contains(',') && level != "off" {
-            set_env_var(level);
-        }
-    } else {
-        set_env_var(options.default_level.to_string().to_lowercase());
-    }
-
+    #[cfg(feature = "log-compat")]
     if options.intercept_log {
         tracing_log::LogTracer::init().expect("Failed to initialize log interceptor.");
     }

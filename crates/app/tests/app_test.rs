@@ -89,7 +89,10 @@ async fn noop<S>(_session: S) -> AppResult {
 async fn runs_in_order() {
     let mut session = TestSession::default();
 
-    App::default().run(&mut session, noop).await.unwrap();
+    App::default()
+        .run_with_session(&mut session, noop)
+        .await
+        .unwrap();
 
     assert_eq!(
         session.get_order(),
@@ -101,7 +104,10 @@ async fn runs_in_order() {
 async fn runs_other_contexts() {
     let mut session = TestSession::default();
 
-    App::default().run(&mut session, noop).await.unwrap();
+    App::default()
+        .run_with_session(&mut session, noop)
+        .await
+        .unwrap();
 
     assert_eq!(
         session.get_contexts(),
@@ -119,7 +125,7 @@ mod startup {
             ..Default::default()
         };
 
-        let error = App::default().run(&mut session, noop).await;
+        let error = App::default().run_with_session(&mut session, noop).await;
 
         assert!(error.is_err());
         assert_eq!(error.unwrap_err().to_string(), "error in startup");
@@ -137,7 +143,7 @@ mod analyze {
             ..Default::default()
         };
 
-        let error = App::default().run(&mut session, noop).await;
+        let error = App::default().run_with_session(&mut session, noop).await;
 
         assert!(error.is_err());
         assert_eq!(error.unwrap_err().to_string(), "error in analyze");
@@ -155,7 +161,7 @@ mod execute {
             ..Default::default()
         };
 
-        let error = App::default().run(&mut session, noop).await;
+        let error = App::default().run_with_session(&mut session, noop).await;
 
         assert!(error.is_err());
         assert_eq!(error.unwrap_err().to_string(), "error in execute");
@@ -176,7 +182,7 @@ mod shutdown {
             ..Default::default()
         };
 
-        let error = App::default().run(&mut session, noop).await;
+        let error = App::default().run_with_session(&mut session, noop).await;
 
         assert!(error.is_err());
         assert_eq!(error.unwrap_err().to_string(), "error in shutdown");
