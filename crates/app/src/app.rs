@@ -76,6 +76,20 @@ impl App {
         Ok(())
     }
 
+    /// Start the application with the provided session and execute all phases
+    /// in order. If a phase fails, always run the shutdown phase.
+    ///
+    /// This method is similar to [`App#run`](#method.run) but consumes the session instead of
+    /// accepting a mutable reference.
+    pub async fn run_with_session<S, F, Fut>(self, mut session: S, op: F) -> miette::Result<()>
+    where
+        S: AppSession + 'static,
+        F: FnOnce(S) -> Fut + Send + 'static,
+        Fut: Future<Output = AppResult> + Send + 'static,
+    {
+        self.run(&mut session, op).await
+    }
+
     // Private
 
     #[instrument(skip_all)]

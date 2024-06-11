@@ -162,7 +162,7 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Determine the packer to use based on the archive file extension,
-    /// then pack the archive using [`Archiver.pack`].
+    /// then pack the archive using [`Archiver#pack`].
     pub fn pack_from_ext(&self) -> ArchiveResult<(String, PathBuf)> {
         let ext = get_full_file_extension(self.archive_file);
         let out = self.archive_file.to_path_buf();
@@ -287,7 +287,7 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Determine the unpacker to use based on the archive file extension,
-    /// then unpack the archive using [`Archiver.unpack`].
+    /// then unpack the archive using [`Archiver#unpack`].
     ///
     /// Returns an absolute path to the directory or file that was created,
     /// and the extension that was extracted from the input archive file.
