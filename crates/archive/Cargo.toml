@@ -23,7 +23,7 @@ flate2 = { version = "1.0.30", optional = true }
 
 # tar
 # https://github.com/moonrepo/starbase/issues/56
-binstall-tar = { version = "0.4.39", optional = true }
+binstall-tar = { version = "0.4.42", optional = true }
 xz2 = { version = "0.1.7", optional = true }
 zstd = { version = "0.13.1", optional = true }
 

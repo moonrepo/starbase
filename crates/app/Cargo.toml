@@ -34,9 +34,5 @@ tracing-subscriber = { version = "0.3.18", optional = true, default-features = f
 
 [features]
 default = ["tracing"]
-tracing = [
-	"dep:tracing",
-	"dep:tracing-chrome",
-	"dep:tracing-log",
-	"dep:tracing-subscriber",
-]
+tracing = ["dep:tracing", "dep:tracing-chrome", "dep:tracing-subscriber"]
+log-compat = ["dep:tracing-log"]
