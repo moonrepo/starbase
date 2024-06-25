@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
 use async_trait::async_trait;
-use starbase::diagnostics::{Diagnostic, IntoDiagnostic};
+use miette::{Diagnostic, IntoDiagnostic};
 use starbase::style::{Style, Stylize};
-use starbase::tracing::{info, warn, TracingOptions};
+use starbase::tracing::TracingOptions;
 use starbase::{App, AppResult, AppSession, MainResult};
 use starbase_utils::{fs, glob};
 use std::env;
@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::sleep;
+use tracing::{info, warn};
 
 #[derive(Debug, Diagnostic, Error)]
 enum AppError {

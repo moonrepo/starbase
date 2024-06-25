@@ -14,7 +14,6 @@ starbase_styles = { version = "0.4.0", path = "../styles" }
 dirs = { workspace = true }
 miette = { workspace = true, optional = true }
 once_cell = { workspace = true }
-relative-path = { workspace = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
