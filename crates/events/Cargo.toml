@@ -16,4 +16,3 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 thiserror = { workspace = true }
-tracing = { workspace = true }

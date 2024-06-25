@@ -9,8 +9,8 @@ example_lib = { path = "../lib" }
 starbase = { path = "../../crates/app" }
 starbase_utils = { path = "../../crates/utils", features = ["glob", "fs-lock"] }
 log = "0.4.21"
-async-trait = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
+async-trait = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
