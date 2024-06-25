@@ -42,7 +42,7 @@ serde_yaml = { workspace = true, optional = true }
 
 # net
 reqwest = { workspace = true, optional = true }
-url = { version = "2.5.1", optional = true }
+url = { version = "2.5.2", optional = true }
 
 [features]
 default = []
