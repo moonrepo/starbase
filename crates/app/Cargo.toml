@@ -1,6 +1,6 @@
 [package]
 name = "starbase"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 license = "MIT"
 description = "Framework for building performant command line applications and developer tools."
@@ -10,7 +10,7 @@ repository = "https://github.com/moonrepo/starbase"
 all-features = true
 
 [dependencies]
-starbase_styles = { version = "0.4.0", path = "../styles", features = [
+starbase_styles = { version = "0.4.1", path = "../styles", features = [
 	"theme",
 ] }
 async-trait = { workspace = true }
