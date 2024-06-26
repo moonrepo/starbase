@@ -2,7 +2,7 @@ use crate::{shell_error::ShellError, shells::*};
 use std::path::Path;
 use std::str::FromStr;
 use std::{env, fmt};
-use tracing::debug;
+use tracing::{debug, instrument};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ShellType {
@@ -59,6 +59,7 @@ impl ShellType {
 
     /// Detect the current shell by inspecting the `$SHELL` environment variable,
     /// and the parent process hierarchy, and return an error if not detected.
+    #[instrument]
     pub fn try_detect() -> Result<Self, ShellError> {
         debug!("Attempting to detect the current shell");
 
@@ -277,8 +278,8 @@ mod windows {
 
                 if let Some(exe_path) = process.exe() {
                     trace!(
-                        pid = current_pid.as_u32(),
-                        next_pid = pid.as_u32(),
+                        pid = current_pid.map(|p| p.as_u32()),
+                        next_pid = pid.map(|p| p.as_u32()),
                         exe = ?exe_path,
                         "Inspecting process to find shell"
                     );
