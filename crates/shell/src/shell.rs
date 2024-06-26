@@ -11,6 +11,7 @@ pub enum ShellType {
     Ion,
     Nu,
     Pwsh,
+    Sh,
     Xonsh,
     Zsh,
 }
@@ -25,6 +26,7 @@ impl ShellType {
             Self::Ion,
             Self::Nu,
             Self::Pwsh,
+            Self::Sh,
             Self::Xonsh,
             Self::Zsh,
         ]
@@ -78,6 +80,7 @@ impl ShellType {
             Self::Ion => Box::new(Ion::new()),
             Self::Nu => Box::new(Nu::new()),
             Self::Pwsh => Box::new(Pwsh::new()),
+            Self::Sh => Box::new(Sh::new()),
             Self::Xonsh => Box::new(Xonsh::new()),
             Self::Zsh => Box::new(Zsh::new()),
         }
@@ -96,6 +99,7 @@ impl fmt::Display for ShellType {
                 Self::Ion => "ion",
                 Self::Nu => "nu",
                 Self::Pwsh => "pwsh",
+                Self::Sh => "sh",
                 Self::Xonsh => "xonsh",
                 Self::Zsh => "zsh",
             }
@@ -114,6 +118,7 @@ impl FromStr for ShellType {
             "ion" => Ok(ShellType::Ion),
             "nu" | "nushell" => Ok(ShellType::Nu),
             "pwsh" | "powershell" | "powershell_ise" => Ok(ShellType::Pwsh),
+            "sh" => Ok(ShellType::Sh),
             "xonsh" | "xon.sh" => Ok(ShellType::Xonsh),
             "zsh" => Ok(ShellType::Zsh),
             _ => Err(ShellError::UnknownShell {
