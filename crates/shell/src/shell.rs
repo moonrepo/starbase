@@ -58,6 +58,22 @@ impl ShellType {
     }
 
     /// Detect the current shell by inspecting the `$SHELL` environment variable,
+    /// and the parent process hierarchy. If no shell could be find, return a fallback.
+    pub fn detect_with_fallback() -> Self {
+        Self::detect().unwrap_or_else(|| {
+            let fallback = if env::consts::OS == "windows" {
+                ShellType::Pwsh
+            } else {
+                ShellType::Sh
+            };
+
+            debug!("Falling back to {} shell", fallback);
+
+            fallback
+        })
+    }
+
+    /// Detect the current shell by inspecting the `$SHELL` environment variable,
     /// and the parent process hierarchy, and return an error if not detected.
     #[instrument]
     pub fn try_detect() -> Result<Self, ShellError> {
@@ -70,14 +86,11 @@ impl ShellType {
                     "Detecting from SHELL environment variable"
                 );
 
-                return match parse_shell_from_path(&env_value) {
-                    Some(shell) => {
-                        debug!("Detected {} shell", shell);
+                if let Some(shell) = parse_shell_from_path(&env_value) {
+                    debug!("Detected {} shell", shell);
 
-                        Ok(shell)
-                    }
-                    None => Err(ShellError::UnknownShell { name: env_value }),
-                };
+                    return Ok(shell);
+                }
             }
         }
 
@@ -88,6 +101,8 @@ impl ShellType {
 
             return Ok(shell);
         }
+
+        debug!("Could not detect a shell!");
 
         Err(ShellError::CouldNotDetectShell)
     }
@@ -240,7 +255,7 @@ mod unix {
             }
 
             let Some(status) = detect_from_process_status(current_pid) else {
-                continue;
+                break;
             };
 
             if let Some(shell) = parse_shell_from_path(status.comm) {
@@ -289,7 +304,7 @@ mod windows {
                     }
                 }
             } else {
-                pid = None;
+                break;
             }
 
             depth += 1;
