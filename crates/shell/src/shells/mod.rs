@@ -4,6 +4,7 @@ mod fish;
 mod ion;
 mod nu;
 mod pwsh;
+mod sh;
 mod xonsh;
 mod zsh;
 
@@ -13,6 +14,7 @@ pub use fish::*;
 pub use ion::*;
 pub use nu::*;
 pub use pwsh::*;
+pub use sh::*;
 pub use xonsh::*;
 pub use zsh::*;
 

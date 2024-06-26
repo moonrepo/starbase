@@ -2,6 +2,7 @@ use crate::{shell_error::ShellError, shells::*};
 use std::path::Path;
 use std::str::FromStr;
 use std::{env, fmt};
+use tracing::{debug, instrument};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ShellType {
@@ -11,6 +12,7 @@ pub enum ShellType {
     Ion,
     Nu,
     Pwsh,
+    Sh,
     Xonsh,
     Zsh,
 }
@@ -25,6 +27,7 @@ impl ShellType {
             Self::Ion,
             Self::Nu,
             Self::Pwsh,
+            Self::Sh,
             Self::Xonsh,
             Self::Zsh,
         ]
@@ -56,13 +59,33 @@ impl ShellType {
 
     /// Detect the current shell by inspecting the `$SHELL` environment variable,
     /// and the parent process hierarchy, and return an error if not detected.
+    #[instrument]
     pub fn try_detect() -> Result<Self, ShellError> {
+        debug!("Attempting to detect the current shell");
+
         if let Ok(env_value) = env::var("SHELL") {
-            return parse_shell_from_path(&env_value)
-                .ok_or(ShellError::UnknownShell { name: env_value });
+            if !env_value.is_empty() {
+                debug!(
+                    env = &env_value,
+                    "Detecting from SHELL environment variable"
+                );
+
+                return match parse_shell_from_path(&env_value) {
+                    Some(shell) => {
+                        debug!("Detected {} shell", shell);
+
+                        Ok(shell)
+                    }
+                    None => Err(ShellError::UnknownShell { name: env_value }),
+                };
+            }
         }
 
+        debug!("Detecting from operating system");
+
         if let Some(shell) = detect_from_os() {
+            debug!("Detected {} shell", shell);
+
             return Ok(shell);
         }
 
@@ -78,6 +101,7 @@ impl ShellType {
             Self::Ion => Box::new(Ion::new()),
             Self::Nu => Box::new(Nu::new()),
             Self::Pwsh => Box::new(Pwsh::new()),
+            Self::Sh => Box::new(Sh::new()),
             Self::Xonsh => Box::new(Xonsh::new()),
             Self::Zsh => Box::new(Zsh::new()),
         }
@@ -96,6 +120,7 @@ impl fmt::Display for ShellType {
                 Self::Ion => "ion",
                 Self::Nu => "nu",
                 Self::Pwsh => "pwsh",
+                Self::Sh => "sh",
                 Self::Xonsh => "xonsh",
                 Self::Zsh => "zsh",
             }
@@ -114,6 +139,7 @@ impl FromStr for ShellType {
             "ion" => Ok(ShellType::Ion),
             "nu" | "nushell" => Ok(ShellType::Nu),
             "pwsh" | "powershell" | "powershell_ise" => Ok(ShellType::Pwsh),
+            "sh" => Ok(ShellType::Sh),
             "xonsh" | "xon.sh" => Ok(ShellType::Xonsh),
             "zsh" => Ok(ShellType::Zsh),
             _ => Err(ShellError::UnknownShell {
@@ -164,6 +190,7 @@ mod unix {
     use super::*;
     use std::io::BufRead;
     use std::process::{self, Command};
+    use tracing::trace;
 
     pub struct ProcessStatus {
         ppid: Option<u32>,
@@ -184,10 +211,21 @@ mod unix {
         let mut parts = line.split_whitespace();
 
         match (parts.next(), parts.next()) {
-            (Some(ppid), Some(comm)) => Some(ProcessStatus {
-                ppid: ppid.parse().ok(),
-                comm: comm.to_owned(),
-            }),
+            (Some(ppid), Some(comm)) => {
+                let status = ProcessStatus {
+                    ppid: ppid.parse().ok(),
+                    comm: comm.to_owned(),
+                };
+
+                trace!(
+                    pid = current_pid,
+                    next_pid = &status.ppid,
+                    comm = &status.comm,
+                    "Running ps command to find shell"
+                );
+
+                Some(status)
+            }
             _ => None,
         }
     }
@@ -221,6 +259,7 @@ mod unix {
 mod windows {
     use super::*;
     use sysinfo::{get_current_pid, System};
+    use tracing::trace;
 
     pub fn detect() -> Option<ShellType> {
         let mut system = System::new();
@@ -238,6 +277,13 @@ mod windows {
                 pid = process.parent();
 
                 if let Some(exe_path) = process.exe() {
+                    trace!(
+                        pid = current_pid.as_u32(),
+                        next_pid = pid.map(|p| p.as_u32()),
+                        exe = ?exe_path,
+                        "Inspecting process to find shell"
+                    );
+
                     if let Some(shell) = parse_shell_from_path(exe_path) {
                         return Some(shell);
                     }

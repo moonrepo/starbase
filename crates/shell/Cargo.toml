@@ -13,6 +13,7 @@ all-features = true
 miette = { workspace = true, optional = true }
 regex = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [target."cfg(windows)".dependencies]
 sysinfo = { version = "0.30.12", default-features = false }
