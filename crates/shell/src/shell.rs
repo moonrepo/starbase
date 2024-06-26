@@ -278,7 +278,7 @@ mod windows {
 
                 if let Some(exe_path) = process.exe() {
                     trace!(
-                        pid = current_pid.map(|p| p.as_u32()),
+                        pid = current_pid.as_u32(),
                         next_pid = pid.map(|p| p.as_u32()),
                         exe = ?exe_path,
                         "Inspecting process to find shell"
