@@ -1781,6 +1781,7 @@ dependencies = [
  "regex",
  "sysinfo",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
