@@ -60,7 +60,7 @@ impl ShellType {
     /// Detect the current shell by inspecting the `$SHELL` environment variable,
     /// and the parent process hierarchy, and return an error if not detected.
     pub fn try_detect() -> Result<Self, ShellError> {
-        debug!("Attempt to detect the current shell");
+        debug!("Attempting to detect the current shell");
 
         if let Ok(env_value) = env::var("SHELL") {
             if !env_value.is_empty() {

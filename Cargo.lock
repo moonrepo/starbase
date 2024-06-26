@@ -440,6 +440,7 @@ dependencies = [
  "log",
  "miette 7.2.0",
  "starbase",
+ "starbase_shell",
  "starbase_utils",
  "thiserror",
  "tokio",

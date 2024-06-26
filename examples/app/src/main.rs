@@ -5,6 +5,7 @@ use miette::{Diagnostic, IntoDiagnostic};
 use starbase::style::{Style, Stylize};
 use starbase::tracing::TracingOptions;
 use starbase::{App, AppResult, AppSession, MainResult};
+use starbase_shell::ShellType;
 use starbase_utils::{fs, glob};
 use std::env;
 use std::path::PathBuf;
@@ -41,6 +42,8 @@ impl AppSession for TestSession {
         })
         .await
         .into_diagnostic()?;
+
+        dbg!(ShellType::detect());
 
         Ok(())
     }
