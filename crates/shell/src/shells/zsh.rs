@@ -1,5 +1,6 @@
 use super::Shell;
 use crate::helpers::is_absolute_dir;
+use crate::hooks::OnCdHook;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -32,6 +33,29 @@ impl Shell for Zsh {
         format!(r#"export PATH="{}:$PATH";"#, paths.join(":"))
     }
 
+    fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {
+        Ok(hook.render_template(
+            self,
+            r#"
+_{prefix}_hook() {
+  trap -- '' SIGINT
+{export_env}
+{export_path}
+  trap - SIGINT
+}
+typeset -ag precmd_functions
+if (( ! ${precmd_functions[(I)_{prefix}_hook]} )); then
+  precmd_functions=(_{prefix}_hook $precmd_functions)
+fi
+typeset -ag chpwd_functions
+if (( ! ${chpwd_functions[(I)_{prefix}_hook]} )); then
+  chpwd_functions=(_{prefix}_hook $chpwd_functions)
+fi
+"#,
+            "  ",
+        ))
+    }
+
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         self.dir.as_deref().unwrap_or(home_dir).join(".zshrc")
     }
@@ -60,6 +84,7 @@ impl fmt::Display for Zsh {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -75,5 +100,24 @@ mod tests {
             Zsh::default().format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";"#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let mut hook = OnCdHook {
+            prefix: "starbase".into(),
+            ..OnCdHook::default()
+        };
+
+        assert_snapshot!(Zsh::default().format_on_cd_hook(hook.clone()).unwrap());
+
+        hook.paths
+            .extend(["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]);
+        hook.env.extend([
+            ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+            ("PROTO_ROOT".into(), None),
+        ]);
+
+        assert_snapshot!(Zsh::default().format_on_cd_hook(hook).unwrap());
     }
 }
