@@ -18,6 +18,8 @@ pub use sh::*;
 pub use xonsh::*;
 pub use zsh::*;
 
+use crate::hooks::OnCdHook;
+use crate::shell_error::ShellError;
 use std::ffi::OsString;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -39,6 +41,14 @@ impl Default for ShellCommand {
 }
 
 pub trait Shell: Display {
+    /// Format an environment variable by either setting or unsetting the value.
+    fn format_env(&self, key: &str, value: Option<&str>) -> String {
+        match value {
+            Some(value) => self.format_env_set(key, value),
+            None => self.format_env_unset(key),
+        }
+    }
+
     /// Format an environment variable that will be set to the entire shell,
     /// and be written to a profile file.
     fn format_env_set(&self, key: &str, value: &str) -> String;
@@ -50,6 +60,14 @@ pub trait Shell: Display {
     /// Format the provided paths to prepend the `PATH` environment variable,
     /// and be written to a profile file.
     fn format_path_set(&self, paths: &[String]) -> String;
+
+    /// Format a hook for "on change directory" functionality. Can be used to set
+    /// `PATH` and environment variables when traversing the file system.
+    fn format_on_cd_hook(&self, _hook: OnCdHook) -> Result<String, ShellError> {
+        Err(ShellError::NoOnCdSupport {
+            name: self.to_string(),
+        })
+    }
 
     /// Return the path in which commands, aliases, and other settings will be configured.
     fn get_config_path(&self, home_dir: &Path) -> PathBuf;

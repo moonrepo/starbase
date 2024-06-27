@@ -1,7 +1,6 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::get_env_var_regex;
+use crate::helpers::{get_env_var_regex, NEWLINE};
 use std::collections::HashSet;
-use std::env::consts;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -52,20 +51,14 @@ impl Shell for Pwsh {
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
-        let newline = if consts::OS == "windows" {
-            "\r\n"
-        } else {
-            "\n"
-        };
-
-        let mut value = format!("$env:PATH = @({newline}");
+        let mut value = format!("$env:PATH = @({}", NEWLINE);
 
         for path in paths {
-            value.push_str(&format!("  ({}),{newline}", join_path(path)))
+            value.push_str(&format!("  ({}),{}", join_path(path), NEWLINE))
         }
 
         value.push_str("  $env:PATH");
-        value.push_str(newline);
+        value.push_str(NEWLINE);
         value.push_str(") -join [IO.PATH]::PathSeparator;");
         value
     }

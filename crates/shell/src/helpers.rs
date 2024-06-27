@@ -2,6 +2,12 @@ use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
+pub const NEWLINE: &'static str = "\n";
+
+#[cfg(windows)]
+pub const NEWLINE: &'static str = "\r\n";
+
 pub fn is_absolute_dir(value: OsString) -> Option<PathBuf> {
     let dir = PathBuf::from(&value);
 

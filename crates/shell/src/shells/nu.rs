@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex};
+use crate::helpers::{get_config_dir, get_env_var_regex, NEWLINE};
 use std::collections::HashSet;
 use std::env::consts;
 use std::fmt;
@@ -37,15 +37,15 @@ impl Shell for Nu {
 
     // https://www.nushell.sh/book/configuration.html#path-configuration
     fn format_path_set(&self, paths: &[String]) -> String {
-        let (path_name, newline) = if consts::OS == "windows" {
-            ("Path", "\r\n")
+        let path_name = if consts::OS == "windows" {
+            "Path"
         } else {
-            ("PATH", "\n")
+            "PATH"
         };
 
         let env_regex = get_env_var_regex();
         let path_var = format!("$env.{path_name}");
-        let mut value = format!("{path_var} = {path_var} | split row (char esep){newline}");
+        let mut value = format!("{path_var} = {path_var} | split row (char esep){}", NEWLINE);
 
         for path in paths {
             value.push_str("  | prepend ");
@@ -62,7 +62,7 @@ impl Shell for Nu {
                 value.push_str(path);
             }
 
-            value.push_str(newline);
+            value.push_str(NEWLINE);
         }
 
         value.push_str("  | uniq");
