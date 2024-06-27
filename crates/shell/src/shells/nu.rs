@@ -1,5 +1,6 @@
 use super::Shell;
 use crate::helpers::{get_config_dir, get_env_var_regex, NEWLINE};
+use crate::hooks::OnCdHook;
 use std::collections::HashSet;
 use std::env::consts;
 use std::fmt;
@@ -69,6 +70,23 @@ impl Shell for Nu {
         value
     }
 
+    fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {
+        Ok(hook.render_template(
+            self,
+            r#"
+# {prefix} hook
+$env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
+    let list = ($config | get -i hooks.env_change.PWD) | default []
+
+    $list | append { |before, after|
+{export_env}
+{export_path}
+    }
+})"#,
+            "        ",
+        ))
+    }
+
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         get_config_dir(home_dir).join("nushell").join("config.nu")
     }
@@ -99,6 +117,7 @@ impl fmt::Display for Nu {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -126,5 +145,22 @@ mod tests {
   | prepend /some/abs/path/bin
   | uniq"#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let mut hook = OnCdHook {
+            prefix: "starbase".into(),
+            ..OnCdHook::default()
+        };
+
+        hook.paths
+            .extend(["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]);
+        hook.env.extend([
+            ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+            ("PROTO_ROOT".into(), None),
+        ]);
+
+        assert_snapshot!(Nu.format_on_cd_hook(hook).unwrap());
     }
 }

@@ -1,0 +1,17 @@
+---
+source: crates/shell/src/shells/nu.rs
+expression: Nu.format_on_cd_hook(hook).unwrap()
+---
+# starbase hook
+$env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
+    let list = ($config | get -i hooks.env_change.PWD) | default []
+
+    $list | append { |before, after|
+        $env.PROTO_HOME = '$HOME/.proto'
+        hide-env PROTO_ROOT
+        $env.PATH = $env.PATH | split row (char esep)
+          | prepend ($env.PROTO_HOME | path join shims)
+          | prepend ($env.PROTO_HOME | path join bin)
+          | uniq
+    }
+})
