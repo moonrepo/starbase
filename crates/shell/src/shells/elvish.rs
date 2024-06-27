@@ -114,8 +114,6 @@ mod tests {
             ..OnCdHook::default()
         };
 
-        assert_snapshot!(Elvish.format_on_cd_hook(hook.clone()).unwrap());
-
         hook.paths
             .extend(["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]);
         hook.env.extend([

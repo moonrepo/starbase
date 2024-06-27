@@ -1,5 +1,6 @@
 use super::{Shell, ShellCommand};
 use crate::helpers::{get_env_var_regex, NEWLINE};
+use crate::hooks::OnCdHook;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -61,6 +62,29 @@ impl Shell for Pwsh {
         value.push_str(NEWLINE);
         value.push_str(") -join [IO.PATH]::PathSeparator;");
         value
+    }
+
+    fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {
+        Ok(hook.render_template(self, r#"
+using namespace System;
+using namespace System.Management.Automation;
+
+$hook = [EventHandler[LocationChangedEventArgs]] {
+  param([object] $source, [LocationChangedEventArgs] $eventArgs)
+  end {
+{export_env}
+{export_path}
+  }
+};
+
+$currentAction = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction;
+
+if ($currentAction) {
+  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [Delegate]::Combine($currentAction, $hook);
+} else {
+  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $hook;
+};
+"#, "    "))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -150,6 +174,7 @@ impl fmt::Display for Pwsh {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -170,5 +195,22 @@ mod tests {
   $env:PATH
 ) -join [IO.PATH]::PathSeparator;"#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let mut hook = OnCdHook {
+            prefix: "starbase".into(),
+            ..OnCdHook::default()
+        };
+
+        hook.paths
+            .extend(["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]);
+        hook.env.extend([
+            ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+            ("PROTO_ROOT".into(), None),
+        ]);
+
+        assert_snapshot!(Pwsh.format_on_cd_hook(hook).unwrap());
     }
 }

@@ -1,11 +1,12 @@
 ---
 source: crates/shell/src/shells/zsh.rs
-expression: "Zsh::default().format_on_cd_hook(hook.clone()).unwrap()"
+expression: "Zsh::default().format_on_cd_hook(hook).unwrap()"
 ---
 _starbase_hook() {
   trap -- '' SIGINT
-  
-  
+  export PROTO_HOME="$HOME/.proto";
+  unset PROTO_ROOT;
+  export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";
   trap - SIGINT
 }
 typeset -ag precmd_functions

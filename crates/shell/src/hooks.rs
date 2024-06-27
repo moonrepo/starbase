@@ -11,6 +11,10 @@ pub struct OnCdHook {
 
 impl OnCdHook {
     pub fn render_template<S: Shell>(&self, shell: &S, template: &str, indent: &str) -> String {
+        if self.env.is_empty() && self.paths.is_empty() {
+            return "".into();
+        }
+
         let env = if self.env.is_empty() {
             indent.into()
         } else {
