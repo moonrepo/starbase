@@ -27,12 +27,12 @@ fn join_path(value: impl AsRef<str>) -> String {
 
 impl Shell for Nu {
     // https://www.nushell.sh/book/configuration.html#environment
-    fn format_env_export(&self, key: &str, value: &str) -> String {
+    fn format_env_set(&self, key: &str, value: &str) -> String {
         format!(r#"$env.{key} = '{value}'"#)
     }
 
     // https://www.nushell.sh/book/configuration.html#path-configuration
-    fn format_path_export(&self, paths: &[String]) -> String {
+    fn format_path_set(&self, paths: &[String]) -> String {
         let (path_name, newline) = if consts::OS == "windows" {
             ("Path", "\r\n")
         } else {
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Nu.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            Nu.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$env.PROTO_HOME = '$HOME/.proto'"#
         );
     }
@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn formats_path() {
         assert_eq!(
-            Nu.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$env.PATH = $env.PATH | split row (char esep)
   | prepend ($env.PROTO_HOME | path join shims)
   | prepend ($env.PROTO_HOME | path join bin)
@@ -116,7 +116,7 @@ mod tests {
         );
 
         assert_eq!(
-            Nu.format_path_export(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
+            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
             r#"$env.PATH = $env.PATH | split row (char esep)
   | prepend ($env.HOME | path join with sub dir)
   | prepend /some/abs/path/bin

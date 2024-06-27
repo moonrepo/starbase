@@ -39,13 +39,13 @@ impl Default for ShellCommand {
 }
 
 pub trait Shell: Display {
-    /// Format an environment variable that will be exported to the entire shell,
+    /// Format an environment variable that will be set to the entire shell,
     /// and be written to a profile file.
-    fn format_env_export(&self, key: &str, value: &str) -> String;
+    fn format_env_set(&self, key: &str, value: &str) -> String;
 
     /// Format the provided paths to prepend the `PATH` environment variable,
     /// and be written to a profile file.
-    fn format_path_export(&self, paths: &[String]) -> String;
+    fn format_path_set(&self, paths: &[String]) -> String;
 
     /// Return the path in which commands, aliases, and other settings will be configured.
     fn get_config_path(&self, home_dir: &Path) -> PathBuf;

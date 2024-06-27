@@ -22,11 +22,11 @@ fn format(value: impl AsRef<str>) -> String {
 
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
-    fn format_env_export(&self, key: &str, value: &str) -> String {
+    fn format_env_set(&self, key: &str, value: &str) -> String {
         format!("set-env {key} {}", format(value))
     }
 
-    fn format_path_export(&self, paths: &[String]) -> String {
+    fn format_path_set(&self, paths: &[String]) -> String {
         format!("set paths = [{} $@paths]", format(paths.join(" ")))
     }
 
@@ -74,16 +74,16 @@ mod tests {
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Elvish.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            Elvish.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"set-env PROTO_HOME {~}/.proto"#
         );
-        assert_eq!(Elvish.format_env_export("FOO", "bar"), r#"set-env FOO bar"#);
+        assert_eq!(Elvish.format_env_set("FOO", "bar"), r#"set-env FOO bar"#);
     }
 
     #[test]
     fn formats_path() {
         assert_eq!(
-            Elvish.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Elvish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths]"#
         );
     }

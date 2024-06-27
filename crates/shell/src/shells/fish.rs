@@ -16,11 +16,11 @@ impl Fish {
 
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
-    fn format_env_export(&self, key: &str, value: &str) -> String {
+    fn format_env_set(&self, key: &str, value: &str) -> String {
         format!(r#"set -gx {key} "{value}""#)
     }
 
-    fn format_path_export(&self, paths: &[String]) -> String {
+    fn format_path_set(&self, paths: &[String]) -> String {
         format!(r#"set -gx PATH "{}" $PATH"#, paths.join(":"))
     }
 
@@ -55,7 +55,7 @@ mod tests {
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Fish.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            Fish.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"set -gx PROTO_HOME "$HOME/.proto""#
         );
     }
@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn formats_path() {
         assert_eq!(
-            Fish.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Fish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH"#
         );
     }

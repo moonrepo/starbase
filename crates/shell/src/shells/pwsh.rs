@@ -39,7 +39,7 @@ fn join_path(value: impl AsRef<str>) -> String {
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.4
 impl Shell for Pwsh {
-    fn format_env_export(&self, key: &str, value: &str) -> String {
+    fn format_env_set(&self, key: &str, value: &str) -> String {
         if value.contains('/') {
             format!("$env:{key} = {}", join_path(value))
         } else {
@@ -47,7 +47,7 @@ impl Shell for Pwsh {
         }
     }
 
-    fn format_path_export(&self, paths: &[String]) -> String {
+    fn format_path_set(&self, paths: &[String]) -> String {
         let newline = if consts::OS == "windows" {
             "\r\n"
         } else {
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Pwsh.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            Pwsh.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$env:PROTO_HOME = Join-Path $HOME ".proto""#
         );
     }
@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn formats_path() {
         assert_eq!(
-            Pwsh.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
+            Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   (Join-Path $env:PROTO_HOME "shims"),
