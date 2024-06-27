@@ -79,7 +79,7 @@ impl Shell for Pwsh {
                 .join("Microsoft.PowerShell_profile.ps1")
         }
 
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         {
             use crate::helpers::get_config_dir;
 
@@ -122,7 +122,7 @@ impl Shell for Pwsh {
             ]);
         }
 
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         {
             use crate::helpers::get_config_dir;
 

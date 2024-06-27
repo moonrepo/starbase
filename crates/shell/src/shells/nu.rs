@@ -108,7 +108,7 @@ mod tests {
         );
     }
 
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     #[test]
     fn formats_path() {
         assert_eq!(
