@@ -1,0 +1,8 @@
+---
+source: crates/shell/src/shells/fish.rs
+expression: Fish.format_on_cd_hook(hook.clone()).unwrap()
+---
+function __starbase_hook --on-variable PWD;
+    
+    
+end;

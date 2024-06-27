@@ -1,5 +1,6 @@
 use super::Shell;
 use crate::helpers::get_config_dir;
+use crate::hooks::OnCdHook;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -26,6 +27,18 @@ impl Shell for Fish {
 
     fn format_path_set(&self, paths: &[String]) -> String {
         format!(r#"set -gx PATH "{}" $PATH;"#, paths.join(":"))
+    }
+
+    fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {
+        Ok(hook.render_template(
+            self,
+            r#"
+function __{prefix}_hook --on-variable PWD;
+{export_env}
+{export_path}
+end;"#,
+            "    ",
+        ))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -55,6 +68,7 @@ impl fmt::Display for Fish {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -70,5 +84,24 @@ mod tests {
             Fish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH;"#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let mut hook = OnCdHook {
+            prefix: "starbase".into(),
+            ..OnCdHook::default()
+        };
+
+        assert_snapshot!(Fish.format_on_cd_hook(hook.clone()).unwrap());
+
+        hook.paths
+            .extend(["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]);
+        hook.env.extend([
+            ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+            ("PROTO_ROOT".into(), None),
+        ]);
+
+        assert_snapshot!(Fish.format_on_cd_hook(hook).unwrap());
     }
 }
