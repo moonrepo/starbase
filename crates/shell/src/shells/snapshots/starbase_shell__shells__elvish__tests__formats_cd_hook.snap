@@ -1,0 +1,9 @@
+---
+source: crates/shell/src/shells/elvish.rs
+expression: Elvish.format_on_cd_hook(hook.clone()).unwrap()
+---
+# starbase hook
+set @edit:before-readline = $@edit:before-readline {
+  
+  
+}

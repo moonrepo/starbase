@@ -1,5 +1,6 @@
 use super::Shell;
 use crate::helpers::{get_config_dir, get_env_var_regex};
+use crate::hooks::OnCdHook;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -32,6 +33,19 @@ impl Shell for Elvish {
 
     fn format_path_set(&self, paths: &[String]) -> String {
         format!("set paths = [{} $@paths]", format(paths.join(" ")))
+    }
+
+    fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {
+        Ok(hook.render_template(
+            self,
+            r#"
+# {prefix} hook
+set @edit:before-readline = $@edit:before-readline {
+{export_env}
+{export_path}
+}"#,
+            "  ",
+        ))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -74,6 +88,7 @@ impl fmt::Display for Elvish {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -90,5 +105,24 @@ mod tests {
             Elvish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths]"#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let mut hook = OnCdHook {
+            prefix: "starbase".into(),
+            ..OnCdHook::default()
+        };
+
+        assert_snapshot!(Elvish.format_on_cd_hook(hook.clone()).unwrap());
+
+        hook.paths
+            .extend(["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]);
+        hook.env.extend([
+            ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+            ("PROTO_ROOT".into(), None),
+        ]);
+
+        assert_snapshot!(Elvish.format_on_cd_hook(hook).unwrap());
     }
 }

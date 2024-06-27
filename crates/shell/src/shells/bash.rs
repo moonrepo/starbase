@@ -102,8 +102,10 @@ mod tests {
 
     #[test]
     fn formats_cd_hook() {
-        let mut hook = OnCdHook::default();
-        hook.prefix = "starbase".into();
+        let mut hook = OnCdHook {
+            prefix: "starbase".into(),
+            ..OnCdHook::default()
+        };
 
         assert_snapshot!(Bash.format_on_cd_hook(hook.clone()).unwrap());
 
