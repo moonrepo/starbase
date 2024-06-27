@@ -21,6 +21,10 @@ impl Shell for Xonsh {
         format!(r#"${key} = "{value}""#)
     }
 
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"del ${key}"#)
+    }
+
     fn format_path_set(&self, paths: &[String]) -> String {
         format!(r#"$PATH = "{}:$PATH""#, paths.join(":"))
     }

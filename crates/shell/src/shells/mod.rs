@@ -43,6 +43,10 @@ pub trait Shell: Display {
     /// and be written to a profile file.
     fn format_env_set(&self, key: &str, value: &str) -> String;
 
+    /// Format an environment variable that will be unset from the entire shell,
+    /// and be written to a profile file.
+    fn format_env_unset(&self, key: &str) -> String;
+
     /// Format the provided paths to prepend the `PATH` environment variable,
     /// and be written to a profile file.
     fn format_path_set(&self, paths: &[String]) -> String;

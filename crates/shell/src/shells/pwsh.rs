@@ -41,10 +41,14 @@ fn join_path(value: impl AsRef<str>) -> String {
 impl Shell for Pwsh {
     fn format_env_set(&self, key: &str, value: &str) -> String {
         if value.contains('/') {
-            format!("$env:{key} = {}", join_path(value))
+            format!("$env:{key} = {};", join_path(value))
         } else {
-            format!(r#"$env:{key} = "{}""#, format(value))
+            format!(r#"$env:{key} = "{}";"#, format(value))
         }
+    }
+
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"Remove-Item -LiteralPath "env:{key}";"#)
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -62,7 +66,7 @@ impl Shell for Pwsh {
 
         value.push_str("  $env:PATH");
         value.push_str(newline);
-        value.push_str(") -join [IO.PATH]::PathSeparator");
+        value.push_str(") -join [IO.PATH]::PathSeparator;");
         value
     }
 
@@ -158,7 +162,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Pwsh.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"$env:PROTO_HOME = Join-Path $HOME ".proto""#
+            r#"$env:PROTO_HOME = Join-Path $HOME ".proto";"#
         );
     }
 
@@ -171,7 +175,7 @@ mod tests {
   (Join-Path $env:PROTO_HOME "shims"),
   (Join-Path $env:PROTO_HOME "bin"),
   $env:PATH
-) -join [IO.PATH]::PathSeparator"#
+) -join [IO.PATH]::PathSeparator;"#
         );
     }
 }

@@ -15,11 +15,15 @@ impl Bash {
 // https://www.baeldung.com/linux/bashrc-vs-bash-profile-vs-profile
 impl Shell for Bash {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"export {key}="{value}""#)
+        format!(r#"export {key}="{value}";"#)
+    }
+
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"unset {key};"#)
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
-        format!(r#"export PATH="{}:$PATH""#, paths.join(":"))
+        format!(r#"export PATH="{}:$PATH";"#, paths.join(":"))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -53,7 +57,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Bash.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"export PROTO_HOME="$HOME/.proto""#
+            r#"export PROTO_HOME="$HOME/.proto";"#
         );
     }
 
@@ -61,7 +65,7 @@ mod tests {
     fn formats_path() {
         assert_eq!(
             Bash.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
+            r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";"#
         );
     }
 }

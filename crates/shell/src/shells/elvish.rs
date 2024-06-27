@@ -26,6 +26,10 @@ impl Shell for Elvish {
         format!("set-env {key} {}", format(value))
     }
 
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"unset-env {key};"#)
+    }
+
     fn format_path_set(&self, paths: &[String]) -> String {
         format!("set paths = [{} $@paths]", format(paths.join(" ")))
     }

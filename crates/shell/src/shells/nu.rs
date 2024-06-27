@@ -31,6 +31,10 @@ impl Shell for Nu {
         format!(r#"$env.{key} = '{value}'"#)
     }
 
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"hide-env {key}"#)
+    }
+
     // https://www.nushell.sh/book/configuration.html#path-configuration
     fn format_path_set(&self, paths: &[String]) -> String {
         let (path_name, newline) = if consts::OS == "windows" {
