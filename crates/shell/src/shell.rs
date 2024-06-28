@@ -47,7 +47,7 @@ impl ShellType {
             ]
         }
 
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         Self::variants()
     }
 
@@ -194,13 +194,13 @@ fn detect_from_os() -> Option<ShellType> {
         windows::detect()
     }
 
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     {
         unix::detect()
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
 mod unix {
     use super::*;
     use std::io::BufRead;

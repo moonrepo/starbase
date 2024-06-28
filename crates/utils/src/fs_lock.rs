@@ -33,7 +33,7 @@ impl DirLock {
             }
         }
 
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         self.file.unlock().map_err(handle_error)?;
 
         fs::remove_file(&self.lock)

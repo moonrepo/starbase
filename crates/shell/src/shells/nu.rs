@@ -1,5 +1,6 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex};
+use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines};
+use crate::hooks::Hook;
 use std::collections::HashSet;
 use std::env::consts;
 use std::fmt;
@@ -27,21 +28,25 @@ fn join_path(value: impl AsRef<str>) -> String {
 
 impl Shell for Nu {
     // https://www.nushell.sh/book/configuration.html#environment
-    fn format_env_export(&self, key: &str, value: &str) -> String {
+    fn format_env_set(&self, key: &str, value: &str) -> String {
         format!(r#"$env.{key} = '{value}'"#)
     }
 
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"hide-env {key}"#)
+    }
+
     // https://www.nushell.sh/book/configuration.html#path-configuration
-    fn format_path_export(&self, paths: &[String]) -> String {
-        let (path_name, newline) = if consts::OS == "windows" {
-            ("Path", "\r\n")
+    fn format_path_set(&self, paths: &[String]) -> String {
+        let path_name = if consts::OS == "windows" {
+            "Path"
         } else {
-            ("PATH", "\n")
+            "PATH"
         };
 
         let env_regex = get_env_var_regex();
         let path_var = format!("$env.{path_name}");
-        let mut value = format!("{path_var} = {path_var} | split row (char esep){newline}");
+        let mut value = format!("{path_var} = {path_var} | split row (char esep)\n");
 
         for path in paths {
             value.push_str("  | prepend ");
@@ -58,11 +63,29 @@ impl Shell for Nu {
                 value.push_str(path);
             }
 
-            value.push_str(newline);
+            value.push('\n');
         }
 
         value.push_str("  | uniq");
-        value
+
+        normalize_newlines(value)
+    }
+
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        Ok(hook.render_template(
+            self,
+            r#"
+# {prefix} hook
+$env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
+    let list = ($config | get -i hooks.env_change.PWD) | default []
+
+    $list | append { |before, after|
+{export_env}
+{export_path}
+    }
+})"#,
+            "        ",
+        ))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -95,20 +118,21 @@ impl fmt::Display for Nu {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Nu.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            Nu.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$env.PROTO_HOME = '$HOME/.proto'"#
         );
     }
 
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     #[test]
     fn formats_path() {
         assert_eq!(
-            Nu.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$env.PATH = $env.PATH | split row (char esep)
   | prepend ($env.PROTO_HOME | path join shims)
   | prepend ($env.PROTO_HOME | path join bin)
@@ -116,11 +140,48 @@ mod tests {
         );
 
         assert_eq!(
-            Nu.format_path_export(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
+            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
             r#"$env.PATH = $env.PATH | split row (char esep)
   | prepend ($env.HOME | path join with sub dir)
   | prepend /some/abs/path/bin
   | uniq"#
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env.Path = $env.Path | split row (char esep)
+  | prepend ($env.PROTO_HOME | path join shims)
+  | prepend ($env.PROTO_HOME | path join bin)
+  | uniq"#
+        );
+
+        assert_eq!(
+            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env.Path = $env.Path | split row (char esep)
+  | prepend ($env.HOME | path join with sub dir)
+  | prepend /some/abs/path/bin
+  | uniq"#
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn formats_cd_hook() {
+        let hook = Hook::OnChangeDir {
+            env: vec![
+                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+                ("PROTO_ROOT".into(), None),
+            ],
+            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            prefix: "starbase".into(),
+        };
+
+        assert_snapshot!(Nu.format_hook(hook).unwrap());
     }
 }

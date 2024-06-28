@@ -1,5 +1,6 @@
 use super::Shell;
 use crate::helpers::get_config_dir;
+use crate::hooks::Hook;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -16,12 +17,28 @@ impl Fish {
 
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
-    fn format_env_export(&self, key: &str, value: &str) -> String {
-        format!(r#"set -gx {key} "{value}""#)
+    fn format_env_set(&self, key: &str, value: &str) -> String {
+        format!(r#"set -gx {key} "{value}";"#)
     }
 
-    fn format_path_export(&self, paths: &[String]) -> String {
-        format!(r#"set -gx PATH "{}" $PATH"#, paths.join(":"))
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"set -ge {key};"#)
+    }
+
+    fn format_path_set(&self, paths: &[String]) -> String {
+        format!(r#"set -gx PATH "{}" $PATH;"#, paths.join(":"))
+    }
+
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        Ok(hook.render_template(
+            self,
+            r#"
+function __{prefix}_hook --on-variable PWD;
+{export_env}
+{export_path}
+end;"#,
+            "    ",
+        ))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -51,20 +68,35 @@ impl fmt::Display for Fish {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Fish.format_env_export("PROTO_HOME", "$HOME/.proto"),
-            r#"set -gx PROTO_HOME "$HOME/.proto""#
+            Fish.format_env_set("PROTO_HOME", "$HOME/.proto"),
+            r#"set -gx PROTO_HOME "$HOME/.proto";"#
         );
     }
 
     #[test]
     fn formats_path() {
         assert_eq!(
-            Fish.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH"#
+            Fish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH;"#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let hook = Hook::OnChangeDir {
+            env: vec![
+                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+                ("PROTO_ROOT".into(), None),
+            ],
+            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            prefix: "starbase".into(),
+        };
+
+        assert_snapshot!(Fish.format_hook(hook).unwrap());
     }
 }

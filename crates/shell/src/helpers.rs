@@ -2,6 +2,12 @@ use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
+pub const NEWLINE: &str = "\n";
+
+#[cfg(windows)]
+pub const NEWLINE: &str = "\r\n";
+
 pub fn is_absolute_dir(value: OsString) -> Option<PathBuf> {
     let dir = PathBuf::from(&value);
 
@@ -20,4 +26,18 @@ pub fn get_config_dir(home_dir: &Path) -> PathBuf {
 
 pub fn get_env_var_regex() -> regex::Regex {
     regex::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap()
+}
+
+pub fn normalize_newlines(content: impl AsRef<str>) -> String {
+    let content = content.as_ref();
+
+    #[cfg(windows)]
+    {
+        content.replace("\r", "").replace("\n", NEWLINE)
+    }
+
+    #[cfg(unix)]
+    {
+        content.to_owned()
+    }
 }

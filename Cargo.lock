@@ -1780,6 +1780,7 @@ version = "0.2.5"
 dependencies = [
  "miette 7.2.0",
  "regex",
+ "starbase_sandbox",
  "sysinfo",
  "thiserror",
  "tracing",

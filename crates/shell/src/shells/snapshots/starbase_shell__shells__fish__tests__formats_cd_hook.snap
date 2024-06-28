@@ -1,0 +1,9 @@
+---
+source: crates/shell/src/shells/fish.rs
+expression: Fish.format_on_cd_hook(hook).unwrap()
+---
+function __starbase_hook --on-variable PWD;
+    set -gx PROTO_HOME "$HOME/.proto";
+    set -ge PROTO_ROOT;
+    set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH;
+end;

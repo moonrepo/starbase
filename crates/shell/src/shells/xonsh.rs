@@ -17,11 +17,15 @@ impl Xonsh {
 // https://xon.sh/bash_to_xsh.html
 // https://xon.sh/xonshrc.html
 impl Shell for Xonsh {
-    fn format_env_export(&self, key: &str, value: &str) -> String {
+    fn format_env_set(&self, key: &str, value: &str) -> String {
         format!(r#"${key} = "{value}""#)
     }
 
-    fn format_path_export(&self, paths: &[String]) -> String {
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"del ${key}"#)
+    }
+
+    fn format_path_set(&self, paths: &[String]) -> String {
         format!(r#"$PATH = "{}:$PATH""#, paths.join(":"))
     }
 
@@ -57,7 +61,7 @@ mod tests {
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Xonsh.format_env_export("PROTO_HOME", "$HOME/.proto"),
+            Xonsh.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$PROTO_HOME = "$HOME/.proto""#
         );
     }
@@ -65,7 +69,7 @@ mod tests {
     #[test]
     fn formats_path() {
         assert_eq!(
-            Xonsh.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Xonsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
         );
     }

@@ -1,7 +1,7 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::get_env_var_regex;
+use crate::helpers::{get_env_var_regex, normalize_newlines};
+use crate::hooks::Hook;
 use std::collections::HashSet;
-use std::env::consts;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -39,31 +39,52 @@ fn join_path(value: impl AsRef<str>) -> String {
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.4
 impl Shell for Pwsh {
-    fn format_env_export(&self, key: &str, value: &str) -> String {
+    fn format_env_set(&self, key: &str, value: &str) -> String {
         if value.contains('/') {
-            format!("$env:{key} = {}", join_path(value))
+            format!("$env:{key} = {};", join_path(value))
         } else {
-            format!(r#"$env:{key} = "{}""#, format(value))
+            format!(r#"$env:{key} = "{}";"#, format(value))
         }
     }
 
-    fn format_path_export(&self, paths: &[String]) -> String {
-        let newline = if consts::OS == "windows" {
-            "\r\n"
-        } else {
-            "\n"
-        };
+    fn format_env_unset(&self, key: &str) -> String {
+        format!(r#"Remove-Item -LiteralPath "env:{key}";"#)
+    }
 
-        let mut value = format!("$env:PATH = @({newline}");
+    fn format_path_set(&self, paths: &[String]) -> String {
+        let mut value = "$env:PATH = @(\n".to_string();
 
         for path in paths {
-            value.push_str(&format!("  ({}),{newline}", join_path(path)))
+            value.push_str(&format!("  ({}),\n", join_path(path)))
         }
 
-        value.push_str("  $env:PATH");
-        value.push_str(newline);
-        value.push_str(") -join [IO.PATH]::PathSeparator");
-        value
+        value.push_str("  $env:PATH\n");
+        value.push_str(") -join [IO.PATH]::PathSeparator;");
+
+        normalize_newlines(value)
+    }
+
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        Ok(hook.render_template(self, r#"
+using namespace System;
+using namespace System.Management.Automation;
+
+$hook = [EventHandler[LocationChangedEventArgs]] {
+  param([object] $source, [LocationChangedEventArgs] $eventArgs)
+  end {
+{export_env}
+{export_path}
+  }
+};
+
+$currentAction = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction;
+
+if ($currentAction) {
+  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [Delegate]::Combine($currentAction, $hook);
+} else {
+  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $hook;
+};
+"#, "    "))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -75,7 +96,7 @@ impl Shell for Pwsh {
                 .join("Microsoft.PowerShell_profile.ps1")
         }
 
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         {
             use crate::helpers::get_config_dir;
 
@@ -118,7 +139,7 @@ impl Shell for Pwsh {
             ]);
         }
 
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         {
             use crate::helpers::get_config_dir;
 
@@ -153,25 +174,40 @@ impl fmt::Display for Pwsh {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Pwsh.format_env_export("PROTO_HOME", "$HOME/.proto"),
-            r#"$env:PROTO_HOME = Join-Path $HOME ".proto""#
+            Pwsh.format_env_set("PROTO_HOME", "$HOME/.proto"),
+            r#"$env:PROTO_HOME = Join-Path $HOME ".proto";"#
         );
     }
 
     #[test]
     fn formats_path() {
         assert_eq!(
-            Pwsh.format_path_export(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
+            Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   (Join-Path $env:PROTO_HOME "shims"),
   (Join-Path $env:PROTO_HOME "bin"),
   $env:PATH
-) -join [IO.PATH]::PathSeparator"#
+) -join [IO.PATH]::PathSeparator;"#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let hook = Hook::OnChangeDir {
+            env: vec![
+                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+                ("PROTO_ROOT".into(), None),
+            ],
+            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            prefix: "starbase".into(),
+        };
+
+        assert_snapshot!(Pwsh.format_hook(hook).unwrap());
     }
 }

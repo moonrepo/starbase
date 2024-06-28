@@ -1,0 +1,27 @@
+---
+source: crates/shell/src/shells/pwsh.rs
+expression: Pwsh.format_on_cd_hook(hook).unwrap()
+---
+using namespace System;
+using namespace System.Management.Automation;
+
+$hook = [EventHandler[LocationChangedEventArgs]] {
+  param([object] $source, [LocationChangedEventArgs] $eventArgs)
+  end {
+    $env:PROTO_HOME = Join-Path $HOME ".proto";
+    Remove-Item -LiteralPath "env:PROTO_ROOT";
+    $env:PATH = @(
+      (Join-Path $env:PROTO_HOME "shims"),
+      (Join-Path $env:PROTO_HOME "bin"),
+      $env:PATH
+    ) -join [IO.PATH]::PathSeparator;
+  }
+};
+
+$currentAction = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction;
+
+if ($currentAction) {
+  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [Delegate]::Combine($currentAction, $hook);
+} else {
+  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $hook;
+};
