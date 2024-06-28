@@ -152,7 +152,8 @@ mod tests {
     #[test]
     fn formats_path() {
         assert_eq!(
-            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
+                .replace("\r\n", "\n"),
             r#"$env.Path = $env.Path | split row (char esep)
   | prepend ($env.PROTO_HOME | path join shims)
   | prepend ($env.PROTO_HOME | path join bin)
@@ -160,7 +161,8 @@ mod tests {
         );
 
         assert_eq!(
-            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
+            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()])
+                .replace("\r\n", "\n"),
             r#"$env.Path = $env.Path | split row (char esep)
   | prepend ($env.HOME | path join with sub dir)
   | prepend /some/abs/path/bin
