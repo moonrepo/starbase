@@ -18,7 +18,7 @@ pub use sh::*;
 pub use xonsh::*;
 pub use zsh::*;
 
-use crate::hooks::OnCdHook;
+use crate::hooks::Hook;
 use crate::shell_error::ShellError;
 use std::ffi::OsString;
 use std::fmt::Display;
@@ -61,11 +61,11 @@ pub trait Shell: Display {
     /// and be written to a profile file.
     fn format_path_set(&self, paths: &[String]) -> String;
 
-    /// Format a hook for "on change directory" functionality. Can be used to set
-    /// `PATH` and environment variables when traversing the file system.
-    fn format_on_cd_hook(&self, _hook: OnCdHook) -> Result<String, ShellError> {
-        Err(ShellError::NoOnCdSupport {
+    /// Format a hook for the current shell.
+    fn format_hook(&self, hook: Hook) -> Result<String, ShellError> {
+        Err(ShellError::NoHookSupport {
             name: self.to_string(),
+            info: hook.get_info().to_owned(),
         })
     }
 

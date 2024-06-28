@@ -1,6 +1,6 @@
 use super::Shell;
 use crate::helpers::{get_config_dir, get_env_var_regex};
-use crate::hooks::OnCdHook;
+use crate::hooks::Hook;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -35,7 +35,7 @@ impl Shell for Elvish {
         format!("set paths = [{} $@paths]", format(paths.join(" ")))
     }
 
-    fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(hook.render_template(
             self,
             r#"
@@ -109,18 +109,15 @@ mod tests {
 
     #[test]
     fn formats_cd_hook() {
-        let mut hook = OnCdHook {
+        let hook = Hook::OnChangeDir {
+            env: vec![
+                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
+                ("PROTO_ROOT".into(), None),
+            ],
+            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
             prefix: "starbase".into(),
-            ..OnCdHook::default()
         };
 
-        hook.paths
-            .extend(["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]);
-        hook.env.extend([
-            ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-            ("PROTO_ROOT".into(), None),
-        ]);
-
-        assert_snapshot!(Elvish.format_on_cd_hook(hook).unwrap());
+        assert_snapshot!(Elvish.format_hook(hook).unwrap());
     }
 }
