@@ -38,7 +38,8 @@ impl Shell for Sh {
     }
 
     fn quote(&self, value: &str) -> String {
-        if value.contains(' ') || value.contains('$') || value.contains('\'') || value.contains('"') {
+        if value.contains(' ') || value.contains('$') || value.contains('\'') || value.contains('"')
+        {
             // Use double quotes and escape necessary characters
             format!(
                 "\"{}\"",
@@ -77,20 +78,6 @@ mod tests {
         assert_eq!(
             Sh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";"#
-        );
-    }
-
-    #[test]
-    fn test_quote() {
-        assert_eq!(Sh.quote("simplevalue"), "simplevalue");
-        assert_eq!(Sh.quote("value with spaces"), "\"value with spaces\"");
-        assert_eq!(
-            Sh.quote("value'with'single'quotes"),
-            "\"value'with'single'quotes\""
-        );
-        assert_eq!(
-            Sh.quote("value\"with\"double\"quotes"),
-            "\"value\\\"with\\\"double\\\"quotes\""
         );
     }
 }

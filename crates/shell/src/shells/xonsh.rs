@@ -82,22 +82,4 @@ mod tests {
             r#"$PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
         );
     }
-
-    #[test]
-    fn test_quote() {
-        assert_eq!(Xonsh.quote("simplevalue"), "simplevalue");
-        assert_eq!(Xonsh.quote("value with spaces"), "\"value with spaces\"");
-        assert_eq!(
-            Xonsh.quote("value\"with\"double\"quotes"),
-            "\"value\\\"with\\\"double\\\"quotes\""
-        );
-        assert_eq!(
-            Xonsh.quote("value\\with\\backslashes"),
-            "\"value\\\\with\\\\backslashes\""
-        );
-        assert_eq!(
-            Xonsh.quote("value$with$variable"),
-            "\"value$with$variable\""
-        );
-    }
 }

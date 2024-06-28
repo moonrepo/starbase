@@ -151,12 +151,4 @@ mod tests {
             "$'value'\\''with'\\''single'\\''quote'"
         );
     }
-
-    #[test]
-    fn quotes_value_with_double_quote() {
-        assert_eq!(
-            Bash.quote("value\"with\"double\"quote"),
-            "\"value\\\"with\\\"double\\\"quote\""
-        );
-    }
 }

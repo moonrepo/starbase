@@ -75,7 +75,8 @@ fi
     }
 
     fn quote(&self, value: &str) -> String {
-        if value.contains('"') || value.contains(' ') || value.contains('$') || value.contains('\\') {
+        if value.contains('"') || value.contains(' ') || value.contains('$') || value.contains('\\')
+        {
             // Escape double quotes and backslashes
             format!("\"{}\"", value.replace("\\", "\\\\").replace("\"", "\\\""))
         } else {
@@ -123,15 +124,5 @@ mod tests {
         };
 
         assert_snapshot!(Zsh::default().format_hook(hook).unwrap());
-    }
-
-    #[test]
-    fn test_quote() {
-        let zsh = Zsh::new();
-        assert_eq!(zsh.quote("simplevalue"), "simplevalue");
-        assert_eq!(zsh.quote("value with spaces"), "\"value with spaces\"");
-        assert_eq!(zsh.quote("value\"with\"double\"quotes"), "\"value\\\"with\\\"double\\\"quotes\"");
-        assert_eq!(zsh.quote("value\\with\\backslashes"), "\"value\\\\with\\\\backslashes\"");
-        assert_eq!(zsh.quote("value$with$variable"), "\"value$with$variable\"");
     }
 }

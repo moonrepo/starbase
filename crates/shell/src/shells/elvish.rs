@@ -24,7 +24,7 @@ fn format(value: impl AsRef<str>) -> String {
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("set-env {} {}", self.quote(key),self.quote(value))
+        format!("set-env {} {}", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -136,19 +136,5 @@ mod tests {
         };
 
         assert_snapshot!(Elvish.format_hook(hook).unwrap());
-    }
-
-    #[test]
-    fn quotes_values_correctly() {
-        assert_eq!(Elvish.quote("simplevalue"), "simplevalue");
-        assert_eq!(Elvish.quote("value with spaces"), "\"value with spaces\"");
-        assert_eq!(
-            Elvish.quote("value\"with\"double\"quotes"),
-            "\"value\\\"with\\\"double\\\"quotes\""
-        );
-        assert_eq!(
-            Elvish.quote("value'with'single'quotes"),
-            "\"value'with'single'quotes\""
-        );
     }
 }

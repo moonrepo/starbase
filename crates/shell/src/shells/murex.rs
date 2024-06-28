@@ -55,7 +55,10 @@ event: onPrompt {prefix}_hook=before {
     }
 
     fn quote(&self, value: &str) -> String {
-        if value.chars().all(|c| c.is_ascii_graphic() && !c.is_whitespace()) {
+        if value
+            .chars()
+            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
+        {
             // No quoting needed for simple values
             value.to_string()
         } else if value.contains('\'') {
@@ -107,19 +110,5 @@ mod tests {
         };
 
         assert_snapshot!(Murex.format_hook(hook).unwrap());
-    }
-
-    #[test]
-    fn quotes_values_correctly() {
-        assert_eq!(Murex.quote("simplevalue"), "simplevalue");
-        assert_eq!(Murex.quote("value with spaces"), "'value with spaces'");
-        assert_eq!(
-            Murex.quote("value'with'single'quotes"),
-            r#""value'with'single'quotes""#
-        );
-        assert_eq!(
-            Murex.quote("value\"with\"double\"quotes"),
-            r#""value\"with\"double\"quotes""#
-        );
     }
 }

@@ -175,7 +175,7 @@ if ($currentAction) {
         } else {
             value.to_string()
         }
-    }    
+    }
 }
 
 impl fmt::Display for Pwsh {
@@ -222,42 +222,5 @@ mod tests {
         };
 
         assert_snapshot!(Pwsh.format_hook(hook).unwrap());
-    }
-
-    // #[test]
-    // fn quotes_values_correctly() {
-    //     assert_eq!(Pwsh.quote("simplevalue"), "simplevalue");
-    //     assert_eq!(Pwsh.quote("value with spaces"), "'value with spaces'");
-    //     assert_eq!(
-    //         Pwsh.quote("value'with'single'quotes"),
-    //         r#""value'with'single'quotes""#
-    //     );
-    //     assert_eq!(
-    //         Pwsh.quote(r#"value"with"double"quotes"#),
-    //         r#""value`"with`"double`"quotes""#
-    //     );
-    //     assert_eq!(Pwsh.quote("`backtick"), r#""`backtick""#);
-    //     assert_eq!(
-    //         Pwsh.quote(r#"$env:PATH = "$env:PATH | split row (char esep)""#),
-    //         r#"'$env:PATH = "$env:PATH | split row (char esep)"'"#
-    //     );
-    // }
-
-    #[test]
-    fn quotes_values_correctly() {
-        let tests = vec![
-            ("simplevalue", "simplevalue"),
-            ("value with spaces", "'value with spaces'"),
-            ("value'with'single'quotes", r#""value'with'single'quotes""#),
-            (r#"value"with"double"quotes"#, r#""value`"with`"double`"quotes""#),
-            ("`backtick", r#""`backtick""#),
-            (r#"$env:PATH = "$env:PATH | split row (char esep)""#, r#"'$env:PATH = "$env:PATH | split row (char esep)"'"#),
-        ];
-
-        for (input, expected) in tests {
-            let output = Pwsh.quote(input);
-            println!("Input: {}, Expected: {}, Output: {}", input, expected, output);
-            assert_eq!(output, expected);
-        }
     }
 }

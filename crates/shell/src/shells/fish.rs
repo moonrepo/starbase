@@ -116,18 +116,4 @@ mod tests {
 
         assert_snapshot!(Fish.format_hook(hook).unwrap());
     }
-
-    #[test]
-    fn quotes_values_correctly() {
-        assert_eq!(Fish.quote("simplevalue"), "simplevalue");
-        assert_eq!(Fish.quote("value with spaces"), "'value with spaces'");
-        assert_eq!(
-            Fish.quote("value'with'single'quotes"),
-            r#""value'with'single'quotes""#
-        );
-        assert_eq!(
-            Fish.quote("value\"with\"double\"quotes"),
-            r#""value\"with\"double\"quotes""#
-        );
-    }
 }

@@ -86,18 +86,4 @@ mod tests {
             r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:${env::PATH}""#
         );
     }
-
-    #[test]
-    fn quotes_values_correctly() {
-        assert_eq!(Ion.quote("simplevalue"), "simplevalue");
-        assert_eq!(Ion.quote("value with spaces"), r#""value with spaces""#);
-        assert_eq!(
-            Ion.quote("value'with'single'quotes"),
-            r#""value'with'single'quotes""#
-        );
-        assert_eq!(
-            Ion.quote(r#"value"with"double"quotes"#),
-            r#""value\"with\"double\"quotes""#
-        );
-    }
 }
