@@ -24,11 +24,7 @@ impl Shell for Bash {
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
-        if paths.is_empty() {
-            "".into()
-        } else {
-            format!(r#"export PATH="{}:$PATH";"#, paths.join(":"))
-        }
+        format!(r#"export PATH="{}:$PATH";"#, paths.join(":"))
     }
 
     fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {

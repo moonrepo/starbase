@@ -1,5 +1,5 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{get_env_var_regex, NEWLINE};
+use crate::helpers::{get_env_var_regex, normalize_newlines};
 use crate::hooks::OnCdHook;
 use std::collections::HashSet;
 use std::fmt;
@@ -52,16 +52,16 @@ impl Shell for Pwsh {
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
-        let mut value = format!("$env:PATH = @({}", NEWLINE);
+        let mut value = "$env:PATH = @(\n".to_string();
 
         for path in paths {
-            value.push_str(&format!("  ({}),{}", join_path(path), NEWLINE))
+            value.push_str(&format!("  ({}),\n", join_path(path)))
         }
 
-        value.push_str("  $env:PATH");
-        value.push_str(NEWLINE);
+        value.push_str("  $env:PATH\n");
         value.push_str(") -join [IO.PATH]::PathSeparator;");
-        value
+
+        normalize_newlines(value)
     }
 
     fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {

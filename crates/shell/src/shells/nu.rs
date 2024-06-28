@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex, NEWLINE};
+use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines};
 use crate::hooks::OnCdHook;
 use std::collections::HashSet;
 use std::env::consts;
@@ -46,7 +46,7 @@ impl Shell for Nu {
 
         let env_regex = get_env_var_regex();
         let path_var = format!("$env.{path_name}");
-        let mut value = format!("{path_var} = {path_var} | split row (char esep){}", NEWLINE);
+        let mut value = format!("{path_var} = {path_var} | split row (char esep)\n");
 
         for path in paths {
             value.push_str("  | prepend ");
@@ -63,11 +63,12 @@ impl Shell for Nu {
                 value.push_str(path);
             }
 
-            value.push_str(NEWLINE);
+            value.push('\n');
         }
 
         value.push_str("  | uniq");
-        value
+
+        normalize_newlines(value)
     }
 
     fn format_on_cd_hook(&self, hook: OnCdHook) -> Result<String, crate::ShellError> {

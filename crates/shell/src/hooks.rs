@@ -1,4 +1,4 @@
-use crate::helpers::NEWLINE;
+use crate::helpers::{normalize_newlines, NEWLINE};
 use crate::shells::Shell;
 
 #[derive(Clone, Default)]
@@ -49,10 +49,7 @@ impl OnCdHook {
             }
         };
 
-        #[cfg(windows)]
-        let template = template.replace("\n", NEWLINE);
-
-        template
+        normalize_newlines(template)
             .replace("{prefix}", &self.prefix)
             .replace("{export_env}", &env)
             .replace("{export_path}", &path)
