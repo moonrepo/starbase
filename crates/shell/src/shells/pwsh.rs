@@ -43,7 +43,7 @@ impl Shell for Pwsh {
         if value.contains('/') {
             format!("$env:{key} = {};", join_path(value))
         } else {
-            format!(r#"$env:{key} = "{}";"#, format(value))
+            format!("$env:{} = {};", self.quote(key), self.quote(value))
         }
     }
 
@@ -163,6 +163,19 @@ if ($currentAction) {
 
         profiles.into_iter().collect()
     }
+
+    fn quote(&self, value: &str) -> String {
+        if value.contains('\'') {
+            // Use double quotes and escape double quotes
+            let escaped = value.replace("\"", "`\"");
+            format!("\"{}\"", escaped)
+        } else if value.contains('"') || value.contains(' ') {
+            // Use single quotes
+            format!("'{}'", value)
+        } else {
+            value.to_string()
+        }
+    }    
 }
 
 impl fmt::Display for Pwsh {
@@ -209,5 +222,42 @@ mod tests {
         };
 
         assert_snapshot!(Pwsh.format_hook(hook).unwrap());
+    }
+
+    // #[test]
+    // fn quotes_values_correctly() {
+    //     assert_eq!(Pwsh.quote("simplevalue"), "simplevalue");
+    //     assert_eq!(Pwsh.quote("value with spaces"), "'value with spaces'");
+    //     assert_eq!(
+    //         Pwsh.quote("value'with'single'quotes"),
+    //         r#""value'with'single'quotes""#
+    //     );
+    //     assert_eq!(
+    //         Pwsh.quote(r#"value"with"double"quotes"#),
+    //         r#""value`"with`"double`"quotes""#
+    //     );
+    //     assert_eq!(Pwsh.quote("`backtick"), r#""`backtick""#);
+    //     assert_eq!(
+    //         Pwsh.quote(r#"$env:PATH = "$env:PATH | split row (char esep)""#),
+    //         r#"'$env:PATH = "$env:PATH | split row (char esep)"'"#
+    //     );
+    // }
+
+    #[test]
+    fn quotes_values_correctly() {
+        let tests = vec![
+            ("simplevalue", "simplevalue"),
+            ("value with spaces", "'value with spaces'"),
+            ("value'with'single'quotes", r#""value'with'single'quotes""#),
+            (r#"value"with"double"quotes"#, r#""value`"with`"double`"quotes""#),
+            ("`backtick", r#""`backtick""#),
+            (r#"$env:PATH = "$env:PATH | split row (char esep)""#, r#"'$env:PATH = "$env:PATH | split row (char esep)"'"#),
+        ];
+
+        for (input, expected) in tests {
+            let output = Pwsh.quote(input);
+            println!("Input: {}, Expected: {}, Output: {}", input, expected, output);
+            assert_eq!(output, expected);
+        }
     }
 }

@@ -24,7 +24,7 @@ fn format(value: impl AsRef<str>) -> String {
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("set-env {key} {}", format(value))
+        format!("set-env {} {}", self.quote(key),self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -77,6 +77,23 @@ set @edit:before-readline = $@edit:before-readline {
 
         profiles.into_iter().collect()
     }
+
+    fn quote(&self, value: &str) -> String {
+        if value
+            .chars()
+            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
+        {
+            // No quoting needed for simple value
+            value.to_string() // No quoting needed for simple values
+        } else if value.contains('\'') || value.contains('"') {
+            // Single quotes are preferred unless they are present in the string
+            // Double quote with escaping for double quotes
+            format!("\"{}\"", value.replace("\"", "\\\""))
+        } else {
+            // Single quote
+            format!("'{}'", value)
+        }
+    }
 }
 
 impl fmt::Display for Elvish {
@@ -119,5 +136,19 @@ mod tests {
         };
 
         assert_snapshot!(Elvish.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn quotes_values_correctly() {
+        assert_eq!(Elvish.quote("simplevalue"), "simplevalue");
+        assert_eq!(Elvish.quote("value with spaces"), "\"value with spaces\"");
+        assert_eq!(
+            Elvish.quote("value\"with\"double\"quotes"),
+            "\"value\\\"with\\\"double\\\"quotes\""
+        );
+        assert_eq!(
+            Elvish.quote("value'with'single'quotes"),
+            "\"value'with'single'quotes\""
+        );
     }
 }

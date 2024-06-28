@@ -16,7 +16,7 @@ impl Bash {
 // https://www.baeldung.com/linux/bashrc-vs-bash-profile-vs-profile
 impl Shell for Bash {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"export {key}="{value}";"#)
+        format!("export {}={};", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -67,6 +67,22 @@ fi
             home_dir.join(".profile"),
         ]
     }
+
+    fn quote(&self, value: &str) -> String {
+        if value
+            .chars()
+            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
+        {
+            // No quoting needed for simple values
+            value.to_string()
+        } else if value.contains('\'') {
+            // Special quoting for single quotes
+            format!("$'{}'", value.replace("'", r"'\''"))
+        } else {
+            // Double quote with escaping
+            format!("\"{}\"", value.replace("\"", "\\\""))
+        }
+    }
 }
 
 impl fmt::Display for Bash {
@@ -108,5 +124,39 @@ mod tests {
         };
 
         assert_snapshot!(Bash.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn quotes_simple_value() {
+        assert_eq!(Bash.quote("simple"), "simple");
+    }
+
+    #[test]
+    fn quotes_value_with_spaces() {
+        assert_eq!(Bash.quote("value with spaces"), "\"value with spaces\"");
+    }
+
+    #[test]
+    fn quotes_value_with_special_chars() {
+        assert_eq!(
+            Bash.quote("value$with&special*chars"),
+            "\"value$with&special*chars\""
+        );
+    }
+
+    #[test]
+    fn quotes_value_with_single_quote() {
+        assert_eq!(
+            Bash.quote("value'with'single'quote"),
+            "$'value'\\''with'\\''single'\\''quote'"
+        );
+    }
+
+    #[test]
+    fn quotes_value_with_double_quote() {
+        assert_eq!(
+            Bash.quote("value\"with\"double\"quote"),
+            "\"value\\\"with\\\"double\\\"quote\""
+        );
     }
 }

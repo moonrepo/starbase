@@ -18,7 +18,7 @@ impl Xonsh {
 // https://xon.sh/xonshrc.html
 impl Shell for Xonsh {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"${key} = "{value}""#)
+        format!("${} = {}", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -46,6 +46,15 @@ impl Shell for Xonsh {
         .into_iter()
         .collect()
     }
+
+    fn quote(&self, value: &str) -> String {
+        if value.contains(' ') || value.contains('$') || value.contains('"') || value.contains('\\')
+        {
+            format!("\"{}\"", value.replace("\\", "\\\\").replace("\"", "\\\""))
+        } else {
+            value.to_string()
+        }
+    }
 }
 
 impl fmt::Display for Xonsh {
@@ -71,6 +80,24 @@ mod tests {
         assert_eq!(
             Xonsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
+        );
+    }
+
+    #[test]
+    fn test_quote() {
+        assert_eq!(Xonsh.quote("simplevalue"), "simplevalue");
+        assert_eq!(Xonsh.quote("value with spaces"), "\"value with spaces\"");
+        assert_eq!(
+            Xonsh.quote("value\"with\"double\"quotes"),
+            "\"value\\\"with\\\"double\\\"quotes\""
+        );
+        assert_eq!(
+            Xonsh.quote("value\\with\\backslashes"),
+            "\"value\\\\with\\\\backslashes\""
+        );
+        assert_eq!(
+            Xonsh.quote("value$with$variable"),
+            "\"value$with$variable\""
         );
     }
 }

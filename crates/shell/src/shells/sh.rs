@@ -14,7 +14,7 @@ impl Sh {
 
 impl Shell for Sh {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"export {key}="{value}";"#)
+        format!("export {}={};", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -35,6 +35,22 @@ impl Shell for Sh {
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         vec![home_dir.join(".profile")]
+    }
+
+    fn quote(&self, value: &str) -> String {
+        if value.contains(' ') || value.contains('$') || value.contains('\'') || value.contains('"') {
+            // Use double quotes and escape necessary characters
+            format!(
+                "\"{}\"",
+                value
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("$", "\\$")
+            )
+        } else {
+            // No quoting needed
+            value.to_string()
+        }
     }
 }
 
@@ -61,6 +77,20 @@ mod tests {
         assert_eq!(
             Sh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";"#
+        );
+    }
+
+    #[test]
+    fn test_quote() {
+        assert_eq!(Sh.quote("simplevalue"), "simplevalue");
+        assert_eq!(Sh.quote("value with spaces"), "\"value with spaces\"");
+        assert_eq!(
+            Sh.quote("value'with'single'quotes"),
+            "\"value'with'single'quotes\""
+        );
+        assert_eq!(
+            Sh.quote("value\"with\"double\"quotes"),
+            "\"value\\\"with\\\"double\\\"quotes\""
         );
     }
 }

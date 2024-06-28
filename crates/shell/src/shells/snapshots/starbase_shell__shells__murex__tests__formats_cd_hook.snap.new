@@ -1,0 +1,10 @@
+---
+source: crates/shell/src/shells/murex.rs
+assertion_line: 109
+expression: Murex.format_hook(hook).unwrap()
+---
+event: onPrompt starbase_hook=before {
+  export PROTO_HOME=$HOME/.proto;
+  unset PROTO_ROOT;
+  $ENV.PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$ENV.PATH"
+}

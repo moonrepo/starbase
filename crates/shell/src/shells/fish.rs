@@ -18,7 +18,7 @@ impl Fish {
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"set -gx {key} "{value}";"#)
+        format!("set -gx {} {};", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -56,6 +56,23 @@ end;"#,
         ])
         .into_iter()
         .collect()
+    }
+
+    fn quote(&self, value: &str) -> String {
+        if value
+            .chars()
+            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
+        {
+            // No quoting needed for simple values
+            value.to_string()
+        } else if value.contains('\'') {
+            // Single quotes are preferred unless they are present in the string
+            // Double quote with escaping for double quotes
+            format!("\"{}\"", value.replace("\"", "\\\""))
+        } else {
+            // Single quote
+            format!("'{}'", value)
+        }
     }
 }
 
@@ -98,5 +115,19 @@ mod tests {
         };
 
         assert_snapshot!(Fish.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn quotes_values_correctly() {
+        assert_eq!(Fish.quote("simplevalue"), "simplevalue");
+        assert_eq!(Fish.quote("value with spaces"), "'value with spaces'");
+        assert_eq!(
+            Fish.quote("value'with'single'quotes"),
+            r#""value'with'single'quotes""#
+        );
+        assert_eq!(
+            Fish.quote("value\"with\"double\"quotes"),
+            r#""value\"with\"double\"quotes""#
+        );
     }
 }

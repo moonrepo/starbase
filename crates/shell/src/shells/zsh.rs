@@ -22,7 +22,7 @@ impl Zsh {
 // https://zsh.sourceforge.io/Doc/Release/Files.html#Files
 impl Shell for Zsh {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"export {key}="{value}";"#)
+        format!("export {}={};", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -73,6 +73,15 @@ fi
             zdot_dir.join(".zshrc"),
         ]
     }
+
+    fn quote(&self, value: &str) -> String {
+        if value.contains('"') || value.contains(' ') || value.contains('$') || value.contains('\\') {
+            // Escape double quotes and backslashes
+            format!("\"{}\"", value.replace("\\", "\\\\").replace("\"", "\\\""))
+        } else {
+            value.to_string()
+        }
+    }
 }
 
 impl fmt::Display for Zsh {
@@ -114,5 +123,15 @@ mod tests {
         };
 
         assert_snapshot!(Zsh::default().format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_quote() {
+        let zsh = Zsh::new();
+        assert_eq!(zsh.quote("simplevalue"), "simplevalue");
+        assert_eq!(zsh.quote("value with spaces"), "\"value with spaces\"");
+        assert_eq!(zsh.quote("value\"with\"double\"quotes"), "\"value\\\"with\\\"double\\\"quotes\"");
+        assert_eq!(zsh.quote("value\\with\\backslashes"), "\"value\\\\with\\\\backslashes\"");
+        assert_eq!(zsh.quote("value$with$variable"), "\"value$with$variable\"");
     }
 }

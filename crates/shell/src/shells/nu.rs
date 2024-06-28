@@ -29,7 +29,7 @@ fn join_path(value: impl AsRef<str>) -> String {
 impl Shell for Nu {
     // https://www.nushell.sh/book/configuration.html#environment
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"$env.{key} = '{value}'"#)
+        format!("$env.{} = {}", self.quote(key),self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -107,6 +107,16 @@ $env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
         .into_iter()
         .collect()
     }
+
+fn quote(&self, value: &str) -> String {
+    if value.contains('\'') {
+        // Escape single quotes by doubling them inside single quotes
+        format!("'{}'", value.replace("'", "''"))
+    } else {
+        // No special quoting needed
+        value.to_string()
+    }
+}
 }
 
 impl fmt::Display for Nu {
@@ -118,7 +128,6 @@ impl fmt::Display for Nu {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -184,4 +193,13 @@ mod tests {
 
         assert_snapshot!(Nu.format_hook(hook).unwrap());
     }
+
+    #[test]
+    fn quotes_values_correctly() {
+        assert_eq!(Nu.quote("simplevalue"), "simplevalue");
+        assert_eq!(Nu.quote("value with spaces"), "'value with spaces'");
+        assert_eq!(Nu.quote("value'with'single'quotes"), r#""value'with'single'quotes""#);
+        assert_eq!(Nu.quote("value\"with\"double\"quotes"), r#""value\"with\"double\"quotes""#);
+    }
+
 }
