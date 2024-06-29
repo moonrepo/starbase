@@ -176,6 +176,47 @@ pub fn create_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Detect the indentation of the provided string, by scanning and comparing each line.
+#[instrument(skip(content))]
+pub fn detect_indentation<T: AsRef<str>>(content: T) -> String {
+    let mut spaces = 0;
+    let mut tabs = 0;
+    let mut lowest_space_width = 0;
+
+    for line in content.as_ref().lines() {
+        if line.starts_with(' ') {
+            let mut line_spaces = 0;
+            let mut line_check = line;
+
+            while let Some(inner) = line_check.strip_prefix(' ') {
+                line_spaces += 1;
+                line_check = inner;
+            }
+
+            // Throw out odd numbers so comments don't throw us
+            if line_spaces % 2 == 1 {
+                continue;
+            }
+
+            spaces += 1;
+
+            if lowest_space_width == 0 || line_spaces < lowest_space_width {
+                lowest_space_width = line_spaces;
+            }
+        } else if line.starts_with('\t') {
+            tabs += 1;
+        } else {
+            continue;
+        }
+    }
+
+    if spaces > tabs {
+        " ".repeat(lowest_space_width)
+    } else {
+        "\t".into()
+    }
+}
+
 /// Return the name of a file or directory, or "unknown" if invalid UTF-8,
 /// or unknown path component.
 #[inline]
