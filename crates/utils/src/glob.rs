@@ -139,6 +139,11 @@ pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
 #[instrument]
 pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
     let value = value.as_ref();
+
+    if value.contains("**") {
+        return true;
+    }
+
     let single_values = vec!['*', '?', '!'];
     let paired_values = vec![('{', '}'), ('[', ']')];
     let mut bytes = value.bytes();
@@ -149,10 +154,6 @@ pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
 
         bytes.nth(index - 1).unwrap_or(b' ') == b'\\'
     };
-
-    if value.contains("**") {
-        return true;
-    }
 
     for single in single_values {
         if !value.contains(single) {
@@ -219,6 +220,8 @@ where
                 value = exp;
             }
         }
+
+        value = value.trim_start_matches("./");
 
         if negate {
             negations.push(value);

@@ -37,6 +37,14 @@ mod globset {
     }
 
     #[test]
+    fn matches_rel_start() {
+        let set = GlobSet::new(["./source"]).unwrap();
+
+        assert!(set.matches("source"));
+        assert!(!set.matches("source.ts"));
+    }
+
+    #[test]
     fn doesnt_match_negations() {
         let set = GlobSet::new(["files/*", "!**/*.ts"]).unwrap();
 
