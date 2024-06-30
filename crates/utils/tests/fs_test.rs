@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 
-use starbase_sandbox::create_empty_sandbox;
+use starbase_sandbox::{create_empty_sandbox, create_sandbox};
 use starbase_utils::fs;
 
 mod fs_base {
@@ -90,6 +90,74 @@ mod fs_base {
             fs::remove_link(&src).unwrap();
 
             assert!(src.exists());
+        }
+    }
+
+    mod detect_indent {
+        use super::*;
+
+        #[test]
+        fn spaces() {
+            let sandbox = create_sandbox("indent");
+
+            assert_eq!(
+                fs::detect_indentation(fs::read_file(sandbox.path().join("spaces.js")).unwrap()),
+                "  "
+            );
+        }
+
+        #[test]
+        fn spaces_with_comments() {
+            let sandbox = create_sandbox("indent");
+
+            assert_eq!(
+                fs::detect_indentation(
+                    fs::read_file(sandbox.path().join("spaces-comments.js")).unwrap()
+                ),
+                "  "
+            );
+        }
+
+        #[test]
+        fn spaces_4() {
+            let sandbox = create_sandbox("indent");
+
+            assert_eq!(
+                fs::detect_indentation(fs::read_file(sandbox.path().join("spaces-4.js")).unwrap()),
+                "    "
+            );
+        }
+
+        #[test]
+        fn tabs() {
+            let sandbox = create_sandbox("indent");
+
+            assert_eq!(
+                fs::detect_indentation(fs::read_file(sandbox.path().join("tabs.js")).unwrap()),
+                "\t"
+            );
+        }
+
+        #[test]
+        fn tabs_with_comments() {
+            let sandbox = create_sandbox("indent");
+
+            assert_eq!(
+                fs::detect_indentation(
+                    fs::read_file(sandbox.path().join("tabs-comments.js")).unwrap()
+                ),
+                "\t"
+            );
+        }
+
+        #[test]
+        fn tabs_2() {
+            let sandbox = create_sandbox("indent");
+
+            assert_eq!(
+                fs::detect_indentation(fs::read_file(sandbox.path().join("tabs-2.js")).unwrap()),
+                "\t\t"
+            );
         }
     }
 }

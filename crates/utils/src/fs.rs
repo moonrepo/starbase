@@ -182,16 +182,23 @@ pub fn detect_indentation<T: AsRef<str>>(content: T) -> String {
     let mut spaces = 0;
     let mut tabs = 0;
     let mut lowest_space_width = 0;
+    let mut lowest_tab_width = 0;
+
+    fn count_line_indent(line: &str, indent: char) -> usize {
+        let mut line_count = 0;
+        let mut line_check = line;
+
+        while let Some(inner) = line_check.strip_prefix(indent) {
+            line_count += 1;
+            line_check = inner;
+        }
+
+        line_count
+    }
 
     for line in content.as_ref().lines() {
         if line.starts_with(' ') {
-            let mut line_spaces = 0;
-            let mut line_check = line;
-
-            while let Some(inner) = line_check.strip_prefix(' ') {
-                line_spaces += 1;
-                line_check = inner;
-            }
+            let line_spaces = count_line_indent(line, ' ');
 
             // Throw out odd numbers so comments don't throw us
             if line_spaces % 2 == 1 {
@@ -204,7 +211,13 @@ pub fn detect_indentation<T: AsRef<str>>(content: T) -> String {
                 lowest_space_width = line_spaces;
             }
         } else if line.starts_with('\t') {
+            let line_tabs = count_line_indent(line, '\t');
+
             tabs += 1;
+
+            if lowest_tab_width == 0 || line_tabs < lowest_tab_width {
+                lowest_tab_width = line_tabs;
+            }
         } else {
             continue;
         }
@@ -213,7 +226,7 @@ pub fn detect_indentation<T: AsRef<str>>(content: T) -> String {
     if spaces > tabs {
         " ".repeat(lowest_space_width)
     } else {
-        "\t".into()
+        "\t".repeat(lowest_tab_width)
     }
 }
 
