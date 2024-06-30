@@ -84,6 +84,11 @@ pub trait Shell: Display {
 
     /// Return a list of all possible interactive profile paths.
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf>;
+
+    // TODO : only implemented for bash and zsh currently, to be extended to other shells
+    // TODO : commented out to get some basic tests work first 
+    // implement the escaping/quoting rules of the shell.
+    // fn quote(&self, value: &str) -> String;
 }
 
 pub type BoxedShell = Box<dyn Shell>;

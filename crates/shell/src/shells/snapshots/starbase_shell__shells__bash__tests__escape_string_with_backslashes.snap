@@ -1,0 +1,6 @@
+---
+source: crates/shell/src/shells/bash.rs
+assertion_line: 150
+expression: "escapeBash(\"a\\\\b\")"
+---
+$'a\\b'

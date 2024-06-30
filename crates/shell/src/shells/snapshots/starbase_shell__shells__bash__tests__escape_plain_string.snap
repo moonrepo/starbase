@@ -1,0 +1,6 @@
+---
+source: crates/shell/src/shells/bash.rs
+assertion_line: 126
+expression: "escapeBash(\"foobar\")"
+---
+foobar

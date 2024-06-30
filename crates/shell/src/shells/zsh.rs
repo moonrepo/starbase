@@ -1,4 +1,5 @@
 use super::Shell;
+// use crate::utils::escape::escapeBash;
 use crate::helpers::is_absolute_dir;
 use crate::hooks::Hook;
 use std::env;
@@ -22,14 +23,18 @@ impl Zsh {
 // https://zsh.sourceforge.io/Doc/Release/Files.html#Files
 impl Shell for Zsh {
     fn format_env_set(&self, key: &str, value: &str) -> String {
+        // format!("export {}={};", self.quote(key), self.quote(value))
         format!(r#"export {key}="{value}";"#)
     }
 
     fn format_env_unset(&self, key: &str) -> String {
+        // format!("unset {key};", key=self.quote(key))
         format!(r#"unset {key};"#)
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
+        // let escaped_paths: Vec<String> = paths.iter().map(|p| self.quote(p)).collect();
+        // format!(r#"export PATH="{}:$PATH";"#, escaped_paths.join(":"))
         format!(r#"export PATH="{}:$PATH";"#, paths.join(":"))
     }
 
@@ -73,6 +78,10 @@ fi
             zdot_dir.join(".zshrc"),
         ]
     }
+
+    // fn quote(&self, value: &str) -> String {
+    //     escapeBash(value)
+    // }
 }
 
 impl fmt::Display for Zsh {

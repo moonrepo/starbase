@@ -1,0 +1,6 @@
+---
+source: crates/shell/src/shells/bash.rs
+assertion_line: 144
+expression: "escapeBash(\"$100@*&\")"
+---
+$'$100\x40\x2A&'

@@ -1,0 +1,6 @@
+---
+source: crates/shell/src/shells/bash.rs
+assertion_line: 156
+expression: "escapeBash(\"\")"
+---
+

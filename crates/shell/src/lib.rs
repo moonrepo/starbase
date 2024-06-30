@@ -3,6 +3,7 @@ mod hooks;
 mod shell;
 mod shell_error;
 mod shells;
+mod utils;
 
 pub use hooks::*;
 pub use shell::ShellType;
