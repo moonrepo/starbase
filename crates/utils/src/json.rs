@@ -83,6 +83,32 @@ where
     }
 }
 
+/// Format and serialize the provided value into a string, with the provided
+/// indentation. This can be used to preserve the original indentation of a file.
+#[inline]
+#[instrument(name = "format_json_with_identation", skip(data))]
+pub fn format_with_identation<D>(data: &D, indent: &str) -> Result<String, JsonError>
+where
+    D: ?Sized + Serialize,
+{
+    use serde_json::ser::PrettyFormatter;
+    use serde_json::Serializer;
+
+    trace!(indent, "Formatting JSON with preserved indentation");
+
+    // Based on serde_json::to_string_pretty!
+    let mut writer = Vec::with_capacity(128);
+    let mut serializer =
+        Serializer::with_formatter(&mut writer, PrettyFormatter::with_indent(indent.as_bytes()));
+
+    data.serialize(&mut serializer)
+        .map_err(|error| JsonError::Format {
+            error: Box::new(error),
+        })?;
+
+    Ok(unsafe { String::from_utf8_unchecked(writer) })
+}
+
 /// Read a file at the provided path and deserialize into the required type.
 /// The path must already exist.
 #[inline]
@@ -146,37 +172,21 @@ where
 #[cfg(feature = "editor-config")]
 #[inline]
 #[instrument(name = "write_json_with_config", skip(json))]
-pub fn write_file_with_config<P: AsRef<Path> + Debug>(
-    path: P,
-    json: JsonValue,
-    pretty: bool,
-) -> Result<(), JsonError> {
+pub fn write_file_with_config<P, D>(path: P, json: &D, pretty: bool) -> Result<(), JsonError>
+where
+    P: AsRef<Path> + Debug,
+    D: ?Sized + Serialize,
+{
     if !pretty {
         return write_file(path, &json, false);
     }
 
-    use serde_json::ser::PrettyFormatter;
-    use serde_json::Serializer;
+    trace!(file = ?path, "Writing JSON file with .editorconfig");
 
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path);
 
-    trace!(file = ?path, "Writing JSON file with .editorconfig");
-
-    // Based on serde_json::to_string_pretty!
-    let mut writer = Vec::with_capacity(128);
-    let mut serializer = Serializer::with_formatter(
-        &mut writer,
-        PrettyFormatter::with_indent(editor_config.indent.as_bytes()),
-    );
-
-    json.serialize(&mut serializer)
-        .map_err(|error| JsonError::WriteFile {
-            path: path.to_path_buf(),
-            error: Box::new(error),
-        })?;
-
-    let mut data = unsafe { String::from_utf8_unchecked(writer) };
+    let mut data = format_with_identation(&json, &editor_config.indent)?;
     editor_config.apply_eof(&mut data);
 
     fs::write_file(path, data)?;
