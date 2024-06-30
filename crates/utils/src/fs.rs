@@ -176,6 +176,60 @@ pub fn create_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Detect the indentation of the provided string, by scanning and comparing each line.
+#[instrument(skip(content))]
+pub fn detect_indentation<T: AsRef<str>>(content: T) -> String {
+    let mut spaces = 0;
+    let mut tabs = 0;
+    let mut lowest_space_width = 0;
+    let mut lowest_tab_width = 0;
+
+    fn count_line_indent(line: &str, indent: char) -> usize {
+        let mut line_count = 0;
+        let mut line_check = line;
+
+        while let Some(inner) = line_check.strip_prefix(indent) {
+            line_count += 1;
+            line_check = inner;
+        }
+
+        line_count
+    }
+
+    for line in content.as_ref().lines() {
+        if line.starts_with(' ') {
+            let line_spaces = count_line_indent(line, ' ');
+
+            // Throw out odd numbers so comments don't throw us
+            if line_spaces % 2 == 1 {
+                continue;
+            }
+
+            spaces += 1;
+
+            if lowest_space_width == 0 || line_spaces < lowest_space_width {
+                lowest_space_width = line_spaces;
+            }
+        } else if line.starts_with('\t') {
+            let line_tabs = count_line_indent(line, '\t');
+
+            tabs += 1;
+
+            if lowest_tab_width == 0 || line_tabs < lowest_tab_width {
+                lowest_tab_width = line_tabs;
+            }
+        } else {
+            continue;
+        }
+    }
+
+    if spaces > tabs {
+        " ".repeat(lowest_space_width)
+    } else {
+        "\t".repeat(lowest_tab_width)
+    }
+}
+
 /// Return the name of a file or directory, or "unknown" if invalid UTF-8,
 /// or unknown path component.
 #[inline]
@@ -279,9 +333,12 @@ impl EditorConfigProps {
 /// Load properties from the closest `.editorconfig` file.
 #[cfg(feature = "editor-config")]
 #[instrument]
-pub fn get_editor_config_props<T: AsRef<Path> + Debug>(path: T) -> EditorConfigProps {
+pub fn get_editor_config_props<T: AsRef<Path> + Debug>(
+    path: T,
+) -> Result<EditorConfigProps, FsError> {
     use ec4rs::property::*;
 
+    let path = path.as_ref();
     let editor_config = ec4rs::properties_of(path).unwrap_or_default();
     let tab_width = editor_config
         .get::<TabWidth>()
@@ -289,29 +346,28 @@ pub fn get_editor_config_props<T: AsRef<Path> + Debug>(path: T) -> EditorConfigP
     let indent_size = editor_config
         .get::<IndentSize>()
         .unwrap_or(IndentSize::Value(2));
-    let indent_style = editor_config
-        .get::<IndentStyle>()
-        .unwrap_or(IndentStyle::Spaces);
+    let indent_style = editor_config.get::<IndentStyle>().ok();
     let insert_final_newline = editor_config
         .get::<FinalNewline>()
         .unwrap_or(FinalNewline::Value(true));
 
-    EditorConfigProps {
+    Ok(EditorConfigProps {
         eof: if matches!(insert_final_newline, FinalNewline::Value(true)) {
             "\n".into()
         } else {
             "".into()
         },
         indent: match indent_style {
-            IndentStyle::Tabs => "\t".into(),
-            IndentStyle::Spaces => match indent_size {
+            Some(IndentStyle::Tabs) => "\t".into(),
+            Some(IndentStyle::Spaces) => match indent_size {
                 IndentSize::UseTabWidth => match tab_width {
                     TabWidth::Value(value) => " ".repeat(value),
                 },
                 IndentSize::Value(value) => " ".repeat(value),
             },
+            None => detect_indentation(read_file(path)?),
         },
-    }
+    })
 }
 
 /// Check if the provided path is a stale file, by comparing modified, created, or accessed
@@ -691,7 +747,7 @@ pub fn write_file_with_config<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(
     data: D,
 ) -> Result<(), FsError> {
     let path = path.as_ref();
-    let editor_config = get_editor_config_props(path);
+    let editor_config = get_editor_config_props(path)?;
 
     let mut data = unsafe { String::from_utf8_unchecked(data.as_ref().to_vec()) };
     editor_config.apply_eof(&mut data);

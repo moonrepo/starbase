@@ -104,8 +104,9 @@ mod editor_config {
     fn uses_defaults_when_no_config() {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.json");
+        let data: json::JsonValue = json::read_file(&path).unwrap();
 
-        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, &data, true).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -114,8 +115,9 @@ mod editor_config {
     fn writes_ugly() {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.json");
+        let data: json::JsonValue = json::read_file(&path).unwrap();
 
-        json::write_file_with_config(&path, json::read_file(&path).unwrap(), false).unwrap();
+        json::write_file_with_config(&path, &data, false).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -124,10 +126,14 @@ mod editor_config {
     fn can_change_space_indent() {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.json");
+        let data: json::JsonValue = json::read_file(&path).unwrap();
 
-        append_editor_config(sandbox.path(), "[*.json]\nindent_size = 8");
+        append_editor_config(
+            sandbox.path(),
+            "[*.json]\nindent_style = space\nindent_size = 8",
+        );
 
-        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, &data, true).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -136,10 +142,11 @@ mod editor_config {
     fn can_change_tab_indent() {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.json");
+        let data: json::JsonValue = json::read_file(&path).unwrap();
 
         append_editor_config(sandbox.path(), "[*.json]\nindent_style = tab");
 
-        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, &data, true).unwrap();
 
         assert_snapshot!(fs::read_file(&path).unwrap());
     }
@@ -148,10 +155,11 @@ mod editor_config {
     fn can_enable_trailing_line() {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.json");
+        let data: json::JsonValue = json::read_file(&path).unwrap();
 
         append_editor_config(sandbox.path(), "[*.json]\ninsert_final_newline = true");
 
-        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, &data, true).unwrap();
 
         assert!(fs::read_file(&path).unwrap().ends_with('\n'));
     }
@@ -160,10 +168,11 @@ mod editor_config {
     fn can_disable_trailing_line() {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.json");
+        let data: json::JsonValue = json::read_file(&path).unwrap();
 
         append_editor_config(sandbox.path(), "[*.json]\ninsert_final_newline = false");
 
-        json::write_file_with_config(&path, json::read_file(&path).unwrap(), true).unwrap();
+        json::write_file_with_config(&path, &data, true).unwrap();
 
         assert!(!fs::read_file(&path).unwrap().ends_with('\n'));
     }

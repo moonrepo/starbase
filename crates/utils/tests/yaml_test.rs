@@ -33,7 +33,10 @@ mod editor_config {
         let sandbox = create_sandbox("editor-config");
         let path = sandbox.path().join("file.yaml");
 
-        append_editor_config(sandbox.path(), "[*.yaml]\nindent_size = 8");
+        append_editor_config(
+            sandbox.path(),
+            "[*.yaml]\nindent_style = space\nindent_size = 8",
+        );
 
         let data: Value = yaml::read_file(&path).unwrap();
 

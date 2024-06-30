@@ -66,6 +66,47 @@ where
     })
 }
 
+/// Format and serialize the provided value into a string, with the provided
+/// indentation. This can be used to preserve the original indentation of a file.
+#[inline]
+#[instrument(name = "format_yaml_with_identation", skip(data))]
+pub fn format_with_identation<D>(data: &D, indent: &str) -> Result<String, YamlError>
+where
+    D: ?Sized + Serialize,
+{
+    trace!("Formatting YAML with preserved indentation");
+
+    let mut data = serde_yaml::to_string(data)
+        .map_err(|error| YamlError::Format {
+            error: Box::new(error),
+        })?
+        .trim()
+        .to_string();
+
+    // serde_yaml does not support customizing the indentation character. So to work around
+    // this, we do it manually on the YAML string, but only if the indent is different than
+    // a double space (the default), which can be customized with `.editorconfig`.
+    if indent != "  " {
+        data = data
+            .split('\n')
+            .map(|line| {
+                if !line.starts_with("  ") {
+                    return line.to_string();
+                }
+
+                WHITESPACE_PREFIX
+                    .replace_all(line, |caps: &regex::Captures| {
+                        indent.repeat(caps.get(1).unwrap().as_str().len() / 2)
+                    })
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    Ok(data)
+}
+
 /// Read a file at the provided path and deserialize into the required type.
 /// The path must already exist.
 #[inline]
@@ -124,42 +165,12 @@ where
     P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
-    let path = path.as_ref();
-    let editor_config = fs::get_editor_config_props(path);
-
     trace!(file = ?path, "Writing YAML file with .editorconfig");
 
-    let mut data = serde_yaml::to_string(&yaml)
-        .map_err(|error| YamlError::WriteFile {
-            path: path.to_path_buf(),
-            error: Box::new(error),
-        })?
-        .trim()
-        .to_string();
+    let path = path.as_ref();
+    let editor_config = fs::get_editor_config_props(path)?;
 
-    // serde_yaml does not support customizing the indentation character. So to work around
-    // this, we do it manually on the YAML string, but only if the indent is different than
-    // a double space (the default), which can be customized with `.editorconfig`.
-    if editor_config.indent != "  " {
-        data = data
-            .split('\n')
-            .map(|line| {
-                if !line.starts_with("  ") {
-                    return line.to_string();
-                }
-
-                WHITESPACE_PREFIX
-                    .replace_all(line, |caps: &regex::Captures| {
-                        editor_config
-                            .indent
-                            .repeat(caps.get(1).unwrap().as_str().len() / 2)
-                    })
-                    .to_string()
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-    }
-
+    let mut data = format_with_identation(yaml, &editor_config.indent)?;
     editor_config.apply_eof(&mut data);
 
     fs::write_file(path, data)?;
