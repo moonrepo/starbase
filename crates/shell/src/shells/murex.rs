@@ -15,7 +15,7 @@ impl Murex {
 
 impl Shell for Murex {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("export {}={};", self.quote(key), self.quote(value))
+        format!("$ENV.{}={}", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -55,21 +55,33 @@ event: onPrompt {prefix}_hook=before {
     }
 
     fn quote(&self, value: &str) -> String {
-        if value
-            .chars()
-            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
-        {
-            // No quoting needed for simple values
-            value.to_string()
-        } else if value.contains('\'') {
-            // Use double quotes if single quotes are present in the value
-            format!("\"{}\"", value.replace("\"", "\\\""))
-        } else {
-            // Use single quotes for other cases
-            format!("'{}'", value)
+        if value.starts_with('$') {
+            return format!("\"{}\"", value);
         }
+        // Check for simple values that don't need quoting
+        if value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+            return value.to_string();
+        }
+    
+        // Handle brace quotes %(...)
+        if value.starts_with("%(") && value.ends_with(")") {
+            return value.to_string(); // Return as-is for brace quotes
+        }
+    
+        // Check for values with spaces or special characters requiring double quotes
+        if value.contains(' ') || value.contains('"') || value.contains('$') {
+            // Escape existing backslashes and double quotes
+            let escaped_value = value.replace("\\", "\\\\").replace("\"", "\\\"");
+            return format!("\"{}\"", escaped_value);
+        }
+    
+        // Default case for complex values
+        format!("{}", value)
     }
+    
 }
+
+    
 
 impl fmt::Display for Murex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -111,4 +123,16 @@ mod tests {
 
         assert_snapshot!(Murex.format_hook(hook).unwrap());
     }
+
+    #[test]
+    fn test_murex_quoting() {
+        assert_eq!(Murex.quote("value"), "value");
+        assert_eq!(Murex.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(Murex.quote("$(echo hello)"), "\"$(echo hello)\"");
+        assert_eq!(Murex.quote(""), "");
+        assert_eq!(Murex.quote("abc123"), "abc123");
+        assert_eq!(Murex.quote("%(Bob)"), "%(Bob)");
+        assert_eq!(Murex.quote("%(hello world)"), "%(hello world)");
+    }
+
 }
