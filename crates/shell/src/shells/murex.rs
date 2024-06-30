@@ -59,29 +59,29 @@ event: onPrompt {prefix}_hook=before {
             return format!("\"{}\"", value);
         }
         // Check for simple values that don't need quoting
-        if value.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        if value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
             return value.to_string();
         }
-    
+
         // Handle brace quotes %(...)
         if value.starts_with("%(") && value.ends_with(")") {
             return value.to_string(); // Return as-is for brace quotes
         }
-    
+
         // Check for values with spaces or special characters requiring double quotes
         if value.contains(' ') || value.contains('"') || value.contains('$') {
             // Escape existing backslashes and double quotes
             let escaped_value = value.replace("\\", "\\\\").replace("\"", "\\\"");
             return format!("\"{}\"", escaped_value);
         }
-    
+
         // Default case for complex values
         format!("{}", value)
     }
-    
 }
-
-    
 
 impl fmt::Display for Murex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -134,5 +134,4 @@ mod tests {
         assert_eq!(Murex.quote("%(Bob)"), "%(Bob)");
         assert_eq!(Murex.quote("%(hello world)"), "%(hello world)");
     }
-
 }

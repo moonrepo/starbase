@@ -108,13 +108,16 @@ $env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
         .collect()
     }
 
-    fn quote(&self, value: &str) -> String {
-        if value.contains('\'') {
-            // Escape single quotes by doubling them inside single quotes
-            format!("'{}'", value.replace("'", "''"))
+    fn quote(&self, input: &str) -> String {
+        if input.contains('\'') && !input.contains('`') {
+            // Use backtick quoting for single-quoted interpolation
+            format!("`{}`", input)
+        } else if input.contains('`') {
+            // Use double quotes with proper escaping for double-quoted interpolation
+            format!("\"{}\"", input.replace("\\", "\\\\").replace("\"", "\\\""))
         } else {
-            // No special quoting needed
-            value.to_string()
+            // Use single quotes for bare strings and other cases
+            format!("'{}'", input)
         }
     }
 }

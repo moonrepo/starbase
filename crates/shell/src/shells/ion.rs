@@ -63,7 +63,9 @@ impl Shell for Ion {
         } else if value.contains('{') || value.contains('}') {
             // Single quotes to prevent brace expansion
             format!("'{}'", value)
-        } else if value.chars().all(|c| c.is_ascii_graphic() && !c.is_whitespace() && c != '"' && c != '\'' && c != '\\') {
+        } else if value.chars().all(|c| {
+            c.is_ascii_graphic() && !c.is_whitespace() && c != '"' && c != '\'' && c != '\\'
+        }) {
             // No quoting needed for simple values
             value.to_string()
         } else {
@@ -103,10 +105,15 @@ mod tests {
     fn test_ion_quoting() {
         assert_eq!(Ion.quote("simplevalue"), "simplevalue");
         assert_eq!(Ion.quote("value with spaces"), r#""value with spaces""#);
-        assert_eq!(Ion.quote(r#"value "with" quotes"#), r#""value \"with\" quotes""#);
+        assert_eq!(
+            Ion.quote(r#"value "with" quotes"#),
+            r#""value \"with\" quotes""#
+        );
         assert_eq!(Ion.quote("$variable"), "\"$variable\"");
         assert_eq!(Ion.quote("{brace_expansion}"), "'{brace_expansion}'");
-        assert_eq!(Ion.quote("value with 'single quotes'"), r#""value with 'single quotes'""#);
+        assert_eq!(
+            Ion.quote("value with 'single quotes'"),
+            r#""value with 'single quotes'""#
+        );
     }
-
 }

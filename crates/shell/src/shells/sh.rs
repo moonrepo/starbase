@@ -18,7 +18,7 @@ impl Shell for Sh {
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"unset {key};"#)
+        format!("unset {};", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -38,18 +38,33 @@ impl Shell for Sh {
     }
 
     fn quote(&self, value: &str) -> String {
-        if value.contains(' ') || value.contains('$') || value.contains('\'') || value.contains('"')
+        if value.is_empty() {
+            return "''".to_string();
+        }
+
+        // Check if we need double quotes
+        if value.contains('\'')
+            || value.contains('\"')
+            || value.contains('`')
+            || value.contains(' ')
         {
             // Use double quotes and escape necessary characters
-            format!(
-                "\"{}\"",
-                value
-                    .replace("\\", "\\\\")
-                    .replace("\"", "\\\"")
-                    .replace("$", "\\$")
-            )
+            let mut quoted = String::from("\"");
+            for c in value.chars() {
+                match c {
+                    '"' | '\\' | '$' | '`' => {
+                        quoted.push('\\');
+                        quoted.push(c);
+                    }
+                    _ => {
+                        quoted.push(c);
+                    }
+                }
+            }
+            quoted.push('"');
+            quoted
         } else {
-            // No quoting needed
+            // Otherwise, use single quotes
             value.to_string()
         }
     }
@@ -78,6 +93,19 @@ mod tests {
         assert_eq!(
             Sh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";"#
+        );
+    }
+
+    #[test]
+    fn test_sh_quoting() {
+        let sh = Sh::new();
+        assert_eq!(sh.quote(""), "''");
+        assert_eq!(sh.quote("simple"), "simple");
+        assert_eq!(sh.quote("say \"hello\""), "\"say \\\"hello\\\"\"");
+        assert_eq!(sh.quote("price $5"), "\"price \\$5\"");
+        assert_eq!(
+            sh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
+            "\"complex 'value' with \\\"quotes\\\" and \\\\backslashes\\\\\""
         );
     }
 }

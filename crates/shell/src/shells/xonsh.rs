@@ -18,11 +18,11 @@ impl Xonsh {
 // https://xon.sh/xonshrc.html
 impl Shell for Xonsh {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("${} = {}", self.quote(key), self.quote(value))
+        format!("${} = {}", key, self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"del ${key}"#)
+        format!("del ${}", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -47,13 +47,38 @@ impl Shell for Xonsh {
         .collect()
     }
 
+    // fn quote(&self, value: &str) -> String {
+    //     if value.is_empty() {
+    //         return "''".to_string();
+    //     }
+
+    //     // Xonsh preserves quotes, so we enclose the value in double quotes
+    //     // and escape any double quotes within the value.
+    //     let mut quoted = String::from("\"");
+    //     for c in value.chars() {
+    //         if c == '"' {
+    //             quoted.push('\\');
+    //         }
+    //         quoted.push(c);
+    //     }
+    //     quoted.push('"');
+    //     quoted
+    // }
+
     fn quote(&self, value: &str) -> String {
-        if value.contains(' ') || value.contains('$') || value.contains('"') || value.contains('\\')
-        {
-            format!("\"{}\"", value.replace("\\", "\\\\").replace("\"", "\\\""))
-        } else {
-            value.to_string()
+        if value.is_empty() {
+            return "''".to_string();
         }
+
+        let mut quoted = String::new();
+        for c in value.chars() {
+            match c {
+                '"' => quoted.push_str("\\\""),
+                '\\' => quoted.push_str("\\\\"),
+                _ => quoted.push(c),
+            }
+        }
+        format!("\"{}\"", quoted)
     }
 }
 
@@ -80,6 +105,19 @@ mod tests {
         assert_eq!(
             Xonsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
+        );
+    }
+    #[test]
+    fn test_xonsh_quoting() {
+        let xonsh = Xonsh::new();
+        assert_eq!(xonsh.quote(""), "''");
+        assert_eq!(xonsh.quote("simple"), "\"simple\"");
+        assert_eq!(xonsh.quote("don't"), "\"don't\"");
+        assert_eq!(xonsh.quote("say \"hello\""), "\"say \\\"hello\\\"\"");
+        assert_eq!(xonsh.quote("price $5"), "\"price $5\"");
+        assert_eq!(
+            xonsh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
+            "\"complex 'value' with \\\"quotes\\\" and \\\\backslashes\\\\\""
         );
     }
 }
