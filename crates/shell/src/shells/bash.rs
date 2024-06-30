@@ -20,7 +20,7 @@ impl Shell for Bash {
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"unset {key};"#)
+        format!("unset {};", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -67,20 +67,43 @@ fi
             home_dir.join(".profile"),
         ]
     }
+    /*
 
+      Quotes a string according to Bash shell quoting rules.
+
+      This method determines whether quoting is necessary based on the presence of special characters or the string's content.
+      It supports three quoting mechanisms:
+      - No quoting for alphanumeric and underscore characters.
+      - ANSI-C quoting (`$'...'`) for values containing characters like newline (`\n`), tab (`\t`), backslash (`\`), and single quote (`'`).
+      - Double quotes (`"..."`) for values containing special characters like double quote (`"`).
+
+      Args:
+          - `value`: The string to be quoted.
+
+      Returns:
+          A quoted string suitable for use in Bash shell scripts.
+
+    */
     fn quote(&self, value: &str) -> String {
-        if value
-            .chars()
-            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
-        {
-            // No quoting needed for simple values
+        // No quoting needed for alphanumeric and underscore characters
+        if value.is_empty() || value.chars().all(|c| c.is_alphanumeric() || c == '_') {
             value.to_string()
-        } else if value.contains('\'') {
-            // Special quoting for single quotes
-            format!("$'{}'", value.replace("'", r"'\''"))
+        } else if value
+            .chars()
+            .any(|c| c == '\n' || c == '\t' || c == '\\' || c == '\'')
+        {
+            // Use $'...' ANSI-C quoting for values containing special characters
+            format!(
+                "$'{}'",
+                value
+                    .replace('\\', "\\\\")
+                    .replace('\'', "\\'")
+                    .replace('\n', "\\n")
+                    .replace('\t', "\\t")
+            )
         } else {
-            // Double quote with escaping
-            format!("\"{}\"", value.replace("\"", "\\\""))
+            // Use double quotes for values containing special characters not handled by ANSI-C
+            format!("\"{}\"", value.replace('"', "\\\""))
         }
     }
 }
@@ -100,7 +123,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Bash.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"export PROTO_HOME="$HOME/.proto";"#
+            "export PROTO_HOME=\"$HOME/.proto\";"
         );
     }
 
@@ -108,7 +131,7 @@ mod tests {
     fn formats_path() {
         assert_eq!(
             Bash.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";"#
+            "export PATH=\"$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH\";"
         );
     }
 
@@ -127,28 +150,24 @@ mod tests {
     }
 
     #[test]
-    fn quotes_simple_value() {
-        assert_eq!(Bash.quote("simple"), "simple");
-    }
-
-    #[test]
-    fn quotes_value_with_spaces() {
-        assert_eq!(Bash.quote("value with spaces"), "\"value with spaces\"");
-    }
-
-    #[test]
-    fn quotes_value_with_special_chars() {
+    fn test_bash_quoting() {
+        let shell = Bash;
+        assert_eq!(shell.quote("simple"), "simple"); // No quoting needed
+        assert_eq!(shell.quote("value with spaces"), "\"value with spaces\""); // Double quotes needed
         assert_eq!(
-            Bash.quote("value$with&special*chars"),
-            "\"value$with&special*chars\""
-        );
-    }
-
-    #[test]
-    fn quotes_value_with_single_quote() {
+            shell.quote("value\"with\"quotes"),
+            "\"value\\\"with\\\"quotes\""
+        ); // Double quotes with escaping
         assert_eq!(
-            Bash.quote("value'with'single'quote"),
-            "$'value'\\''with'\\''single'\\''quote'"
-        );
+            shell.quote("value\nwith\nnewlines"),
+            "$'value\\nwith\\nnewlines'"
+        ); // ANSI-C quoting for newlines
+        assert_eq!(shell.quote("value\twith\ttabs"), "$'value\\twith\\ttabs'"); // ANSI-C quoting for tabs
+        assert_eq!(
+            shell.quote("value\\with\\backslashes"),
+            "$'value\\\\with\\\\backslashes'"
+        ); // ANSI-C quoting for backslashes
+        assert_eq!(shell.quote("value'with'quotes"), "$'value\\'with\\'quotes'");
+        // ANSI-C quoting for single quotes
     }
 }
