@@ -19,7 +19,7 @@ impl Shell for Murex {
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"unset {key};"#)
+        format!("unset {};", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
