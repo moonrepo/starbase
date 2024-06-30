@@ -1,0 +1,7 @@
+---
+source: crates/shell/src/utils/escape.rs
+assertion_line: 181
+expression: "escape(\"line1\\nline2\", \"bash\")"
+---
+$'line1\
+line2'

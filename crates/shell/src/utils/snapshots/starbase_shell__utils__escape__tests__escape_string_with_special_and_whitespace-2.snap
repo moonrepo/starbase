@@ -1,0 +1,7 @@
+---
+source: crates/shell/src/utils/escape.rs
+assertion_line: 227
+expression: "escape(special_whitespace, \"powershell\")"
+---
+' $ `	 `
+ @ !'

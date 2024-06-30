@@ -1,0 +1,6 @@
+---
+source: crates/shell/src/utils/escape.rs
+assertion_line: 203
+expression: "escape(special_chars, \"bash\")"
+---
+$'!@#$%^&*()_\x2B\x2D={}[]:";\'<>?,.\x2F\|`~'

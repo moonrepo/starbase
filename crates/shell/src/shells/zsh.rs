@@ -1,5 +1,5 @@
 use super::Shell;
-// use crate::utils::escape::escapeBash;
+// use crate::utils::escape::escape_bash;
 use crate::helpers::is_absolute_dir;
 use crate::hooks::Hook;
 use std::env;
@@ -80,7 +80,7 @@ fi
     }
 
     // fn quote(&self, value: &str) -> String {
-    //     escapeBash(value)
+    //     escape_bash(value)
     // }
 }
 

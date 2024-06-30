@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::utils::escape::escapeBash;
+use crate::utils::escape::escape;
 use crate::hooks::Hook;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -18,18 +18,18 @@ impl Bash {
 impl Shell for Bash {
     fn format_env_set(&self, key: &str, value: &str) -> String {
         // format!("export {}={};", self.quote(key), self.quote(value))
-        format!("export {}={};", escapeBash(key), escapeBash(value))
+        format!("export {}={};", escape(key, "bash"), escape(value, "bash"))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
         // format!("unset {key};", key=self.quote(key))
-        format!("unset {key};", key=escapeBash(key))
+        format!("unset {key};", key=escape(key, "bash"))
     }    
 
     fn format_path_set(&self, paths: &[String]) -> String {
         // let escaped_paths: Vec<String> = paths.iter().map(|p| self.quote(p)).collect();
         // format!(r#"export PATH="{}:$PATH";"#, escaped_paths.join(":"))
-        let escaped_paths: Vec<String> = paths.iter().map(|p| escapeBash(p)).collect();
+        let escaped_paths: Vec<String> = paths.iter().map(|p| escape(p, "bash")).collect();
         format!(r#"export PATH="{}:$PATH";"#, escaped_paths.join(":"))
     }
 
@@ -76,7 +76,7 @@ fi
 
     // TODO: commented out to get some basic tests work first
     // fn quote(&self, value: &str) -> String {
-    //     escapeBash(value)
+    //     escape_bash(value)
     // }
 }
 
@@ -119,41 +119,5 @@ mod tests {
         };
 
         assert_snapshot!(Bash.format_hook(hook).unwrap());
-    }
-
-    #[test]
-    fn test_escape_plain_string() {
-        // let bash_shell = Bash::new();
-        assert_snapshot!(escapeBash("foobar"));
-    }
-
-    #[test]
-    fn test_escape_string_with_spaces() {
-        // let bash_shell = Bash::new();
-        assert_snapshot!(escapeBash("foo bar"));
-    }
-
-    #[test]
-    fn test_escape_string_with_single_quotes() {
-        // let bash_shell = Bash::new();
-        assert_snapshot!(escapeBash("don't"));
-    }
-
-    #[test]
-    fn test_escape_string_with_special_characters() {
-        // let bash_shell = Bash::new();
-        assert_snapshot!(escapeBash("$100@*&"));
-    }
-
-    #[test]
-    fn test_escape_string_with_backslashes() {
-        // let bash_shell = Bash::new();
-        assert_snapshot!(escapeBash("a\\b"));
-    }
-
-    #[test]
-    fn test_escape_empty_string() {
-        // let bash_shell = Bash::new();
-        assert_snapshot!(escapeBash(""));
     }
 }

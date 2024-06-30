@@ -1,0 +1,7 @@
+---
+source: crates/shell/src/utils/escape.rs
+assertion_line: 182
+expression: "escape(\"line1\\nline2\", \"powershell\")"
+---
+'line1`
+line2'
