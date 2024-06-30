@@ -1,6 +1,6 @@
 ---
 source: crates/shell/src/shells/murex.rs
-assertion_line: 109
+assertion_line: 112
 expression: Murex.format_hook(hook).unwrap()
 ---
 event: onPrompt starbase_hook=before {

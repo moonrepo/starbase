@@ -1,10 +1,10 @@
 ---
 source: crates/shell/src/shells/fish.rs
-assertion_line: 117
+assertion_line: 183
 expression: Fish.format_hook(hook).unwrap()
 ---
 function __starbase_hook --on-variable PWD;
-    set -gx PROTO_HOME $HOME/.proto;
+    set -gx PROTO_HOME "\$HOME/.proto";
     set -ge PROTO_ROOT;
     set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH;
 end;

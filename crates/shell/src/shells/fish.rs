@@ -22,7 +22,7 @@ impl Shell for Fish {
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"set -ge {key};"#)
+        format!("set -ge {};", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -58,24 +58,90 @@ end;"#,
         .collect()
     }
 
+    /// Quotes a string according to Fish shell quoting rules.
+    ///
+    /// This method handles quoting and escaping according to Fish shell rules.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The string to be quoted.
+    ///
+    /// # Returns
+    ///
+    /// A quoted string suitable for use in Fish shell scripts.
     fn quote(&self, value: &str) -> String {
-        if value
-            .chars()
-            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
+        if value.is_empty() {
+            return "''".to_string();
+        }
+
+        // Check for complex values requiring special quoting
+        if value.contains('\n')
+            || value.contains('\t')
+            || value.contains('\x07')
+            || value.contains('\x08')
+            || value.contains('\x1b')
+            || value.contains('\x0c')
+            || value.contains('\x0a')
+            || value.contains('\x0d')
+            || value.contains('\x0b')
+            || value.contains('*')
+            || value.contains('?')
+            || value.contains('~')
+            || value.contains('#')
+            || value.contains('(')
+            || value.contains(')')
+            || value.contains('{')
+            || value.contains('}')
+            || value.contains('[')
+            || value.contains(']')
+            || value.contains('<')
+            || value.contains('>')
+            || value.contains('^')
+            || value.contains('&')
+            || value.contains('|')
+            || value.contains(';')
+            || value.contains('"')
+            || value.contains('$')
         {
-            // No quoting needed for simple values
-            value.to_string()
-        } else if value.contains('\'') {
-            // Single quotes are preferred unless they are present in the string
-            // Double quote with escaping for double quotes
-            format!("\"{}\"", value.replace("\"", "\\\""))
+            format!(
+                r#""{}""#,
+                value
+                    .replace("\\", "\\\\")
+                    .replace("\n", "\\n")
+                    .replace("\t", "\\t")
+                    .replace("\x07", "\\a")
+                    .replace("\x08", "\\b")
+                    .replace("\x1b", "\\e")
+                    .replace("\x0c", "\\f")
+                    .replace("\x0a", "\\n")
+                    .replace("\x0d", "\\r")
+                    .replace("\x0b", "\\v")
+                    .replace("\"", "\\\"")
+                    .replace("$", "\\$")
+                    .replace("*", "\\*")
+                    .replace("?", "\\?")
+                    .replace("~", "\\~")
+                    .replace("#", "\\#")
+                    .replace("(", "\\(")
+                    .replace(")", "\\)")
+                    .replace("{", "\\{")
+                    .replace("}", "\\}")
+                    .replace("[", "\\[")
+                    .replace("]", "\\]")
+                    .replace("<", "\\<")
+                    .replace(">", "\\>")
+                    .replace("^", "\\^")
+                    .replace("&", "\\&")
+                    .replace("|", "\\|")
+                    .replace(";", "\\;")
+            )
+        } else if value.contains(' ') {
+            format!("'{}'", value.replace("'", "''"))
         } else {
-            // Single quote
-            format!("'{}'", value)
+            value.to_string()
         }
     }
 }
-
 impl fmt::Display for Fish {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "fish")
@@ -115,5 +181,38 @@ mod tests {
         };
 
         assert_snapshot!(Fish.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_fish_quoting() {
+        assert_eq!(Fish.quote("\n"), r#""\n""#);
+        assert_eq!(Fish.quote("\t"), r#""\t""#);
+        assert_eq!(Fish.quote("\x07"), r#""\a""#);
+        assert_eq!(Fish.quote("\x08"), r#""\b""#);
+        assert_eq!(Fish.quote("\x1b"), r#""\e""#);
+        assert_eq!(Fish.quote("\x0c"), r#""\f""#);
+        assert_eq!(Fish.quote("\r"), r#""\r""#);
+        assert_eq!(Fish.quote("\x0a"), r#""\n""#);
+        assert_eq!(Fish.quote("\x0b"), r#""\v""#);
+        assert_eq!(Fish.quote("*"), r#""\*""#);
+        assert_eq!(Fish.quote("?"), r#""\?""#);
+        assert_eq!(Fish.quote("~"), r#""\~""#);
+        assert_eq!(Fish.quote("#"), r#""\#""#);
+        assert_eq!(Fish.quote("("), r#""\(""#);
+        assert_eq!(Fish.quote(")"), r#""\)""#);
+        assert_eq!(Fish.quote("{"), r#""\{""#);
+        assert_eq!(Fish.quote("}"), r#""\}""#);
+        assert_eq!(Fish.quote("["), r#""\[""#);
+        assert_eq!(Fish.quote("]"), r#""\]""#);
+        assert_eq!(Fish.quote("<"), r#""\<""#);
+        assert_eq!(Fish.quote(">"), r#""\>""#);
+        assert_eq!(Fish.quote("^"), r#""\^""#);
+        assert_eq!(Fish.quote("&"), r#""\&""#);
+        assert_eq!(Fish.quote("|"), r#""\|""#);
+        assert_eq!(Fish.quote(";"), r#""\;""#);
+        assert_eq!(Fish.quote("\""), r#""\"""#);
+        assert_eq!(Fish.quote("$"), r#""\$""#);
+        assert_eq!(Fish.quote("$variable"), r#""\$variable""#);
+        assert_eq!(Fish.quote("value with spaces"), "'value with spaces'");
     }
 }
