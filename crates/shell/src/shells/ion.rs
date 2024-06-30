@@ -21,12 +21,10 @@ impl Shell for Ion {
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        // TODO Not sure if correct
         format!("drop {}", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
-        // TODO Not sure if correct
         format!(r#"export PATH = "{}:{}""#, paths.join(":"), "${env::PATH}")
     }
 
