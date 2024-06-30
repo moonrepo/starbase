@@ -41,14 +41,14 @@ fn join_path(value: impl AsRef<str>) -> String {
 impl Shell for Pwsh {
     fn format_env_set(&self, key: &str, value: &str) -> String {
         if value.contains('/') {
-            format!("$env:{key} = {};", join_path(value))
+            format!("$env:{} = {};", key, join_path(value))
         } else {
-            format!("$env:{} = {};", self.quote(key), self.quote(value))
+            format!("$env:{} = {};", key, self.quote(format(value).as_str()))
         }
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"Remove-Item -LiteralPath "env:{key}";"#)
+        format!("Remove-Item -LiteralPath \"env:{}\";", key)
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -165,16 +165,30 @@ if ($currentAction) {
     }
 
     fn quote(&self, value: &str) -> String {
-        if value.contains('\'') {
-            // Use double quotes and escape double quotes
-            let escaped = value.replace("\"", "`\"");
-            format!("\"{}\"", escaped)
-        } else if value.contains('"') || value.contains(' ') {
-            // Use single quotes
-            format!("'{}'", value)
-        } else {
-            value.to_string()
+        // If the string is empty, return an empty single-quoted string
+        if value.is_empty() {
+            return "''".to_string();
         }
+
+        // Check if the string contains any characters that need to be escaped
+        if value.contains('\'') || value.contains('"') || value.contains('`') || value.contains('$')
+        {
+            // If the string contains a single quote, use a single-quoted string and escape single quotes by doubling them
+            if value.contains('\'') {
+                let escaped = value.replace("'", "''");
+                return format!("'{}'", escaped);
+            } else {
+                // Use a double-quoted string and escape necessary characters
+                let escaped = value
+                    .replace("`", "``")
+                    .replace("$", "`$")
+                    .replace("\"", "`\"");
+                return format!("\"{}\"", escaped);
+            }
+        }
+
+        // If the string does not contain any special characters, return a single-quoted string
+        format!("'{}'", value)
     }
 }
 
@@ -222,5 +236,15 @@ mod tests {
         };
 
         assert_snapshot!(Pwsh.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_murex_quoting() {
+        assert_eq!(Pwsh.quote(""), "''");
+        assert_eq!(Pwsh.quote("simple"), "'simple'");
+        assert_eq!(Pwsh.quote("don't"), "'don''t'");
+        assert_eq!(Pwsh.quote("say \"hello\""), "\"say `\"hello`\"\"");
+        assert_eq!(Pwsh.quote("back`tick"), "\"back``tick\"");
+        assert_eq!(Pwsh.quote("price $5"), "\"price `$5\"");
     }
 }
