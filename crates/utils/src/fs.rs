@@ -320,9 +320,12 @@ impl EditorConfigProps {
 /// Load properties from the closest `.editorconfig` file.
 #[cfg(feature = "editor-config")]
 #[instrument]
-pub fn get_editor_config_props<T: AsRef<Path> + Debug>(path: T) -> EditorConfigProps {
+pub fn get_editor_config_props<T: AsRef<Path> + Debug>(
+    path: T,
+) -> Result<EditorConfigProps, FsError> {
     use ec4rs::property::*;
 
+    let path = path.as_ref();
     let editor_config = ec4rs::properties_of(path).unwrap_or_default();
     let tab_width = editor_config
         .get::<TabWidth>()
@@ -330,29 +333,28 @@ pub fn get_editor_config_props<T: AsRef<Path> + Debug>(path: T) -> EditorConfigP
     let indent_size = editor_config
         .get::<IndentSize>()
         .unwrap_or(IndentSize::Value(2));
-    let indent_style = editor_config
-        .get::<IndentStyle>()
-        .unwrap_or(IndentStyle::Spaces);
+    let indent_style = editor_config.get::<IndentStyle>().ok();
     let insert_final_newline = editor_config
         .get::<FinalNewline>()
         .unwrap_or(FinalNewline::Value(true));
 
-    EditorConfigProps {
+    Ok(EditorConfigProps {
         eof: if matches!(insert_final_newline, FinalNewline::Value(true)) {
             "\n".into()
         } else {
             "".into()
         },
         indent: match indent_style {
-            IndentStyle::Tabs => "\t".into(),
-            IndentStyle::Spaces => match indent_size {
+            Some(IndentStyle::Tabs) => "\t".into(),
+            Some(IndentStyle::Spaces) => match indent_size {
                 IndentSize::UseTabWidth => match tab_width {
                     TabWidth::Value(value) => " ".repeat(value),
                 },
                 IndentSize::Value(value) => " ".repeat(value),
             },
+            None => detect_indentation(read_file(path)?),
         },
-    }
+    })
 }
 
 /// Check if the provided path is a stale file, by comparing modified, created, or accessed
@@ -732,7 +734,7 @@ pub fn write_file_with_config<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(
     data: D,
 ) -> Result<(), FsError> {
     let path = path.as_ref();
-    let editor_config = get_editor_config_props(path);
+    let editor_config = get_editor_config_props(path)?;
 
     let mut data = unsafe { String::from_utf8_unchecked(data.as_ref().to_vec()) };
     editor_config.apply_eof(&mut data);

@@ -184,7 +184,7 @@ where
     trace!(file = ?path, "Writing JSON file with .editorconfig");
 
     let path = path.as_ref();
-    let editor_config = fs::get_editor_config_props(path);
+    let editor_config = fs::get_editor_config_props(path)?;
 
     let mut data = format_with_identation(&json, &editor_config.indent)?;
     editor_config.apply_eof(&mut data);

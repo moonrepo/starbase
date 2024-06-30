@@ -128,7 +128,10 @@ mod editor_config {
         let path = sandbox.path().join("file.json");
         let data: json::JsonValue = json::read_file(&path).unwrap();
 
-        append_editor_config(sandbox.path(), "[*.json]\nindent_size = 8");
+        append_editor_config(
+            sandbox.path(),
+            "[*.json]\nindent_style = space\nindent_size = 8",
+        );
 
         json::write_file_with_config(&path, &data, true).unwrap();
 
