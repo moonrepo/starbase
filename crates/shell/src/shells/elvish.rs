@@ -77,22 +77,21 @@ set @edit:before-readline = $@edit:before-readline {
 
         profiles.into_iter().collect()
     }
-    /*
-       Quotes a string according to Elvish shell quoting rules.
-
-       This method determines whether quoting is necessary based on the presence of special characters or the string's content. It uses single quotes (`'`) for simple cases and double quotes (`"`) for values containing special characters that require escaping. It supports escape sequences for backslashes and characters such as newline, tab, single quote, double quote, and other control characters.
-
-       Args:
-           - `value`: The string to be quoted.
-
-       Returns:
-           A quoted string suitable for use in Elvish shell scripts.
-    */
+    /// Quotes a string according to Elvish shell quoting rules.
+    ///
+    /// This method determines whether quoting is necessary based on the presence of special characters
+    /// or the string's content. It uses single quotes (`'`) for simple cases and double quotes (`"`)
+    /// for values containing special characters that require escaping. It supports escape sequences for
+    /// backslashes and characters such as newline, tab, single quote, double quote, and other control characters.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The string to be quoted.
+    ///
+    /// # Returns
+    ///
+    /// A quoted string suitable for use in Elvish shell scripts.
     fn quote(&self, value: &str) -> String {
-        // Special case for {~} which should not be quoted
-        if value == "{~}" {
-            return value.to_string();
-        }
         // Check for null character
         if value.contains('\0') {
             return "parse error".to_string();
