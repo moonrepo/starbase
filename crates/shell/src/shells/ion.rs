@@ -17,12 +17,12 @@ impl Ion {
 impl Shell for Ion {
     // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("export {}={};", self.quote(key), self.quote(value))
+        format!("export {}={}", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
         // TODO Not sure if correct
-        format!(r#"drop {key}"#)
+        format!("drop {}", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -47,15 +47,29 @@ impl Shell for Ion {
         .into_iter()
         .collect()
     }
-
+    /// Quotes a string according to Ion shell quoting rules.
+    ///
+    /// This method handles quoting and escaping according to Ion shell rules.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The string to be quoted.
+    ///
+    /// # Returns
+    ///
+    /// A quoted string suitable for use in Ion shell scripts.
     fn quote(&self, value: &str) -> String {
-        if value
-            .chars()
-            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
-        {
+        if value.starts_with('$') {
+            // Variables expanded in double quotes
+            format!("\"{}\"", value)
+        } else if value.contains('{') || value.contains('}') {
+            // Single quotes to prevent brace expansion
+            format!("'{}'", value)
+        } else if value.chars().all(|c| c.is_ascii_graphic() && !c.is_whitespace() && c != '"' && c != '\'' && c != '\\') {
             // No quoting needed for simple values
             value.to_string()
         } else {
+            // Double quotes for other cases
             format!("\"{}\"", value.replace("\"", "\\\""))
         }
     }
@@ -75,7 +89,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Ion.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"export PROTO_HOME = "$HOME/.proto""#
+            r#"export PROTO_HOME="$HOME/.proto""#
         );
     }
 
@@ -86,4 +100,15 @@ mod tests {
             r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:${env::PATH}""#
         );
     }
+
+    #[test]
+    fn test_ion_quoting() {
+        assert_eq!(Ion.quote("simplevalue"), "simplevalue");
+        assert_eq!(Ion.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(Ion.quote(r#"value "with" quotes"#), r#""value \"with\" quotes""#);
+        assert_eq!(Ion.quote("$variable"), "\"$variable\"");
+        assert_eq!(Ion.quote("{brace_expansion}"), "'{brace_expansion}'");
+        assert_eq!(Ion.quote("value with 'single quotes'"), r#""value with 'single quotes'""#);
+    }
+
 }
