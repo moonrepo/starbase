@@ -24,11 +24,11 @@ fn format(value: impl AsRef<str>) -> String {
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("set-env {} {}", self.quote(key), self.quote(value))
+        format!("set-env {} {}", self.quote(key), format(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"unset-env {key};"#)
+        format!("unset-env {};", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -77,21 +77,60 @@ set @edit:before-readline = $@edit:before-readline {
 
         profiles.into_iter().collect()
     }
+    /*
+       Quotes a string according to Elvish shell quoting rules.
 
+       This method determines whether quoting is necessary based on the presence of special characters or the string's content. It uses single quotes (`'`) for simple cases and double quotes (`"`) for values containing special characters that require escaping. It supports escape sequences for backslashes and characters such as newline, tab, single quote, double quote, and other control characters.
+
+       Args:
+           - `value`: The string to be quoted.
+
+       Returns:
+           A quoted string suitable for use in Elvish shell scripts.
+    */
     fn quote(&self, value: &str) -> String {
-        if value
+        // Special case for {~} which should not be quoted
+        if value == "{~}" {
+            return value.to_string();
+        }
+        // Check for null character
+        if value.contains('\0') {
+            return "parse error".to_string();
+        }
+
+        // Check if the value is a bareword (only specific characters allowed)
+        let is_bareword = value
             .chars()
-            .all(|c| c.is_ascii_graphic() && !c.is_whitespace())
-        {
-            // No quoting needed for simple value
-            value.to_string() // No quoting needed for simple values
-        } else if value.contains('\'') || value.contains('"') {
-            // Single quotes are preferred unless they are present in the string
-            // Double quote with escaping for double quotes
-            format!("\"{}\"", value.replace("\"", "\\\""))
+            .all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
+
+        if is_bareword {
+            // Barewords: no quotes needed
+            value.to_string()
+        } else if value.chars().any(|c| {
+            c.is_whitespace()
+                || [
+                    '$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F',
+                ]
+                .contains(&c)
+        }) {
+            // Double-quoted strings with escape sequences
+            format!(
+                r#""{}""#,
+                value
+                    .replace("\\", "\\\\")
+                    .replace("\n", "\\n")
+                    .replace("\t", "\\t")
+                    .replace("\x07", "\\a")
+                    .replace("\x08", "\\b")
+                    .replace("\x0C", "\\f")
+                    .replace("\r", "\\r")
+                    .replace("\x1B", "\\e")
+                    .replace("\"", "\\\"")
+                    .replace("\x7F", "\\^?")
+            )
         } else {
-            // Single quote
-            format!("'{}'", value)
+            // Single-quoted strings for non-barewords containing special characters
+            format!("'{}'", value.replace("'", "''"))
         }
     }
 }
@@ -111,16 +150,16 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Elvish.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"set-env PROTO_HOME {~}/.proto"#
+            "set-env PROTO_HOME {~}/.proto"
         );
-        assert_eq!(Elvish.format_env_set("FOO", "bar"), r#"set-env FOO bar"#);
+        assert_eq!(Elvish.format_env_set("FOO", "bar"), "set-env FOO bar");
     }
 
     #[test]
     fn formats_path() {
         assert_eq!(
             Elvish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths]"#
+            "set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths]"
         );
     }
 
@@ -136,5 +175,45 @@ mod tests {
         };
 
         assert_snapshot!(Elvish.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_elvish_quoting() {
+        // Barewords
+        assert_eq!(Elvish.quote("simple"), "simple");
+        assert_eq!(Elvish.quote("a123"), "a123");
+        assert_eq!(Elvish.quote("foo_bar"), "foo_bar");
+        assert_eq!(Elvish.quote("A"), "A");
+
+        // Single quotes
+        assert_eq!(Elvish.quote("it's"), "'it''s'");
+        assert_eq!(Elvish.quote("value'with'quotes"), "'value''with''quotes'");
+
+        // Double quotes
+        assert_eq!(Elvish.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(
+            Elvish.quote("value\"with\"quotes"),
+            r#""value\"with\"quotes""#
+        );
+        assert_eq!(
+            Elvish.quote("value\nwith\nnewlines"),
+            r#""value\nwith\nnewlines""#
+        );
+        assert_eq!(Elvish.quote("value\twith\ttabs"), r#""value\twith\ttabs""#);
+        assert_eq!(
+            Elvish.quote("value\\with\\backslashes"),
+            r#""value\\with\\backslashes""#
+        );
+
+        // Escape sequences
+        assert_eq!(Elvish.quote("\x41"), "A"); // A is a bareword
+        assert_eq!(Elvish.quote("\u{0041}"), "A"); // A is a bareword
+        assert_eq!(Elvish.quote("\x09"), r#""\t""#);
+        assert_eq!(Elvish.quote("\x07"), r#""\a""#);
+        assert_eq!(Elvish.quote("\x1B"), r#""\e""#);
+        assert_eq!(Elvish.quote("\x7F"), r#""\^?""#);
+
+        // Unsupported sequences
+        assert_eq!(Elvish.quote("\0"), "parse error".to_string());
     }
 }
