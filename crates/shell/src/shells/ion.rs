@@ -70,7 +70,7 @@ impl Shell for Ion {
             value.to_string()
         } else {
             // Double quotes for other cases
-            format!("\"{}\"", value.replace("\"", "\\\""))
+            format!("\"{}\"", value.replace('"', "\\\""))
         }
     }
 }

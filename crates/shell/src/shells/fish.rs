@@ -112,7 +112,7 @@ end;"#,
         }
 
         if quoted.contains(' ') {
-            format!("'{}'", quoted.replace("'", "''"))
+            format!("'{}'", quoted.replace('\'', "''"))
         } else {
             format!(r#""{}""#, quoted)
         }

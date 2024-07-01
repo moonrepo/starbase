@@ -175,14 +175,14 @@ if ($currentAction) {
         {
             // If the string contains a single quote, use a single-quoted string and escape single quotes by doubling them
             if value.contains('\'') {
-                let escaped = value.replace("'", "''");
+                let escaped = value.replace('\'', "''");
                 return format!("'{}'", escaped);
             } else {
                 // Use a double-quoted string and escape necessary characters
-                let escaped = value
-                    .replace("`", "``")
-                    .replace("$", "`$")
-                    .replace("\"", "`\"");
+                let escaped: String = value
+                    .replace('`', "``")
+                    .replace('$', "`$")
+                    .replace('"', "`\"");
                 return format!("\"{}\"", escaped);
             }
         }
@@ -239,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn test_murex_quoting() {
+    fn test_pwsh_quoting() {
         assert_eq!(Pwsh.quote(""), "''");
         assert_eq!(Pwsh.quote("simple"), "'simple'");
         assert_eq!(Pwsh.quote("don't"), "'don''t'");

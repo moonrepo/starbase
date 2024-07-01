@@ -67,19 +67,19 @@ event: onPrompt {prefix}_hook=before {
         }
 
         // Handle brace quotes %(...)
-        if value.starts_with("%(") && value.ends_with(")") {
+        if value.starts_with("%(") && value.ends_with(')') {
             return value.to_string(); // Return as-is for brace quotes
         }
 
         // Check for values with spaces or special characters requiring double quotes
         if value.contains(' ') || value.contains('"') || value.contains('$') {
             // Escape existing backslashes and double quotes
-            let escaped_value = value.replace("\\", "\\\\").replace("\"", "\\\"");
+            let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
             return format!("\"{}\"", escaped_value);
         }
 
         // Default case for complex values
-        format!("{}", value)
+        value.to_string()
     }
 }
 

@@ -117,22 +117,22 @@ $env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
             format!(
                 "\"{}\"",
                 input
-                    .replace("\\", "\\\\")
-                    .replace("\"", "\\\"")
-                    .replace("\n", "\\n")
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
             )
         } else if input.contains('"') {
             // Escape double quotes if present
             format!(
                 "\"{}\"",
                 input
-                    .replace("\\", "\\\\")
-                    .replace("\"", "\\\"")
-                    .replace("\n", "\\n")
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
             )
         } else {
             // Use single quotes for other cases
-            format!("'{}'", input.replace("\n", "\\n"))
+            format!("'{}'", input.replace('\n', "\\n"))
         }
     }
 }
@@ -213,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn test_single_quoted_string() {
+    fn test_nu_quoting() {
         assert_eq!(Nu.quote("hello"), "'hello'");
         assert_eq!(Nu.quote(""), "''");
         assert_eq!(Nu.quote("echo 'hello'"), "\"echo 'hello'\"");

@@ -112,7 +112,7 @@ set @edit:before-readline = $@edit:before-readline {
             value.to_string()
         } else if value.contains("{~}") {
             // Special case for {~} within the value to escape quoting
-            value.replace("{~}", "{~}")
+            value.to_string()
         } else if value.chars().any(|c| {
             c.is_whitespace()
                 || [
@@ -124,20 +124,20 @@ set @edit:before-readline = $@edit:before-readline {
             format!(
                 r#""{}""#,
                 value
-                    .replace("\\", "\\\\")
-                    .replace("\n", "\\n")
-                    .replace("\t", "\\t")
-                    .replace("\x07", "\\a")
-                    .replace("\x08", "\\b")
-                    .replace("\x0C", "\\f")
-                    .replace("\r", "\\r")
-                    .replace("\x1B", "\\e")
-                    .replace("\"", "\\\"")
-                    .replace("\x7F", "\\^?")
+                    .replace('\\', "\\\\")
+                    .replace('\n', "\\n")
+                    .replace('\t', "\\t")
+                    .replace('\x07', "\\a")
+                    .replace('\x08', "\\b")
+                    .replace('\x0C', "\\f")
+                    .replace('\r', "\\r")
+                    .replace('\x1B', "\\e")
+                    .replace('\"', "\\\"")
+                    .replace('\x7F', "\\^?")
             )
         } else {
             // Single-quoted strings for non-barewords containing special characters
-            format!("'{}'", value.replace("'", "''"))
+            format!("'{}'", value.replace('\'', "''"))
         }
     }
 }
