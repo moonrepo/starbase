@@ -108,6 +108,8 @@ $env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
         .collect()
     }
 
+    /// Quotes a string according to Nu shell quoting rules.
+    /// @see <https://www.nushell.sh/book/working_with_strings.html>
     fn quote(&self, input: &str) -> String {
         if input.contains('`') {
             // Use backtick quoting for strings containing backticks

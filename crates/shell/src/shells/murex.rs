@@ -54,10 +54,13 @@ event: onPrompt {prefix}_hook=before {
         ]
     }
 
+    /// Quotes a string according to Murex shell quoting rules.
+    /// @see <https://murex.rocks/tour.html#basic-syntax>
     fn quote(&self, value: &str) -> String {
         if value.starts_with('$') {
             return format!("\"{}\"", value);
         }
+
         // Check for simple values that don't need quoting
         if value
             .chars()

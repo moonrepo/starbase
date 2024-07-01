@@ -59,16 +59,7 @@ end;"#,
     }
 
     /// Quotes a string according to Fish shell quoting rules.
-    ///
-    /// This method handles quoting and escaping according to Fish shell rules.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The string to be quoted.
-    ///
-    /// # Returns
-    ///
-    /// A quoted string suitable for use in Fish shell scripts.
+    /// @see <https://fishshell.com/docs/current/language.html#quotes>
     fn quote(&self, value: &str) -> String {
         if value.is_empty() {
             return "''".to_string();

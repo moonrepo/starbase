@@ -164,6 +164,8 @@ if ($currentAction) {
         profiles.into_iter().collect()
     }
 
+    /// Quotes a string according to PowerShell shell quoting rules.
+    /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
     fn quote(&self, value: &str) -> String {
         // If the string is empty, return an empty single-quoted string
         if value.is_empty() {
@@ -179,7 +181,7 @@ if ($currentAction) {
                 return format!("'{}'", escaped);
             } else {
                 // Use a double-quoted string and escape necessary characters
-                let escaped: String = value
+                let escaped = value
                     .replace('`', "``")
                     .replace('$', "`$")
                     .replace('"', "`\"");

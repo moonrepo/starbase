@@ -45,17 +45,9 @@ impl Shell for Ion {
         .into_iter()
         .collect()
     }
+
     /// Quotes a string according to Ion shell quoting rules.
-    ///
-    /// This method handles quoting and escaping according to Ion shell rules.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The string to be quoted.
-    ///
-    /// # Returns
-    ///
-    /// A quoted string suitable for use in Ion shell scripts.
+    /// @see <https://doc.redox-os.org/ion-manual/general.html>
     fn quote(&self, value: &str) -> String {
         if value.starts_with('$') {
             // Variables expanded in double quotes

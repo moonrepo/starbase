@@ -47,6 +47,8 @@ impl Shell for Xonsh {
         .collect()
     }
 
+    /// Quotes a string according to Xonsh shell quoting rules.
+    /// @see <https://xon.sh/tutorial_subproc_strings.html>
     fn quote(&self, value: &str) -> String {
         if value.is_empty() {
             return "''".to_string();
@@ -60,6 +62,7 @@ impl Shell for Xonsh {
                 _ => quoted.push(c),
             }
         }
+
         format!("\"{}\"", quoted)
     }
 }

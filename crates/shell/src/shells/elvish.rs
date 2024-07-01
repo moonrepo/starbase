@@ -81,27 +81,11 @@ set @edit:before-readline = $@edit:before-readline {
 
         profiles.into_iter().collect()
     }
+
     /// Quotes a string according to Elvish shell quoting rules.
-    ///
-    /// This method determines whether quoting is necessary based on the presence of special characters
-    /// or the string's content. It uses single quotes (`'`) for simple cases and double quotes (`"`)
-    /// for values containing special characters that require escaping. It supports escape sequences for
-    /// backslashes and characters such as newline, tab, single quote, double quote, and other control characters.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The string to be quoted.
-    ///
-    /// # Returns
-    ///
-    /// A quoted string suitable for use in Elvish shell scripts.
-
+    /// @see <https://elv.sh/ref/language.html#single-quoted-string>
+    #[allow(clippy::no_effect_replace)]
     fn quote(&self, value: &str) -> String {
-        // Check for null character
-        if value.contains('\0') {
-            return "parse error".to_string();
-        }
-
         // Check if the value is a bareword (only specific characters allowed)
         let is_bareword = value
             .chars()
@@ -134,10 +118,11 @@ set @edit:before-readline = $@edit:before-readline {
                     .replace('\x1B', "\\e")
                     .replace('\"', "\\\"")
                     .replace('\x7F', "\\^?")
+                    .replace('\0', "\x00")
             )
         } else {
             // Single-quoted strings for non-barewords containing special characters
-            format!("'{}'", value.replace('\'', "''"))
+            format!("'{}'", value.replace('\'', "''").replace('\0', "\x00"))
         }
     }
 }
@@ -221,6 +206,6 @@ mod tests {
         assert_eq!(Elvish.quote("\x7F"), r#""\^?""#);
 
         // Unsupported sequences
-        assert_eq!(Elvish.quote("\0"), "parse error".to_string());
+        assert_eq!(Elvish.quote("\0"), "'\x00'".to_string());
     }
 }

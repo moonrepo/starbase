@@ -67,23 +67,9 @@ fi
             home_dir.join(".profile"),
         ]
     }
-    /*
 
-      Quotes a string according to Bash shell quoting rules.
-
-      This method determines whether quoting is necessary based on the presence of special characters or the string's content.
-      It supports three quoting mechanisms:
-      - No quoting for alphanumeric and underscore characters.
-      - ANSI-C quoting (`$'...'`) for values containing characters like newline (`\n`), tab (`\t`), backslash (`\`), and single quote (`'`).
-      - Double quotes (`"..."`) for values containing special characters like double quote (`"`).
-
-      Args:
-          - `value`: The string to be quoted.
-
-      Returns:
-          A quoted string suitable for use in Bash shell scripts.
-
-    */
+    /// Quotes a string according to Bash shell quoting rules.
+    /// @see <https://www.gnu.org/software/bash/manual/html_node/Qu>
     fn quote(&self, value: &str) -> String {
         // No quoting needed for alphanumeric and underscore characters
         if value.is_empty() || value.chars().all(|c| c.is_alphanumeric() || c == '_') {

@@ -74,6 +74,8 @@ fi
         ]
     }
 
+    /// Quotes a string according to Zsh shell quoting rules.
+    /// @see <https://info2html.sourceforge.net/cgi-bin/info2html-demo/info2html?(zsh)Quoting>
     fn quote(&self, value: &str) -> String {
         if value.is_empty() {
             return "''".to_string();

@@ -37,6 +37,8 @@ impl Shell for Sh {
         vec![home_dir.join(".profile")]
     }
 
+    /// Quotes a string according to shell quoting rules.
+    /// @see <https://rg1-teaching.mpi-inf.mpg.de/unixffb-ss98/quoting-guide.html>
     fn quote(&self, value: &str) -> String {
         if value.is_empty() {
             return "''".to_string();
