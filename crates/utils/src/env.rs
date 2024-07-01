@@ -11,7 +11,7 @@ pub fn paths() -> Vec<PathBuf> {
     env::split_paths(&path).collect::<Vec<_>>()
 }
 
-/// Return an environment variable is a boolean value. If the value is a `1`, `true`,
+/// Return an environment variable as a boolean value. If the value is a `1`, `true`,
 /// `yes`, `on`, or `enable`, return true, otherwise return false for all other cases.
 pub fn bool_var(key: &str) -> bool {
     match env::var(key) {
