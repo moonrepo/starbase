@@ -107,10 +107,10 @@ fi
     //     if value.is_empty() {
     //         return "''".to_string();
     //     }
-    
+
     //     let mut quoted = String::new();
     //     let mut is_quoted = false;
-    
+
     //     for (i, c) in value.chars().enumerate() {
     //         match c {
     //             '\\' | '\'' | '"' | '$' => {
@@ -124,11 +124,11 @@ fi
     //         }
     //         quoted.push(c);
     //     }
-    
+
     //     if is_quoted {
     //         quoted.push_str("\"");
     //     }
-    
+
     //     quoted
     // }
 
@@ -136,10 +136,10 @@ fi
         if value.is_empty() {
             return "''".to_string();
         }
-    
+
         let mut quoted = String::new();
         let mut is_quoted = false;
-    
+
         for (i, c) in value.chars().enumerate() {
             match c {
                 '\\' | '\'' | '"' => {
@@ -162,14 +162,13 @@ fi
                 }
             }
         }
-    
+
         if is_quoted {
             quoted.push('"');
         }
-    
+
         quoted
     }
-    
 }
 
 impl fmt::Display for Zsh {

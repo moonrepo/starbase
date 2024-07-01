@@ -24,7 +24,11 @@ fn format(value: impl AsRef<str>) -> String {
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("set-env {} {};", self.quote(key), self.quote(&format(value)).as_str())
+        format!(
+            "set-env {} {};",
+            self.quote(key),
+            self.quote(&format(value)).as_str()
+        )
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -137,10 +141,12 @@ set @edit:before-readline = $@edit:before-readline {
         if value.contains('\0') {
             return "parse error".to_string();
         }
-    
+
         // Check if the value is a bareword (only specific characters allowed)
-        let is_bareword = value.chars().all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
-    
+        let is_bareword = value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
+
         if is_bareword {
             // Barewords: no quotes needed
             value.to_string()
@@ -149,12 +155,16 @@ set @edit:before-readline = $@edit:before-readline {
             format!("{{~}}/.proto")
         } else if value.chars().any(|c| {
             c.is_whitespace()
-                || ['$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F'].contains(&c)
+                || [
+                    '$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F',
+                ]
+                .contains(&c)
         }) {
             // Double-quoted strings with escape sequences
             format!(
                 r#""{}""#,
-                value.replace("\\", "\\\\")
+                value
+                    .replace("\\", "\\\\")
                     .replace("\n", "\\n")
                     .replace("\t", "\\t")
                     .replace("\x07", "\\a")
@@ -170,8 +180,6 @@ set @edit:before-readline = $@edit:before-readline {
             format!("'{}'", value.replace("'", "''"))
         }
     }
-    
-    
 }
 
 impl fmt::Display for Elvish {
