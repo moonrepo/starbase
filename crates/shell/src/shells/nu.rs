@@ -200,6 +200,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn formats_cd_hook() {
+        use starbase_sandbox::assert_snapshot;
+
         let hook = Hook::OnChangeDir {
             env: vec![
                 ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
