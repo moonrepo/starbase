@@ -31,6 +31,10 @@ pub fn bool_var(key: &str) -> bool {
 pub fn path_var(key: &str) -> Option<PathBuf> {
     match env::var(key) {
         Ok(value) => {
+            if value.is_empty() {
+                return None;
+            }
+
             let path = PathBuf::from(value);
 
             Some(if path.is_absolute() {
