@@ -110,9 +110,9 @@ set @edit:before-readline = $@edit:before-readline {
         if is_bareword {
             // Barewords: no quotes needed
             value.to_string()
-        } else if value == "{~}/.proto" {
-            // Special case for {~}/.proto
-            format!("{{~}}/.proto")
+        } else if value.contains("{~}") {
+            // Special case for {~} within the value to escape quoting
+            value.replace("{~}", "{~}")
         } else if value.chars().any(|c| {
             c.is_whitespace()
                 || [
