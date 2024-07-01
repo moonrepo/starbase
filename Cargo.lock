@@ -1722,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "binstall-tar",
  "flate2",
@@ -1762,7 +1762,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "assert_cmd",
  "assert_fs",
