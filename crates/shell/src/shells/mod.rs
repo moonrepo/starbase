@@ -84,6 +84,9 @@ pub trait Shell: Display {
 
     /// Return a list of all possible interactive profile paths.
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf>;
+
+    /// Quote method for shell-specific quoting
+    fn quote(&self, value: &str) -> String;
 }
 
 pub type BoxedShell = Box<dyn Shell>;

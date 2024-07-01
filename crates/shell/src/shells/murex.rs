@@ -15,11 +15,11 @@ impl Murex {
 
 impl Shell for Murex {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"$ENV.{key}="{value}""#)
+        format!("$ENV.{}={}", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"unset {key};"#)
+        format!("unset {};", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -52,6 +52,34 @@ event: onPrompt {prefix}_hook=before {
             home_dir.join(".murex_preload"),
             home_dir.join(".murex_profile"),
         ]
+    }
+
+    fn quote(&self, value: &str) -> String {
+        if value.starts_with('$') {
+            return format!("\"{}\"", value);
+        }
+        // Check for simple values that don't need quoting
+        if value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return value.to_string();
+        }
+
+        // Handle brace quotes %(...)
+        if value.starts_with("%(") && value.ends_with(')') {
+            return value.to_string(); // Return as-is for brace quotes
+        }
+
+        // Check for values with spaces or special characters requiring double quotes
+        if value.contains(' ') || value.contains('"') || value.contains('$') {
+            // Escape existing backslashes and double quotes
+            let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
+            return format!("\"{}\"", escaped_value);
+        }
+
+        // Default case for complex values
+        value.to_string()
     }
 }
 
@@ -94,5 +122,16 @@ mod tests {
         };
 
         assert_snapshot!(Murex.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_murex_quoting() {
+        assert_eq!(Murex.quote("value"), "value");
+        assert_eq!(Murex.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(Murex.quote("$(echo hello)"), "\"$(echo hello)\"");
+        assert_eq!(Murex.quote(""), "");
+        assert_eq!(Murex.quote("abc123"), "abc123");
+        assert_eq!(Murex.quote("%(Bob)"), "%(Bob)");
+        assert_eq!(Murex.quote("%(hello world)"), "%(hello world)");
     }
 }

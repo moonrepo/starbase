@@ -22,11 +22,11 @@ impl Zsh {
 // https://zsh.sourceforge.io/Doc/Release/Files.html#Files
 impl Shell for Zsh {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"export {key}="{value}";"#)
+        format!("export {}={};", self.quote(key), self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"unset {key};"#)
+        format!("unset {};", self.quote(key))
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
@@ -73,6 +73,44 @@ fi
             zdot_dir.join(".zshrc"),
         ]
     }
+
+    fn quote(&self, value: &str) -> String {
+        if value.is_empty() {
+            return "''".to_string();
+        }
+
+        let mut quoted = String::new();
+        let mut is_quoted = false;
+
+        for (i, c) in value.chars().enumerate() {
+            match c {
+                '\\' | '\'' | '"' => {
+                    if i == 0 && c == '$' {
+                        quoted.push('$');
+                    }
+                    quoted.push('\\');
+                    quoted.push(c);
+                }
+                '$' => {
+                    if i == 0 {
+                        quoted.push_str("\"$");
+                        is_quoted = true;
+                    } else {
+                        quoted.push('$');
+                    }
+                }
+                _ => {
+                    quoted.push(c);
+                }
+            }
+        }
+
+        if is_quoted {
+            quoted.push('"');
+        }
+
+        quoted
+    }
 }
 
 impl fmt::Display for Zsh {
@@ -114,5 +152,18 @@ mod tests {
         };
 
         assert_snapshot!(Zsh::default().format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_zsh_quoting() {
+        let zsh = Zsh::new();
+        assert_eq!(zsh.quote(""), "''");
+        assert_eq!(zsh.quote("simple"), "simple");
+        assert_eq!(zsh.quote("don't"), "don\\'t");
+        assert_eq!(zsh.quote("say \"hello\""), "say \\\"hello\\\"");
+        assert_eq!(
+            zsh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
+            "complex \\'value\\' with \\\"quotes\\\" and \\\\backslashes\\\\"
+        );
     }
 }

@@ -18,7 +18,7 @@ impl Fish {
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(r#"set -gx {key} "{value}";"#)
+        format!("set -gx {} {};", key, self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -57,8 +57,67 @@ end;"#,
         .into_iter()
         .collect()
     }
-}
 
+    /// Quotes a string according to Fish shell quoting rules.
+    ///
+    /// This method handles quoting and escaping according to Fish shell rules.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The string to be quoted.
+    ///
+    /// # Returns
+    ///
+    /// A quoted string suitable for use in Fish shell scripts.
+    fn quote(&self, value: &str) -> String {
+        if value.is_empty() {
+            return "''".to_string();
+        }
+
+        // Characters that need to be escaped in double quotes
+        let escape_chars: &[(char, &str)] = &[
+            ('\\', "\\\\"),
+            ('\n', "\\n"),
+            ('\t', "\\t"),
+            ('\x07', "\\a"),
+            ('\x08', "\\b"),
+            ('\x1b', "\\e"),
+            ('\x0c', "\\f"),
+            ('\x0a', "\\n"),
+            ('\x0d', "\\r"),
+            ('\x0b', "\\v"),
+            ('*', "\\*"),
+            ('?', "\\?"),
+            ('~', "\\~"),
+            ('#', "\\#"),
+            ('(', "\\("),
+            (')', "\\)"),
+            ('{', "\\{"),
+            ('}', "\\}"),
+            ('[', "\\["),
+            (']', "\\]"),
+            ('<', "\\<"),
+            ('>', "\\>"),
+            ('^', "\\^"),
+            ('&', "\\&"),
+            ('|', "\\|"),
+            (';', "\\;"),
+            ('"', "\\\""),
+            ('$', "\\$"),
+        ];
+
+        let mut quoted = value.to_string();
+        for &(char, escape) in escape_chars.iter() {
+            quoted = quoted.replace(char, escape);
+        }
+
+        if quoted.contains(' ') {
+            format!("'{}'", quoted.replace('\'', "''"))
+        } else {
+            format!(r#""{}""#, quoted)
+        }
+    }
+}
 impl fmt::Display for Fish {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "fish")
@@ -74,7 +133,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Fish.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"set -gx PROTO_HOME "$HOME/.proto";"#
+            r#"set -gx PROTO_HOME "\$HOME/.proto";"#
         );
     }
 
@@ -98,5 +157,38 @@ mod tests {
         };
 
         assert_snapshot!(Fish.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_fish_quoting() {
+        assert_eq!(Fish.quote("\n"), r#""\n""#);
+        assert_eq!(Fish.quote("\t"), r#""\t""#);
+        assert_eq!(Fish.quote("\x07"), r#""\a""#);
+        assert_eq!(Fish.quote("\x08"), r#""\b""#);
+        assert_eq!(Fish.quote("\x1b"), r#""\e""#);
+        assert_eq!(Fish.quote("\x0c"), r#""\f""#);
+        assert_eq!(Fish.quote("\r"), r#""\r""#);
+        assert_eq!(Fish.quote("\x0a"), r#""\n""#);
+        assert_eq!(Fish.quote("\x0b"), r#""\v""#);
+        assert_eq!(Fish.quote("*"), r#""\*""#);
+        assert_eq!(Fish.quote("?"), r#""\?""#);
+        assert_eq!(Fish.quote("~"), r#""\~""#);
+        assert_eq!(Fish.quote("#"), r#""\#""#);
+        assert_eq!(Fish.quote("("), r#""\(""#);
+        assert_eq!(Fish.quote(")"), r#""\)""#);
+        assert_eq!(Fish.quote("{"), r#""\{""#);
+        assert_eq!(Fish.quote("}"), r#""\}""#);
+        assert_eq!(Fish.quote("["), r#""\[""#);
+        assert_eq!(Fish.quote("]"), r#""\]""#);
+        assert_eq!(Fish.quote("<"), r#""\<""#);
+        assert_eq!(Fish.quote(">"), r#""\>""#);
+        assert_eq!(Fish.quote("^"), r#""\^""#);
+        assert_eq!(Fish.quote("&"), r#""\&""#);
+        assert_eq!(Fish.quote("|"), r#""\|""#);
+        assert_eq!(Fish.quote(";"), r#""\;""#);
+        assert_eq!(Fish.quote("\""), r#""\"""#);
+        assert_eq!(Fish.quote("$"), r#""\$""#);
+        assert_eq!(Fish.quote("$variable"), r#""\$variable""#);
+        assert_eq!(Fish.quote("value with spaces"), "'value with spaces'");
     }
 }
