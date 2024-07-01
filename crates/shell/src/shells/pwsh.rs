@@ -48,7 +48,7 @@ impl Shell for Pwsh {
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!("Remove-Item -LiteralPath \"env:{}\";", key)
+        format!(r#"Remove-Item -LiteralPath "env:{key}";"#)
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {

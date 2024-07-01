@@ -95,47 +95,7 @@ set @edit:before-readline = $@edit:before-readline {
     /// # Returns
     ///
     /// A quoted string suitable for use in Elvish shell scripts.
-    // fn quote(&self, value: &str) -> String {
-    //     // Check for null character
-    //     if value.contains('\0') {
-    //         return "parse error".to_string();
-    //     }
 
-    //     // Check if the value is a bareword (only specific characters allowed)
-    //     let is_bareword = value
-    //         .chars()
-    //         .all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
-
-    //     if is_bareword {
-    //         // Barewords: no quotes needed
-    //         value.to_string()
-    //     } else if value.chars().any(|c| {
-    //         c.is_whitespace()
-    //             || [
-    //                 '$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F',
-    //             ]
-    //             .contains(&c)
-    //     }) {
-    //         // Double-quoted strings with escape sequences
-    //         format!(
-    //             r#""{}""#,
-    //             value
-    //                 .replace("\\", "\\\\")
-    //                 .replace("\n", "\\n")
-    //                 .replace("\t", "\\t")
-    //                 .replace("\x07", "\\a")
-    //                 .replace("\x08", "\\b")
-    //                 .replace("\x0C", "\\f")
-    //                 .replace("\r", "\\r")
-    //                 .replace("\x1B", "\\e")
-    //                 .replace("\"", "\\\"")
-    //                 .replace("\x7F", "\\^?")
-    //         )
-    //     } else {
-    //         // Single-quoted strings for non-barewords containing special characters
-    //         format!("'{}'", value.replace("'", "''"))
-    //     }
-    // }
     fn quote(&self, value: &str) -> String {
         // Check for null character
         if value.contains('\0') {

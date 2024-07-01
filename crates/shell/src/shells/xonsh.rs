@@ -22,7 +22,7 @@ impl Shell for Xonsh {
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!("del ${}", self.quote(key))
+        format!(r#"del ${key}"#)
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {

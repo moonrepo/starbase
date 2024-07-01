@@ -22,7 +22,7 @@ impl Shell for Fish {
     }
 
     fn format_env_unset(&self, key: &str) -> String {
-        format!("set -ge {};", self.quote(key))
+        format!(r#"set -ge {key};"#)
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
