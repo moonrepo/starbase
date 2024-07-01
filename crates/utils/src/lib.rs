@@ -1,3 +1,6 @@
+/// Utilities for reading and writing environment variables.
+pub mod env;
+
 /// Utilities for reading and writing files and directories.
 pub mod fs;
 mod fs_error;
