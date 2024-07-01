@@ -47,24 +47,6 @@ impl Shell for Xonsh {
         .collect()
     }
 
-    // fn quote(&self, value: &str) -> String {
-    //     if value.is_empty() {
-    //         return "''".to_string();
-    //     }
-
-    //     // Xonsh preserves quotes, so we enclose the value in double quotes
-    //     // and escape any double quotes within the value.
-    //     let mut quoted = String::from("\"");
-    //     for c in value.chars() {
-    //         if c == '"' {
-    //             quoted.push('\\');
-    //         }
-    //         quoted.push(c);
-    //     }
-    //     quoted.push('"');
-    //     quoted
-    // }
-
     fn quote(&self, value: &str) -> String {
         if value.is_empty() {
             return "''".to_string();

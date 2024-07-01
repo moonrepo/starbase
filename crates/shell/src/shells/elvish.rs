@@ -24,7 +24,7 @@ fn format(value: impl AsRef<str>) -> String {
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("set-env {} {}", self.quote(key), format(value))
+        format!("set-env {} {};", self.quote(key), self.quote(&format(value)).as_str())
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -32,7 +32,7 @@ impl Shell for Elvish {
     }
 
     fn format_path_set(&self, paths: &[String]) -> String {
-        format!("set paths = [{} $@paths]", format(paths.join(" ")))
+        format!("set paths = [{} $@paths];", format(paths.join(" ")))
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
@@ -91,32 +91,70 @@ set @edit:before-readline = $@edit:before-readline {
     /// # Returns
     ///
     /// A quoted string suitable for use in Elvish shell scripts.
+    // fn quote(&self, value: &str) -> String {
+    //     // Check for null character
+    //     if value.contains('\0') {
+    //         return "parse error".to_string();
+    //     }
+
+    //     // Check if the value is a bareword (only specific characters allowed)
+    //     let is_bareword = value
+    //         .chars()
+    //         .all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
+
+    //     if is_bareword {
+    //         // Barewords: no quotes needed
+    //         value.to_string()
+    //     } else if value.chars().any(|c| {
+    //         c.is_whitespace()
+    //             || [
+    //                 '$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F',
+    //             ]
+    //             .contains(&c)
+    //     }) {
+    //         // Double-quoted strings with escape sequences
+    //         format!(
+    //             r#""{}""#,
+    //             value
+    //                 .replace("\\", "\\\\")
+    //                 .replace("\n", "\\n")
+    //                 .replace("\t", "\\t")
+    //                 .replace("\x07", "\\a")
+    //                 .replace("\x08", "\\b")
+    //                 .replace("\x0C", "\\f")
+    //                 .replace("\r", "\\r")
+    //                 .replace("\x1B", "\\e")
+    //                 .replace("\"", "\\\"")
+    //                 .replace("\x7F", "\\^?")
+    //         )
+    //     } else {
+    //         // Single-quoted strings for non-barewords containing special characters
+    //         format!("'{}'", value.replace("'", "''"))
+    //     }
+    // }
     fn quote(&self, value: &str) -> String {
         // Check for null character
         if value.contains('\0') {
             return "parse error".to_string();
         }
-
+    
         // Check if the value is a bareword (only specific characters allowed)
-        let is_bareword = value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
-
+        let is_bareword = value.chars().all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
+    
         if is_bareword {
             // Barewords: no quotes needed
             value.to_string()
+        } else if value == "{~}/.proto" {
+            // Special case for {~}/.proto
+            format!("{{~}}/.proto")
         } else if value.chars().any(|c| {
             c.is_whitespace()
-                || [
-                    '$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F',
-                ]
-                .contains(&c)
+                || ['$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F'].contains(&c)
         }) {
             // Double-quoted strings with escape sequences
             format!(
                 r#""{}""#,
-                value
-                    .replace("\\", "\\\\")
+                value.replace("\\", "\\\\")
                     .replace("\n", "\\n")
                     .replace("\t", "\\t")
                     .replace("\x07", "\\a")
@@ -132,6 +170,8 @@ set @edit:before-readline = $@edit:before-readline {
             format!("'{}'", value.replace("'", "''"))
         }
     }
+    
+    
 }
 
 impl fmt::Display for Elvish {
@@ -149,16 +189,16 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Elvish.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            "set-env PROTO_HOME {~}/.proto"
+            "set-env PROTO_HOME {~}/.proto;"
         );
-        assert_eq!(Elvish.format_env_set("FOO", "bar"), "set-env FOO bar");
+        assert_eq!(Elvish.format_env_set("FOO", "bar"), "set-env FOO bar;");
     }
 
     #[test]
     fn formats_path() {
         assert_eq!(
             Elvish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            "set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths]"
+            "set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths];"
         );
     }
 

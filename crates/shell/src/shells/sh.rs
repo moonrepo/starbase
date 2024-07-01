@@ -41,15 +41,12 @@ impl Shell for Sh {
         if value.is_empty() {
             return "''".to_string();
         }
-
+    
         // Check if we need double quotes
-        if value.contains('\'')
-            || value.contains('\"')
-            || value.contains('`')
-            || value.contains(' ')
-        {
+        if value.contains('\'') || value.contains('\"') || value.contains('`') || value.contains(' ') {
             // Use double quotes and escape necessary characters
             let mut quoted = String::from("\"");
+    
             for c in value.chars() {
                 match c {
                     '"' | '\\' | '$' | '`' => {
@@ -61,13 +58,21 @@ impl Shell for Sh {
                     }
                 }
             }
+    
             quoted.push('"');
             quoted
         } else {
-            // Otherwise, use single quotes
-            value.to_string()
+            // Otherwise, use single quotes for literals and variables
+            // Check if it starts with a variable
+            if value.starts_with('$') {
+                format!("\"{}\"", value)
+            } else {
+                value.to_string()
+            }
         }
     }
+    
+    
 }
 
 impl fmt::Display for Sh {

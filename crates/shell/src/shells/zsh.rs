@@ -74,34 +74,102 @@ fi
         ]
     }
 
+    // fn quote(&self, value: &str) -> String {
+    //     if value.is_empty() {
+    //         return "''".to_string();
+    //     }
+
+    //     let mut quoted = String::new();
+    //     let mut is_quoted = false;
+
+    //     for (i, c) in value.chars().enumerate() {
+    //         match c {
+    //             '\\' | '\'' | '"' | '$' => {
+    //                 if i == 0 && c == '$' {
+    //                     quoted.push_str("\"");
+    //                     is_quoted = true;
+    //                 }
+    //                 quoted.push('\\');
+    //             }
+    //             _ => {}
+    //         }
+    //         quoted.push(c);
+    //     }
+
+    //     if is_quoted {
+    //         quoted.push_str("\"");
+    //     }
+
+    //     quoted
+    // }
+
+    // fn quote(&self, value: &str) -> String {
+    //     if value.is_empty() {
+    //         return "''".to_string();
+    //     }
+    
+    //     let mut quoted = String::new();
+    //     let mut is_quoted = false;
+    
+    //     for (i, c) in value.chars().enumerate() {
+    //         match c {
+    //             '\\' | '\'' | '"' | '$' => {
+    //                 if i == 0 && c == '$' {
+    //                     quoted.push_str("\"");
+    //                     is_quoted = true;
+    //                 }
+    //                 quoted.push('\\');
+    //             }
+    //             _ => {}
+    //         }
+    //         quoted.push(c);
+    //     }
+    
+    //     if is_quoted {
+    //         quoted.push_str("\"");
+    //     }
+    
+    //     quoted
+    // }
+
     fn quote(&self, value: &str) -> String {
         if value.is_empty() {
             return "''".to_string();
         }
-
+    
         let mut quoted = String::new();
         let mut is_quoted = false;
-
+    
         for (i, c) in value.chars().enumerate() {
             match c {
-                '\\' | '\'' | '"' | '$' => {
+                '\\' | '\'' | '"' => {
                     if i == 0 && c == '$' {
-                        quoted.push_str("\"");
-                        is_quoted = true;
+                        quoted.push('$');
                     }
                     quoted.push('\\');
+                    quoted.push(c);
                 }
-                _ => {}
+                '$' => {
+                    if i == 0 {
+                        quoted.push_str("\"$");
+                        is_quoted = true;
+                    } else {
+                        quoted.push('$');
+                    }
+                }
+                _ => {
+                    quoted.push(c);
+                }
             }
-            quoted.push(c);
         }
-
+    
         if is_quoted {
-            quoted.push_str("\"");
+            quoted.push('"');
         }
-
+    
         quoted
     }
+    
 }
 
 impl fmt::Display for Zsh {

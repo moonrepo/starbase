@@ -29,7 +29,7 @@ fn join_path(value: impl AsRef<str>) -> String {
 impl Shell for Nu {
     // https://www.nushell.sh/book/configuration.html#environment
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("$env.{} = {}", self.quote(key), self.quote(value))
+        format!("$env.{} = {}", key, self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -109,15 +109,30 @@ $env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
     }
 
     fn quote(&self, input: &str) -> String {
-        if input.contains('\'') && !input.contains('`') {
-            // Use backtick quoting for single-quoted interpolation
+        if input.contains('`') {
+            // Use backtick quoting for strings containing backticks
             format!("`{}`", input)
-        } else if input.contains('`') {
-            // Use double quotes with proper escaping for double-quoted interpolation
-            format!("\"{}\"", input.replace("\\", "\\\\").replace("\"", "\\\""))
+        } else if input.contains('\'') {
+            // Use double quotes with proper escaping for single-quoted strings
+            format!(
+                "\"{}\"",
+                input
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("\n", "\\n")
+            )
+        } else if input.contains('"') {
+            // Escape double quotes if present
+            format!(
+                "\"{}\"",
+                input
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace("\n", "\\n")
+            )
         } else {
-            // Use single quotes for bare strings and other cases
-            format!("'{}'", input)
+            // Use single quotes for other cases
+            format!("'{}'", input.replace("\n", "\\n"))
         }
     }
 }
@@ -195,5 +210,20 @@ mod tests {
         };
 
         assert_snapshot!(Nu.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_single_quoted_string() {
+        assert_eq!(Nu.quote("hello"), "'hello'");
+        assert_eq!(Nu.quote(""), "''");
+        assert_eq!(Nu.quote("echo 'hello'"), "\"echo 'hello'\"");
+        assert_eq!(Nu.quote("echo \"$HOME\""), "\"echo \\\"$HOME\\\"\"");
+        assert_eq!(Nu.quote("\"hello\""), "\"\\\"hello\\\"\"");
+        assert_eq!(Nu.quote("\"hello\nworld\""), "\"\\\"hello\\nworld\\\"\"");
+        assert_eq!(Nu.quote("$'hello world'"), "\"$'hello world'\"");
+        assert_eq!(Nu.quote("$''"), "\"$''\"");
+        assert_eq!(Nu.quote("$\"hello world\""), "\"$\\\"hello world\\\"\"");
+        assert_eq!(Nu.quote("$\"$HOME\""), "\"$\\\"$HOME\\\"\"");
+        assert_eq!(Nu.quote("'hello'"), "\"'hello'\"");
     }
 }

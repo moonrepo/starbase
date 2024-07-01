@@ -18,7 +18,7 @@ impl Fish {
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("set -gx {} {};", self.quote(key), self.quote(value))
+        format!("set -gx {} {};", key, self.quote(value))
     }
 
     fn format_env_unset(&self, key: &str) -> String {
@@ -74,71 +74,47 @@ end;"#,
             return "''".to_string();
         }
 
-        // Check for complex values requiring special quoting
-        if value.contains('\n')
-            || value.contains('\t')
-            || value.contains('\x07')
-            || value.contains('\x08')
-            || value.contains('\x1b')
-            || value.contains('\x0c')
-            || value.contains('\x0a')
-            || value.contains('\x0d')
-            || value.contains('\x0b')
-            || value.contains('*')
-            || value.contains('?')
-            || value.contains('~')
-            || value.contains('#')
-            || value.contains('(')
-            || value.contains(')')
-            || value.contains('{')
-            || value.contains('}')
-            || value.contains('[')
-            || value.contains(']')
-            || value.contains('<')
-            || value.contains('>')
-            || value.contains('^')
-            || value.contains('&')
-            || value.contains('|')
-            || value.contains(';')
-            || value.contains('"')
-            || value.contains('$')
-        {
-            format!(
-                r#""{}""#,
-                value
-                    .replace("\\", "\\\\")
-                    .replace("\n", "\\n")
-                    .replace("\t", "\\t")
-                    .replace("\x07", "\\a")
-                    .replace("\x08", "\\b")
-                    .replace("\x1b", "\\e")
-                    .replace("\x0c", "\\f")
-                    .replace("\x0a", "\\n")
-                    .replace("\x0d", "\\r")
-                    .replace("\x0b", "\\v")
-                    .replace("\"", "\\\"")
-                    .replace("$", "\\$")
-                    .replace("*", "\\*")
-                    .replace("?", "\\?")
-                    .replace("~", "\\~")
-                    .replace("#", "\\#")
-                    .replace("(", "\\(")
-                    .replace(")", "\\)")
-                    .replace("{", "\\{")
-                    .replace("}", "\\}")
-                    .replace("[", "\\[")
-                    .replace("]", "\\]")
-                    .replace("<", "\\<")
-                    .replace(">", "\\>")
-                    .replace("^", "\\^")
-                    .replace("&", "\\&")
-                    .replace("|", "\\|")
-                    .replace(";", "\\;")
-            )
-        } else if value.contains(' ') {
-            format!("'{}'", value.replace("'", "''"))
+        // Characters that need to be escaped in double quotes
+        let escape_chars: &[(char, &str)] = &[
+            ('\\', "\\\\"),
+            ('\n', "\\n"),
+            ('\t', "\\t"),
+            ('\x07', "\\a"),
+            ('\x08', "\\b"),
+            ('\x1b', "\\e"),
+            ('\x0c', "\\f"),
+            ('\x0a', "\\n"),
+            ('\x0d', "\\r"),
+            ('\x0b', "\\v"),
+            ('*', "\\*"),
+            ('?', "\\?"),
+            ('~', "\\~"),
+            ('#', "\\#"),
+            ('(', "\\("),
+            (')', "\\)"),
+            ('{', "\\{"),
+            ('}', "\\}"),
+            ('[', "\\["),
+            (']', "\\]"),
+            ('<', "\\<"),
+            ('>', "\\>"),
+            ('^', "\\^"),
+            ('&', "\\&"),
+            ('|', "\\|"),
+            (';', "\\;"),
+            ('"', "\\\""),
+            ('$', "\\$"),
+        ];
+
+        let mut quoted = value.to_string();
+        for &(char, escape) in escape_chars.iter() {
+            quoted = quoted.replace(char, escape);
+        }
+
+        if quoted.contains(' ') {
+            format!("'{}'", quoted.replace("'", "''"))
         } else {
-            value.to_string()
+            format!(r#""{}""#, quoted)
         }
     }
 }
@@ -157,7 +133,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Fish.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"set -gx PROTO_HOME "$HOME/.proto";"#
+            r#"set -gx PROTO_HOME "\$HOME/.proto";"#
         );
     }
 

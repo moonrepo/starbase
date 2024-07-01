@@ -1,6 +1,6 @@
 ---
 source: crates/shell/src/shells/zsh.rs
-expression: "Zsh::default().format_on_cd_hook(hook).unwrap()"
+expression: "Zsh::default().format_hook(hook).unwrap()"
 ---
 _starbase_hook() {
   trap -- '' SIGINT
