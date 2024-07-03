@@ -31,7 +31,7 @@ impl Shell for Fish {
                     r#"set -gx {key} {} ${orig_key};"#,
                     paths
                         .iter()
-                        .map(|p| format!("\"{p}\""))
+                        .map(|p| self.quote(p))
                         .collect::<Vec<_>>()
                         .join(" ")
                 )

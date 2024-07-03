@@ -106,7 +106,7 @@ $env.config = ( $env.config | upsert hooks.env_change.PWD {{ |config|
       }}
     }}
 
-    let path_list = $env.{path_name} | split row (char esep)
+    let path_list = $env.__ORIG_PATH | split row (char esep)
 
     $data | get paths | reverse | each {{ |p|
       let path_list = ($path_list | prepend $p)

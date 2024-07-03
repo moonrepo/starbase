@@ -34,7 +34,16 @@ impl Shell for Elvish {
                 let orig_key = orig_key.unwrap_or(key);
 
                 if key == "PATH" && orig_key == "PATH" {
-                    format!("set paths = [{} $@paths];", format(paths.join(" ")))
+                    format!(
+                        "set paths = [{} $@paths];",
+                        format(
+                            paths
+                                .iter()
+                                .map(|p| self.quote(p))
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        )
+                    )
                 } else {
                     format!(
                         r#"set-env {key} "{}{}"$E:{orig_key};"#,
@@ -172,7 +181,7 @@ mod tests {
     fn formats_path() {
         assert_eq!(
             Elvish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            "set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths];"
+            r#"set paths = ["$E:PROTO_HOME/shims" "$E:PROTO_HOME/bin" $@paths];"#
         );
     }
 
