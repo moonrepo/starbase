@@ -45,6 +45,8 @@ impl Shell for Elvish {
                 format!(
                     r#"
 # {prefix} hook
+set-env __ORIG_PATH $PATH
+
 set @edit:before-readline = $@edit:before-readline {{
   eval ({command});
 }}

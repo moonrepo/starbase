@@ -70,6 +70,8 @@ impl Shell for Pwsh {
                 format!(
                     r#"
 # {prefix} hook
+$env.__ORIG_PATH = "$env.PATH"
+
 using namespace System;
 using namespace System.Management.Automation;
 

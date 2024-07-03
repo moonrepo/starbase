@@ -2,6 +2,8 @@
 source: crates/shell/src/shells/bash.rs
 expression: Bash.format_hook(hook).unwrap()
 ---
+export __ORIG_PATH="$PATH"
+
 _starbase_hook() {
   local previous_exit_status=$?;
   trap -- '' SIGINT;

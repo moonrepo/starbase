@@ -83,6 +83,8 @@ impl Shell for Nu {
                 format!(
                     r#"
 # {prefix} hook
+$env.__ORIG_PATH = $env.PATH
+
 $env.config = ( $env.config | upsert hooks.env_change.PWD {{ |config|
   let list = ($config | get -i hooks.env_change.PWD) | default []
 

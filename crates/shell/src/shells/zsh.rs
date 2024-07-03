@@ -39,6 +39,8 @@ impl Shell for Zsh {
             Hook::OnChangeDir { command, prefix } => {
                 format!(
                     r#"
+export __ORIG_PATH="$PATH"
+
 _{prefix}_hook() {{
   trap -- '' SIGINT
   eval "$({command})";

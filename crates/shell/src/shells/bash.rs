@@ -33,6 +33,8 @@ impl Shell for Bash {
             Hook::OnChangeDir { command, prefix } => {
                 format!(
                     r#"
+export __ORIG_PATH="$PATH"
+
 _{prefix}_hook() {{
   local previous_exit_status=$?;
   trap -- '' SIGINT;

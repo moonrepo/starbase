@@ -2,6 +2,8 @@
 source: crates/shell/src/shells/zsh.rs
 expression: "Zsh::default().format_hook(hook).unwrap()"
 ---
+export __ORIG_PATH="$PATH"
+
 _starbase_hook() {
   trap -- '' SIGINT
   eval "$(starbase hook zsh)";

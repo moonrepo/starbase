@@ -3,6 +3,8 @@ source: crates/shell/src/shells/nu.rs
 expression: Nu.format_hook(hook).unwrap()
 ---
 # starbase hook
+$env.__ORIG_PATH = $env.PATH
+
 $env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
   let list = ($config | get -i hooks.env_change.PWD) | default []
 

@@ -33,6 +33,8 @@ impl Shell for Murex {
             Hook::OnChangeDir { command, prefix } => {
                 format!(
                     r#"
+$ENV.__ORIG_PATH="$ENV.PATH"
+
 event: onPrompt {prefix}_hook=before {{
   {command} -> source
 }}
