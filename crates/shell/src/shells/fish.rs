@@ -1,6 +1,6 @@
 use super::Shell;
-use crate::helpers::get_config_dir;
-use crate::hooks::Hook;
+use crate::helpers::{get_config_dir, normalize_newlines};
+use crate::hooks::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -17,28 +17,48 @@ impl Fish {
 
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("set -gx {} {};", key, self.quote(value))
-    }
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let orig_key = orig_key.unwrap_or(key);
 
-    fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"set -ge {key};"#)
-    }
-
-    fn format_path_set(&self, paths: &[String]) -> String {
-        format!(r#"set -gx PATH "{}" $PATH;"#, paths.join(":"))
+                format!(
+                    r#"set -gx {key} {} ${orig_key};"#,
+                    paths
+                        .iter()
+                        .map(|p| self.quote(p))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                )
+            }
+            Statement::SetEnv { key, value } => {
+                format!("set -gx {} {};", key, self.quote(value))
+            }
+            Statement::UnsetEnv { key } => {
+                format!("set -ge {key};")
+            }
+        }
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(
-            self,
-            r#"
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
+set -gx __ORIG_PATH $PATH
+
 function __{prefix}_hook --on-variable PWD;
-{export_env}
-{export_path}
-end;"#,
-            "    ",
-        ))
+  {command} | source
+end;
+"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -94,7 +114,7 @@ end;"#,
             ('|', "\\|"),
             (';', "\\;"),
             ('"', "\\\""),
-            ('$', "\\$"),
+            // ('$', "\\$"),
         ];
 
         let mut quoted = value.to_string();
@@ -124,7 +144,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Fish.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"set -gx PROTO_HOME "\$HOME/.proto";"#
+            r#"set -gx PROTO_HOME "$HOME/.proto";"#
         );
     }
 
@@ -132,18 +152,14 @@ mod tests {
     fn formats_path() {
         assert_eq!(
             Fish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH;"#
+            r#"set -gx PATH "$PROTO_HOME/shims" "$PROTO_HOME/bin" $PATH;"#
         );
     }
 
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook fish".into(),
             prefix: "starbase".into(),
         };
 
@@ -178,8 +194,8 @@ mod tests {
         assert_eq!(Fish.quote("|"), r#""\|""#);
         assert_eq!(Fish.quote(";"), r#""\;""#);
         assert_eq!(Fish.quote("\""), r#""\"""#);
-        assert_eq!(Fish.quote("$"), r#""\$""#);
-        assert_eq!(Fish.quote("$variable"), r#""\$variable""#);
+        // assert_eq!(Fish.quote("$"), r#""\$""#);
+        // assert_eq!(Fish.quote("$variable"), r#""\$variable""#);
         assert_eq!(Fish.quote("value with spaces"), "'value with spaces'");
     }
 }

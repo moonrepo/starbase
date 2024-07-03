@@ -2,8 +2,8 @@
 source: crates/shell/src/shells/fish.rs
 expression: Fish.format_hook(hook).unwrap()
 ---
+set -gx __ORIG_PATH $PATH
+
 function __starbase_hook --on-variable PWD;
-    set -gx PROTO_HOME "\$HOME/.proto";
-    set -ge PROTO_ROOT;
-    set -gx PATH "$PROTO_HOME/shims:$PROTO_HOME/bin" $PATH;
+  starbase hook fish | source
 end;

@@ -22,6 +22,7 @@ pub use zsh::*;
 
 use crate::hooks::Hook;
 use crate::shell_error::ShellError;
+use crate::Statement;
 use std::ffi::OsString;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -43,6 +44,9 @@ impl Default for ShellCommand {
 }
 
 pub trait Shell: Display {
+    /// Format the provided statement.
+    fn format(&self, data: Statement<'_>) -> String;
+
     /// Format an environment variable by either setting or unsetting the value.
     fn format_env(&self, key: &str, value: Option<&str>) -> String {
         match value {
@@ -53,15 +57,25 @@ pub trait Shell: Display {
 
     /// Format an environment variable that will be set to the entire shell,
     /// and be written to a profile file.
-    fn format_env_set(&self, key: &str, value: &str) -> String;
+    fn format_env_set(&self, key: &str, value: &str) -> String {
+        self.format(Statement::SetEnv { key, value })
+    }
 
     /// Format an environment variable that will be unset from the entire shell,
     /// and be written to a profile file.
-    fn format_env_unset(&self, key: &str) -> String;
+    fn format_env_unset(&self, key: &str) -> String {
+        self.format(Statement::UnsetEnv { key })
+    }
 
     /// Format the provided paths to prepend the `PATH` environment variable,
     /// and be written to a profile file.
-    fn format_path_set(&self, paths: &[String]) -> String;
+    fn format_path_set(&self, paths: &[String]) -> String {
+        self.format(Statement::PrependPath {
+            paths,
+            key: None,
+            orig_key: None,
+        })
+    }
 
     /// Format a hook for the current shell.
     fn format_hook(&self, hook: Hook) -> Result<String, ShellError> {

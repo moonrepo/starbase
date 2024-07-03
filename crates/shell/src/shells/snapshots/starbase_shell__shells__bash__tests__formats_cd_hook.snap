@@ -1,13 +1,13 @@
 ---
 source: crates/shell/src/shells/bash.rs
-expression: Bash.format_on_cd_hook(hook).unwrap()
+expression: Bash.format_hook(hook).unwrap()
 ---
+export __ORIG_PATH="$PATH"
+
 _starbase_hook() {
   local previous_exit_status=$?;
   trap -- '' SIGINT;
-  export PROTO_HOME="$HOME/.proto";
-  unset PROTO_ROOT;
-  export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";
+  eval "$(starbase hook bash)";
   trap - SIGINT;
   return $previous_exit_status;
 };

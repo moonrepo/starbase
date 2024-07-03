@@ -1,5 +1,6 @@
 use super::Shell;
-use crate::hooks::Hook;
+use crate::helpers::{normalize_newlines, PATH_DELIMITER};
+use crate::hooks::*;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -14,29 +15,46 @@ impl Murex {
 }
 
 impl Shell for Murex {
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("$ENV.{}={}", self.quote(key), self.quote(value))
-    }
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let orig_key = orig_key.unwrap_or(key);
 
-    fn format_env_unset(&self, key: &str) -> String {
-        format!("unset {};", self.quote(key))
-    }
-
-    fn format_path_set(&self, paths: &[String]) -> String {
-        format!(r#"$ENV.PATH="{}:$ENV.PATH""#, paths.join(":"))
+                format!(
+                    r#"$ENV.{key}="{}{}$ENV.{orig_key}""#,
+                    paths.join(PATH_DELIMITER),
+                    PATH_DELIMITER,
+                )
+            }
+            Statement::SetEnv { key, value } => {
+                format!("$ENV.{}={}", self.quote(key), self.quote(value))
+            }
+            Statement::UnsetEnv { key } => {
+                format!("unset {};", self.quote(key))
+            }
+        }
     }
 
     // hook referenced from https://github.com/direnv/direnv/blob/ff451a860b31f176d252c410b43d7803ec0f8b23/internal/cmd/shell_murex.go#L12
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(
-            self,
-            r#"
-event: onPrompt {prefix}_hook=before {
-{export_env}
-{export_path}
-}"#,
-            "  ",
-        ))
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
+$ENV.__ORIG_PATH="$ENV.PATH"
+
+event: onPrompt {prefix}_hook=before {{
+  {command} -> source
+}}
+"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -105,6 +123,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn formats_path() {
         assert_eq!(
@@ -113,14 +132,19 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Murex.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"$ENV.PATH="$PROTO_HOME/shims;$PROTO_HOME/bin;$ENV.PATH""#
+        );
+    }
+
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook murex".into(),
             prefix: "starbase".into(),
         };
 

@@ -2,19 +2,19 @@
 source: crates/shell/src/shells/pwsh.rs
 expression: Pwsh.format_hook(hook).unwrap()
 ---
+# starbase hook
+$env.__ORIG_PATH = "$env.PATH"
+
 using namespace System;
 using namespace System.Management.Automation;
 
 $hook = [EventHandler[LocationChangedEventArgs]] {
   param([object] $source, [LocationChangedEventArgs] $eventArgs)
   end {
-    $env:PROTO_HOME = Join-Path $HOME ".proto";
-    Remove-Item -LiteralPath "env:PROTO_ROOT";
-    $env:PATH = @(
-      (Join-Path $env:PROTO_HOME "shims"),
-      (Join-Path $env:PROTO_HOME "bin"),
-      $env:PATH
-    ) -join [IO.PATH]::PathSeparator;
+    $exports = starbase hook pwsh;
+    if ($exports) {
+      Invoke-Expression -Command $exports;
+    }
   }
 };
 

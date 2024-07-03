@@ -1,6 +1,6 @@
 use super::Shell;
-use crate::helpers::is_absolute_dir;
-use crate::hooks::Hook;
+use crate::helpers::{is_absolute_dir, normalize_newlines};
+use crate::hooks::*;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -21,39 +21,51 @@ impl Zsh {
 // https://zsh.sourceforge.io/Intro/intro_3.html
 // https://zsh.sourceforge.io/Doc/Release/Files.html#Files
 impl Shell for Zsh {
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("export {}={};", self.quote(key), self.quote(value))
-    }
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let orig_key = orig_key.unwrap_or(key);
 
-    fn format_env_unset(&self, key: &str) -> String {
-        format!("unset {};", self.quote(key))
-    }
-
-    fn format_path_set(&self, paths: &[String]) -> String {
-        format!(r#"export PATH="{}:$PATH";"#, paths.join(":"))
+                format!(r#"export {key}="{}:${orig_key}";"#, paths.join(":"))
+            }
+            Statement::SetEnv { key, value } => {
+                format!("export {}={};", self.quote(key), self.quote(value))
+            }
+            Statement::UnsetEnv { key } => {
+                format!("unset {};", self.quote(key))
+            }
+        }
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(
-            self,
-            r#"
-_{prefix}_hook() {
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
+export __ORIG_PATH="$PATH"
+
+_{prefix}_hook() {{
   trap -- '' SIGINT
-{export_env}
-{export_path}
+  eval "$({command})";
   trap - SIGINT
-}
+}}
 typeset -ag precmd_functions
-if (( ! ${precmd_functions[(I)_{prefix}_hook]} )); then
+if (( ! ${{precmd_functions[(I)_{prefix}_hook]}} )); then
   precmd_functions=(_{prefix}_hook $precmd_functions)
 fi
 typeset -ag chpwd_functions
-if (( ! ${chpwd_functions[(I)_{prefix}_hook]} )); then
+if (( ! ${{chpwd_functions[(I)_{prefix}_hook]}} )); then
   chpwd_functions=(_{prefix}_hook $chpwd_functions)
 fi
-"#,
-            "  ",
-        ))
+"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -145,11 +157,7 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook zsh".into(),
             prefix: "starbase".into(),
         };
 

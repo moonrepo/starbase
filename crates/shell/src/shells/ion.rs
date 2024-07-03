@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::get_config_dir;
-use std::collections::HashSet;
+use crate::hooks::*;
+use std::collections::*;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -16,16 +17,28 @@ impl Ion {
 
 impl Shell for Ion {
     // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("export {}={}", self.quote(key), self.quote(value))
-    }
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let orig_key = orig_key.unwrap_or(key);
 
-    fn format_env_unset(&self, key: &str) -> String {
-        format!("drop {}", self.quote(key))
-    }
-
-    fn format_path_set(&self, paths: &[String]) -> String {
-        format!(r#"export PATH = "{}:{}""#, paths.join(":"), "${env::PATH}")
+                format!(
+                    r#"export {key} = "{}:${{env::{orig_key}}}""#,
+                    paths.join(":"),
+                )
+            }
+            Statement::SetEnv { key, value } => {
+                format!("export {}={}", self.quote(key), self.quote(value))
+            }
+            Statement::UnsetEnv { key } => {
+                format!("drop {}", self.quote(key))
+            }
+        }
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {

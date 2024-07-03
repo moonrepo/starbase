@@ -3,10 +3,10 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 #[cfg(unix)]
-pub const NEWLINE: &str = "\n";
+pub static PATH_DELIMITER: &str = ":";
 
 #[cfg(windows)]
-pub const NEWLINE: &str = "\r\n";
+pub static PATH_DELIMITER: &str = ";";
 
 pub fn is_absolute_dir(value: OsString) -> Option<PathBuf> {
     let dir = PathBuf::from(&value);
@@ -29,15 +29,15 @@ pub fn get_env_var_regex() -> regex::Regex {
 }
 
 pub fn normalize_newlines(content: impl AsRef<str>) -> String {
-    let content = content.as_ref();
+    let content = content.as_ref().trim();
 
     #[cfg(windows)]
     {
-        content.replace("\r", "").replace("\n", NEWLINE)
+        content.replace('\r', "").replace('\n', "\r\n")
     }
 
     #[cfg(unix)]
     {
-        content.to_owned()
+        content.replace('\r', "")
     }
 }
