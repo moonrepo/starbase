@@ -27,11 +27,11 @@ pub fn normalize_newlines(content: impl AsRef<str>) -> String {
 
     #[cfg(windows)]
     {
-        content.replace("\r", "").replace("\n", "\r\n")
+        content.replace('\r', "").replace('\n', "\r\n")
     }
 
     #[cfg(unix)]
     {
-        content.replace("\r", "")
+        content.replace('\r', "")
     }
 }
