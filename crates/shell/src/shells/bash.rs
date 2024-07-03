@@ -1,4 +1,5 @@
 use super::Shell;
+use crate::helpers::normalize_newlines;
 use crate::hooks::Hook;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -28,25 +29,29 @@ impl Shell for Bash {
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(
-            r#"
-_{prefix}_hook() {
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
+_{prefix}_hook() {{
   local previous_exit_status=$?;
   trap -- '' SIGINT;
   eval "$({command})";
   trap - SIGINT;
   return $previous_exit_status;
-};
+}};
 
-if [[ ";${PROMPT_COMMAND[*]:-};" != *";_{prefix}_hook;"* ]]; then
+if [[ ";${{PROMPT_COMMAND[*]:-}};" != *";_{prefix}_hook;"* ]]; then
   if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
-    PROMPT_COMMAND=(_{prefix}_hook "${PROMPT_COMMAND[@]}")
+    PROMPT_COMMAND=(_{prefix}_hook "${{PROMPT_COMMAND[@]}}")
   else
-    PROMPT_COMMAND="_{prefix}_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+    PROMPT_COMMAND="_{prefix}_hook${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
   fi
 fi
-"#,
-        ))
+"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {

@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex};
+use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines};
 use crate::hooks::Hook;
 use std::collections::HashSet;
 use std::fmt;
@@ -40,13 +40,18 @@ impl Shell for Elvish {
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(
-            r#"
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
 # {prefix} hook
-set @edit:before-readline = $@edit:before-readline {
+set @edit:before-readline = $@edit:before-readline {{
   eval ({command});
-}"#,
-        ))
+}}
+"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {

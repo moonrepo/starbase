@@ -1,5 +1,6 @@
 use super::Shell;
 use crate::helpers::is_absolute_dir;
+use crate::helpers::normalize_newlines;
 use crate::hooks::Hook;
 use std::env;
 use std::fmt;
@@ -34,23 +35,27 @@ impl Shell for Zsh {
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(
-            r#"
-_{prefix}_hook() {
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
+_{prefix}_hook() {{
   trap -- '' SIGINT
   eval "$({command})";
   trap - SIGINT
-}
+}}
 typeset -ag precmd_functions
-if (( ! ${precmd_functions[(I)_{prefix}_hook]} )); then
+if (( ! ${{precmd_functions[(I)_{prefix}_hook]}} )); then
   precmd_functions=(_{prefix}_hook $precmd_functions)
 fi
 typeset -ag chpwd_functions
-if (( ! ${chpwd_functions[(I)_{prefix}_hook]} )); then
+if (( ! ${{chpwd_functions[(I)_{prefix}_hook]}} )); then
   chpwd_functions=(_{prefix}_hook $chpwd_functions)
 fi
-"#,
-        ))
+"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {

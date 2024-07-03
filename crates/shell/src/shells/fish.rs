@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::get_config_dir;
+use crate::helpers::{get_config_dir, normalize_newlines};
 use crate::hooks::Hook;
 use std::collections::HashSet;
 use std::fmt;
@@ -30,12 +30,17 @@ impl Shell for Fish {
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(
-            r#"
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
 function __{prefix}_hook --on-variable PWD;
   {command} | source
-end;"#,
-        ))
+end;
+"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {

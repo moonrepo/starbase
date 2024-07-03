@@ -65,28 +65,35 @@ impl Shell for Pwsh {
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template( r#"
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
+# {prefix} hook
 using namespace System;
 using namespace System.Management.Automation;
 
-$hook = [EventHandler[LocationChangedEventArgs]] {
+$hook = [EventHandler[LocationChangedEventArgs]] {{
   param([object] $source, [LocationChangedEventArgs] $eventArgs)
-  end {
+  end {{
     $exports = {command};
-    if ($exports) {
+    if ($exports) {{
       Invoke-Expression -Command $exports;
-    }
-  }
-};
+    }}
+  }}
+}};
 
 $currentAction = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction;
 
-if ($currentAction) {
+if ($currentAction) {{
   $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [Delegate]::Combine($currentAction, $hook);
-} else {
+}} else {{
   $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $hook;
-};
-"#))
+}};
+"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {

@@ -23,7 +23,7 @@ pub fn get_env_var_regex() -> regex::Regex {
 }
 
 pub fn normalize_newlines(content: impl AsRef<str>) -> String {
-    let content = content.as_ref();
+    let content = content.as_ref().trim();
 
     #[cfg(windows)]
     {

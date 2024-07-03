@@ -2,6 +2,7 @@
 source: crates/shell/src/shells/pwsh.rs
 expression: Pwsh.format_hook(hook).unwrap()
 ---
+# starbase hook
 using namespace System;
 using namespace System.Management.Automation;
 

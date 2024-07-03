@@ -78,34 +78,37 @@ impl Shell for Nu {
             "PATH"
         };
 
-        let template = r#"
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, prefix } => {
+                format!(
+                    r#"
 # {prefix} hook
-$env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
+$env.config = ( $env.config | upsert hooks.env_change.PWD {{ |config|
   let list = ($config | get -i hooks.env_change.PWD) | default []
 
-  $list | append { |before, after|
+  $list | append {{ |before, after|
     let data = {command} | from json
 
-    $data | get env | items { |k, v|
-      if $v == null {
+    $data | get env | items {{ |k, v|
+      if $v == null {{
         hide_env $k
-      } else {
-        load-env { ($k): $v }
-      }
-    }
+      }} else {{
+        load-env {{ ($k): $v }}
+      }}
+    }}
 
     let path_list = $env.PATH | split row (char esep)
 
-    $data | get paths | reverse | each { |p|
+    $data | get paths | reverse | each {{ |p|
       let path_list = ($path_list | prepend $p)
-    }
+    }}
 
     $env.{path_name} = ($path_list | uniq)
-  }
-})"#
-        .replace("{path_name}", path_name);
-
-        Ok(hook.render_template(&template))
+  }}
+}})"#
+                )
+            }
+        }))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
