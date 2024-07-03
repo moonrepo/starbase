@@ -72,20 +72,40 @@ impl Shell for Nu {
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(
-            self,
-            r#"
+        let path_name = if consts::OS == "windows" {
+            "Path"
+        } else {
+            "PATH"
+        };
+
+        let template = r#"
 # {prefix} hook
 $env.config = ( $env.config | upsert hooks.env_change.PWD { |config|
-    let list = ($config | get -i hooks.env_change.PWD) | default []
+  let list = ($config | get -i hooks.env_change.PWD) | default []
 
-    $list | append { |before, after|
-{export_env}
-{export_path}
+  $list | append { |before, after|
+    let data = {command} | from json
+
+    $data | get env | items { |k, v|
+      if $v == null {
+        hide_env $k
+      } else {
+        load-env { ($k): $v }
+      }
     }
-})"#,
-            "        ",
-        ))
+
+    let path_list = $env.PATH | split row (char esep)
+
+    $data | get paths | reverse | each { |p|
+      let path_list = ($path_list | prepend $p)
+    }
+
+    $env.{path_name} = ($path_list | uniq)
+  }
+})"#
+        .replace("{path_name}", path_name);
+
+        Ok(hook.render_template(&template))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -205,11 +225,7 @@ mod tests {
         use starbase_sandbox::assert_snapshot;
 
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook nu".into(),
             prefix: "starbase".into(),
         };
 

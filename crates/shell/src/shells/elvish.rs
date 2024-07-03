@@ -41,14 +41,11 @@ impl Shell for Elvish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(hook.render_template(
-            self,
             r#"
 # {prefix} hook
 set @edit:before-readline = $@edit:before-readline {
-{export_env}
-{export_path}
+  eval ({command});
 }"#,
-            "  ",
         ))
     }
 
@@ -158,11 +155,7 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook elvish".into(),
             prefix: "starbase".into(),
         };
 

@@ -31,13 +31,10 @@ impl Shell for Fish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(hook.render_template(
-            self,
             r#"
 function __{prefix}_hook --on-variable PWD;
-{export_env}
-{export_path}
+  {command} | source
 end;"#,
-            "    ",
         ))
     }
 
@@ -139,11 +136,7 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook fish".into(),
             prefix: "starbase".into(),
         };
 

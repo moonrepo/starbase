@@ -29,13 +29,11 @@ impl Shell for Bash {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(hook.render_template(
-            self,
             r#"
 _{prefix}_hook() {
   local previous_exit_status=$?;
   trap -- '' SIGINT;
-{export_env}
-{export_path}
+  eval "$({command})";
   trap - SIGINT;
   return $previous_exit_status;
 };
@@ -48,7 +46,6 @@ if [[ ";${PROMPT_COMMAND[*]:-};" != *";_{prefix}_hook;"* ]]; then
   fi
 fi
 "#,
-            "  ",
         ))
     }
 
@@ -124,11 +121,7 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook bash".into(),
             prefix: "starbase".into(),
         };
 

@@ -1,13 +1,7 @@
-use crate::helpers::{normalize_newlines, NEWLINE};
-use crate::shells::Shell;
+use crate::helpers::normalize_newlines;
 
 pub enum Hook {
-    OnChangeDir {
-        // Don't use a map as we want to preserve order!
-        env: Vec<(String, Option<String>)>,
-        paths: Vec<String>,
-        prefix: String,
-    },
+    OnChangeDir { command: String, prefix: String },
 }
 
 impl Hook {
@@ -17,51 +11,11 @@ impl Hook {
         }
     }
 
-    pub fn render_template<S: Shell>(&self, shell: &S, template: &str, indent: &str) -> String {
+    pub fn render_template(&self, template: &str) -> String {
         match self {
-            Hook::OnChangeDir { env, paths, prefix } => {
-                if env.is_empty() && paths.is_empty() {
-                    return "".into();
-                }
-
-                let env = if env.is_empty() {
-                    indent.into()
-                } else {
-                    env.iter()
-                        .map(|(key, value)| {
-                            let result = shell.format_env(key, value.as_deref());
-
-                            if indent.is_empty() {
-                                result
-                            } else {
-                                format!("{indent}{result}")
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .join(NEWLINE)
-                };
-
-                let path = if paths.is_empty() {
-                    indent.into()
-                } else {
-                    let result = shell.format_path_set(paths);
-
-                    if indent.is_empty() {
-                        result
-                    } else {
-                        result
-                            .lines()
-                            .map(|line| format!("{indent}{line}"))
-                            .collect::<Vec<_>>()
-                            .join(NEWLINE)
-                    }
-                };
-
-                normalize_newlines(template)
-                    .replace("{prefix}", prefix)
-                    .replace("{export_env}", &env)
-                    .replace("{export_path}", &path)
-            }
+            Hook::OnChangeDir { command, prefix } => normalize_newlines(template)
+                .replace("{command}", command)
+                .replace("{prefix}", prefix),
         }
     }
 }

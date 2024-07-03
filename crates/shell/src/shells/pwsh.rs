@@ -65,15 +65,17 @@ impl Shell for Pwsh {
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(hook.render_template(self, r#"
+        Ok(hook.render_template( r#"
 using namespace System;
 using namespace System.Management.Automation;
 
 $hook = [EventHandler[LocationChangedEventArgs]] {
   param([object] $source, [LocationChangedEventArgs] $eventArgs)
   end {
-{export_env}
-{export_path}
+    $exports = {command};
+    if ($exports) {
+      Invoke-Expression -Command $exports;
+    }
   }
 };
 
@@ -84,7 +86,7 @@ if ($currentAction) {
 } else {
   $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $hook;
 };
-"#, "    "))
+"#))
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -229,11 +231,7 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook pwsh".into(),
             prefix: "starbase".into(),
         };
 

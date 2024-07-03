@@ -2,12 +2,6 @@ use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-#[cfg(unix)]
-pub const NEWLINE: &str = "\n";
-
-#[cfg(windows)]
-pub const NEWLINE: &str = "\r\n";
-
 pub fn is_absolute_dir(value: OsString) -> Option<PathBuf> {
     let dir = PathBuf::from(&value);
 
@@ -33,11 +27,11 @@ pub fn normalize_newlines(content: impl AsRef<str>) -> String {
 
     #[cfg(windows)]
     {
-        content.replace("\r", "").replace("\n", NEWLINE)
+        content.replace("\r", "").replace("\n", "\r\n")
     }
 
     #[cfg(unix)]
     {
-        content.to_owned()
+        content.replace("\r", "")
     }
 }

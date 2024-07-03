@@ -35,12 +35,10 @@ impl Shell for Zsh {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(hook.render_template(
-            self,
             r#"
 _{prefix}_hook() {
   trap -- '' SIGINT
-{export_env}
-{export_path}
+  eval "$({command})";
   trap - SIGINT
 }
 typeset -ag precmd_functions
@@ -52,7 +50,6 @@ if (( ! ${chpwd_functions[(I)_{prefix}_hook]} )); then
   chpwd_functions=(_{prefix}_hook $chpwd_functions)
 fi
 "#,
-            "  ",
         ))
     }
 
@@ -145,11 +142,7 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            env: vec![
-                ("PROTO_HOME".into(), Some("$HOME/.proto".into())),
-                ("PROTO_ROOT".into(), None),
-            ],
-            paths: vec!["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()],
+            command: "starbase hook zsh".into(),
             prefix: "starbase".into(),
         };
 
