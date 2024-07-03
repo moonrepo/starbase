@@ -4,7 +4,5 @@ expression: Elvish.format_hook(hook).unwrap()
 ---
 # starbase hook
 set @edit:before-readline = $@edit:before-readline {
-  set-env PROTO_HOME {~}/.proto;
-  unset-env PROTO_ROOT;
-  set paths = [$E:PROTO_HOME/shims $E:PROTO_HOME/bin $@paths];
+  eval (starbase hook elvish);
 }
