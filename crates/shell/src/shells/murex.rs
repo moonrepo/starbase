@@ -15,6 +15,10 @@ impl Murex {
 }
 
 impl Shell for Murex {
+    fn format_env_ref(&self, key: &str) -> String {
+        format!("$ENV.{}", self.quote(key))
+    }
+
     fn format_env_set(&self, key: &str, value: &str) -> String {
         format!("$ENV.{}={}", self.quote(key), self.quote(value))
     }

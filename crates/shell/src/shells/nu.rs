@@ -27,6 +27,10 @@ fn join_path(value: impl AsRef<str>) -> String {
 }
 
 impl Shell for Nu {
+    fn format_env_ref(&self, key: &str) -> String {
+        format!("$env.{key}")
+    }
+
     // https://www.nushell.sh/book/configuration.html#environment
     fn format_env_set(&self, key: &str, value: &str) -> String {
         format!("$env.{} = {}", key, self.quote(value))
@@ -83,7 +87,7 @@ impl Shell for Nu {
                 format!(
                     r#"
 # {prefix} hook
-$env.__ORIG_PATH = $env.PATH
+$env.__ORIG_PATH = $env.{path_name}
 
 $env.config = ( $env.config | upsert hooks.env_change.PWD {{ |config|
   let list = ($config | get -i hooks.env_change.PWD) | default []
@@ -99,7 +103,7 @@ $env.config = ( $env.config | upsert hooks.env_change.PWD {{ |config|
       }}
     }}
 
-    let path_list = $env.PATH | split row (char esep)
+    let path_list = $env.{path_name} | split row (char esep)
 
     $data | get paths | reverse | each {{ |p|
       let path_list = ($path_list | prepend $p)

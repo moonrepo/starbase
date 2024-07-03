@@ -51,6 +51,11 @@ pub trait Shell: Display {
         }
     }
 
+    /// Format an enviroment variable for use as a variable reference.
+    fn format_env_ref(&self, key: &str) -> String {
+        format!("${key}")
+    }
+
     /// Format an environment variable that will be set to the entire shell,
     /// and be written to a profile file.
     fn format_env_set(&self, key: &str, value: &str) -> String;

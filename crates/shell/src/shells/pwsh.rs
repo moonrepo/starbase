@@ -39,6 +39,10 @@ fn join_path(value: impl AsRef<str>) -> String {
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.4
 impl Shell for Pwsh {
+    fn format_env_ref(&self, key: &str) -> String {
+        format!("$env:{}", self.quote(key))
+    }
+
     fn format_env_set(&self, key: &str, value: &str) -> String {
         if value.contains('/') {
             format!("$env:{} = {};", key, join_path(value))
