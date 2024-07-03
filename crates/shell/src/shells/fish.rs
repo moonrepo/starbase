@@ -144,7 +144,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Fish.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"set -gx PROTO_HOME "\$HOME/.proto";"#
+            r#"set -gx PROTO_HOME "$HOME/.proto";"#
         );
     }
 

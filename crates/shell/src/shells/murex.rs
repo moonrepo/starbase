@@ -123,11 +123,21 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn formats_path() {
         assert_eq!(
             Murex.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$ENV.PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$ENV.PATH""#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Murex.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"$ENV.PATH="$PROTO_HOME/shims;$PROTO_HOME/bin;$ENV.PATH""#
         );
     }
 
