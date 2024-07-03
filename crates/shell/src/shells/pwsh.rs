@@ -1,6 +1,6 @@
 use super::{Shell, ShellCommand};
 use crate::helpers::{get_env_var_regex, normalize_newlines};
-use crate::hooks::Hook;
+use crate::hooks::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -39,33 +39,38 @@ fn join_path(value: impl AsRef<str>) -> String {
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.4
 impl Shell for Pwsh {
-    fn format_env_ref(&self, key: &str) -> String {
-        format!("$env:{}", self.quote(key))
-    }
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let orig_key = orig_key.unwrap_or(key);
+                let mut value = format!("$env:{key} = @(\n");
 
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        if value.contains('/') {
-            format!("$env:{} = {};", key, join_path(value))
-        } else {
-            format!("$env:{} = {};", key, self.quote(format(value).as_str()))
+                for path in paths {
+                    value.push_str(&format!("  ({}),\n", join_path(path)))
+                }
+
+                value.push_str("  $env:");
+                value.push_str(orig_key);
+                value.push_str("\n) -join [IO.PATH]::PathSeparator;");
+
+                normalize_newlines(value)
+            }
+            Statement::SetEnv { key, value } => {
+                if value.contains('/') {
+                    format!("$env:{} = {};", key, join_path(value))
+                } else {
+                    format!("$env:{} = {};", key, self.quote(format(value).as_str()))
+                }
+            }
+            Statement::UnsetEnv { key } => {
+                format!(r#"Remove-Item -LiteralPath "env:{key}";"#)
+            }
         }
-    }
-
-    fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"Remove-Item -LiteralPath "env:{key}";"#)
-    }
-
-    fn format_path_set(&self, paths: &[String]) -> String {
-        let mut value = "$env:PATH = @(\n".to_string();
-
-        for path in paths {
-            value.push_str(&format!("  ({}),\n", join_path(path)))
-        }
-
-        value.push_str("  $env:PATH\n");
-        value.push_str(") -join [IO.PATH]::PathSeparator;");
-
-        normalize_newlines(value)
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {

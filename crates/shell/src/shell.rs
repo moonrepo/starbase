@@ -43,6 +43,7 @@ impl ShellType {
                 Self::Bash,
                 Self::Elvish,
                 Self::Fish,
+                Self::Murex,
                 Self::Nu,
                 Self::Xonsh,
                 Self::Pwsh,

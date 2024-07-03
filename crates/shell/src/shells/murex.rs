@@ -1,6 +1,6 @@
 use super::Shell;
-use crate::helpers::normalize_newlines;
-use crate::hooks::Hook;
+use crate::helpers::{normalize_newlines, PATH_DELIMITER};
+use crate::hooks::*;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -15,20 +15,29 @@ impl Murex {
 }
 
 impl Shell for Murex {
-    fn format_env_ref(&self, key: &str) -> String {
-        format!("$ENV.{}", self.quote(key))
-    }
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let orig_key = orig_key.unwrap_or(key);
 
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("$ENV.{}={}", self.quote(key), self.quote(value))
-    }
-
-    fn format_env_unset(&self, key: &str) -> String {
-        format!("unset {};", self.quote(key))
-    }
-
-    fn format_path_set(&self, paths: &[String]) -> String {
-        format!(r#"$ENV.PATH="{}:$ENV.PATH""#, paths.join(":"))
+                format!(
+                    r#"$ENV.{key}="{}{}$ENV.{orig_key}""#,
+                    paths.join(PATH_DELIMITER),
+                    PATH_DELIMITER,
+                )
+            }
+            Statement::SetEnv { key, value } => {
+                format!("$ENV.{}={}", self.quote(key), self.quote(value))
+            }
+            Statement::UnsetEnv { key } => {
+                format!("unset {};", self.quote(key))
+            }
+        }
     }
 
     // hook referenced from https://github.com/direnv/direnv/blob/ff451a860b31f176d252c410b43d7803ec0f8b23/internal/cmd/shell_murex.go#L12

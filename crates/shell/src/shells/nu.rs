@@ -1,6 +1,6 @@
 use super::Shell;
 use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines};
-use crate::hooks::Hook;
+use crate::hooks::*;
 use std::collections::HashSet;
 use std::env::consts;
 use std::fmt;
@@ -27,52 +27,55 @@ fn join_path(value: impl AsRef<str>) -> String {
 }
 
 impl Shell for Nu {
-    fn format_env_ref(&self, key: &str) -> String {
-        format!("$env.{key}")
-    }
-
     // https://www.nushell.sh/book/configuration.html#environment
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("$env.{} = {}", key, self.quote(value))
-    }
-
-    fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"hide-env {key}"#)
-    }
-
-    // https://www.nushell.sh/book/configuration.html#path-configuration
-    fn format_path_set(&self, paths: &[String]) -> String {
+    fn format(&self, statement: Statement<'_>) -> String {
         let path_name = if consts::OS == "windows" {
             "Path"
         } else {
             "PATH"
         };
 
-        let env_regex = get_env_var_regex();
-        let path_var = format!("$env.{path_name}");
-        let mut value = format!("{path_var} = {path_var} | split row (char esep)\n");
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let env_regex = get_env_var_regex();
+                let key = key.unwrap_or(path_name);
+                let orig_key = orig_key.unwrap_or(key);
+                let mut value = format!("$env.{key} = $env.{orig_key} | split row (char esep)\n");
 
-        for path in paths {
-            value.push_str("  | prepend ");
+                // https://www.nushell.sh/book/configuration.html#path-configuration
+                for path in paths.iter().rev() {
+                    value.push_str("  | prepend ");
 
-            if let Some(cap) = env_regex.captures(path) {
-                let path_without_env = path.replace(cap.get(0).unwrap().as_str(), "");
+                    if let Some(cap) = env_regex.captures(path) {
+                        let path_without_env = path.replace(cap.get(0).unwrap().as_str(), "");
 
-                value.push('(');
-                value.push_str(&format!("$env.{}", cap.name("name").unwrap().as_str()));
-                value.push_str(" | ");
-                value.push_str(&join_path(path_without_env));
-                value.push(')');
-            } else {
-                value.push_str(path);
+                        value.push('(');
+                        value.push_str(&format!("$env.{}", cap.name("name").unwrap().as_str()));
+                        value.push_str(" | ");
+                        value.push_str(&join_path(path_without_env));
+                        value.push(')');
+                    } else {
+                        value.push_str(path);
+                    }
+
+                    value.push('\n');
+                }
+
+                value.push_str("  | uniq");
+
+                normalize_newlines(value)
             }
-
-            value.push('\n');
+            Statement::SetEnv { key, value } => {
+                format!("$env.{} = {}", key, self.quote(value))
+            }
+            Statement::UnsetEnv { key } => {
+                format!("hide-env {key}")
+            }
         }
-
-        value.push_str("  | uniq");
-
-        normalize_newlines(value)
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {

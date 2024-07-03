@@ -1,5 +1,6 @@
 use super::Shell;
 use crate::helpers::get_config_dir;
+use crate::hooks::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -17,16 +18,25 @@ impl Xonsh {
 // https://xon.sh/bash_to_xsh.html
 // https://xon.sh/xonshrc.html
 impl Shell for Xonsh {
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!("${} = {}", key, self.quote(value))
-    }
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let orig_key = orig_key.unwrap_or(key);
 
-    fn format_env_unset(&self, key: &str) -> String {
-        format!(r#"del ${key}"#)
-    }
-
-    fn format_path_set(&self, paths: &[String]) -> String {
-        format!(r#"$PATH = "{}:$PATH""#, paths.join(":"))
+                format!(r#"${key} = "{}:${orig_key}""#, paths.join(":"))
+            }
+            Statement::SetEnv { key, value } => {
+                format!("${key} = {}", self.quote(value))
+            }
+            Statement::UnsetEnv { key } => {
+                format!("del ${key}")
+            }
+        }
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {

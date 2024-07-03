@@ -1,6 +1,6 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines};
-use crate::hooks::Hook;
+use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines, PATH_DELIMITER};
+use crate::hooks::*;
 use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -23,20 +23,37 @@ fn format(value: impl AsRef<str>) -> String {
 
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
-    fn format_env_set(&self, key: &str, value: &str) -> String {
-        format!(
-            "set-env {} {};",
-            self.quote(key),
-            self.quote(&format(value)).as_str()
-        )
-    }
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let orig_key = orig_key.unwrap_or(key);
 
-    fn format_env_unset(&self, key: &str) -> String {
-        format!("unset-env {};", self.quote(key))
-    }
-
-    fn format_path_set(&self, paths: &[String]) -> String {
-        format!("set paths = [{} $@paths];", format(paths.join(" ")))
+                if key == "PATH" && orig_key == "PATH" {
+                    format!("set paths = [{} $@paths];", format(paths.join(" ")))
+                } else {
+                    format!(
+                        r#"set-env {key} "{}{}"$E:{orig_key};"#,
+                        paths.join(PATH_DELIMITER),
+                        PATH_DELIMITER,
+                    )
+                }
+            }
+            Statement::SetEnv { key, value } => {
+                format!(
+                    "set-env {} {};",
+                    self.quote(key),
+                    self.quote(&format(value)).as_str()
+                )
+            }
+            Statement::UnsetEnv { key } => {
+                format!("unset-env {};", self.quote(key))
+            }
+        }
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
@@ -45,7 +62,7 @@ impl Shell for Elvish {
                 format!(
                     r#"
 # {prefix} hook
-set-env __ORIG_PATH $PATH
+set-env __ORIG_PATH $E:PATH
 
 set @edit:before-readline = $@edit:before-readline {{
   eval ({command});

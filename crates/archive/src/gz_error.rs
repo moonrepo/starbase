@@ -19,7 +19,7 @@ pub enum GzError {
         error: Box<std::io::Error>,
     },
 
-    #[error("Directories cannot be gzipped. Use {} instead.", "tar".style(Style::Symbol),)]
+    #[error("Directories cannot be gzipped. Use {} instead.", "tar".style(Style::Symbol))]
     NoDirs,
 
     #[error("Only 1 file can be gzipped, received more than 1.")]
