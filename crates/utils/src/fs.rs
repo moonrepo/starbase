@@ -365,7 +365,13 @@ pub fn get_editor_config_props<T: AsRef<Path> + Debug>(
                 },
                 IndentSize::Value(value) => " ".repeat(value),
             },
-            None => detect_indentation(read_file(path)?),
+            None => {
+                if path.exists() {
+                    detect_indentation(read_file(path)?)
+                } else {
+                    "  ".into()
+                }
+            }
         },
     })
 }
