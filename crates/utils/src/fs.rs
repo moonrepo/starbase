@@ -1,3 +1,4 @@
+use std::cmp;
 use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::fs::{self, File, OpenOptions};
@@ -223,10 +224,10 @@ pub fn detect_indentation<T: AsRef<str>>(content: T) -> String {
         }
     }
 
-    if spaces > tabs {
-        " ".repeat(lowest_space_width)
+    if tabs > spaces {
+        "\t".repeat(cmp::max(lowest_tab_width, 1))
     } else {
-        "\t".repeat(lowest_tab_width)
+        " ".repeat(cmp::max(lowest_space_width, 2))
     }
 }
 
