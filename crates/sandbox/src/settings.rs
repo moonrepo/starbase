@@ -15,7 +15,7 @@ pub struct SandboxSettings {
 impl Default for SandboxSettings {
     fn default() -> Self {
         Self {
-            bin: env::var("CARGO_BIN_NAME").expect("Missing CARGO_BIN_NAME!"),
+            bin: env::var("CARGO_BIN_NAME").unwrap_or_default(),
             env: HashMap::default(),
             log_filters: string_vec![
                 // Starbase formats
