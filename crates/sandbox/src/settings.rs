@@ -1,40 +1,41 @@
-use once_cell::sync::Lazy;
 use starbase_utils::string_vec;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::env;
-use std::sync::RwLock;
 
-pub static BIN_NAME: Lazy<RwLock<Option<String>>> = Lazy::new(|| RwLock::new(None));
+/// Settings to customize commands and assertions.
+pub struct SandboxSettings {
+    /// The binary name to use when running binaries in the sandbox.
+    pub bin: String,
+    /// Environment variables to use when running binaries in the sandbox.
+    pub env: HashMap<String, String>,
+    /// Filters to apply when filtering log lines from process outputs.
+    pub log_filters: Vec<String>,
+}
 
-/// Get the configured binary name, or the `CARGO_BIN_NAME` environment variable.
-pub fn get_bin_name() -> String {
-    if let Some(bin) = BIN_NAME.read().unwrap().as_ref() {
-        return bin.to_owned();
+impl Default for SandboxSettings {
+    fn default() -> Self {
+        Self {
+            bin: env::var("CARGO_BIN_NAME").expect("Missing CARGO_BIN_NAME!"),
+            env: HashMap::default(),
+            log_filters: string_vec![
+                // Starbase formats
+                "[ERROR", "[WARN", "[ WARN", "[INFO", "[ INFO", "[DEBUG", "[TRACE",
+            ],
+        }
     }
-
-    env::var("CARGO_BIN_NAME").expect("Missing CARGO_BIN_NAME!")
 }
 
-/// Set the binary name to use when running binaries in the sandbox.
-pub fn set_bin_name<N: AsRef<str>>(name: N) {
-    *BIN_NAME.write().unwrap() = Some(name.as_ref().to_owned());
-}
+impl SandboxSettings {
+    pub fn apply_log_filters(&self, input: String) -> String {
+        let mut output = String::new();
 
-pub static ENV_VARS: Lazy<RwLock<HashMap<String, String>>> =
-    Lazy::new(|| RwLock::new(HashMap::new()));
+        for line in input.split('\n') {
+            if self.log_filters.iter().all(|f| !line.contains(f)) {
+                output.push_str(line);
+                output.push('\n');
+            }
+        }
 
-/// Set environment variables to use when running binaries in the sandbox.
-pub fn set_command_env_vars(vars: HashMap<String, String>) {
-    ENV_VARS.write().unwrap().extend(vars);
-}
-
-pub static LOG_FILTERS: Lazy<RwLock<HashSet<String>>> = Lazy::new(|| {
-    RwLock::new(HashSet::from_iter(string_vec![
-        "[ERROR", "[WARN", "[INFO", "[DEBUG", "[TRACE",
-    ]))
-});
-
-/// Set filters to apply when filtering log lines from process outputs.
-pub fn set_output_log_filters(filters: HashSet<String>) {
-    LOG_FILTERS.write().unwrap().extend(filters);
+        output
+    }
 }
