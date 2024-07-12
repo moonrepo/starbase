@@ -12,7 +12,7 @@ pub fn create_command_with_name<P: AsRef<Path>, N: AsRef<str>>(
 ) -> assert_cmd::Command {
     let mut cmd = assert_cmd::Command::cargo_bin(name.as_ref()).unwrap();
     cmd.current_dir(path);
-    cmd.timeout(std::time::Duration::from_secs(90));
+    cmd.timeout(std::time::Duration::from_secs(settings.timeout));
     cmd.env("RUST_BACKTRACE", "1");
     cmd.env("STARBASE_LOG", "trace");
     cmd.env("STARBASE_TEST", "true");
@@ -80,8 +80,18 @@ impl<'s> SandboxAssert<'s> {
     /// Will replace the sandbox root and home directories.
     pub fn output(&self) -> String {
         let mut output = String::new();
-        output.push_str(&get_assert_stdout_output(&self.inner));
-        output.push_str(&get_assert_stderr_output(&self.inner));
+        output.push_str(
+            &self
+                .sandbox
+                .settings
+                .apply_log_filters(get_assert_stderr_output(&self.inner)),
+        );
+        output.push_str(
+            &self
+                .sandbox
+                .settings
+                .apply_log_filters(get_assert_stdout_output(&self.inner)),
+        );
 
         // Replace fixture path
         let root = self.sandbox.path().to_str().unwrap();

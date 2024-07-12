@@ -10,6 +10,8 @@ pub struct SandboxSettings {
     pub env: HashMap<String, String>,
     /// Filters to apply when filtering log lines from process outputs.
     pub log_filters: Vec<String>,
+    /// Timeout when running processes.
+    pub timeout: u64,
 }
 
 impl Default for SandboxSettings {
@@ -21,6 +23,7 @@ impl Default for SandboxSettings {
                 // Starbase formats
                 "[ERROR", "[WARN", "[ WARN", "[INFO", "[ INFO", "[DEBUG", "[TRACE",
             ],
+            timeout: 90,
         }
     }
 }
