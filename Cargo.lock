@@ -1722,7 +1722,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "binstall-tar",
  "flate2",
@@ -1752,7 +1752,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_macros"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -1775,7 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "miette 7.2.0",
  "regex",
