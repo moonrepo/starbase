@@ -68,9 +68,9 @@ impl Shell for Pwsh {
                     let path = self.join_path(path);
 
                     if path.starts_with("Join-Path") {
-                        value.push_str(&format!("  ({}),\n", path));
+                        value.push_str(&format!("  ({})\n", path));
                     } else {
-                        value.push_str(&format!("  {},\n", path));
+                        value.push_str(&format!("  {}\n", path));
                     }
                 }
 
@@ -279,8 +279,8 @@ mod tests {
             Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
-  (Join-Path $env:PROTO_HOME "shims"),
-  (Join-Path $env:PROTO_HOME "bin"),
+  (Join-Path $env:PROTO_HOME "shims")
+  (Join-Path $env:PROTO_HOME "bin")
   $env:PATH
 ) -join [IO.PATH]::PathSeparator;"#
         );
@@ -289,7 +289,7 @@ mod tests {
             Pwsh.format_path_set(&["$HOME".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
-  $HOME,
+  $HOME
   $env:PATH
 ) -join [IO.PATH]::PathSeparator;"#
         );
@@ -298,8 +298,8 @@ mod tests {
             Pwsh.format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
-  $env:BINPATH,
-  "C:\absolute\path",
+  $env:BINPATH
+  "C:\absolute\path"
   $env:PATH
 ) -join [IO.PATH]::PathSeparator;"#
         );
