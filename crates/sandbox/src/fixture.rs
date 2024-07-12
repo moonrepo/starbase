@@ -29,7 +29,7 @@ pub fn locate_fixture<T: AsRef<str>>(fixture: T) -> PathBuf {
             None => {
                 break;
             }
-        }
+        };
     }
 
     panic!("Fixture \"{}\" does not exist!", fixture);

@@ -16,7 +16,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [target."cfg(windows)".dependencies]
-sysinfo = { version = "0.30.12", default-features = false }
+sysinfo = { version = "0.30.13", default-features = false }
 
 [dev-dependencies]
 starbase_sandbox = { path = "../sandbox" }

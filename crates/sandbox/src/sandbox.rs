@@ -1,6 +1,6 @@
-use crate::bin::{create_command_with_name, output_to_string, SandboxAssert};
 use crate::fixture::locate_fixture;
-use crate::settings::get_bin_name;
+use crate::process::{create_command_with_name, output_to_string, SandboxAssert};
+use crate::settings::SandboxSettings;
 use assert_cmd::Command;
 use assert_fs::prelude::*;
 use assert_fs::TempDir;
@@ -10,8 +10,12 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command as StdCommand, Output};
 
+/// A temporary directory to run fs and process operations against.
 pub struct Sandbox {
+    /// The fixture instance.
     pub fixture: TempDir,
+    /// Settings to customize commands and assertions.
+    pub settings: SandboxSettings,
 }
 
 impl Sandbox {
@@ -29,7 +33,7 @@ impl Sandbox {
         if path.exists() {
             let mut file = OpenOptions::new().append(true).open(path).unwrap();
 
-            writeln!(file, "\n\n{}", content.as_ref()).unwrap();
+            writeln!(file, "{}", content.as_ref()).unwrap();
         } else {
             self.create_file(name, content);
         }
@@ -109,7 +113,7 @@ impl Sandbox {
         N: AsRef<str>,
         C: FnOnce(&mut Command),
     {
-        let mut cmd = create_command_with_name(self.path(), name.as_ref());
+        let mut cmd = create_command_with_name(self.path(), name.as_ref(), &self.settings);
 
         handler(&mut cmd);
 
@@ -121,11 +125,11 @@ impl Sandbox {
 
     /// Run a binary in the sandbox. Will default to the `BIN_NAME` setting,
     /// or the `CARGO_BIN_NAME` environment variable.
-    pub fn run_bin<N, C>(&self, handler: C) -> SandboxAssert
+    pub fn run_bin<C>(&self, handler: C) -> SandboxAssert
     where
         C: FnOnce(&mut Command),
     {
-        self.run_bin_with_name(get_bin_name(), handler)
+        self.run_bin_with_name(&self.settings.bin, handler)
     }
 }
 
@@ -138,34 +142,34 @@ pub fn create_temp_dir() -> TempDir {
 pub fn create_empty_sandbox() -> Sandbox {
     Sandbox {
         fixture: create_temp_dir(),
+        settings: SandboxSettings::default(),
     }
 }
 
 /// Create a sandbox and populate it with the contents of a fixture.
 pub fn create_sandbox<N: AsRef<str>>(fixture: N) -> Sandbox {
-    let temp_dir = create_temp_dir();
+    let sandbox = create_empty_sandbox();
 
-    temp_dir
+    sandbox
+        .fixture
         .copy_from(locate_fixture(fixture), &["**/*"])
         .unwrap();
 
-    Sandbox { fixture: temp_dir }
+    sandbox
 }
 
 /// Debug all files in the sandbox by printing to the console.
 pub fn debug_sandbox_files<P: AsRef<Path>>(dir: P) {
     println!("SANDBOX:");
 
-    let dir = dir.as_ref();
-
-    for entry in fs::read_dir_all(dir).unwrap() {
+    for entry in fs::read_dir_all(dir.as_ref()).unwrap() {
         println!("- {}", entry.path().to_string_lossy());
     }
 }
 
 /// Debug the stderr, stdout, and status of a process output by printing to the console.
 pub fn debug_process_output(output: &Output) {
-    println!("STDOUT:\n{}\n", output_to_string(&output.stdout));
     println!("STDERR:\n{}\n", output_to_string(&output.stderr));
+    println!("STDOUT:\n{}\n", output_to_string(&output.stdout));
     println!("STATUS:\n{:#?}", output.status);
 }

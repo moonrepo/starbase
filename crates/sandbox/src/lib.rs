@@ -1,11 +1,11 @@
-mod bin;
 mod fixture;
+mod process;
 mod sandbox;
 mod settings;
 
-pub use bin::*;
 pub use fixture::*;
 pub use insta::{assert_debug_snapshot, assert_snapshot};
+pub use process::*;
 pub use sandbox::*;
 pub use settings::*;
 

@@ -1,5 +1,5 @@
 use crate::sandbox::{debug_process_output, debug_sandbox_files, Sandbox};
-use crate::settings::{get_bin_name, ENV_VARS, LOG_FILTERS};
+use crate::settings::SandboxSettings;
 use assert_cmd::assert::Assert;
 use starbase_utils::dirs::home_dir;
 use std::path::Path;
@@ -8,21 +8,22 @@ use std::path::Path;
 pub fn create_command_with_name<P: AsRef<Path>, N: AsRef<str>>(
     path: P,
     name: N,
+    settings: &SandboxSettings,
 ) -> assert_cmd::Command {
     let mut cmd = assert_cmd::Command::cargo_bin(name.as_ref()).unwrap();
     cmd.current_dir(path);
-    cmd.timeout(std::time::Duration::from_secs(90));
+    cmd.timeout(std::time::Duration::from_secs(settings.timeout));
     cmd.env("RUST_BACKTRACE", "1");
     cmd.env("STARBASE_LOG", "trace");
     cmd.env("STARBASE_TEST", "true");
-    cmd.envs(ENV_VARS.read().unwrap().iter());
+    cmd.envs(&settings.env);
     cmd
 }
 
 /// Create a command to run. Will default the binary name to the `BIN_NAME` setting,
 /// or the `CARGO_BIN_NAME` environment variable.
-pub fn create_command<P: AsRef<Path>>(path: P) -> assert_cmd::Command {
-    create_command_with_name(path, get_bin_name())
+pub fn create_command<P: AsRef<Path>>(path: P, settings: &SandboxSettings) -> assert_cmd::Command {
+    create_command_with_name(path, &settings.bin, settings)
 }
 
 /// Convert a binary output to a string.
@@ -40,20 +41,9 @@ pub fn get_assert_stdout_output(assert: &Assert) -> String {
     output_to_string(&assert.get_output().stdout)
 }
 
-/// Convert the stderr output to a string, and filter out applicable log messages.
+/// Convert the stderr output to a string.
 pub fn get_assert_stderr_output(assert: &Assert) -> String {
-    let mut output = String::new();
-    let stderr = output_to_string(&assert.get_output().stderr);
-    let filters = LOG_FILTERS.read().unwrap();
-
-    for line in stderr.split('\n') {
-        if filters.iter().all(|f| !line.contains(f)) {
-            output.push_str(line);
-            output.push('\n');
-        }
-    }
-
-    output
+    output_to_string(&assert.get_output().stderr)
 }
 
 pub struct SandboxAssert<'s> {
@@ -89,7 +79,19 @@ impl<'s> SandboxAssert<'s> {
     /// Return a combined output of stdout and stderr.
     /// Will replace the sandbox root and home directories.
     pub fn output(&self) -> String {
-        let mut output = get_assert_output(&self.inner);
+        let mut output = String::new();
+        output.push_str(
+            &self
+                .sandbox
+                .settings
+                .apply_log_filters(get_assert_stderr_output(&self.inner)),
+        );
+        output.push_str(
+            &self
+                .sandbox
+                .settings
+                .apply_log_filters(get_assert_stdout_output(&self.inner)),
+        );
 
         // Replace fixture path
         let root = self.sandbox.path().to_str().unwrap();
