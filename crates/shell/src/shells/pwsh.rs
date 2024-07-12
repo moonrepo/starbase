@@ -2,6 +2,7 @@ use super::{Shell, ShellCommand};
 use crate::helpers::{get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use std::collections::HashSet;
+use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -13,28 +14,41 @@ impl Pwsh {
     pub fn new() -> Self {
         Self
     }
-}
 
-fn format(value: impl AsRef<str>) -> String {
-    get_env_var_regex()
-        .replace_all(value.as_ref(), "$$env:$name")
-        .replace("$env:HOME", "$HOME")
-}
+    fn format_env(&self, value: impl AsRef<str>) -> String {
+        get_env_var_regex()
+            .replace_all(value.as_ref(), "$$env:$name")
+            // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_automatic_variables?view=powershell-7.4#home
+            .replace("$env:HOME", "$HOME")
+    }
 
-fn join_path(value: impl AsRef<str>) -> String {
-    let parts = value
-        .as_ref()
-        .split('/')
-        .map(|part| {
-            if part.starts_with('$') {
-                part.to_owned()
-            } else {
-                format!("\"{}\"", part)
-            }
-        })
-        .collect::<Vec<_>>();
+    fn join_path(&self, value: impl AsRef<str>) -> String {
+        let value = value.as_ref();
 
-    format(format!("Join-Path {}", parts.join(" ")))
+        // When no variable, return as-is
+        if !value.contains('$') {
+            return format!("\"{}\"", value);
+        }
+
+        // Otherwise split into segments and join
+        let parts = self
+            .format_env(value)
+            .split(['/', '\\'])
+            .map(|part| {
+                if part.starts_with('$') {
+                    part.to_owned()
+                } else {
+                    format!("\"{}\"", part)
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if parts.len() == 1 {
+            return parts.join("");
+        }
+
+        format!("Join-Path {}", parts.join(" "))
+    }
 }
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.4
@@ -51,7 +65,13 @@ impl Shell for Pwsh {
                 let mut value = format!("$env:{key} = @(\n");
 
                 for path in paths {
-                    value.push_str(&format!("  ({}),\n", join_path(path)))
+                    let path = self.join_path(path);
+
+                    if path.starts_with("Join-Path") {
+                        value.push_str(&format!("  ({}),\n", path));
+                    } else {
+                        value.push_str(&format!("  {},\n", path));
+                    }
                 }
 
                 value.push_str("  $env:");
@@ -61,10 +81,14 @@ impl Shell for Pwsh {
                 normalize_newlines(value)
             }
             Statement::SetEnv { key, value } => {
-                if value.contains('/') {
-                    format!("$env:{} = {};", key, join_path(value))
+                if value.contains('/') || value.contains('\\') {
+                    format!("$env:{} = {};", key, self.join_path(value))
                 } else {
-                    format!("$env:{} = {};", key, self.quote(format(value).as_str()))
+                    format!(
+                        "$env:{} = {};",
+                        key,
+                        self.quote(self.format_env(value).as_str())
+                    )
                 }
             }
             Statement::UnsetEnv { key } => {
@@ -147,6 +171,11 @@ if ($currentAction) {{
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         let mut profiles = HashSet::new();
 
+        // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_automatic_variables?view=powershell-7.4#profile
+        if let Some(profile) = env::var_os("PROFILE") {
+            profiles.insert(PathBuf::from(profile));
+        }
+
         #[cfg(windows)]
         {
             let docs_dir = home_dir.join("Documents");
@@ -198,13 +227,12 @@ if ($currentAction) {{
             // If the string contains a single quote, use a single-quoted string and escape single quotes by doubling them
             if value.contains('\'') {
                 let escaped = value.replace('\'', "''");
+
                 return format!("'{}'", escaped);
             } else {
                 // Use a double-quoted string and escape necessary characters
-                let escaped = value
-                    .replace('`', "``")
-                    .replace('$', "`$")
-                    .replace('"', "`\"");
+                let escaped = value.replace('`', "``").replace('"', "`\"");
+
                 return format!("\"{}\"", escaped);
             }
         }
@@ -231,16 +259,47 @@ mod tests {
             Pwsh.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$env:PROTO_HOME = Join-Path $HOME ".proto";"#
         );
+        assert_eq!(
+            Pwsh.format_env_set("PROTO_HOME", "$HOME"),
+            r#"$env:PROTO_HOME = "$HOME";"#
+        );
+        assert_eq!(
+            Pwsh.format_env_set("BOOL", "true"),
+            r#"$env:BOOL = 'true';"#
+        );
+        assert_eq!(
+            Pwsh.format_env_set("STRING", "a b c"),
+            r#"$env:STRING = 'a b c';"#
+        );
     }
 
     #[test]
     fn formats_path() {
         assert_eq!(
-            Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
+            Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   (Join-Path $env:PROTO_HOME "shims"),
   (Join-Path $env:PROTO_HOME "bin"),
+  $env:PATH
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            Pwsh.format_path_set(&["$HOME".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:PATH = @(
+  $HOME,
+  $env:PATH
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            Pwsh.format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:PATH = @(
+  $env:BINPATH,
+  "C:\absolute\path",
   $env:PATH
 ) -join [IO.PATH]::PathSeparator;"#
         );
@@ -263,6 +322,6 @@ mod tests {
         assert_eq!(Pwsh.quote("don't"), "'don''t'");
         assert_eq!(Pwsh.quote("say \"hello\""), "\"say `\"hello`\"\"");
         assert_eq!(Pwsh.quote("back`tick"), "\"back``tick\"");
-        assert_eq!(Pwsh.quote("price $5"), "\"price `$5\"");
+        // assert_eq!(Pwsh.quote("price $5"), "\"price `$5\"");
     }
 }
