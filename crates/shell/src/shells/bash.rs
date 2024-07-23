@@ -37,6 +37,7 @@ impl Shell for Bash {
         }
     }
 
+    // https://mywiki.wooledge.org/SignalTrap
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
             Hook::OnChangeDir { command, prefix } => {
@@ -46,8 +47,11 @@ export __ORIG_PATH="$PATH"
 
 _{prefix}_hook() {{
   local previous_exit_status=$?;
-  trap -- '' SIGINT;
-  eval "$({command})";
+  trap '' SIGINT;
+  output=$({command})
+  if [ -n "$output" ]; then
+    eval "$output";
+  fi
   trap - SIGINT;
   return $previous_exit_status;
 }};

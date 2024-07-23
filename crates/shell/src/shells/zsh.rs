@@ -50,14 +50,13 @@ impl Shell for Zsh {
 export __ORIG_PATH="$PATH"
 
 _{prefix}_hook() {{
-  trap -- '' SIGINT
-  eval "$({command})";
+  trap '' SIGINT
+  output=$({command})
+  if [ -n "$output" ]; then
+    eval "$output";
+  fi
   trap - SIGINT
 }}
-typeset -ag precmd_functions
-if (( ! ${{precmd_functions[(I)_{prefix}_hook]}} )); then
-  precmd_functions=(_{prefix}_hook $precmd_functions)
-fi
 typeset -ag chpwd_functions
 if (( ! ${{chpwd_functions[(I)_{prefix}_hook]}} )); then
   chpwd_functions=(_{prefix}_hook $chpwd_functions)
