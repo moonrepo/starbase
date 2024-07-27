@@ -16,7 +16,7 @@ jobs:
         with:
           bins: cargo-msrv
       - name: Check MSRV
-        run: cargo msrv verify
+        run: for dir in crates/*; do (cd "$dir" && cargo msrv verify); done
       - name: Check semver
         uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
