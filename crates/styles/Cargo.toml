@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT"
 description = "Utilities for styling the terminal."
 repository = "https://github.com/moonrepo/starbase"
+rust-version = "1.70.0"
 
 [package.metadata.docs.rs]
 all-features = true

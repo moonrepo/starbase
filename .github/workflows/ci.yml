@@ -13,8 +13,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
+        with:
+          bins: msrv
       - name: Check semver
         uses: obi1kenobi/cargo-semver-checks-action@v2
+      - name: Check MSRV
+        run: cargo msrv verify
   format:
     name: Format
     runs-on: ubuntu-latest

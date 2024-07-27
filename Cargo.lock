@@ -438,7 +438,7 @@ dependencies = [
  "async-trait",
  "example_lib",
  "log",
- "miette 7.2.0",
+ "miette",
  "starbase",
  "starbase_shell",
  "starbase_utils",
@@ -451,7 +451,7 @@ dependencies = [
 name = "example_lib"
 version = "0.5.1"
 dependencies = [
- "miette 7.2.0",
+ "miette",
  "starbase_utils",
  "tracing",
 ]
@@ -917,18 +917,6 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "miette"
-version = "5.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59bb584eaeeab6bd0226ccf3509a69d7936d148cf3d036ad350abe35e8c6856e"
-dependencies = [
- "miette-derive 5.10.0",
- "once_cell",
- "thiserror",
- "unicode-width",
-]
-
-[[package]]
-name = "miette"
 version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4edc8853320c2a0dab800fbda86253c8938f6ea88510dc92c5f1ed20e794afc1"
@@ -936,7 +924,7 @@ dependencies = [
  "backtrace",
  "backtrace-ext",
  "cfg-if",
- "miette-derive 7.2.0",
+ "miette-derive",
  "owo-colors",
  "supports-color",
  "supports-hyperlinks",
@@ -945,17 +933,6 @@ dependencies = [
  "textwrap",
  "thiserror",
  "unicode-width",
-]
-
-[[package]]
-name = "miette-derive"
-version = "5.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1723,7 +1700,7 @@ version = "0.8.1"
 dependencies = [
  "async-trait",
  "chrono",
- "miette 7.2.0",
+ "miette",
  "starbase_styles",
  "tokio",
  "tracing",
@@ -1738,7 +1715,7 @@ version = "0.8.2"
 dependencies = [
  "binstall-tar",
  "flate2",
- "miette 7.2.0",
+ "miette",
  "rustc-hash 2.0.0",
  "starbase_archive",
  "starbase_sandbox",
@@ -1756,7 +1733,7 @@ name = "starbase_events"
 version = "0.6.2"
 dependencies = [
  "async-trait",
- "miette 7.2.0",
+ "miette",
  "starbase_macros",
  "thiserror",
  "tokio",
@@ -1789,7 +1766,7 @@ dependencies = [
 name = "starbase_shell"
 version = "0.5.3"
 dependencies = [
- "miette 7.2.0",
+ "miette",
  "regex",
  "starbase_sandbox",
  "sysinfo",
@@ -1802,7 +1779,7 @@ name = "starbase_styles"
 version = "0.4.1"
 dependencies = [
  "dirs",
- "miette 7.2.0",
+ "miette",
  "owo-colors",
  "relative-path",
  "supports-color",
@@ -1816,8 +1793,7 @@ dependencies = [
  "ec4rs",
  "fs4",
  "json-strip-comments",
- "miette 7.2.0",
- "once_cell",
+ "miette",
  "regex",
  "reqwest",
  "serde",
@@ -1896,16 +1872,6 @@ dependencies = [
  "ntapi",
  "once_cell",
  "windows",
-]
-
-[[package]]
-name = "tardar"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900c942f83b6a8b9998cc8f74ad3ffa24b7ff3c4279ea1c1c52d95dced9f3516"
-dependencies = [
- "miette 5.10.0",
- "vec1",
 ]
 
 [[package]]
@@ -2245,12 +2211,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
-name = "vec1"
-version = "1.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bda7c41ca331fe9a1c278a9e7ee055f4be7f5eb1c2b72f079b4ff8b5fce9d5c"
-
-[[package]]
 name = "wait-timeout"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2358,11 +2318,9 @@ checksum = "8d12a78aa0bab22d2f26ed1a96df7ab58e8a93506a3e20adb47c51a93b4e1357"
 dependencies = [
  "const_format",
  "itertools",
- "miette 5.10.0",
  "nom",
  "pori",
  "regex",
- "tardar",
  "thiserror",
  "walkdir",
 ]

@@ -1,6 +1,5 @@
-use once_cell::sync::Lazy;
 use std::fmt::Debug;
-use std::sync::RwLock;
+use std::sync::{LazyLock, RwLock};
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
@@ -11,7 +10,7 @@ use wax::{Any, LinkBehavior, Pattern};
 pub use crate::glob_error::GlobError;
 pub use wax::{self, Glob};
 
-static GLOBAL_NEGATIONS: Lazy<RwLock<Vec<&'static str>>> = Lazy::new(|| {
+static GLOBAL_NEGATIONS: LazyLock<RwLock<Vec<&'static str>>> = LazyLock::new(|| {
     RwLock::new(vec![
         "**/.{git,svn}/**",
         "**/.DS_Store",
