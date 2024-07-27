@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "example_app"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "async-trait",
  "example_lib",
@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "example_lib"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "miette",
  "starbase_utils",
@@ -1696,7 +1696,7 @@ checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "starbase"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1711,7 +1711,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "binstall-tar",
  "flate2",
@@ -1730,7 +1730,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_events"
-version = "0.6.2"
+version = "0.6.3"
 dependencies = [
  "async-trait",
  "miette",
@@ -1741,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_macros"
-version = "0.7.3"
+version = "0.7.4"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -1751,7 +1751,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -1764,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "miette",
  "regex",
@@ -1776,7 +1776,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_styles"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "dirs",
  "miette",
@@ -1787,7 +1787,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.8.3"
+version = "0.8.4"
 dependencies = [
  "dirs",
  "ec4rs",
