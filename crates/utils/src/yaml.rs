@@ -1,10 +1,10 @@
 use crate::fs;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
 use std::path::Path;
+use std::sync::LazyLock;
 use tracing::{instrument, trace};
 
 pub use crate::yaml_error::YamlError;
@@ -13,7 +13,7 @@ pub use serde_yaml::{
     Mapping as YamlMapping, Number as YamlNumber, Sequence as YamlSequence, Value as YamlValue,
 };
 
-static WHITESPACE_PREFIX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(\s+)").unwrap());
+static WHITESPACE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\s+)").unwrap());
 
 /// Recursively merge [`YamlValue`] objects, with values from next overwriting previous.
 #[inline]

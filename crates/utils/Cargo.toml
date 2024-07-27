@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT"
 description = "General fs, io, serde, net, etc, utilities."
 repository = "https://github.com/moonrepo/starbase"
+rust-version = "1.80.0"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -13,7 +14,6 @@ all-features = true
 starbase_styles = { version = "0.4.1", path = "../styles" }
 dirs = { workspace = true }
 miette = { workspace = true, optional = true }
-once_cell = { workspace = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
@@ -48,7 +48,7 @@ default = []
 editor-config = ["dep:ec4rs"]
 fs-lock = ["dep:fs4", "dep:tokio"]
 glob = ["dep:wax"]
-glob-miette = ["glob", "miette", "wax/miette"]
+# glob-miette = ["glob", "miette", "wax/miette"]
 miette = ["dep:miette"]
 net = ["dep:reqwest", "dep:url"]
 json = ["dep:json-strip-comments", "dep:serde", "dep:serde_json"]
