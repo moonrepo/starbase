@@ -43,7 +43,7 @@ impl Default for ShellCommand {
     }
 }
 
-pub trait Shell: Display {
+pub trait Shell: Display + Send + Sync {
     /// Format the provided statement.
     fn format(&self, data: Statement<'_>) -> String;
 
