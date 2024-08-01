@@ -1796,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.8.3"
+version = "0.8.4"
 dependencies = [
  "binstall-tar",
  "flate2",
@@ -1836,7 +1836,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.7.1"
+version = "0.7.2"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -1849,7 +1849,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.5.4"
+version = "0.5.5"
 dependencies = [
  "miette",
  "regex",
@@ -1873,7 +1873,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.8.4"
+version = "0.8.5"
 dependencies = [
  "dirs",
  "ec4rs",
