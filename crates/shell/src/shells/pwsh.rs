@@ -105,16 +105,20 @@ impl Shell for Pwsh {
 # {prefix} hook
 $env.__ORIG_PATH = "$env.PATH"
 
+function _{prefix}_hook {{
+  $exports = {command};
+  if ($exports) {{
+    Invoke-Expression -Command $exports;
+  }}
+}}
+
 using namespace System;
 using namespace System.Management.Automation;
 
 $hook = [EventHandler[LocationChangedEventArgs]] {{
   param([object] $source, [LocationChangedEventArgs] $eventArgs)
   end {{
-    $exports = {command};
-    if ($exports) {{
-      Invoke-Expression -Command $exports;
-    }}
+    _{prefix}_hook
   }}
 }};
 

@@ -52,7 +52,7 @@ impl Shell for Fish {
                     r#"
 set -gx __ORIG_PATH $PATH
 
-function __{prefix}_hook --on-variable PWD;
+function _{prefix}_hook --on-variable PWD;
   {command} | source
 end;
 "#

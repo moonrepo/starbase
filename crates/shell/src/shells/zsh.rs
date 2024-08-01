@@ -57,6 +57,7 @@ _{prefix}_hook() {{
   fi
   trap - SIGINT
 }}
+
 typeset -ag chpwd_functions
 if (( ! ${{chpwd_functions[(I)_{prefix}_hook]}} )); then
   chpwd_functions=(_{prefix}_hook $chpwd_functions)
