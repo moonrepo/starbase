@@ -1,5 +1,5 @@
 use crate::fs::{self, FsError};
-use fs4::FileExt;
+use fs4::fs_std::FileExt;
 use std::fmt::Debug;
 use std::fs::File;
 use std::path::{Path, PathBuf};

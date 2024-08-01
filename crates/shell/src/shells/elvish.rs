@@ -73,8 +73,12 @@ impl Shell for Elvish {
 # {prefix} hook
 set-env __ORIG_PATH $E:PATH
 
-set @edit:before-readline = $@edit:before-readline {{
+fn _{prefix}_hook {{
   eval ({command});
+}}
+
+set @edit:before-readline = $@edit:before-readline {{
+  _{prefix}_hook
 }}
 "#
                 )

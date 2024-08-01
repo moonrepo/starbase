@@ -5,6 +5,10 @@ expression: Elvish.format_hook(hook).unwrap()
 # starbase hook
 set-env __ORIG_PATH $E:PATH
 
-set @edit:before-readline = $@edit:before-readline {
+fn _starbase_hook {
   eval (starbase hook elvish);
+}
+
+set @edit:before-readline = $@edit:before-readline {
+  _starbase_hook
 }

@@ -48,8 +48,12 @@ impl Shell for Murex {
                     r#"
 $ENV.__ORIG_PATH="$ENV.PATH"
 
-event: onPrompt {prefix}_hook=before {{
+function _{prefix}_hook {{
   {command} -> source
+}}
+
+event onPrompt {prefix}_hook=before {{
+  _{prefix}_hook
 }}
 "#
                 )

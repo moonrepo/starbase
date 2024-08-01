@@ -17,10 +17,13 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [target."cfg(windows)".dependencies]
-sysinfo = { version = "0.30.13", default-features = false }
+sysinfo = { version = "0.31.2", default-features = false, features = [
+	"system",
+] }
 
 [dev-dependencies]
 starbase_sandbox = { path = "../sandbox" }
+serial_test = { workspace = true }
 
 [features]
 default = []

@@ -12,6 +12,7 @@ _starbase_hook() {
   fi
   trap - SIGINT
 }
+
 typeset -ag chpwd_functions
 if (( ! ${chpwd_functions[(I)_starbase_hook]} )); then
   chpwd_functions=(_starbase_hook $chpwd_functions)

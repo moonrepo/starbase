@@ -279,7 +279,7 @@ mod unix {
 #[cfg(windows)]
 mod windows {
     use super::*;
-    use sysinfo::{get_current_pid, System};
+    use sysinfo::{get_current_pid, ProcessesToUpdate, System};
     use tracing::trace;
 
     pub fn detect() -> Option<ShellType> {
@@ -292,7 +292,7 @@ mod windows {
                 return None;
             }
 
-            system.refresh_process(current_pid);
+            system.refresh_processes(ProcessesToUpdate::Some(&[current_pid]));
 
             if let Some(process) = system.process(current_pid) {
                 pid = process.parent();
