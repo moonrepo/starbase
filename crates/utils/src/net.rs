@@ -30,7 +30,6 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
 ) -> Result<(), NetError> {
     let source_url = source_url.as_ref();
     let dest_file = dest_file.as_ref();
-
     let base_client = Client::new();
     let client = options.client.unwrap_or(&base_client);
 
@@ -42,6 +41,12 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
         error: Box::new(error),
         url: source_url.to_owned(),
     };
+
+    trace!(
+        source_url,
+        dest_file = ?dest_file,
+        "Downloading file from remote URL to local file",
+    );
 
     // Fetch the file from the HTTP source
     let mut response = client
@@ -70,23 +75,23 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
     }
 
     let mut file = fs::create_file(&dest_file)?;
-    let mut downloaded: u64 = 0;
 
     // Write the bytes in chunks
     if let Some(on_chunk) = options.on_chunk {
         let total_size = response.content_length().unwrap_or(0);
+        let mut current_size: u64 = 0;
 
         on_chunk(0, total_size);
 
         while let Some(chunk) = response.chunk().await.map_err(handle_net_error)? {
             file.write_all(&chunk).map_err(handle_fs_error)?;
 
-            downloaded = cmp::min(downloaded + (chunk.len() as u64), total_size);
+            current_size = cmp::min(current_size + (chunk.len() as u64), total_size);
 
-            on_chunk(downloaded, total_size);
+            on_chunk(current_size, total_size);
         }
     }
-    // Write all bytes to our file
+    // Write all bytes at once
     else {
         let bytes = response.bytes().await.map_err(handle_net_error)?;
 
@@ -94,6 +99,24 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
     }
 
     Ok(())
+}
+
+/// Download a file from the provided source URL, to the destination file path,
+/// using a custom `reqwest` [`Client`].
+pub async fn download_from_url_with_client<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
+    source_url: S,
+    dest_file: D,
+    client: &Client,
+) -> Result<(), NetError> {
+    download_from_url_with_options(
+        source_url,
+        dest_file,
+        DownloadOptions {
+            client: Some(client),
+            on_chunk: None,
+        },
+    )
+    .await
 }
 
 /// Download a file from the provided source URL, to the destination file path.
