@@ -1,6 +1,8 @@
-use crate::fs;
+use crate::fs::{self, FsError};
 use reqwest::Client;
+use std::cmp;
 use std::fmt::Debug;
+use std::io::Write;
 use std::net::{Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::thread;
@@ -10,30 +12,53 @@ use url::Url;
 
 pub use crate::net_error::NetError;
 
+pub type OnChunkFn = Box<dyn Fn(u64, u64) + Send>;
+
+#[derive(Default)]
+pub struct DownloadOptions<'a> {
+    pub client: Option<&'a Client>,
+    pub on_chunk: Option<OnChunkFn>,
+}
+
 /// Download a file from the provided source URL, to the destination file path,
-/// using a custom `reqwest` [`Client`].
-#[instrument(name = "download_from_url", skip(client))]
-pub async fn download_from_url_with_client<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
+/// using custom options.
+#[instrument(name = "download_from_url", skip(options))]
+pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
     source_url: S,
     dest_file: D,
-    client: &Client,
+    options: DownloadOptions<'_>,
 ) -> Result<(), NetError> {
     let source_url = source_url.as_ref();
-    let url = Url::parse(source_url).map_err(|error| NetError::UrlParseFailed {
-        url: source_url.to_owned(),
+    let dest_file = dest_file.as_ref();
+    let base_client = Client::new();
+    let client = options.client.unwrap_or(&base_client);
+
+    let handle_fs_error = |error: std::io::Error| FsError::Write {
+        path: dest_file.to_path_buf(),
         error: Box::new(error),
-    })?;
+    };
+    let handle_net_error = |error: reqwest::Error| NetError::Http {
+        error: Box::new(error),
+        url: source_url.to_owned(),
+    };
+
+    trace!(
+        source_url,
+        dest_file = ?dest_file,
+        "Downloading file from remote URL to local file",
+    );
 
     // Fetch the file from the HTTP source
-    let response = client
-        .get(url)
+    let mut response = client
+        .get(
+            Url::parse(source_url).map_err(|error| NetError::UrlParseFailed {
+                url: source_url.to_owned(),
+                error: Box::new(error),
+            })?,
+        )
         .send()
         .await
-        .map_err(|error| NetError::Http {
-            error: Box::new(error),
-            url: source_url.to_owned(),
-        })?;
-
+        .map_err(handle_net_error)?;
     let status = response.status();
 
     if status.as_u16() == 404 {
@@ -49,16 +74,49 @@ pub async fn download_from_url_with_client<S: AsRef<str> + Debug, D: AsRef<Path>
         });
     }
 
-    // Write the bytes to our file
-    fs::write_file(
-        dest_file,
-        response.bytes().await.map_err(|error| NetError::Http {
-            error: Box::new(error),
-            url: source_url.to_owned(),
-        })?,
-    )?;
+    let mut file = fs::create_file(&dest_file)?;
+
+    // Write the bytes in chunks
+    if let Some(on_chunk) = options.on_chunk {
+        let total_size = response.content_length().unwrap_or(0);
+        let mut current_size: u64 = 0;
+
+        on_chunk(0, total_size);
+
+        while let Some(chunk) = response.chunk().await.map_err(handle_net_error)? {
+            file.write_all(&chunk).map_err(handle_fs_error)?;
+
+            current_size = cmp::min(current_size + (chunk.len() as u64), total_size);
+
+            on_chunk(current_size, total_size);
+        }
+    }
+    // Write all bytes at once
+    else {
+        let bytes = response.bytes().await.map_err(handle_net_error)?;
+
+        file.write_all(&bytes).map_err(handle_fs_error)?;
+    }
 
     Ok(())
+}
+
+/// Download a file from the provided source URL, to the destination file path,
+/// using a custom `reqwest` [`Client`].
+pub async fn download_from_url_with_client<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
+    source_url: S,
+    dest_file: D,
+    client: &Client,
+) -> Result<(), NetError> {
+    download_from_url_with_options(
+        source_url,
+        dest_file,
+        DownloadOptions {
+            client: Some(client),
+            on_chunk: None,
+        },
+    )
+    .await
 }
 
 /// Download a file from the provided source URL, to the destination file path.
@@ -66,7 +124,7 @@ pub async fn download_from_url<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
     source_url: S,
     dest_file: D,
 ) -> Result<(), NetError> {
-    download_from_url_with_client(source_url, dest_file, &Client::new()).await
+    download_from_url_with_options(source_url, dest_file, DownloadOptions::default()).await
 }
 
 mod offline {
