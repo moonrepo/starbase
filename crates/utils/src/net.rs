@@ -74,28 +74,40 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
         });
     }
 
-    let mut file = fs::create_file(&dest_file)?;
+    // Wrap in a closure so that we can capture the error and cleanup
+    let do_write = || async {
+        let mut file = fs::create_file(&dest_file)?;
 
-    // Write the bytes in chunks
-    if let Some(on_chunk) = options.on_chunk {
-        let total_size = response.content_length().unwrap_or(0);
-        let mut current_size: u64 = 0;
+        // Write the bytes in chunks
+        if let Some(on_chunk) = options.on_chunk {
+            let total_size = response.content_length().unwrap_or(0);
+            let mut current_size: u64 = 0;
 
-        on_chunk(0, total_size);
+            on_chunk(0, total_size);
 
-        while let Some(chunk) = response.chunk().await.map_err(handle_net_error)? {
-            file.write_all(&chunk).map_err(handle_fs_error)?;
+            while let Some(chunk) = response.chunk().await.map_err(handle_net_error)? {
+                file.write_all(&chunk).map_err(handle_fs_error)?;
 
-            current_size = cmp::min(current_size + (chunk.len() as u64), total_size);
+                current_size = cmp::min(current_size + (chunk.len() as u64), total_size);
 
-            on_chunk(current_size, total_size);
+                on_chunk(current_size, total_size);
+            }
         }
-    }
-    // Write all bytes at once
-    else {
-        let bytes = response.bytes().await.map_err(handle_net_error)?;
+        // Write all bytes at once
+        else {
+            let bytes = response.bytes().await.map_err(handle_net_error)?;
 
-        file.write_all(&bytes).map_err(handle_fs_error)?;
+            file.write_all(&bytes).map_err(handle_fs_error)?;
+        }
+
+        Ok::<(), NetError>(())
+    };
+
+    // Cleanup on failure, otherwise the file was only partially written to
+    if let Err(error) = do_write().await {
+        let _ = fs::remove_file(dest_file);
+
+        return Err(error);
     }
 
     Ok(())
