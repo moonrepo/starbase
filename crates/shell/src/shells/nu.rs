@@ -220,19 +220,19 @@ mod tests {
         assert_eq!(
             Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
                 .replace("\r\n", "\n"),
-            r#"$env.Path = $env.Path | split row (char esep)
+            r#"$env.Path = ($env.Path | split row (char esep)
   | prepend ($env.PROTO_HOME | path join bin)
   | prepend ($env.PROTO_HOME | path join shims)
-  | uniq"#
+  | uniq)"#
         );
 
         assert_eq!(
             Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()])
                 .replace("\r\n", "\n"),
-            r#"$env.Path = $env.Path | split row (char esep)
+            r#"$env.Path = ($env.Path | split row (char esep)
   | prepend /some/abs/path/bin
   | prepend ($env.HOME | path join with sub dir)
-  | uniq"#
+  | uniq)"#
         );
     }
 
