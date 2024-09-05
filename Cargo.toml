@@ -6,8 +6,8 @@ members = ["crates/*", "examples/*"]
 async-trait = "0.1.82"
 dirs = "5.0.1"
 miette = "7.2.0"
-regex = { version = "1.9.6", default-features = false }
-relative-path = "1.9.0"
+regex = { version = "1.10.6", default-features = false }
+relative-path = "1.9.3"
 reqwest = { version = "0.12.7", default-features = false }
 rustc-hash = "2.0.0"
 serial_test = "3.1.1"
