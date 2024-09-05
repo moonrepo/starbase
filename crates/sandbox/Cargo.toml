@@ -9,7 +9,7 @@ rust-version = "1.80.0"
 
 [dependencies]
 starbase_utils = { version = "0.8.7", path = "../utils", default-features = false }
-assert_cmd = "2.0.15"
+assert_cmd = "2.0.16"
 assert_fs = "1.1.2"
 clean-path = "0.2.1"
 insta = "1.39.0"

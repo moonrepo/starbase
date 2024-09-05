@@ -20,7 +20,7 @@ rustc-hash = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
-flate2 = { version = "1.0.30", optional = true }
+flate2 = { version = "1.0.33", optional = true }
 
 # tar
 # https://github.com/moonrepo/starbase/issues/56
@@ -29,7 +29,7 @@ xz2 = { version = "0.1.7", optional = true }
 zstd = { version = "0.13.2", optional = true }
 
 # zip
-zip = { version = "2.1.6", default-features = false, optional = true }
+zip = { version = "2.2.0", default-features = false, optional = true }
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = [
