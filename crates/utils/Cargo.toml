@@ -1,6 +1,6 @@
 [package]
 name = "starbase_utils"
-version = "0.8.7"
+version = "0.8.8"
 edition = "2021"
 license = "MIT"
 description = "General fs, io, serde, net, etc, utilities."
@@ -11,7 +11,7 @@ rust-version = "1.80.0"
 all-features = true
 
 [dependencies]
-starbase_styles = { version = "0.4.2", path = "../styles" }
+starbase_styles = { version = "0.4.3", path = "../styles" }
 dirs = { workspace = true }
 miette = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
