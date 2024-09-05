@@ -76,7 +76,7 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
 
     // Wrap in a closure so that we can capture the error and cleanup
     let do_write = || async {
-        let mut file = fs::create_file(&dest_file)?;
+        let mut file = fs::create_file(dest_file)?;
 
         // Write the bytes in chunks
         if let Some(on_chunk) = options.on_chunk {
@@ -178,51 +178,81 @@ mod offline {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct OfflineOptions {
+    pub check_default_hosts: bool,
+    pub check_default_ips: bool,
+    pub custom_hosts: Vec<String>,
+    pub timeout: u64,
+}
+
+/// Detect if there is an internet connection, or the user is offline,
+/// using a custom list of hosts.
+#[instrument]
+pub fn is_offline(timeout: u64, custom_hosts: Vec<String>) -> bool {
+    is_offline_with_options(OfflineOptions {
+        custom_hosts,
+        timeout,
+        ..Default::default()
+    })
+}
+
 /// Detect if there is an internet connection, or the user is offline.
 /// This will first ping Cloudflare and Google DNS IP addresses, which
 /// is the fastest approach as they do not need to parse host names.
 /// If all of these fail, then we will ping Google, Mozilla, and custom
 /// hosts, which is slower, so we wrap them in a timeout.
 #[instrument]
-pub fn is_offline(timeout: u64, custom_hosts: Vec<String>) -> bool {
-    trace!(timeout, "Checking for an internet connection");
+pub fn is_offline_with_options(options: OfflineOptions) -> bool {
+    trace!(
+        timeout = options.timeout,
+        "Checking for an internet connection"
+    );
 
     // Check these first as they do not need to resolve IP addresses!
     // These typically happen in milliseconds.
-    let online = [
-        // Cloudflare DNS: https://1.1.1.1/dns/
-        SocketAddr::from(([1, 1, 1, 1], 53)),
-        SocketAddr::from(([1, 0, 0, 1], 53)),
-        // Google DNS: https://developers.google.com/speed/public-dns
-        SocketAddr::from(([8, 8, 8, 8], 53)),
-        SocketAddr::from(([8, 8, 4, 4], 53)),
-    ]
-    .into_iter()
-    .map(|address| thread::spawn(move || offline::check_connection(address, timeout)))
-    .any(|handle| handle.join().is_ok_and(|v| v));
+    if options.check_default_ips {
+        let online = [
+            // Cloudflare DNS: https://1.1.1.1/dns/
+            SocketAddr::from(([1, 1, 1, 1], 53)),
+            SocketAddr::from(([1, 0, 0, 1], 53)),
+            // Google DNS: https://developers.google.com/speed/public-dns
+            SocketAddr::from(([8, 8, 8, 8], 53)),
+            SocketAddr::from(([8, 8, 4, 4], 53)),
+        ]
+        .into_iter()
+        .map(|address| thread::spawn(move || offline::check_connection(address, options.timeout)))
+        .any(|handle| handle.join().is_ok_and(|v| v));
 
-    if online {
-        trace!("Online!");
+        if online {
+            trace!("Online!");
 
-        return false;
+            return false;
+        }
     }
 
     // Check these second as they need to resolve IP addresses,
     // which adds unnecessary time and overhead that can't be
     // controlled with a native timeout.
-    let mut hosts = vec![
-        "clients3.google.com:80".to_owned(),
-        "detectportal.firefox.com:80".to_owned(),
-        "google.com:80".to_owned(),
-    ];
+    let mut hosts = vec![];
 
-    if !custom_hosts.is_empty() {
-        hosts.extend(custom_hosts);
+    if options.check_default_hosts {
+        hosts.extend([
+            "clients3.google.com:80".to_owned(),
+            "detectportal.firefox.com:80".to_owned(),
+            "google.com:80".to_owned(),
+        ]);
+    }
+
+    if !options.custom_hosts.is_empty() {
+        hosts.extend(options.custom_hosts);
     }
 
     let online = hosts
         .into_iter()
-        .map(|host| thread::spawn(move || offline::check_connection_from_host(host, timeout)))
+        .map(|host| {
+            thread::spawn(move || offline::check_connection_from_host(host, options.timeout))
+        })
         .any(|handle| handle.join().is_ok_and(|v| v));
 
     if online {
