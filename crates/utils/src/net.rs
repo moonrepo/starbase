@@ -76,7 +76,7 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
 
     // Wrap in a closure so that we can capture the error and cleanup
     let do_write = || async {
-        let mut file = fs::create_file(&dest_file)?;
+        let mut file = fs::create_file(dest_file)?;
 
         // Write the bytes in chunks
         if let Some(on_chunk) = options.on_chunk {
