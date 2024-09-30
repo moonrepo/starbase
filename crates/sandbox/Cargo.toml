@@ -1,6 +1,6 @@
 [package]
 name = "starbase_sandbox"
-version = "0.7.3"
+version = "0.7.4"
 edition = "2021"
 license = "MIT"
 description = "A temporary sandbox for testing file system and process operations, with fixtures support."
@@ -8,7 +8,7 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.80.0"
 
 [dependencies]
-starbase_utils = { version = "0.8.8", path = "../utils", default-features = false }
+starbase_utils = { version = "0.8.9", path = "../utils", default-features = false }
 assert_cmd = "2.0.16"
 assert_fs = "1.1.2"
 clean-path = "0.2.1"

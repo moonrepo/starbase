@@ -8,7 +8,7 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.70.0"
 
 [dependencies]
-starbase_macros = { version = "0.7.4", path = "../macros", features = [
+starbase_macros = { version = "0.7.5", path = "../macros", features = [
 	"events",
 ] }
 async-trait = { workspace = true }
