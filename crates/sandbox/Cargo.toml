@@ -12,6 +12,6 @@ starbase_utils = { version = "0.8.8", path = "../utils", default-features = fals
 assert_cmd = "2.0.16"
 assert_fs = "1.1.2"
 clean-path = "0.2.1"
-insta = "1.39.0"
+insta = "1.40.0"
 predicates = "3.1.2"
-pretty_assertions = "1.4.0"
+pretty_assertions = "1.4.1"
