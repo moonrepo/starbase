@@ -10,10 +10,15 @@ pub const LOCK_FILE: &str = ".lock";
 pub struct DirLock {
     lock: PathBuf,
     file: File,
+    unlocked: bool,
 }
 
 impl DirLock {
-    pub fn unlock(&self) -> Result<(), FsError> {
+    pub fn unlock(&mut self) -> Result<(), FsError> {
+        if self.unlocked {
+            return Ok(());
+        }
+
         trace!(dir = ?self.lock.parent().unwrap(), "Unlocking directory");
 
         let handle_error = |error: std::io::Error| FsError::Unlock {
@@ -35,6 +40,8 @@ impl DirLock {
 
         #[cfg(unix)]
         self.file.unlock().map_err(handle_error)?;
+
+        self.unlocked = true;
 
         fs::remove_file(&self.lock)
     }
@@ -136,7 +143,11 @@ pub fn lock_directory<T: AsRef<Path> + Debug>(path: T) -> Result<DirLock, FsErro
             error: Box::new(error),
         })?;
 
-    Ok(DirLock { lock, file })
+    Ok(DirLock {
+        lock,
+        file,
+        unlocked: false,
+    })
 }
 
 /// Lock the provided file with exclusive access and execute the operation.
