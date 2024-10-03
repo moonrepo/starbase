@@ -190,6 +190,17 @@ impl<'owner> Archiver<'owner> {
                 }
                 .into());
             }
+            Some("tar.bz2" | "tz2" | "tbz" | "tbz2") => {
+                #[cfg(feature = "tar-bz2")]
+                self.pack(crate::tar::TarPacker::new_bz2)?;
+
+                #[cfg(not(feature = "tar-bz2"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-bz2".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
             Some("tar.gz" | "tgz") => {
                 #[cfg(feature = "tar-gz")]
                 self.pack(crate::tar::TarPacker::new_gz)?;
@@ -318,6 +329,19 @@ impl<'owner> Archiver<'owner> {
                 #[cfg(not(feature = "tar"))]
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar".into(),
+                    path: self.archive_file.to_path_buf(),
+                }
+                .into());
+            }
+            Some("tar.bz2" | "tz2" | "tbz" | "tbz2") => {
+                #[cfg(feature = "tar-bz2")]
+                {
+                    out = self.unpack(crate::tar::TarUnpacker::new_bz2)?;
+                }
+
+                #[cfg(not(feature = "tar-bz2"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-bz2".into(),
                     path: self.archive_file.to_path_buf(),
                 }
                 .into());

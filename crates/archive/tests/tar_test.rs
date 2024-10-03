@@ -28,3 +28,9 @@ mod tar_zstd {
 
     generate_tests!("out.tar.zst", TarPacker::new_zstd, TarUnpacker::new_zstd);
 }
+
+mod tar_bz2 {
+    use super::*;
+
+    generate_tests!("out.tar.bz2", TarPacker::new_bz2, TarUnpacker::new_bz2);
+}

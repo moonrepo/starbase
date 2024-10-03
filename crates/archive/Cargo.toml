@@ -27,6 +27,7 @@ flate2 = { version = "1.0.34", optional = true }
 binstall-tar = { version = "0.4.42", optional = true }
 xz2 = { version = "0.1.7", optional = true }
 zstd = { version = "0.13.2", optional = true }
+bzip2 = { version = "0.4.4", optional = true }
 
 # zip
 zip = { version = "2.2.0", default-features = false, optional = true }
@@ -35,6 +36,7 @@ zip = { version = "2.2.0", default-features = false, optional = true }
 starbase_archive = { path = ".", features = [
 	"gz",
 	"miette",
+	"tar-bz2",
 	"tar-gz",
 	"tar-xz",
 	"tar-zstd",
@@ -48,6 +50,7 @@ default = ["tar-gz"]
 gz = ["dep:flate2"]
 miette = ["dep:miette"]
 tar = ["dep:binstall-tar"]
+tar-bz2 = ["dep:bzip2", "tar"]
 tar-gz = ["dep:flate2", "tar"]
 tar-xz = ["dep:xz2", "tar"]
 tar-zstd = ["dep:zstd", "tar"]
