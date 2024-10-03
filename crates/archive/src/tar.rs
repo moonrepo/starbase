@@ -79,6 +79,21 @@ impl TarPacker {
             TarPacker::create(Box::new(encoder?.auto_finish()))
         }
     }
+
+    /// Create a new `.tar.bz2` packer.
+    #[cfg(feature = "tar-bz2")]
+    pub fn new_bz2(output_file: &Path) -> ArchiveResult<Self> {
+        Self::new_bz2_with_level(output_file, 6) // Default in lib
+    }
+
+    /// Create a new `.tar.gz` packer with a custom compression level.
+    #[cfg(feature = "tar-bz2")]
+    pub fn new_bz2_with_level(output_file: &Path, level: u32) -> ArchiveResult<Self> {
+        TarPacker::create(Box::new(bzip2::write::BzEncoder::new(
+            fs::create_file(output_file)?,
+            bzip2::Compression::new(level),
+        )))
+    }
 }
 
 impl ArchivePacker for TarPacker {
@@ -178,6 +193,15 @@ impl TarUnpacker {
         {
             TarUnpacker::create(output_dir, Box::new(decoder?))
         }
+    }
+
+    /// Create a new `.tar.bz2` unpacker.
+    #[cfg(feature = "tar-bz2")]
+    pub fn new_bz2(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+        TarUnpacker::create(
+            output_dir,
+            Box::new(bzip2::read::BzDecoder::new(fs::open_file(input_file)?)),
+        )
     }
 }
 
