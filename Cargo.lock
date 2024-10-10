@@ -1868,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_macros"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -1891,7 +1891,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.5.7"
+version = "0.5.8"
 dependencies = [
  "miette",
  "regex",
@@ -1915,7 +1915,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.8.9"
+version = "0.8.10"
 dependencies = [
  "dirs",
  "ec4rs",
