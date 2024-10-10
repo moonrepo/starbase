@@ -137,12 +137,8 @@ impl App {
         futures.push(spawn(async move { op(fg_session).await }));
         futures.push(spawn(async move { bg_session.execute().await }));
 
-        for (index, future) in futures.into_iter().enumerate() {
-            let code = future.await.into_diagnostic()??;
-
-            if index == 0 {
-                self.handle_exit_code(code);
-            }
+        for future in futures {
+            self.handle_exit_code(future.await.into_diagnostic()??);
         }
 
         Ok(())
@@ -170,6 +166,8 @@ impl App {
     }
 
     fn handle_exit_code(&mut self, code: Option<u8>) {
+        dbg!(&self.exit_code, &code);
+
         if let Some(code) = code {
             self.exit_code = Some(code);
         }
