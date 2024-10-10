@@ -159,8 +159,8 @@ impl App {
         self.phase = AppPhase::Shutdown;
         self.handle_exit_code(session.shutdown().await?);
 
-        if self.exit_code.is_none() {
-            self.exit_code = Some(1);
+        if on_failure && self.exit_code.is_none() {
+            self.handle_exit_code(Some(1));
         }
 
         Ok(())
@@ -168,6 +168,8 @@ impl App {
 
     fn handle_exit_code(&mut self, code: Option<u8>) {
         if let Some(code) = code {
+            trace!(code, "Setting exit code");
+
             self.exit_code = Some(code);
         }
     }
