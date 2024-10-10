@@ -35,7 +35,7 @@ impl AppSession for TestSession {
             bail!("error in startup");
         }
 
-        Ok(())
+        Ok(None)
     }
 
     async fn analyze(&mut self) -> AppResult {
@@ -45,7 +45,7 @@ impl AppSession for TestSession {
             bail!("error in analyze");
         }
 
-        Ok(())
+        Ok(None)
     }
 
     async fn execute(&mut self) -> AppResult {
@@ -65,7 +65,7 @@ impl AppSession for TestSession {
         .await
         .into_diagnostic()?;
 
-        Ok(())
+        Ok(None)
     }
 
     async fn shutdown(&mut self) -> AppResult {
@@ -77,12 +77,12 @@ impl AppSession for TestSession {
 
         self.contexts.write().await.push("shutdown".into());
 
-        Ok(())
+        Ok(None)
     }
 }
 
 async fn noop<S>(_session: S) -> AppResult {
-    Ok(())
+    Ok(None)
 }
 
 #[tokio::test]
