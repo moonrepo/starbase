@@ -166,8 +166,6 @@ impl App {
     }
 
     fn handle_exit_code(&mut self, code: Option<u8>) {
-        dbg!(&self.exit_code, &code);
-
         if let Some(code) = code {
             self.exit_code = Some(code);
         }
