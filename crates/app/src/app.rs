@@ -2,11 +2,12 @@ use crate::session::{AppResult, AppSession};
 use crate::tracing::TracingOptions;
 use miette::IntoDiagnostic;
 use std::future::Future;
+use std::process::ExitCode;
 use tokio::spawn;
 use tokio::task::JoinHandle;
 use tracing::{instrument, trace};
 
-pub type MainResult = miette::Result<()>;
+pub type MainResult = miette::Result<ExitCode>;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum AppPhase {

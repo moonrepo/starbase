@@ -9,6 +9,7 @@ use starbase_shell::ShellType;
 use starbase_utils::{fs, glob};
 use std::env;
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::sleep;
@@ -109,7 +110,7 @@ async fn main() -> MainResult {
 
     let mut session = TestSession::default();
 
-    let _code = app
+    let code = app
         .run_with_session(&mut session, |session| async {
             dbg!(session);
             create_file().await?;
@@ -118,5 +119,5 @@ async fn main() -> MainResult {
         })
         .await?;
 
-    Ok(())
+    Ok(ExitCode::from(code))
 }

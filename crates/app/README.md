@@ -16,6 +16,7 @@ for each [phase](#phases).
 
 ```rust
 use starbase::{App, MainResult};
+use std::process::ExitCode;
 use crate::CustomSession;
 
 #[tokio::main]
@@ -28,11 +29,7 @@ async fn main() -> MainResult {
     Ok(None)
   }).await?;
 
-  if exit_code > 0 {
-    std::process::exit(exit_code);
-  }
-
-  Ok(())
+  Ok(ExitCode::from(exit_code))
 }
 ```
 
