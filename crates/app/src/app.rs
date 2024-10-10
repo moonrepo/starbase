@@ -19,8 +19,8 @@ pub enum AppPhase {
 
 #[derive(Debug, Default)]
 pub struct App {
-    pub exit_code: Option<u8>,
     pub phase: AppPhase,
+    exit_code: Option<u8>,
 }
 
 impl App {

@@ -292,7 +292,7 @@ mod windows {
                 return None;
             }
 
-            system.refresh_processes(ProcessesToUpdate::Some(&[current_pid]));
+            system.refresh_processes(ProcessesToUpdate::Some(&[current_pid]), true);
 
             if let Some(process) = system.process(current_pid) {
                 pid = process.parent();
