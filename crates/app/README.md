@@ -23,12 +23,14 @@ async fn main() -> MainResult {
   let app = App::default();
   app.setup_diagnostics();
 
-  let mut session = CustomSession::default();
-
-  app.run(&mut session, |session| async {
+  let exit_code = app.run(CustomSession::default(), |session| async {
     // Run CLI
-    Ok(())
+    Ok(None)
   }).await?;
+
+  if exit_code > 0 {
+    std::process::exit(exit_code);
+  }
 
   Ok(())
 }
@@ -53,7 +55,7 @@ pub struct CustomSession {
 impl AppSession for CustomSession {
   async fn startup(&mut self) -> AppResult {
     self.workspace_root = detect_workspace_root()?;
-    Ok(())
+    Ok(None)
   }
 }
 ```
@@ -98,7 +100,7 @@ use starbase::{App, MainResult};
 async fn main() -> MainResult {
   let app = App::default();
   app.setup_diagnostics();
-  app.setup_tracing_defaults();
+  app.setup_tracing_with_defaults();
 
   // ...
 

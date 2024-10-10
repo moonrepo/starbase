@@ -45,20 +45,20 @@ impl AppSession for TestSession {
 
         dbg!(ShellType::detect());
 
-        Ok(())
+        Ok(None)
     }
 
     async fn analyze(&mut self) -> AppResult {
         info!(val = self.state, "analyze {}", "foo.bar".style(Style::File));
         self.state = "mutated".into();
 
-        Ok(())
+        Ok(None)
     }
 
     async fn shutdown(&mut self) -> AppResult {
         info!(val = self.state, "shutdown");
 
-        Ok(())
+        Ok(None)
     }
 }
 
@@ -72,13 +72,13 @@ async fn create_file() -> AppResult {
 
     sleep(Duration::new(10, 0)).await;
 
-    Ok(())
+    Ok(None)
 }
 
 async fn missing_file() -> AppResult {
     fs::read_file(PathBuf::from("temp/fake.file")).into_diagnostic()?;
 
-    Ok(())
+    Ok(None)
 }
 
 async fn fail() -> AppResult {
@@ -91,7 +91,7 @@ async fn fail() -> AppResult {
         return Err(AppError::Test)?;
     }
 
-    Ok(())
+    Ok(None)
 }
 
 #[tokio::main]
@@ -109,13 +109,14 @@ async fn main() -> MainResult {
 
     let mut session = TestSession::default();
 
-    app.run_with_session(&mut session, |session| async {
-        dbg!(session);
-        create_file().await?;
+    let _code = app
+        .run_with_session(&mut session, |session| async {
+            dbg!(session);
+            create_file().await?;
 
-        Ok(())
-    })
-    .await?;
+            Ok(None)
+        })
+        .await?;
 
     Ok(())
 }

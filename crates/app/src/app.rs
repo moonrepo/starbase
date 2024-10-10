@@ -20,6 +20,7 @@ pub enum AppPhase {
 #[derive(Debug, Default)]
 pub struct App {
     pub phase: AppPhase,
+    exit_code: Option<u8>,
 }
 
 impl App {
@@ -42,7 +43,7 @@ impl App {
 
     /// Start the application with the provided session and execute all phases
     /// in order. If a phase fails, always run the shutdown phase.
-    pub async fn run<S, F, Fut>(self, mut session: S, op: F) -> miette::Result<()>
+    pub async fn run<S, F, Fut>(self, mut session: S, op: F) -> miette::Result<u8>
     where
         S: AppSession + 'static,
         F: FnOnce(S) -> Fut + Send + 'static,
@@ -57,7 +58,7 @@ impl App {
     /// This method is similar to [`App#run`](#method.run) but doesn't consume
     /// the session, and instead accepts a mutable reference.
     #[instrument(skip_all)]
-    pub async fn run_with_session<S, F, Fut>(mut self, session: &mut S, op: F) -> miette::Result<()>
+    pub async fn run_with_session<S, F, Fut>(mut self, session: &mut S, op: F) -> miette::Result<u8>
     where
         S: AppSession + 'static,
         F: FnOnce(S) -> Fut + Send + 'static,
@@ -87,41 +88,39 @@ impl App {
         // Shutdown
         self.run_shutdown(session, false).await?;
 
-        Ok(())
+        Ok(self.exit_code.unwrap_or_default())
     }
 
     // Private
 
     #[instrument(skip_all)]
-    async fn run_startup<S>(&mut self, session: &mut S) -> AppResult
+    async fn run_startup<S>(&mut self, session: &mut S) -> miette::Result<()>
     where
         S: AppSession,
     {
         trace!("Running startup phase");
 
         self.phase = AppPhase::Startup;
-
-        session.startup().await?;
+        self.handle_exit_code(session.startup().await?);
 
         Ok(())
     }
 
     #[instrument(skip_all)]
-    async fn run_analyze<S>(&mut self, session: &mut S) -> AppResult
+    async fn run_analyze<S>(&mut self, session: &mut S) -> miette::Result<()>
     where
         S: AppSession,
     {
         trace!("Running analyze phase");
 
         self.phase = AppPhase::Analyze;
-
-        session.analyze().await?;
+        self.handle_exit_code(session.analyze().await?);
 
         Ok(())
     }
 
     #[instrument(skip_all)]
-    async fn run_execute<S, F, Fut>(&mut self, session: &mut S, op: F) -> AppResult
+    async fn run_execute<S, F, Fut>(&mut self, session: &mut S, op: F) -> miette::Result<()>
     where
         S: AppSession + 'static,
         F: FnOnce(S) -> Fut + Send + 'static,
@@ -139,14 +138,14 @@ impl App {
         futures.push(spawn(async move { bg_session.execute().await }));
 
         for future in futures {
-            future.await.into_diagnostic()??;
+            self.handle_exit_code(future.await.into_diagnostic()??);
         }
 
         Ok(())
     }
 
     #[instrument(skip_all)]
-    async fn run_shutdown<S>(&mut self, session: &mut S, on_failure: bool) -> AppResult
+    async fn run_shutdown<S>(&mut self, session: &mut S, on_failure: bool) -> miette::Result<()>
     where
         S: AppSession,
     {
@@ -157,9 +156,18 @@ impl App {
         }
 
         self.phase = AppPhase::Shutdown;
+        self.handle_exit_code(session.shutdown().await?);
 
-        session.shutdown().await?;
+        if self.exit_code.is_none() {
+            self.exit_code = Some(1);
+        }
 
         Ok(())
+    }
+
+    fn handle_exit_code(&mut self, code: Option<u8>) {
+        if let Some(code) = code {
+            self.exit_code = Some(code);
+        }
     }
 }
