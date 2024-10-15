@@ -107,12 +107,15 @@ impl ConsoleBuffer {
         Ok(())
     }
 
-    pub fn write_raw<F: FnMut(&mut Vec<u8>)>(&self, mut op: F) -> miette::Result<()> {
+    pub fn write_raw<F: FnMut(&mut Vec<u8>) -> io::Result<()>>(
+        &self,
+        mut op: F,
+    ) -> miette::Result<()> {
         // When testing just flush immediately
         if self.test_mode {
             let mut buffer = Vec::new();
 
-            op(&mut buffer);
+            op(&mut buffer).into_diagnostic()?;
 
             flush(&mut buffer, self.stream).into_diagnostic()?;
         }
@@ -121,7 +124,7 @@ impl ConsoleBuffer {
         else {
             let mut buffer = self.buffer.lock();
 
-            op(&mut buffer);
+            op(&mut buffer).into_diagnostic()?;
 
             if buffer.len() >= 1024 {
                 flush(&mut buffer, self.stream).into_diagnostic()?;
@@ -138,7 +141,10 @@ impl ConsoleBuffer {
             return Ok(());
         }
 
-        self.write_raw(|buffer| buffer.extend_from_slice(data))
+        self.write_raw(|buffer| {
+            buffer.extend_from_slice(data);
+            Ok(())
+        })
     }
 
     pub fn write_line<T: AsRef<[u8]>>(&self, data: T) -> miette::Result<()> {
@@ -150,6 +156,7 @@ impl ConsoleBuffer {
             }
 
             buffer.push(b'\n');
+            Ok(())
         })
     }
 
