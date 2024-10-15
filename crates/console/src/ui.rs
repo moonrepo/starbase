@@ -2,21 +2,9 @@ use crate::console::Console;
 use crate::reporter::Reporter;
 use miette::IntoDiagnostic;
 
+pub use crate::components::*;
 pub use iocraft;
 pub use iocraft::prelude::*;
-
-#[component]
-fn Counter(mut hooks: Hooks) -> impl Into<AnyElement<'static>> {
-    let mut count = hooks.use_state(|| 0);
-
-    hooks.use_future(async move {
-        count += 1;
-    });
-
-    element! {
-        Text(color: Color::Blue, content: format!("counter: {}", count))
-    }
-}
 
 impl<R: Reporter> Console<R> {
     pub fn render(&self, mut element: AnyElement) -> miette::Result<()> {
