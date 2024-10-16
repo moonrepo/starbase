@@ -1,22 +1,21 @@
 use crate::console::Console;
 use crate::reporter::Reporter;
+use iocraft::prelude::*;
 use miette::IntoDiagnostic;
 
 pub use crate::components::*;
-pub use iocraft;
-pub use iocraft::prelude::*;
 
 impl<R: Reporter> Console<R> {
-    pub fn render(&self, mut element: AnyElement) -> miette::Result<()> {
+    pub fn render<T: Component>(&self, element: Element<'_, T>) -> miette::Result<()> {
         self.out.flush()?;
-        element.print();
+        element.into_any().print();
 
         Ok(())
     }
 
-    pub async fn render_loop(&self, mut element: AnyElement<'_>) -> miette::Result<()> {
+    pub async fn render_loop<T: Component>(&self, element: Element<'_, T>) -> miette::Result<()> {
         self.out.flush()?;
-        element.render_loop().await.into_diagnostic()?;
+        element.into_any().render_loop().await.into_diagnostic()?;
 
         Ok(())
     }
