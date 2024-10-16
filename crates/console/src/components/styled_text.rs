@@ -1,9 +1,14 @@
 use iocraft::prelude::*;
-use starbase_styles::Style;
 
-#[derive(Props)]
+pub use starbase_styles::Style;
+
+pub fn style_to_color(style: Style) -> Color {
+    Color::AnsiValue(style.color() as u8)
+}
+
+#[derive(Default, Props)]
 pub struct StyledTextProps {
-    pub style: Style,
+    pub style: Option<Style>,
     pub content: String,
     pub weight: Weight,
     pub wrap: TextWrap,
@@ -12,10 +17,10 @@ pub struct StyledTextProps {
 }
 
 #[component]
-pub fn StyledText(props: &StyledTextProps) -> impl Into<AnyElement<'static>> {
+pub fn StyledText<'a>(props: &StyledTextProps) -> impl Into<AnyElement<'a>> {
     element! {
         Text(
-            color: Color::AnsiValue(props.style as u8),
+            color: props.style.map(style_to_color),
             content: props.content.clone(),
             weight: props.weight,
             wrap: props.wrap,
