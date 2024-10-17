@@ -2,47 +2,6 @@ use super::styled_text::*;
 use iocraft::prelude::*;
 
 #[derive(Default, Props)]
-pub struct EntryGroupProps<'a> {
-    pub title: String,
-    pub children: Vec<AnyElement<'a>>,
-}
-
-#[component]
-pub fn EntryGroup<'a>(props: &mut EntryGroupProps<'a>) -> impl Into<AnyElement<'a>> {
-    element! {
-        Box(
-            flex_direction: FlexDirection::Column,
-            margin_top: 1,
-            // margin_bottom: 1,
-            width: Size::Percent(100.0),
-        ) {
-            Box(
-                flex_direction: FlexDirection::Row,
-                border_color: style_to_color(Style::Muted),
-                border_edges: Edges::Top,
-                border_style: BorderStyle::Single,
-                width: Size::Percent(40.0)
-            ) {
-                Box(margin_top: -1) {
-                    StyledText(
-                        content: format!("{} ", props.title),
-                        style: Style::MutedLight,
-                        weight: Weight::Bold,
-                        wrap: TextWrap::NoWrap,
-                    )
-                }
-            }
-            Box(
-                flex_direction: FlexDirection::Column,
-                padding_left: 2
-            ) {
-                #(&mut props.children)
-            }
-        }
-    }
-}
-
-#[derive(Default, Props)]
 pub struct EntryProps<'a> {
     pub title: String,
     pub content: String,

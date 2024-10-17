@@ -15,7 +15,6 @@ pub fn Container<'a>(
     element! {
         Box(
             flex_direction: FlexDirection::Column,
-            padding_bottom: 1,
             width,
         ) {
             #(&mut props.children)

@@ -6,6 +6,8 @@ mod console;
 pub mod prompts;
 mod reporter;
 #[cfg(feature = "ui")]
+pub mod theme;
+#[cfg(feature = "ui")]
 pub mod ui;
 
 pub use buffer::*;
