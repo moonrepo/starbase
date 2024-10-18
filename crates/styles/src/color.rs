@@ -96,6 +96,16 @@ pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
     }
 }
 
+pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Style)> {
+    let mut message = value.as_ref().to_owned();
+    let mut result = vec![];
+
+    let mut last_index = 0;
+    let mut curr_index = 0;
+
+    result
+}
+
 /// Apply styles to a string by replacing style specific tags.
 /// For example, `<file>starbase.json</file>`.
 pub fn apply_style_tags<T: AsRef<str>>(value: T) -> String {

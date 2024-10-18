@@ -4,6 +4,7 @@ use iocraft::prelude::*;
 #[derive(Default, Props)]
 pub struct SectionProps<'a> {
     pub title: String,
+    pub title_color: Option<Color>,
     pub children: Vec<AnyElement<'a>>,
 }
 
@@ -26,20 +27,26 @@ pub fn Section<'a>(props: &mut SectionProps<'a>, hooks: Hooks) -> impl Into<AnyE
                 Box(margin_top: -1) {
                     Text(
                         content: format!("{} ", props.title),
-                        color: theme.border_focus_color,
+                        color: props.title_color.unwrap_or(theme.border_focus_color),
                         weight: Weight::Bold,
                         wrap: TextWrap::NoWrap,
                     )
                 }
             }
-            Box(
-                flex_direction: FlexDirection::Column,
-                padding_top: 1,
-                padding_left: 2,
-                padding_bottom: 1,
-            ) {
-                #(&mut props.children)
-            }
+            #(if props.children.is_empty() {
+                None
+            } else {
+                Some(element! {
+                    Box(
+                        flex_direction: FlexDirection::Column,
+                        padding_top: 1,
+                        padding_left: 2,
+                        padding_bottom: 1,
+                    ) {
+                        #(&mut props.children)
+                    }
+                })
+            })
         }
     }
 }
