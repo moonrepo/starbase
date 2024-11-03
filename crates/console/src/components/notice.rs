@@ -1,4 +1,3 @@
-use super::styled_text::*;
 use crate::ui::{ConsoleTheme, Variant};
 use iocraft::prelude::*;
 
