@@ -559,6 +559,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "example_term"
+version = "0.0.0"
+dependencies = [
+ "async-trait",
+ "iocraft",
+ "miette",
+ "starbase",
+ "starbase_console",
+ "thiserror 2.0.4",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1110,9 +1124,9 @@ dependencies = [
 
 [[package]]
 name = "iocraft"
-version = "0.3.2"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46c89439a9dd17d5de7215a14928efae013d1b281f177ec3bfd3c9651ad579aa"
+checksum = "f71fdb568f761189ce852729fc68b5a1e3003da0f845619cd71b8d4721d5b5e2"
 dependencies = [
  "any_key",
  "bitflags 2.6.0",
@@ -1129,9 +1143,9 @@ dependencies = [
 
 [[package]]
 name = "iocraft-macros"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c23693fa666552feadf75efc3e0da9d144f3bea30b6a703d3f0b8adf8619434"
+checksum = "bd89a0706c7f66bbc9b5049c67a94937e12ae233c4d94c97cdce180772902a1a"
 dependencies = [
  "proc-macro2",
  "quote",

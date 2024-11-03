@@ -1,0 +1,15 @@
+[package]
+name = "example_term"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+starbase = { path = "../../crates/app" }
+starbase_console = { path = "../../crates/console", features = ["ui"] }
+async-trait = { workspace = true }
+iocraft = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full", "tracing"] }
+tracing = { workspace = true }

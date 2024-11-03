@@ -10,7 +10,7 @@ rust-version = "1.80.0"
 [dependencies]
 starbase_styles = { version = "0.4.4", path = "../styles" }
 inquire = { version = "0.7.5", optional = true }
-iocraft = { version = "0.3.2", optional = true }
+iocraft = { workspace = true, optional = true }
 miette = { workspace = true }
 parking_lot = "0.12.3"
 tracing = { workspace = true }

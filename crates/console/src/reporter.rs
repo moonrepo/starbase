@@ -1,7 +1,8 @@
 use crate::buffer::ConsoleBuffer;
+use std::fmt;
 use std::sync::Arc;
 
-pub trait Reporter: Send + Sync {
+pub trait Reporter: fmt::Debug + Send + Sync {
     fn inherit_streams(&mut self, _err: Arc<ConsoleBuffer>, _out: Arc<ConsoleBuffer>) {}
 
     #[cfg(feature = "prompts")]
@@ -10,7 +11,7 @@ pub trait Reporter: Send + Sync {
 
 pub type BoxedReporter = Box<dyn Reporter>;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct EmptyReporter;
 
 impl Reporter for EmptyReporter {}

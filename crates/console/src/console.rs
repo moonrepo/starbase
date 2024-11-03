@@ -1,5 +1,6 @@
 use crate::buffer::*;
 use crate::reporter::*;
+use std::fmt;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -129,6 +130,17 @@ impl<R: Reporter> Clone for Console<R> {
             #[cfg(feature = "prompts")]
             theme: self.theme.clone(),
         }
+    }
+}
+
+impl<R: Reporter> fmt::Debug for Console<R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Console")
+            .field("err", &self.err)
+            .field("out", &self.out)
+            .field("quiet", &self.quiet)
+            .field("reporter", &self.reporter)
+            .finish()
     }
 }
 

@@ -1,5 +1,6 @@
 use miette::IntoDiagnostic;
 use parking_lot::Mutex;
+use std::fmt;
 use std::io::{self, IsTerminal, Write};
 use std::mem;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -9,7 +10,7 @@ use std::thread::{sleep, spawn, JoinHandle};
 use std::time::Duration;
 use tracing::{trace, warn};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ConsoleStream {
     Stderr,
     Stdout,
@@ -191,6 +192,17 @@ impl Clone for ConsoleBuffer {
             channel: None,
             handle: None,
         }
+    }
+}
+
+impl fmt::Debug for ConsoleBuffer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConsoleBuffer")
+            .field("buffer", &self.buffer)
+            .field("stream", &self.stream)
+            .field("quiet", &self.quiet)
+            .field("test_mode", &self.test_mode)
+            .finish()
     }
 }
 
