@@ -67,27 +67,27 @@ impl App {
     {
         // Startup
         if let Err(error) = self.run_startup(session).await {
-            self.run_shutdown(session, true).await?;
+            self.run_shutdown(session, Some(&error)).await?;
 
             return Err(error);
         }
 
         // Analyze
         if let Err(error) = self.run_analyze(session).await {
-            self.run_shutdown(session, true).await?;
+            self.run_shutdown(session, Some(&error)).await?;
 
             return Err(error);
         }
 
         // Execute
         if let Err(error) = self.run_execute(session, op).await {
-            self.run_shutdown(session, true).await?;
+            self.run_shutdown(session, Some(&error)).await?;
 
             return Err(error);
         }
 
         // Shutdown
-        self.run_shutdown(session, false).await?;
+        self.run_shutdown(session, None).await?;
 
         Ok(self.exit_code.unwrap_or_default())
     }
@@ -146,12 +146,17 @@ impl App {
     }
 
     #[instrument(skip_all)]
-    async fn run_shutdown<S>(&mut self, session: &mut S, on_failure: bool) -> miette::Result<()>
+    async fn run_shutdown<S>(
+        &mut self,
+        session: &mut S,
+        error: Option<&miette::Report>,
+    ) -> miette::Result<()>
     where
         S: AppSession,
     {
-        if on_failure {
+        if let Some(error) = error {
             trace!("Running shutdown phase (because another phase failed)");
+            trace!("Error: {error}");
         } else {
             trace!("Running shutdown phase");
         }
@@ -159,7 +164,7 @@ impl App {
         self.phase = AppPhase::Shutdown;
         self.handle_exit_code(session.shutdown().await?);
 
-        if on_failure && self.exit_code.is_none() {
+        if error.is_some() && self.exit_code.is_none() {
             self.handle_exit_code(Some(1));
         }
 
