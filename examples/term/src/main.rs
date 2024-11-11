@@ -33,6 +33,17 @@ fn render(session: TestSession, ui: String) {
             })
             .unwrap();
         }
+        "styledtext" => {
+            con.render(element! {
+                Container {
+                    StyledText(content: "Unstyled")
+                    StyledText(content: "Styled success", style: Style::Success)
+                    StyledText(content: "Styled failure with weight", style: Style::Failure, weight: Weight::Bold)
+                    StyledText(content: "Styled file with decoration", style: Style::File, decoration: TextDecoration::Underline)
+                }
+            })
+            .unwrap();
+        }
         _ => panic!("Unknown UI {}.", ui),
     }
 }
