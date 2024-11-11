@@ -14,6 +14,21 @@ impl Bash {
     }
 }
 
+fn has_bash_profile(home_dir: &Path) -> bool {
+    home_dir.join(".bash_profile").exists()
+}
+
+fn profile_for_bash(home_dir: &Path) -> PathBuf {
+    // https://github.com/moonrepo/starbase/issues/99
+    // Ubuntu doesn't have .bash_profile. It uses .profile instead.
+    // If .bash_profile is newly created, .profile will be no longer loaded.
+    if has_bash_profile(home_dir) {
+        home_dir.join(".bash_profile")
+    } else {
+        home_dir.join(".profile")
+    }
+}
+
 // https://www.baeldung.com/linux/bashrc-vs-bash-profile-vs-profile
 impl Shell for Bash {
     fn format(&self, statement: Statement<'_>) -> String {
@@ -70,19 +85,24 @@ fi
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
-        home_dir.join(".bash_profile")
+        profile_for_bash(home_dir)
     }
 
     fn get_env_path(&self, home_dir: &Path) -> PathBuf {
-        home_dir.join(".bash_profile")
+        profile_for_bash(home_dir)
     }
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        vec![
-            home_dir.join(".bash_profile"),
-            home_dir.join(".bashrc"),
-            home_dir.join(".profile"),
-        ]
+        if has_bash_profile(home_dir) {
+            vec![
+                home_dir.join(".bash_profile"),
+                home_dir.join(".bashrc"),
+                home_dir.join(".profile"),
+            ]
+        } else {
+            // Default .profile calls .bashrc in Ubuntu
+            vec![home_dir.join(".profile"), home_dir.join(".bashrc")]
+        }
     }
 
     /// Quotes a string according to Bash shell quoting rules.
