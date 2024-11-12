@@ -10,12 +10,12 @@ regex = { version = "1.11.1", default-features = false }
 relative-path = "1.9.3"
 reqwest = { version = "0.12.9", default-features = false }
 rustc-hash = "2.0.0"
-serial_test = "3.1.1"
-serde = { version = "1.0.214", features = ["derive"] }
+serial_test = "3.2.0"
+serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.132"
 serde_yaml = "0.9.34"
-thiserror = "1.0.66"
-tokio = { version = "1.41.0", default-features = false, features = [
+thiserror = "1.0.69"
+tokio = { version = "1.41.1", default-features = false, features = [
 	"io-util",
 	"rt",
 	"sync",
