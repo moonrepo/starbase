@@ -55,12 +55,12 @@ impl Shell for Bash {
     // https://mywiki.wooledge.org/SignalTrap
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, prefix } => {
+            Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
 export __ORIG_PATH="$PATH"
 
-_{prefix}_hook() {{
+{function}() {{
   local previous_exit_status=$?;
   trap '' SIGINT;
   output=$({command})
@@ -71,11 +71,11 @@ _{prefix}_hook() {{
   return $previous_exit_status;
 }};
 
-if [[ ";${{PROMPT_COMMAND[*]:-}};" != *";_{prefix}_hook;"* ]]; then
+if [[ ";${{PROMPT_COMMAND[*]:-}};" != *";{{{function}}};"* ]]; then
   if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
-    PROMPT_COMMAND=(_{prefix}_hook "${{PROMPT_COMMAND[@]}}")
+    PROMPT_COMMAND=({function} "${{PROMPT_COMMAND[@]}}")
   else
-    PROMPT_COMMAND="_{prefix}_hook${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
+    PROMPT_COMMAND="{function}${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
   fi
 fi
 "#
@@ -162,7 +162,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook bash".into(),
-            prefix: "starbase".into(),
+            function: "starbase".into(),
         };
 
         assert_snapshot!(Bash.format_hook(hook).unwrap());

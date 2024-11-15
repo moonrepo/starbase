@@ -91,10 +91,9 @@ impl Shell for Nu {
         };
 
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, prefix } => {
+            Hook::OnChangeDir { command, .. } => {
                 format!(
                     r#"
-# {prefix} hook
 $env.__ORIG_PATH = $env.{path_name}
 
 $env.config = ( $env.config | upsert hooks.env_change.PWD {{ |config|
@@ -243,7 +242,7 @@ mod tests {
 
         let hook = Hook::OnChangeDir {
             command: "starbase hook nu".into(),
-            prefix: "starbase".into(),
+            function: "starbase".into(),
         };
 
         assert_snapshot!(Nu.format_hook(hook).unwrap());

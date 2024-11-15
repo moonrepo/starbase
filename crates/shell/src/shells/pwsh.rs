@@ -99,13 +99,12 @@ impl Shell for Pwsh {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, prefix } => {
+            Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-# {prefix} hook
 $env.__ORIG_PATH = "$env.PATH"
 
-function _{prefix}_hook {{
+function {function} {{
   $exports = {command};
   if ($exports) {{
     Invoke-Expression -Command $exports;
@@ -118,7 +117,7 @@ using namespace System.Management.Automation;
 $hook = [EventHandler[LocationChangedEventArgs]] {{
   param([object] $source, [LocationChangedEventArgs] $eventArgs)
   end {{
-    _{prefix}_hook
+    {function}
   }}
 }};
 
@@ -313,7 +312,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook pwsh".into(),
-            prefix: "starbase".into(),
+            function: "starbase".into(),
         };
 
         assert_snapshot!(Pwsh.format_hook(hook).unwrap());

@@ -14,7 +14,7 @@ pub enum Statement<'data> {
 }
 
 pub enum Hook {
-    OnChangeDir { command: String, prefix: String },
+    OnChangeDir { command: String, function: String },
 }
 
 impl Hook {
