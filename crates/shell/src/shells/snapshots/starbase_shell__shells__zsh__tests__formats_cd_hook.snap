@@ -4,7 +4,7 @@ expression: "Zsh::default().format_hook(hook).unwrap()"
 ---
 export __ORIG_PATH="$PATH"
 
-_starbase_hook() {
+starbase() {
   trap '' SIGINT
   output=$(starbase hook zsh)
   if [ -n "$output" ]; then
@@ -14,6 +14,6 @@ _starbase_hook() {
 }
 
 typeset -ag chpwd_functions
-if (( ! ${chpwd_functions[(I)_starbase_hook]} )); then
-  chpwd_functions=(_starbase_hook $chpwd_functions)
+if (( ! ${chpwd_functions[(I)starbase]} )); then
+  chpwd_functions=(starbase $chpwd_functions)
 fi

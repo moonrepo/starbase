@@ -2,13 +2,12 @@
 source: crates/shell/src/shells/elvish.rs
 expression: Elvish.format_hook(hook).unwrap()
 ---
-# starbase hook
 set-env __ORIG_PATH $E:PATH
 
-fn _starbase_hook {
+fn starbase {
   eval (starbase hook elvish);
 }
 
 set @edit:before-readline = $@edit:before-readline {
-  _starbase_hook
+  starbase
 }

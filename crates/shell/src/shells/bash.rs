@@ -71,7 +71,7 @@ export __ORIG_PATH="$PATH"
   return $previous_exit_status;
 }};
 
-if [[ ";${{PROMPT_COMMAND[*]:-}};" != *";{{{function}}};"* ]]; then
+if [[ ";${{PROMPT_COMMAND[*]:-}};" != *";{function};"* ]]; then
   if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
     PROMPT_COMMAND=({function} "${{PROMPT_COMMAND[@]}}")
   else

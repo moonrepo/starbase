@@ -2,10 +2,9 @@
 source: crates/shell/src/shells/pwsh.rs
 expression: Pwsh.format_hook(hook).unwrap()
 ---
-# starbase hook
 $env.__ORIG_PATH = "$env.PATH"
 
-function _starbase_hook {
+function starbase {
   $exports = starbase hook pwsh;
   if ($exports) {
     Invoke-Expression -Command $exports;
@@ -18,7 +17,7 @@ using namespace System.Management.Automation;
 $hook = [EventHandler[LocationChangedEventArgs]] {
   param([object] $source, [LocationChangedEventArgs] $eventArgs)
   end {
-    _starbase_hook
+    starbase
   }
 };
 
