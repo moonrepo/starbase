@@ -47,12 +47,12 @@ impl Shell for Fish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, prefix } => {
+            Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
 set -gx __ORIG_PATH $PATH
 
-function _{prefix}_hook --on-variable PWD;
+function {function} --on-variable PWD;
   {command} | source
 end;
 "#
@@ -160,7 +160,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook fish".into(),
-            prefix: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Fish.format_hook(hook).unwrap());

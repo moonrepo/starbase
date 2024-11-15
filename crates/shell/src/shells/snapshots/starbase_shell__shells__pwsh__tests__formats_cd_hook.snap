@@ -2,7 +2,6 @@
 source: crates/shell/src/shells/pwsh.rs
 expression: Pwsh.format_hook(hook).unwrap()
 ---
-# starbase hook
 $env.__ORIG_PATH = "$env.PATH"
 
 function _starbase_hook {

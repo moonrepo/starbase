@@ -43,17 +43,17 @@ impl Shell for Murex {
     // hook referenced from https://github.com/direnv/direnv/blob/ff451a860b31f176d252c410b43d7803ec0f8b23/internal/cmd/shell_murex.go#L12
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, prefix } => {
+            Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
 $ENV.__ORIG_PATH="$ENV.PATH"
 
-function _{prefix}_hook {{
+function {function} {{
   {command} -> source
 }}
 
-event onPrompt {prefix}_hook=before {{
-  _{prefix}_hook
+event onPrompt {function}_hook=before {{
+  {function}
 }}
 "#
                 )
@@ -149,7 +149,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook murex".into(),
-            prefix: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Murex.format_hook(hook).unwrap());

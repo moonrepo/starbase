@@ -67,18 +67,17 @@ impl Shell for Elvish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, prefix } => {
+            Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-# {prefix} hook
 set-env __ORIG_PATH $E:PATH
 
-fn _{prefix}_hook {{
+fn {function} {{
   eval ({command});
 }}
 
 set @edit:before-readline = $@edit:before-readline {{
-  _{prefix}_hook
+  {function}
 }}
 "#
                 )
@@ -193,7 +192,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook elvish".into(),
-            prefix: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Elvish.format_hook(hook).unwrap());

@@ -44,12 +44,12 @@ impl Shell for Zsh {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, prefix } => {
+            Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
 export __ORIG_PATH="$PATH"
 
-_{prefix}_hook() {{
+{function}() {{
   trap '' SIGINT
   output=$({command})
   if [ -n "$output" ]; then
@@ -59,8 +59,8 @@ _{prefix}_hook() {{
 }}
 
 typeset -ag chpwd_functions
-if (( ! ${{chpwd_functions[(I)_{prefix}_hook]}} )); then
-  chpwd_functions=(_{prefix}_hook $chpwd_functions)
+if (( ! ${{chpwd_functions[(I){function}]}} )); then
+  chpwd_functions=({function} $chpwd_functions)
 fi
 "#
                 )
@@ -158,7 +158,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook zsh".into(),
-            prefix: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Zsh::default().format_hook(hook).unwrap());
