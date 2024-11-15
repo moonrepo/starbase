@@ -192,7 +192,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook elvish".into(),
-            function: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Elvish.format_hook(hook).unwrap());

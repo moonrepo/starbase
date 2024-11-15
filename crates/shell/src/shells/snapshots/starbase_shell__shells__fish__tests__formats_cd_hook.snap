@@ -4,6 +4,6 @@ expression: Fish.format_hook(hook).unwrap()
 ---
 set -gx __ORIG_PATH $PATH
 
-function starbase --on-variable PWD;
+function _starbase_hook --on-variable PWD;
   starbase hook fish | source
 end;

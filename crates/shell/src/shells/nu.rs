@@ -242,7 +242,7 @@ mod tests {
 
         let hook = Hook::OnChangeDir {
             command: "starbase hook nu".into(),
-            function: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Nu.format_hook(hook).unwrap());

@@ -158,7 +158,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook zsh".into(),
-            function: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Zsh::default().format_hook(hook).unwrap());

@@ -149,7 +149,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook murex".into(),
-            function: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Murex.format_hook(hook).unwrap());

@@ -312,7 +312,7 @@ mod tests {
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
             command: "starbase hook pwsh".into(),
-            function: "starbase".into(),
+            function: "_starbase_hook".into(),
         };
 
         assert_snapshot!(Pwsh.format_hook(hook).unwrap());

@@ -4,7 +4,7 @@ expression: Pwsh.format_hook(hook).unwrap()
 ---
 $env.__ORIG_PATH = "$env.PATH"
 
-function starbase {
+function _starbase_hook {
   $exports = starbase hook pwsh;
   if ($exports) {
     Invoke-Expression -Command $exports;
@@ -17,7 +17,7 @@ using namespace System.Management.Automation;
 $hook = [EventHandler[LocationChangedEventArgs]] {
   param([object] $source, [LocationChangedEventArgs] $eventArgs)
   end {
-    starbase
+    _starbase_hook
   }
 };
 

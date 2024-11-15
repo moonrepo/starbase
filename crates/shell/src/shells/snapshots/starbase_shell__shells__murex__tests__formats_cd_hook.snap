@@ -4,10 +4,10 @@ expression: Murex.format_hook(hook).unwrap()
 ---
 $ENV.__ORIG_PATH="$ENV.PATH"
 
-function starbase {
+function _starbase_hook {
   starbase hook murex -> source
 }
 
-event onPrompt starbase_hook=before {
-  starbase
+event onPrompt _starbase_hook_hook=before {
+  _starbase_hook
 }
