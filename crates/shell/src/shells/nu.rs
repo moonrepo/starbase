@@ -90,33 +90,38 @@ impl Shell for Nu {
             "PATH"
         };
 
+        // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, .. } => {
+            Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
 $env.__ORIG_PATH = $env.{path_name}
 
-$env.config = ( $env.config | upsert hooks.env_change.PWD {{ |config|
+def {function} [] {{
+  let data = {command} | from json
+
+  $data | get env | items {{ |k, v|
+    if $v == null {{
+        hide_env $k
+    }} else {{
+        load-env {{ ($k): $v }}
+    }}
+  }}
+
+  let path_list = $env.__ORIG_PATH | split row (char esep)
+
+  $data | get paths | reverse | each {{ |p|
+    let path_list = ($path_list | prepend $p)
+  }}
+
+  $env.{path_name} = ($path_list | uniq)
+}}
+
+$env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
   let list = ($config | get -i hooks.env_change.PWD) | default []
 
   $list | append {{ |before, after|
-    let data = {command} | from json
-
-    $data | get env | items {{ |k, v|
-      if $v == null {{
-        hide_env $k
-      }} else {{
-        load-env {{ ($k): $v }}
-      }}
-    }}
-
-    let path_list = $env.__ORIG_PATH | split row (char esep)
-
-    $data | get paths | reverse | each {{ |p|
-      let path_list = ($path_list | prepend $p)
-    }}
-
-    $env.{path_name} = ($path_list | uniq)
+    {function}
   }}
 }})"#
                 )
