@@ -55,7 +55,7 @@ impl ProfileSet {
         Self { items: self.items }
     }
 
-    pub fn to_list(self) -> Vec<PathBuf> {
+    pub fn into_list(self) -> Vec<PathBuf> {
         let mut items = self.items.into_iter().collect::<Vec<_>>();
         items.sort_by(|a, d| a.1.cmp(&d.1));
         items.into_iter().map(|item| item.0).collect()

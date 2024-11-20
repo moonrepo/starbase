@@ -225,7 +225,7 @@ if ($currentAction) {{
                 );
         }
 
-        profiles.to_list()
+        profiles.into_list()
     }
 
     /// Quotes a string according to PowerShell shell quoting rules.
@@ -328,6 +328,42 @@ mod tests {
         };
 
         assert_snapshot!(Pwsh.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        if cfg!(windows) {
+            assert_eq!(
+                Pwsh::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir
+                        .join("Documents")
+                        .join("PowerShell")
+                        .join("Profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("PowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                ]
+            );
+        } else {
+            assert_eq!(
+                Pwsh::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir
+                        .join(".config")
+                        .join("powershell")
+                        .join("profile.ps1"),
+                    home_dir
+                        .join(".config")
+                        .join("powershell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                ]
+            );
+        }
     }
 
     #[test]

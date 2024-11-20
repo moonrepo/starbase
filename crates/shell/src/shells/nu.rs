@@ -149,7 +149,7 @@ $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
             )
             .insert(get_config_dir(home_dir).join("nushell").join("env.nu"), 3)
             .insert(home_dir.join(".config").join("nushell").join("env.nu"), 4)
-            .to_list()
+            .into_list()
     }
 
     /// Quotes a string according to Nu shell quoting rules.
@@ -254,6 +254,20 @@ mod tests {
         };
 
         assert_snapshot!(Nu.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Nu::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".config").join("nushell").join("config.nu"),
+                home_dir.join(".config").join("nushell").join("env.nu"),
+            ]
+        );
     }
 
     #[test]

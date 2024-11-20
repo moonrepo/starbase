@@ -165,6 +165,21 @@ mod tests {
     }
 
     #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Zsh::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".zshrc"),
+                home_dir.join(".zprofile"),
+                home_dir.join(".zshenv"),
+            ]
+        );
+    }
+
+    #[test]
     fn test_zsh_quoting() {
         let zsh = Zsh::new();
         assert_eq!(zsh.quote(""), "''");

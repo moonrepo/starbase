@@ -102,7 +102,7 @@ set @edit:before-readline = $@edit:before-readline {{
 
         #[cfg(windows)]
         {
-            profiles.insert(
+            profiles = profiles.insert(
                 home_dir
                     .join("AppData")
                     .join("Roaming")
@@ -113,7 +113,7 @@ set @edit:before-readline = $@edit:before-readline {{
         }
 
         profiles = profiles.insert(home_dir.join(".elvish").join("rc.elv"), 4); // Legacy
-        profiles.to_list()
+        profiles.into_list()
     }
 
     /// Quotes a string according to Elvish shell quoting rules.

@@ -156,6 +156,20 @@ mod tests {
     }
 
     #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Murex::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".murex_profile"),
+                home_dir.join(".murex_preload"),
+            ]
+        );
+    }
+
+    #[test]
     fn test_murex_quoting() {
         assert_eq!(Murex.quote("value"), "value");
         assert_eq!(Murex.quote("value with spaces"), r#""value with spaces""#);

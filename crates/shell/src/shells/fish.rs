@@ -72,7 +72,7 @@ end;
         ProfileSet::default()
             .insert(get_config_dir(home_dir).join("fish").join("config.fish"), 1)
             .insert(home_dir.join(".config").join("fish").join("config.fish"), 2)
-            .to_list()
+            .into_list()
     }
 
     /// Quotes a string according to Fish shell quoting rules.
@@ -161,6 +161,17 @@ mod tests {
         };
 
         assert_snapshot!(Fish.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Fish::new().get_profile_paths(&home_dir),
+            vec![home_dir.join(".config").join("fish").join("config.fish")]
+        );
     }
 
     #[test]
