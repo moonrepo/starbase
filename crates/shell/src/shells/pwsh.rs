@@ -1,7 +1,6 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{get_env_var_regex, normalize_newlines};
+use crate::helpers::{get_env_var_regex, normalize_newlines, ProfileSet};
 use crate::hooks::*;
-use std::collections::HashSet;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -172,48 +171,61 @@ if ($currentAction) {{
     }
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        let mut profiles = HashSet::new();
+        let mut profiles = ProfileSet::default();
 
         // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_automatic_variables?view=powershell-7.4#profile
         if let Some(profile) = env::var_os("PROFILE") {
-            profiles.insert(PathBuf::from(profile));
+            profiles = profiles.insert(PathBuf::from(profile), 10);
         }
 
         #[cfg(windows)]
         {
             let docs_dir = home_dir.join("Documents");
 
-            profiles.extend([
-                docs_dir
-                    .join("PowerShell")
-                    .join("Microsoft.PowerShell_profile.ps1"),
-                docs_dir.join("PowerShell").join("Profile.ps1"),
-            ]);
+            profiles = profiles
+                .insert(docs_dir.join("PowerShell").join("Profile.ps1"), 1)
+                .insert(
+                    docs_dir
+                        .join("PowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                    2,
+                );
         }
 
         #[cfg(unix)]
         {
             use crate::helpers::get_config_dir;
 
-            profiles.extend([
-                get_config_dir(home_dir)
-                    .join("powershell")
-                    .join("Microsoft.PowerShell_profile.ps1"),
-                home_dir
-                    .join(".config")
-                    .join("powershell")
-                    .join("Microsoft.PowerShell_profile.ps1"),
-                get_config_dir(home_dir)
-                    .join("powershell")
-                    .join("profile.ps1"),
-                home_dir
-                    .join(".config")
-                    .join("powershell")
-                    .join("profile.ps1"),
-            ]);
+            profiles = profiles
+                .insert(
+                    get_config_dir(home_dir)
+                        .join("powershell")
+                        .join("profile.ps1"),
+                    1,
+                )
+                .insert(
+                    home_dir
+                        .join(".config")
+                        .join("powershell")
+                        .join("profile.ps1"),
+                    2,
+                )
+                .insert(
+                    get_config_dir(home_dir)
+                        .join("powershell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                    3,
+                )
+                .insert(
+                    home_dir
+                        .join(".config")
+                        .join("powershell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                    4,
+                );
         }
 
-        profiles.into_iter().collect()
+        profiles.to_list()
     }
 
     /// Quotes a string according to PowerShell shell quoting rules.

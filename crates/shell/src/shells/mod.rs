@@ -96,7 +96,8 @@ pub trait Shell: Display + Send + Sync {
         ShellCommand::default()
     }
 
-    /// Return a list of all possible interactive profile paths.
+    /// Return a list of all possible profile/rc/config paths.
+    /// Ordered from most to least common/applicable.
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf>;
 
     /// Quote method for shell-specific quoting

@@ -71,8 +71,8 @@ event onPrompt {function}_hook=before {{
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         vec![
-            home_dir.join(".murex_preload"),
             home_dir.join(".murex_profile"),
+            home_dir.join(".murex_preload"),
         ]
     }
 

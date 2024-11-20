@@ -101,7 +101,7 @@ fi
             ]
         } else {
             // Default .profile calls .bashrc in Ubuntu
-            vec![home_dir.join(".profile"), home_dir.join(".bashrc")]
+            vec![home_dir.join(".bashrc"), home_dir.join(".profile")]
         }
     }
 

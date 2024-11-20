@@ -80,9 +80,9 @@ fi
         let zdot_dir = self.dir.as_deref().unwrap_or(home_dir);
 
         vec![
-            zdot_dir.join(".zshenv"),
-            zdot_dir.join(".zprofile"),
             zdot_dir.join(".zshrc"),
+            zdot_dir.join(".zprofile"),
+            zdot_dir.join(".zshenv"),
         ]
     }
 

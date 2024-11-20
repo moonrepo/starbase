@@ -1,7 +1,7 @@
 use super::Shell;
 use crate::helpers::get_config_dir;
+use crate::helpers::ProfileSet;
 use crate::hooks::*;
-use std::collections::*;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -51,12 +51,10 @@ impl Shell for Ion {
 
     // https://doc.redox-os.org/ion-manual/general.html#xdg-app-dirs-support
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        HashSet::<PathBuf>::from_iter([
-            get_config_dir(home_dir).join("ion").join("initrc"),
-            home_dir.join(".config").join("ion").join("initrc"),
-        ])
-        .into_iter()
-        .collect()
+        ProfileSet::default()
+            .insert(get_config_dir(home_dir).join("ion").join("initrc"), 1)
+            .insert(home_dir.join(".config").join("ion").join("initrc"), 2)
+            .to_list()
     }
 
     /// Quotes a string according to Ion shell quoting rules.

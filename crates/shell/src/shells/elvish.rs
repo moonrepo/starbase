@@ -1,7 +1,8 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines, PATH_DELIMITER};
+use crate::helpers::{
+    get_config_dir, get_env_var_regex, normalize_newlines, ProfileSet, PATH_DELIMITER,
+};
 use crate::hooks::*;
-use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -93,13 +94,11 @@ set @edit:before-readline = $@edit:before-readline {{
         self.get_config_path(home_dir)
     }
 
+    // https://elv.sh/ref/command.html#rc-file
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        #[allow(unused_mut)]
-        let mut profiles = HashSet::<PathBuf>::from_iter([
-            get_config_dir(home_dir).join("elvish").join("rc.elv"),
-            home_dir.join(".config").join("elvish").join("rc.elv"),
-            home_dir.join(".elvish").join("rc.elv"), // Legacy
-        ]);
+        let mut profiles = ProfileSet::default()
+            .insert(get_config_dir(home_dir).join("elvish").join("rc.elv"), 1)
+            .insert(home_dir.join(".config").join("elvish").join("rc.elv"), 2);
 
         #[cfg(windows)]
         {
@@ -109,10 +108,12 @@ set @edit:before-readline = $@edit:before-readline {{
                     .join("Roaming")
                     .join("elvish")
                     .join("rc.elv"),
+                3,
             );
         }
 
-        profiles.into_iter().collect()
+        profiles = profiles.insert(home_dir.join(".elvish").join("rc.elv"), 4); // Legacy
+        profiles.to_list()
     }
 
     /// Quotes a string according to Elvish shell quoting rules.
