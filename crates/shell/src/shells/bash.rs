@@ -169,6 +169,28 @@ mod tests {
     }
 
     #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        if has_bash_profile(&home_dir) {
+            assert_eq!(
+                Bash::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir.join(".bash_profile"),
+                    home_dir.join(".bashrc"),
+                    home_dir.join(".profile")
+                ]
+            );
+        } else {
+            assert_eq!(
+                Bash::new().get_profile_paths(&home_dir),
+                vec![home_dir.join(".bashrc"), home_dir.join(".profile")]
+            );
+        }
+    }
+
+    #[test]
     fn test_bash_quoting() {
         let shell = Bash;
         assert_eq!(shell.quote("simple"), "simple"); // No quoting needed

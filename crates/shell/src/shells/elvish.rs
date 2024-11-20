@@ -200,6 +200,35 @@ mod tests {
     }
 
     #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        if cfg!(windows) {
+            assert_eq!(
+                Elvish::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir.join(".config").join("elvish").join("rc.elv"),
+                    home_dir
+                        .join("AppData")
+                        .join("Roaming")
+                        .join("elvish")
+                        .join("rc.elv"),
+                    home_dir.join(".elvish").join("rc.elv"),
+                ]
+            );
+        } else {
+            assert_eq!(
+                Elvish::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir.join(".config").join("elvish").join("rc.elv"),
+                    home_dir.join(".elvish").join("rc.elv"),
+                ]
+            );
+        }
+    }
+
+    #[test]
     fn test_elvish_quoting() {
         // Barewords
         assert_eq!(Elvish.quote("simple"), "simple");
