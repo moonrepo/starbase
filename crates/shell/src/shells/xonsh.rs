@@ -1,7 +1,6 @@
 use super::Shell;
-use crate::helpers::get_config_dir;
+use crate::helpers::{get_config_dir, ProfileSet};
 use crate::hooks::*;
-use std::collections::HashSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -48,13 +47,11 @@ impl Shell for Xonsh {
     }
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        HashSet::<PathBuf>::from_iter([
-            get_config_dir(home_dir).join("xonsh").join("rc.xsh"),
-            home_dir.join(".config").join("xonsh").join("rc.xsh"),
-            home_dir.join(".xonshrc"),
-        ])
-        .into_iter()
-        .collect()
+        ProfileSet::default()
+            .insert(get_config_dir(home_dir).join("xonsh").join("rc.xsh"), 1)
+            .insert(home_dir.join(".config").join("xonsh").join("rc.xsh"), 2)
+            .insert(home_dir.join(".xonshrc"), 3)
+            .into_list()
     }
 
     /// Quotes a string according to Xonsh shell quoting rules.
@@ -102,6 +99,21 @@ mod tests {
             r#"$PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
         );
     }
+
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Xonsh::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".config").join("xonsh").join("rc.xsh"),
+                home_dir.join(".xonshrc"),
+            ]
+        );
+    }
+
     #[test]
     fn test_xonsh_quoting() {
         let xonsh = Xonsh::new();

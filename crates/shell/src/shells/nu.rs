@@ -1,7 +1,6 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines};
+use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines, ProfileSet};
 use crate::hooks::*;
-use std::collections::HashSet;
 use std::env::consts;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -139,14 +138,18 @@ $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
 
     // https://www.nushell.sh/book/configuration.html
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        HashSet::<PathBuf>::from_iter([
-            get_config_dir(home_dir).join("nushell").join("env.nu"),
-            home_dir.join(".config").join("nushell").join("env.nu"),
-            get_config_dir(home_dir).join("nushell").join("config.nu"),
-            home_dir.join(".config").join("nushell").join("config.nu"),
-        ])
-        .into_iter()
-        .collect()
+        ProfileSet::default()
+            .insert(
+                get_config_dir(home_dir).join("nushell").join("config.nu"),
+                1,
+            )
+            .insert(
+                home_dir.join(".config").join("nushell").join("config.nu"),
+                2,
+            )
+            .insert(get_config_dir(home_dir).join("nushell").join("env.nu"), 3)
+            .insert(home_dir.join(".config").join("nushell").join("env.nu"), 4)
+            .into_list()
     }
 
     /// Quotes a string according to Nu shell quoting rules.
@@ -251,6 +254,20 @@ mod tests {
         };
 
         assert_snapshot!(Nu.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Nu::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".config").join("nushell").join("config.nu"),
+                home_dir.join(".config").join("nushell").join("env.nu"),
+            ]
+        );
     }
 
     #[test]

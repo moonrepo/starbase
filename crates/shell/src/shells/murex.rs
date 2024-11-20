@@ -71,8 +71,8 @@ event onPrompt {function}_hook=before {{
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         vec![
-            home_dir.join(".murex_preload"),
             home_dir.join(".murex_profile"),
+            home_dir.join(".murex_preload"),
         ]
     }
 
@@ -153,6 +153,20 @@ mod tests {
         };
 
         assert_snapshot!(Murex.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Murex::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".murex_profile"),
+                home_dir.join(".murex_preload"),
+            ]
+        );
     }
 
     #[test]

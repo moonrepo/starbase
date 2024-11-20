@@ -80,9 +80,9 @@ fi
         let zdot_dir = self.dir.as_deref().unwrap_or(home_dir);
 
         vec![
-            zdot_dir.join(".zshenv"),
-            zdot_dir.join(".zprofile"),
             zdot_dir.join(".zshrc"),
+            zdot_dir.join(".zprofile"),
+            zdot_dir.join(".zshenv"),
         ]
     }
 
@@ -162,6 +162,21 @@ mod tests {
         };
 
         assert_snapshot!(Zsh::default().format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Zsh::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".zshrc"),
+                home_dir.join(".zprofile"),
+                home_dir.join(".zshenv"),
+            ]
+        );
     }
 
     #[test]

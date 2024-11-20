@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -39,5 +40,24 @@ pub fn normalize_newlines(content: impl AsRef<str>) -> String {
     #[cfg(unix)]
     {
         content.replace('\r', "")
+    }
+}
+
+#[derive(Default)]
+pub struct ProfileSet {
+    items: HashMap<PathBuf, u8>,
+}
+
+impl ProfileSet {
+    pub fn insert(mut self, path: PathBuf, order: u8) -> Self {
+        self.items.insert(path, order);
+
+        Self { items: self.items }
+    }
+
+    pub fn into_list(self) -> Vec<PathBuf> {
+        let mut items = self.items.into_iter().collect::<Vec<_>>();
+        items.sort_by(|a, d| a.1.cmp(&d.1));
+        items.into_iter().map(|item| item.0).collect()
     }
 }

@@ -101,7 +101,7 @@ fi
             ]
         } else {
             // Default .profile calls .bashrc in Ubuntu
-            vec![home_dir.join(".profile"), home_dir.join(".bashrc")]
+            vec![home_dir.join(".bashrc"), home_dir.join(".profile")]
         }
     }
 
@@ -166,6 +166,28 @@ mod tests {
         };
 
         assert_snapshot!(Bash.format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        if has_bash_profile(&home_dir) {
+            assert_eq!(
+                Bash::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir.join(".bash_profile"),
+                    home_dir.join(".bashrc"),
+                    home_dir.join(".profile")
+                ]
+            );
+        } else {
+            assert_eq!(
+                Bash::new().get_profile_paths(&home_dir),
+                vec![home_dir.join(".bashrc"), home_dir.join(".profile")]
+            );
+        }
     }
 
     #[test]
