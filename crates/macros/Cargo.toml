@@ -1,6 +1,6 @@
 [package]
 name = "starbase_macros"
-version = "0.7.7"
+version = "0.7.8"
 edition = "2021"
 license = "MIT"
 description = "Macros for the starbase framework."
