@@ -63,17 +63,7 @@ impl ShellType {
     /// Detect the current shell by inspecting the `$SHELL` environment variable,
     /// and the parent process hierarchy. If no shell could be find, return a fallback.
     pub fn detect_with_fallback() -> Self {
-        Self::detect().unwrap_or_else(|| {
-            let fallback = if env::consts::OS == "windows" {
-                ShellType::Pwsh
-            } else {
-                ShellType::Sh
-            };
-
-            debug!("Falling back to {} shell", fallback);
-
-            fallback
-        })
+        Self::detect().unwrap_or_default()
     }
 
     /// Detect the current shell by inspecting the `$SHELL` environment variable,
@@ -124,6 +114,19 @@ impl ShellType {
             Self::Xonsh => Box::new(Xonsh::new()),
             Self::Zsh => Box::new(Zsh::new()),
         }
+    }
+}
+
+impl Default for ShellType {
+    fn default() -> Self {
+        #[cfg(windows)]
+        let fallback = ShellType::Pwsh;
+        #[cfg(unix)]
+        let fallback = ShellType::Sh;
+
+        debug!("Defaulting to {} shell", fallback);
+
+        fallback
     }
 }
 
