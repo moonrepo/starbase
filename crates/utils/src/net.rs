@@ -28,13 +28,14 @@ pub struct DefaultDownloader {
 #[async_trait]
 impl Downloader for DefaultDownloader {
     async fn download(&self, url: Url) -> Result<Response, NetError> {
-        self.client.get(url.clone()).send().await.map_err(|error| {
-            NetError::Http {
+        self.client
+            .get(url.clone())
+            .send()
+            .await
+            .map_err(|error| NetError::Http {
                 error: Box::new(error),
                 url: url.to_string(),
-            }
-            .into()
-        })
+            })
     }
 }
 
