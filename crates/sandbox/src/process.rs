@@ -51,7 +51,7 @@ pub struct SandboxAssert<'s> {
     pub sandbox: &'s Sandbox,
 }
 
-impl<'s> SandboxAssert<'s> {
+impl SandboxAssert<'_> {
     /// Debug all files in the sandbox and the command's output.
     pub fn debug(&self) -> &Self {
         debug_sandbox_files(self.sandbox.path());
