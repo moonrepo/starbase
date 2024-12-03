@@ -16,7 +16,7 @@ struct FieldVisitor<'writer> {
     writer: fmt::format::Writer<'writer>,
 }
 
-impl<'writer> Visit for FieldVisitor<'writer> {
+impl Visit for FieldVisitor<'_> {
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         if field.name() == "message" {
             self.record_debug(field, &format_args!("{}", value))

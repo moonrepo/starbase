@@ -24,7 +24,7 @@ tracing = { workspace = true }
 ec4rs = { version = "1.1.1", optional = true }
 
 # fs
-fs4 = { version = "0.11.1", optional = true }
+fs4 = { version = "0.12.0", optional = true }
 
 # glob
 wax = { version = "0.6.0", optional = true, features = ["walk"] }
@@ -40,6 +40,7 @@ toml = { version = "0.8.19", optional = true }
 serde_yaml = { workspace = true, optional = true }
 
 # net
+async-trait = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 url = { version = "2.5.4", optional = true }
 
@@ -50,7 +51,7 @@ fs-lock = ["dep:fs4", "dep:tokio"]
 glob = ["dep:wax"]
 # glob-miette = ["glob", "miette", "wax/miette"]
 miette = ["dep:miette"]
-net = ["dep:reqwest", "dep:url"]
+net = ["dep:reqwest", "dep:url", "dep:async-trait"]
 json = ["dep:json-strip-comments", "dep:serde", "dep:serde_json"]
 toml = ["dep:toml", "dep:serde"]
 yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
@@ -59,13 +60,13 @@ yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [
-	"editor-config",
-	"fs-lock",
-	"glob",
-	# "glob-miette",
-	"miette",
-	"net",
-	"json",
-	"toml",
-	"yaml",
+    "editor-config",
+    "fs-lock",
+    "glob",
+    # "glob-miette",
+    "miette",
+    "net",
+    "json",
+    "toml",
+    "yaml",
 ] }
