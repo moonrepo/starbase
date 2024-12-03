@@ -15,6 +15,9 @@ pub enum NetError {
         error: Box<reqwest::Error>,
     },
 
+    #[error("Failed to make HTTP request for {}.\n{error}", .url.style(Style::Url))]
+    HttpUnknown { url: String, error: String },
+
     #[error(
         "Failed to download file from {} ({status}).",
         .url.style(Style::Url),
@@ -46,6 +49,10 @@ pub enum NetError {
         #[source]
         error: Box<reqwest::Error>,
     },
+
+    #[diagnostic(code(net::http))]
+    #[error("Failed to make HTTP request for {}.\n{error}", .url.style(Style::Url))]
+    HttpUnknown { url: String, error: String },
 
     #[diagnostic(code(net::download_failed))]
     #[error(

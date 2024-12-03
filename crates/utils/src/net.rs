@@ -1,5 +1,6 @@
 use crate::fs::{self, FsError};
-use reqwest::Client;
+use async_trait::async_trait;
+use reqwest::{Client, Response};
 use std::cmp;
 use std::fmt::Debug;
 use std::io::Write;
@@ -12,11 +13,36 @@ use url::Url;
 
 pub use crate::net_error::NetError;
 
+#[async_trait]
+pub trait Downloader {
+    async fn download(&self, url: Url) -> Result<Response, NetError>;
+}
+
+pub type BoxedDownloader = Box<dyn Downloader>;
+
+#[derive(Default)]
+pub struct DefaultDownloader {
+    client: reqwest::Client,
+}
+
+#[async_trait]
+impl Downloader for DefaultDownloader {
+    async fn download(&self, url: Url) -> Result<Response, NetError> {
+        self.client.get(url.clone()).send().await.map_err(|error| {
+            NetError::Http {
+                error: Box::new(error),
+                url: url.to_string(),
+            }
+            .into()
+        })
+    }
+}
+
 pub type OnChunkFn = Box<dyn Fn(u64, u64) + Send>;
 
 #[derive(Default)]
-pub struct DownloadOptions<'a> {
-    pub client: Option<&'a Client>,
+pub struct DownloadOptions {
+    pub downloader: Option<BoxedDownloader>,
     pub on_chunk: Option<OnChunkFn>,
 }
 
@@ -26,12 +52,13 @@ pub struct DownloadOptions<'a> {
 pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
     source_url: S,
     dest_file: D,
-    options: DownloadOptions<'_>,
+    options: DownloadOptions,
 ) -> Result<(), NetError> {
     let source_url = source_url.as_ref();
     let dest_file = dest_file.as_ref();
-    let base_client = Client::new();
-    let client = options.client.unwrap_or(&base_client);
+    let downloader = options
+        .downloader
+        .unwrap_or_else(|| Box::new(DefaultDownloader::default()));
 
     let handle_fs_error = |error: std::io::Error| FsError::Write {
         path: dest_file.to_path_buf(),
@@ -49,16 +76,14 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
     );
 
     // Fetch the file from the HTTP source
-    let mut response = client
-        .get(
+    let mut response = downloader
+        .download(
             Url::parse(source_url).map_err(|error| NetError::UrlParseFailed {
                 url: source_url.to_owned(),
                 error: Box::new(error),
             })?,
         )
-        .send()
-        .await
-        .map_err(handle_net_error)?;
+        .await?;
     let status = response.status();
 
     if status.as_u16() == 404 {
@@ -124,7 +149,9 @@ pub async fn download_from_url_with_client<S: AsRef<str> + Debug, D: AsRef<Path>
         source_url,
         dest_file,
         DownloadOptions {
-            client: Some(client),
+            downloader: Some(Box::new(DefaultDownloader {
+                client: client.to_owned(),
+            })),
             on_chunk: None,
         },
     )

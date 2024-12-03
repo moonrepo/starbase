@@ -16,8 +16,8 @@ serde_json = "1.0.133"
 serde_yaml = "0.9.34"
 thiserror = "2.0.3"
 tokio = { version = "1.41.1", default-features = false, features = [
-	"io-util",
-	"rt",
-	"sync",
+    "io-util",
+    "rt",
+    "sync",
 ] }
 tracing = { version = "0.1.40" }
