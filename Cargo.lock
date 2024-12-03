@@ -1919,7 +1919,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.8.10"
+version = "0.9.0"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -1960,7 +1960,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.7.7"
+version = "0.8.0"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -1997,7 +1997,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.8.13"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "dirs",
