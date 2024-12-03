@@ -14,7 +14,7 @@ use url::Url;
 pub use crate::net_error::NetError;
 
 #[async_trait]
-pub trait Downloader {
+pub trait Downloader: Send {
     async fn download(&self, url: Url) -> Result<Response, NetError>;
 }
 
