@@ -22,6 +22,7 @@ pub fn Notice<'a>(props: &mut NoticeProps<'a>, hooks: Hooks) -> impl Into<AnyEle
             Variant::Caution => Some("Caution".into()),
             Variant::Failure => Some("Failure".into()),
             Variant::Success => Some("Success".into()),
+            Variant::Info => Some("Info".into()),
             _ => None,
         }
     };

@@ -19,6 +19,136 @@ fn render(session: TestSession, ui: String) {
     let con = &session.console;
 
     match ui.as_str() {
+        "list" => {
+            con.render(element! {
+                Container {
+                    Section(title: "Default") {
+                        List {
+                            ListItem {
+                                Text(content: "One")
+                            }
+                            ListItem {
+                                Text(content: "Two")
+                            }
+                            ListItem {
+                                Text(content: "Three")
+                            }
+                        }
+                    }
+                    Section(title: "Custom bullets") {
+                        List {
+                            ListItem(bullet: ">>".to_owned()) {
+                                Text(content: "One")
+                            }
+                            ListItem(bullet: ">>".to_owned()) {
+                                Text(content: "Two")
+                            }
+                            ListItem(bullet: ">>".to_owned()) {
+                                Text(content: "Three")
+                            }
+                        }
+                    }
+                }
+            })
+            .unwrap();
+        }
+        "entry" => {
+            con.render(element! {
+                Container {
+                    Section(title: "Simple values") {
+                        Entry(name: "No content")
+                        Entry(
+                            name: "Basic content",
+                            content: element! { Text(content: "Value") }.into_any()
+                        )
+                        Entry(
+                            name: "Styled content",
+                            content: element! { StyledText(content: "identifier", style: Style::Id) }.into_any()
+                        )
+                        Entry(
+                            name: "Custom separator",
+                            content: element! { Text(content: "Value") }.into_any(),
+                            separator: " =".to_owned()
+                        )
+                    }
+                    Section(title: "Complex values") {
+                        Entry(name: "List") {
+                            List {
+                                ListItem {
+                                    Text(content: "One")
+                                }
+                                ListItem {
+                                    Text(content: "Two")
+                                }
+                                ListItem {
+                                    Text(content: "Three")
+                                }
+                            }
+                        }
+                        Entry(name: "Entry") {
+                            Entry(name: "No content")
+                            Entry(
+                                name: "Basic content",
+                                content: element! { Text(content: "Value") }.into_any()
+                            )
+                            Entry(name: "Nested content") {
+                                Entry(
+                                    name: "Styled content",
+                                    content: element! { StyledText(content: "identifier", style: Style::Id) }.into_any()
+                                )
+                            }
+                        }
+                    }
+                    Section(title: "Composed values") {
+                        Entry(
+                            name: "Content and children",
+                            content: element! { StyledText(content: "3 items", style: Style::MutedLight) }.into_any()
+                        ) {
+                            List {
+                                ListItem {
+                                    Text(content: "One")
+                                }
+                                ListItem {
+                                    Text(content: "Two")
+                                }
+                                ListItem {
+                                    Text(content: "Three")
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .unwrap();
+        }
+        "notice" => {
+            con.render(element! {
+                Container {
+                    Notice {
+                        Text(content: "Default")
+                    }
+                    Notice(title: "Title".to_owned()) {
+                        Text(content: "With title")
+                    }
+                    Notice(variant: Variant::Success) {
+                        Text(content: "Success state")
+                    }
+                    Notice(variant: Variant::Success, no_title: true) {
+                        Text(content: "Success state without title")
+                    }
+                    Notice(variant: Variant::Failure) {
+                        Text(content: "Failure state")
+                    }
+                    Notice(variant: Variant::Info) {
+                        Text(content: "Info state")
+                    }
+                    Notice(variant: Variant::Caution) {
+                        Text(content: "Caution state")
+                    }
+                }
+            })
+            .unwrap();
+        }
         "section" => {
             con.render(element! {
                 Container {
@@ -40,6 +170,7 @@ fn render(session: TestSession, ui: String) {
                     StyledText(content: "Styled success", style: Style::Success)
                     StyledText(content: "Styled failure with weight", style: Style::Failure, weight: Weight::Bold)
                     StyledText(content: "Styled file with decoration", style: Style::File, decoration: TextDecoration::Underline)
+                    StyledText(content: "Styled <file>with</file> <path>tags</path>")
                 }
             })
             .unwrap();

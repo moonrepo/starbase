@@ -30,7 +30,7 @@ pub fn ListItem<'a>(props: &mut ListItemProps<'a>) -> impl Into<AnyElement<'a>> 
         ) {
             Box(padding_right: 1) {
                 StyledText(
-                    content: props.bullet.as_deref().unwrap_or("-"),
+                    content: props.bullet.as_deref().unwrap_or("▪"),
                     style: Style::Muted,
                 )
             }

@@ -39,3 +39,21 @@ pub fn Stack<'a>(props: &mut StackProps<'a>) -> impl Into<AnyElement<'a>> {
         }
     }
 }
+
+#[derive(Default, Props)]
+pub struct GroupProps<'a> {
+    pub children: Vec<AnyElement<'a>>,
+    pub gap: Gap,
+}
+
+#[component]
+pub fn Group<'a>(props: &mut GroupProps<'a>) -> impl Into<AnyElement<'a>> {
+    element! {
+        Box(
+            flex_direction: FlexDirection::Row,
+            gap: props.gap,
+        ) {
+            #(&mut props.children)
+        }
+    }
+}
