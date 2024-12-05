@@ -1,5 +1,4 @@
 use super::layout::*;
-use super::styled_text::*;
 use iocraft::prelude::*;
 
 #[derive(Default, Props)]
@@ -29,10 +28,7 @@ pub fn ListItem<'a>(props: &mut ListItemProps<'a>) -> impl Into<AnyElement<'a>> 
             flex_direction: FlexDirection::Row,
         ) {
             Box(padding_right: 1) {
-                StyledText(
-                    content: props.bullet.as_deref().unwrap_or("▪"),
-                    style: Style::Muted,
-                )
+                Separator(value: props.bullet.as_deref().unwrap_or("-"))
             }
             Box {
                 #(&mut props.children)

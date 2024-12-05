@@ -1,4 +1,6 @@
+use super::styled_text::StyledText;
 use iocraft::prelude::*;
+use starbase_styles::Style;
 
 #[derive(Default, Props)]
 pub struct ContainerProps<'a> {
@@ -55,5 +57,21 @@ pub fn Group<'a>(props: &mut GroupProps<'a>) -> impl Into<AnyElement<'a>> {
         ) {
             #(&mut props.children)
         }
+    }
+}
+
+#[derive(Default, Props)]
+pub struct SeparatorProps {
+    pub value: String,
+}
+
+#[component]
+pub fn Separator<'a>(props: &SeparatorProps) -> impl Into<AnyElement<'a>> {
+    element! {
+        StyledText(
+            content: &props.value,
+            style: Style::Muted,
+            weight: Weight::Bold,
+        )
     }
 }

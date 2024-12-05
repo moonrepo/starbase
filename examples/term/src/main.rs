@@ -59,15 +59,15 @@ fn render(session: TestSession, ui: String) {
                         Entry(name: "No content")
                         Entry(
                             name: "Basic content",
-                            content: element! { Text(content: "Value") }.into_any()
+                            content: "Value".to_owned(),
                         )
                         Entry(
                             name: "Styled content",
-                            content: element! { StyledText(content: "identifier", style: Style::Id) }.into_any()
+                            value: element! { StyledText(content: "identifier", style: Style::Id) }.into_any()
                         )
                         Entry(
                             name: "Custom separator",
-                            content: element! { Text(content: "Value") }.into_any(),
+                            value: element! { Text(content: "Value") }.into_any(),
                             separator: " =".to_owned()
                         )
                     }
@@ -89,12 +89,12 @@ fn render(session: TestSession, ui: String) {
                             Entry(name: "No content")
                             Entry(
                                 name: "Basic content",
-                                content: element! { Text(content: "Value") }.into_any()
+                                value: element! { Text(content: "Value") }.into_any()
                             )
                             Entry(name: "Nested content") {
                                 Entry(
                                     name: "Styled content",
-                                    content: element! { StyledText(content: "identifier", style: Style::Id) }.into_any()
+                                    value: element! { StyledText(content: "identifier", style: Style::Id) }.into_any()
                                 )
                             }
                         }
@@ -102,7 +102,7 @@ fn render(session: TestSession, ui: String) {
                     Section(title: "Composed values") {
                         Entry(
                             name: "Content and children",
-                            content: element! { StyledText(content: "3 items", style: Style::MutedLight) }.into_any()
+                            value: element! { StyledText(content: "3 items", style: Style::MutedLight) }.into_any()
                         ) {
                             List {
                                 ListItem {
