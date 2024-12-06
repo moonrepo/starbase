@@ -2,7 +2,11 @@ use crate::ui::style_to_color;
 use iocraft::Color;
 use starbase_styles::Style;
 
+// https://www.ditig.com/publications/256-colors-cheat-sheet
 pub struct ConsoleTheme {
+    // Backgrounds
+    pub bg_alt_color: Color,
+
     // Borders
     pub border_color: Color,
     pub border_focus_color: Color,
@@ -18,6 +22,7 @@ pub struct ConsoleTheme {
 impl Default for ConsoleTheme {
     fn default() -> Self {
         Self {
+            bg_alt_color: Color::AnsiValue(234),
             border_color: style_to_color(Style::Muted),
             border_focus_color: style_to_color(Style::MutedLight),
             variant_caution: style_to_color(Style::Caution),

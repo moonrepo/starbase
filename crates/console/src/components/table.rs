@@ -90,13 +90,15 @@ pub struct TableRowProps<'a> {
 }
 
 #[component]
-pub fn TableRow<'a>(props: &mut TableRowProps<'a>) -> impl Into<AnyElement<'a>> {
+pub fn TableRow<'a>(props: &mut TableRowProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+    let theme = hooks.use_context::<ConsoleTheme>();
+
     element! {
         Box(
             background_color: if props.row % 2 == 0 {
                 None
             } else {
-                Some(Color::DarkGrey) // TODO
+                Some(theme.bg_alt_color)
             }
         ) {
             #(&mut props.children)
@@ -122,7 +124,7 @@ pub fn TableCol<'a>(props: &mut TableColProps<'a>, hooks: Hooks) -> impl Into<An
         Box(
             justify_content: align_to_justify(attrs.align),
             padding_left: 1,
-            padding_right: 1,
+            // padding_right: 1,
             width: attrs.width,
         ) {
             #(&mut props.children)
