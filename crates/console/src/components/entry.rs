@@ -41,7 +41,7 @@ pub fn Entry<'a>(props: &mut EntryProps<'a>) -> impl Into<AnyElement<'a>> {
                     Some(element! {
                         Box {
                             StyledText(
-                                content: props.fallback.as_deref().unwrap_or("N/A"),
+                                content: props.fallback.as_deref().unwrap_or("—"),
                                 style: Style::Muted,
                             )
                         }

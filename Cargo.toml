@@ -5,7 +5,7 @@ members = ["crates/*", "examples/*"]
 [workspace.dependencies]
 async-trait = "0.1.83"
 dirs = "5.0.1"
-iocraft = "0.4.0"
+iocraft = "0.4.1"
 miette = "7.4.0"
 regex = { version = "1.11.1", default-features = false }
 relative-path = "1.9.3"
