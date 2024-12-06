@@ -2,7 +2,11 @@
 source: crates/shell/src/shells/pwsh.rs
 expression: Pwsh.format_hook(hook).unwrap()
 ---
-$env.__ORIG_PATH = "$env.PATH"
+using namespace System;
+using namespace System.Management.Automation;
+
+$origPath = [Environment]::GetEnvironmentVariable('PATH')
+[Environment]::SetEnvironmentVariable('__ORIG_PATH', "$origPath");
 
 function _starbase_hook {
   $exports = starbase hook pwsh;
@@ -11,11 +15,8 @@ function _starbase_hook {
   }
 }
 
-using namespace System;
-using namespace System.Management.Automation;
-
 $hook = [EventHandler[LocationChangedEventArgs]] {
-  param([object] $source, [LocationChangedEventArgs] $eventArgs)
+  param([object] $source, [LocationChangedEventArgs] $changedArgs)
   end {
     _starbase_hook
   }

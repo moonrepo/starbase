@@ -100,8 +100,11 @@ impl Shell for Pwsh {
         Ok(normalize_newlines(match hook {
             Hook::OnChangeDir { command, function } => {
                 format!(
-                    r#"
-$env.__ORIG_PATH = "$env.PATH"
+                    r#"using namespace System;
+using namespace System.Management.Automation;
+
+$origPath = [Environment]::GetEnvironmentVariable('PATH')
+[Environment]::SetEnvironmentVariable('__ORIG_PATH', "$origPath");
 
 function {function} {{
   $exports = {command};
@@ -110,11 +113,8 @@ function {function} {{
   }}
 }}
 
-using namespace System;
-using namespace System.Management.Automation;
-
 $hook = [EventHandler[LocationChangedEventArgs]] {{
-  param([object] $source, [LocationChangedEventArgs] $eventArgs)
+  param([object] $source, [LocationChangedEventArgs] $changedArgs)
   end {{
     {function}
   }}
