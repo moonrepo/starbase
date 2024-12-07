@@ -34,7 +34,7 @@ pub fn MapItem<'a>(props: &mut MapItemProps<'a>) -> impl Into<AnyElement<'a>> {
             Box(padding_left: 1, padding_right: 1) {
                 Separator(value: props.separator.as_deref().unwrap_or("="))
             }
-            Box {
+            Box(flex_direction: FlexDirection::Column) {
                 #(&mut props.value)
             }
         }

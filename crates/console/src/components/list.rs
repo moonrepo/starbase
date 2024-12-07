@@ -4,12 +4,13 @@ use iocraft::prelude::*;
 #[derive(Default, Props)]
 pub struct ListProps<'a> {
     pub children: Vec<AnyElement<'a>>,
+    pub gap: Option<Gap>,
 }
 
 #[component]
 pub fn List<'a>(props: &mut ListProps<'a>) -> impl Into<AnyElement<'a>> {
     element! {
-        Stack(gap: 0) {
+        Stack(gap: props.gap.unwrap_or(Gap::Unset)) {
             #(&mut props.children)
         }
     }
@@ -30,7 +31,7 @@ pub fn ListItem<'a>(props: &mut ListItemProps<'a>) -> impl Into<AnyElement<'a>> 
             Box(padding_right: 1) {
                 Separator(value: props.bullet.as_deref().unwrap_or("-"))
             }
-            Box {
+            Box(flex_direction: FlexDirection::Column) {
                 #(&mut props.children)
             }
         }

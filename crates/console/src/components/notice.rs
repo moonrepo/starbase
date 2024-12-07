@@ -38,7 +38,8 @@ pub fn Notice<'a>(props: &mut NoticeProps<'a>, hooks: Hooks) -> impl Into<AnyEle
             border_color: color,
             border_edges: Edges::Left,
             border_style: BorderStyle::Bold,
-            margin: 1,
+            margin_top: 1,
+            margin_bottom: 1,
             padding_left: 1,
         ) {
             #(title.map(|title| {

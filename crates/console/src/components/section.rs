@@ -1,4 +1,4 @@
-use crate::ui::ConsoleTheme;
+use crate::ui::{ConsoleTheme, Variant};
 use iocraft::prelude::*;
 
 #[derive(Default, Props)]
@@ -6,6 +6,7 @@ pub struct SectionProps<'a> {
     pub title: String,
     pub title_color: Option<Color>,
     pub children: Vec<AnyElement<'a>>,
+    pub variant: Option<Variant>,
 }
 
 #[component]
@@ -27,7 +28,10 @@ pub fn Section<'a>(props: &mut SectionProps<'a>, hooks: Hooks) -> impl Into<AnyE
                 Box(margin_top: -1) {
                     Text(
                         content: format!("{} ", props.title),
-                        color: props.title_color.unwrap_or(theme.border_focus_color),
+                        color: props
+                            .title_color
+                            .or_else(|| props.variant.map(|v| theme.variant(v)))
+                            .unwrap_or(theme.border_focus_color),
                         weight: Weight::Bold,
                         wrap: TextWrap::NoWrap,
                     )
