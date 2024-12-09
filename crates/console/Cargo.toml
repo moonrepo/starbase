@@ -14,6 +14,7 @@ iocraft = { workspace = true, optional = true }
 miette = { workspace = true }
 parking_lot = "0.12.3"
 tracing = { workspace = true }
+tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
 starbase_console = { path = ".", features = ["prompts", "ui"] }
@@ -21,4 +22,4 @@ starbase_console = { path = ".", features = ["prompts", "ui"] }
 [features]
 default = []
 prompts = ["dep:inquire"]
-ui = ["dep:iocraft"]
+ui = ["dep:iocraft", "dep:tokio"]

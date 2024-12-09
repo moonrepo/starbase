@@ -4,6 +4,8 @@ use starbase_styles::Style;
 
 // https://www.ditig.com/publications/256-colors-cheat-sheet
 pub struct ConsoleTheme {
+    pub brand_color: Color,
+
     // Backgrounds
     pub bg_alt_color: Color,
 
@@ -22,6 +24,7 @@ pub struct ConsoleTheme {
 impl Default for ConsoleTheme {
     fn default() -> Self {
         Self {
+            brand_color: Color::White,
             bg_alt_color: Color::AnsiValue(234),
             border_color: style_to_color(Style::Muted),
             border_focus_color: style_to_color(Style::MutedLight),
