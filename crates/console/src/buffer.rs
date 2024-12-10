@@ -1,5 +1,6 @@
 use miette::IntoDiagnostic;
-use parking_lot::Mutex;
+use parking_lot::lock_api::MutexGuard;
+use parking_lot::{Mutex, RawMutex};
 use std::fmt;
 use std::io::{self, IsTerminal, Write};
 use std::mem;
@@ -81,6 +82,10 @@ impl ConsoleBuffer {
         self.quiet
             .as_ref()
             .is_some_and(|quiet| quiet.load(Ordering::Relaxed))
+    }
+
+    pub fn buffer(&self) -> MutexGuard<'_, RawMutex, Vec<u8>> {
+        self.buffer.lock()
     }
 
     pub fn close(&self) -> miette::Result<()> {

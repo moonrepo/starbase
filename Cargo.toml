@@ -4,6 +4,7 @@ members = ["crates/*", "examples/*"]
 
 [workspace.dependencies]
 async-trait = "0.1.83"
+crossterm = "0.28.1"
 dirs = "5.0.1"
 iocraft = "0.4.1"
 miette = "7.4.0"

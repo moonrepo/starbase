@@ -1,9 +1,8 @@
-use core::future::Future;
-
 use crate::console::Console;
 use crate::reporter::Reporter;
 use iocraft::prelude::*;
 use miette::IntoDiagnostic;
+use std::future::Future;
 
 pub use crate::components::*;
 pub use crate::theme::*;
@@ -11,15 +10,31 @@ pub use crate::theme::*;
 impl<R: Reporter> Console<R> {
     pub fn render<T: Component>(&self, element: Element<'_, T>) -> miette::Result<()> {
         let theme = ConsoleTheme::default();
+        let is_tty = self.out.is_terminal();
 
-        self.out.flush()?;
-
-        element! {
+        let canvas = element! {
             ContextProvider(value: Context::owned(theme)) {
                 #(element)
             }
         }
-        .print();
+        .render(if is_tty {
+            crossterm::terminal::size().ok().map(|size| size.0 as usize)
+        } else {
+            None
+        });
+
+        // Block is required to drop the mutex lock
+        {
+            let mut buffer = &mut *self.out.buffer();
+
+            if is_tty {
+                canvas.write_ansi(&mut buffer).into_diagnostic()?;
+            } else {
+                canvas.write(&mut buffer).into_diagnostic()?;
+            }
+        }
+
+        self.out.flush()?;
 
         Ok(())
     }

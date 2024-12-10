@@ -149,28 +149,28 @@ async fn render(session: TestSession, ui: String) {
             })
             .unwrap();
         }
-        "progressbar" => {
-            con.render_loop_3(
-                element! {
-                    Container {
-                        ProgressBar(
-                            default_message: "Unfilled".to_owned()
-                        )
-                        ProgressBar(
-                            default_message: "Partially filled".to_owned(),
-                            default_position: 50 as usize
-                        )
-                        ProgressBar(
-                            default_message: "Filled".to_owned(),
-                            default_position: 100 as usize
-                        )
-                    }
-                }
-                .render_loop(),
-            )
-            .await
-            .unwrap();
-        }
+        // "progressbar" => {
+        //     con.render_loop_3(
+        //         element! {
+        //             Container {
+        //                 ProgressBar(
+        //                     default_message: "Unfilled".to_owned()
+        //                 )
+        //                 ProgressBar(
+        //                     default_message: "Partially filled".to_owned(),
+        //                     default_position: 50 as usize
+        //                 )
+        //                 ProgressBar(
+        //                     default_message: "Filled".to_owned(),
+        //                     default_position: 100 as usize
+        //                 )
+        //             }
+        //         }
+        //         .render_loop(),
+        //     )
+        //     .await
+        //     .unwrap();
+        // }
         "section" => {
             con.render(element! {
                 Container {

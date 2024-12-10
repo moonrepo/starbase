@@ -2192,6 +2192,7 @@ dependencies = [
 name = "starbase_console"
 version = "0.0.1"
 dependencies = [
+ "crossterm 0.28.1",
  "inquire",
  "iocraft",
  "miette",
