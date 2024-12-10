@@ -2,6 +2,7 @@
 // https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg
 
 use owo_colors::{OwoColorize, XtermColors};
+use std::collections::HashMap;
 use std::env;
 use std::path::Path;
 
@@ -27,7 +28,7 @@ pub enum Color {
     GrayLight = 246,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Style {
     // States
     Caution,
@@ -96,52 +97,139 @@ pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
     }
 }
 
-/// Apply styles to a string by replacing style specific tags.
-/// For example, `<file>starbase.json</file>`.
-pub fn apply_style_tags<T: AsRef<str>>(value: T) -> String {
-    let mut message = value.as_ref().to_owned();
+/// Parses a string with HTML-like tags into a list of styled pieces.
+/// For example: `<file>starbase.json</file>`
+pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<Style>)> {
+    let message = value.as_ref().to_owned();
 
     if !message.contains('<') {
-        return message;
+        return vec![(message, None)];
     }
 
-    for style in [
-        Style::Caution,
-        Style::Failure,
-        Style::File,
-        Style::Hash,
-        Style::Id,
-        Style::Invalid,
-        Style::Label,
-        Style::Muted,
-        Style::MutedLight,
-        Style::Path,
-        Style::Property,
-        Style::Shell,
-        Style::Success,
-        Style::Symbol,
-        Style::Url,
-    ] {
-        let tag_name = format!("{:?}", style).to_lowercase();
-        let open_tag = format!("<{}>", tag_name);
-        let close_tag = format!("</{}>", tag_name);
+    let tags_map = HashMap::<String, Style>::from_iter(
+        [
+            Style::Caution,
+            Style::Failure,
+            Style::File,
+            Style::Hash,
+            Style::Id,
+            Style::Invalid,
+            Style::Label,
+            Style::Muted,
+            Style::MutedLight,
+            Style::Path,
+            Style::Property,
+            Style::Shell,
+            Style::Success,
+            Style::Symbol,
+            Style::Url,
+        ]
+        .into_iter()
+        .map(|style| (format!("{:?}", style).to_lowercase(), style)),
+    );
 
-        while let Some(open_index) = message.find(&open_tag) {
-            if let Some(close_index) = message.find(&close_tag) {
-                let inner = &message[open_index + open_tag.len()..close_index];
+    let mut results: Vec<(String, Option<Style>)> = vec![];
 
-                message = message.replace(
-                    &format!("{}{}{}", open_tag, inner, close_tag),
-                    &paint_style(style, inner),
-                );
-            } else {
-                // No closing? Just remove the opening...
-                message = message.replace(&open_tag, "");
+    let mut add_result = |text: &str, style: Option<Style>| {
+        if let Some(last) = results.last_mut() {
+            if last.1 == style {
+                last.0.push_str(text);
+                return;
             }
+        }
+
+        results.push((text.to_owned(), style));
+    };
+
+    let mut text = message.as_str();
+    let mut tag_stack = vec![];
+
+    while let Some(open_index) = text.find('<') {
+        if let Some(close_index) = text.find('>') {
+            let mut tag = text.get(open_index + 1..close_index).unwrap_or_default();
+
+            // Definitely not a tag
+            if tag.is_empty() || tag.contains(' ') {
+                add_result(text.get(..=open_index).unwrap(), None);
+
+                text = text.get(open_index + 1..).unwrap();
+                continue;
+            }
+
+            let prev_text = text.get(..open_index).unwrap();
+
+            // Close tag, extract with style
+            if tag.starts_with('/') {
+                tag = tag.strip_prefix('/').unwrap();
+
+                if tag_stack.is_empty() {
+                    panic!("Close tag `{}` found without an open tag", tag)
+                }
+
+                let in_tag = tag_stack.last().unwrap();
+
+                if tag != *in_tag {
+                    panic!(
+                        "Close tag `{}` does not much the open tag `{}`",
+                        tag, in_tag
+                    );
+                }
+
+                add_result(
+                    prev_text,
+                    Some(
+                        tags_map
+                            .get(tag)
+                            .cloned()
+                            .unwrap_or_else(|| panic!("Unknown tag `{}`!", tag)),
+                    ),
+                );
+
+                tag_stack.pop();
+            }
+            // Open tag, preserve the current tag
+            else {
+                add_result(
+                    prev_text,
+                    tag_stack
+                        .last()
+                        .and_then(|in_tag| tags_map.get(*in_tag).cloned()),
+                );
+
+                tag_stack.push(tag);
+            }
+
+            text = text.get(close_index + 1..).unwrap();
+        } else {
+            add_result(text.get(..=open_index).unwrap(), None);
+
+            text = text.get(open_index + 1..).unwrap();
         }
     }
 
-    message
+    if !text.is_empty() {
+        add_result(text, None);
+    }
+
+    results
+        .into_iter()
+        .filter(|item| !item.0.is_empty())
+        .collect()
+}
+
+/// Apply styles to a string by replacing style specific tags.
+/// For example: `<file>starbase.json</file>`
+pub fn apply_style_tags<T: AsRef<str>>(value: T) -> String {
+    let mut result = vec![];
+
+    for (text, style) in parse_style_tags(value) {
+        result.push(match style {
+            Some(with) => paint_style(with, text),
+            None => text,
+        });
+    }
+
+    result.join("")
 }
 
 // States
