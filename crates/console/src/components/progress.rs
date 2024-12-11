@@ -1,8 +1,8 @@
 use super::layout::Group;
 use super::styled_text::StyledText;
 use crate::ui::ConsoleTheme;
+use flume::{Receiver, Sender};
 use iocraft::prelude::*;
-use std::sync::mpsc::{self, Receiver, Sender};
 
 pub enum ProgressState {
     Length(usize),
@@ -12,25 +12,17 @@ pub enum ProgressState {
     Suffix(String),
 }
 
+#[derive(Clone)]
 pub struct ProgressReporter {
     tx: Sender<ProgressState>,
-    rx: Option<Receiver<ProgressState>>,
+    rx: Receiver<ProgressState>,
 }
 
 impl Default for ProgressReporter {
     fn default() -> Self {
-        let (tx, rx) = mpsc::channel::<ProgressState>();
+        let (tx, rx) = flume::unbounded::<ProgressState>();
 
-        Self { tx, rx: Some(rx) }
-    }
-}
-
-impl Clone for ProgressReporter {
-    fn clone(&self) -> Self {
-        Self {
-            tx: self.tx.clone(),
-            rx: None, // Only the component should have the receiver
-        }
+        Self { tx, rx }
     }
 }
 
@@ -60,9 +52,7 @@ impl ProgressReporter {
     }
 
     pub fn wait_for_state_changes(&mut self) -> Receiver<ProgressState> {
-        self.rx
-            .take()
-            .expect("`rx` not available for receiving state changes. The original reporter instance must be passed to the component as a prop!")
+        self.rx.clone()
     }
 }
 
@@ -114,7 +104,7 @@ pub fn ProgressBar<'a>(
 
     hooks.use_future(async move {
         loop {
-            while let Ok(state) = receiver.recv() {
+            while let Ok(state) = receiver.recv_async().await {
                 match state {
                     ProgressState::Length(value) => {
                         length.set(value);

@@ -1,217 +1,37 @@
-use miette::IntoDiagnostic;
-use parking_lot::lock_api::MutexGuard;
-use parking_lot::{Mutex, RawMutex};
-use std::fmt;
-use std::io::{self, IsTerminal, Write};
+use crate::stream::ConsoleStreamType;
+use parking_lot::Mutex;
+use std::io::{self, Write};
 use std::mem;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::Arc;
-use std::thread::{sleep, spawn, JoinHandle};
+use std::thread::sleep;
 use std::time::Duration;
-use tracing::{trace, warn};
-
-#[derive(Clone, Copy, Debug)]
-pub enum ConsoleStream {
-    Stderr,
-    Stdout,
-}
+use tracing::warn;
 
 pub struct ConsoleBuffer {
     buffer: Arc<Mutex<Vec<u8>>>,
-    channel: Option<Sender<bool>>,
-    stream: ConsoleStream,
-
-    pub(crate) handle: Option<JoinHandle<()>>,
-    pub(crate) quiet: Option<Arc<AtomicBool>>,
-    pub(crate) test_mode: bool,
+    stream: ConsoleStreamType,
 }
 
 impl ConsoleBuffer {
-    fn internal_new(stream: ConsoleStream, with_handle: bool) -> Self {
-        let buffer = Arc::new(Mutex::new(Vec::new()));
-        let buffer_clone = Arc::clone(&buffer);
-        let (tx, rx) = mpsc::channel();
-
-        // Every 100ms, flush the buffer
-        let handle = if with_handle {
-            Some(spawn(move || flush_on_loop(buffer_clone, stream, rx)))
-        } else {
-            None
-        };
-
-        Self {
-            buffer,
-            channel: Some(tx),
-            handle,
-            stream,
-            quiet: None,
-            test_mode: false,
-        }
-    }
-
-    pub fn new(stream: ConsoleStream) -> Self {
-        Self::internal_new(stream, true)
-    }
-
-    pub fn new_testing(stream: ConsoleStream) -> Self {
-        let mut console = Self::internal_new(stream, false);
-        console.test_mode = true;
-        console
-    }
-
-    pub fn empty(stream: ConsoleStream) -> Self {
-        Self {
-            buffer: Arc::new(Mutex::new(Vec::new())),
-            channel: None,
-            stream,
-            handle: None,
-            quiet: None,
-            test_mode: false,
-        }
-    }
-
-    pub fn is_terminal(&self) -> bool {
-        match self.stream {
-            ConsoleStream::Stderr => io::stderr().is_terminal(),
-            ConsoleStream::Stdout => io::stdout().is_terminal(),
-        }
-    }
-
-    pub fn is_quiet(&self) -> bool {
-        self.quiet
-            .as_ref()
-            .is_some_and(|quiet| quiet.load(Ordering::Relaxed))
-    }
-
-    pub fn buffer(&self) -> MutexGuard<'_, RawMutex, Vec<u8>> {
-        self.buffer.lock()
-    }
-
-    pub fn close(&self) -> miette::Result<()> {
-        trace!(
-            "Closing {} stream",
-            match self.stream {
-                ConsoleStream::Stderr => "stderr",
-                ConsoleStream::Stdout => "stdout",
-            }
-        );
-
-        self.flush()?;
-
-        // Send the closed message
-        if let Some(channel) = &self.channel {
-            let _ = channel.send(true);
-        }
-
-        Ok(())
-    }
-
-    pub fn flush(&self) -> miette::Result<()> {
-        flush(&mut self.buffer.lock(), self.stream).into_diagnostic()?;
-
-        Ok(())
-    }
-
-    pub fn write_raw<F: FnMut(&mut Vec<u8>) -> io::Result<()>>(
-        &self,
-        mut op: F,
-    ) -> miette::Result<()> {
-        // When testing just flush immediately
-        if self.test_mode {
-            let mut buffer = Vec::new();
-
-            op(&mut buffer).into_diagnostic()?;
-
-            flush(&mut buffer, self.stream).into_diagnostic()?;
-        }
-        // Otherwise just write to the buffer and flush
-        // when its length grows too large
-        else {
-            let mut buffer = self.buffer.lock();
-
-            op(&mut buffer).into_diagnostic()?;
-
-            if buffer.len() >= 1024 {
-                flush(&mut buffer, self.stream).into_diagnostic()?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn write<T: AsRef<[u8]>>(&self, data: T) -> miette::Result<()> {
-        let data = data.as_ref();
-
-        if data.is_empty() {
-            return Ok(());
-        }
-
-        self.write_raw(|buffer| {
-            buffer.extend_from_slice(data);
-            Ok(())
-        })
-    }
-
-    pub fn write_line<T: AsRef<[u8]>>(&self, data: T) -> miette::Result<()> {
-        let data = data.as_ref();
-
-        self.write_raw(|buffer| {
-            if !data.is_empty() {
-                buffer.extend_from_slice(data);
-            }
-
-            buffer.push(b'\n');
-            Ok(())
-        })
-    }
-
-    pub fn write_line_with_prefix<T: AsRef<str>>(
-        &self,
-        data: T,
-        prefix: &str,
-    ) -> miette::Result<()> {
-        let data = data.as_ref();
-        let lines = data
-            .lines()
-            .map(|line| format!("{prefix}{line}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        self.write_line(lines)
-    }
-
-    pub fn write_newline(&self) -> miette::Result<()> {
-        self.write("\n")
+    pub fn new(buffer: Arc<Mutex<Vec<u8>>>, stream: ConsoleStreamType) -> Self {
+        Self { buffer, stream }
     }
 }
 
-impl Clone for ConsoleBuffer {
-    fn clone(&self) -> Self {
-        Self {
-            buffer: Arc::clone(&self.buffer),
-            stream: self.stream,
-            quiet: self.quiet.clone(),
-            test_mode: self.test_mode,
-            // Ignore for clones
-            channel: None,
-            handle: None,
-        }
+impl Write for ConsoleBuffer {
+    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+        self.buffer.lock().extend_from_slice(data);
+
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        flush(&mut self.buffer.lock(), self.stream)
     }
 }
 
-impl fmt::Debug for ConsoleBuffer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ConsoleBuffer")
-            .field("buffer", &self.buffer)
-            .field("stream", &self.stream)
-            .field("quiet", &self.quiet)
-            .field("test_mode", &self.test_mode)
-            .finish()
-    }
-}
-
-fn flush(buffer: &mut Vec<u8>, stream: ConsoleStream) -> io::Result<()> {
+pub fn flush(buffer: &mut Vec<u8>, stream: ConsoleStreamType) -> io::Result<()> {
     if buffer.is_empty() {
         return Ok(());
     }
@@ -219,12 +39,16 @@ fn flush(buffer: &mut Vec<u8>, stream: ConsoleStream) -> io::Result<()> {
     let data = mem::take(buffer);
 
     match stream {
-        ConsoleStream::Stderr => io::stderr().lock().write_all(&data),
-        ConsoleStream::Stdout => io::stdout().lock().write_all(&data),
+        ConsoleStreamType::Stderr => io::stderr().lock().write_all(&data),
+        ConsoleStreamType::Stdout => io::stdout().lock().write_all(&data),
     }
 }
 
-fn flush_on_loop(buffer: Arc<Mutex<Vec<u8>>>, stream: ConsoleStream, receiver: Receiver<bool>) {
+pub fn flush_on_loop(
+    buffer: Arc<Mutex<Vec<u8>>>,
+    stream: ConsoleStreamType,
+    receiver: Receiver<bool>,
+) {
     loop {
         sleep(Duration::from_millis(100));
 

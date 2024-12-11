@@ -6,7 +6,7 @@ members = ["crates/*", "examples/*"]
 async-trait = "0.1.83"
 crossterm = "0.28.1"
 dirs = "5.0.1"
-iocraft = "0.4.1"
+iocraft = "0.5.0"
 miette = "7.4.0"
 regex = { version = "1.11.1", default-features = false }
 relative-path = "1.9.3"

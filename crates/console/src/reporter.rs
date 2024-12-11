@@ -1,12 +1,11 @@
-use crate::buffer::ConsoleBuffer;
+use crate::stream::ConsoleStream;
 use std::fmt;
-use std::sync::Arc;
 
 pub trait Reporter: fmt::Debug + Send + Sync {
-    fn inherit_streams(&mut self, _err: Arc<ConsoleBuffer>, _out: Arc<ConsoleBuffer>) {}
+    fn inherit_streams(&mut self, _err: ConsoleStream, _out: ConsoleStream) {}
 
     #[cfg(feature = "prompts")]
-    fn inherit_theme(&mut self, _theme: Arc<crate::console::ConsoleTheme>) {}
+    fn inherit_theme(&mut self, _theme: std::sync::Arc<crate::console::ConsoleTheme>) {}
 }
 
 pub type BoxedReporter = Box<dyn Reporter>;

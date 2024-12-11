@@ -1,5 +1,5 @@
-use crate::buffer::*;
 use crate::reporter::*;
+use crate::stream::*;
 use std::fmt;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,10 +11,10 @@ use tracing::trace;
 pub type ConsoleTheme = inquire::ui::RenderConfig<'static>;
 
 pub struct Console<R: Reporter> {
-    pub err: Arc<ConsoleBuffer>,
+    pub err: ConsoleStream,
     err_handle: Option<JoinHandle<()>>,
 
-    pub out: Arc<ConsoleBuffer>,
+    pub out: ConsoleStream,
     out_handle: Option<JoinHandle<()>>,
 
     quiet: Arc<AtomicBool>,
@@ -30,17 +30,17 @@ impl<R: Reporter> Console<R> {
 
         let quiet = Arc::new(AtomicBool::new(quiet));
 
-        let mut err = ConsoleBuffer::new(ConsoleStream::Stderr);
+        let mut err = ConsoleStream::new(ConsoleStreamType::Stderr);
         err.quiet = Some(Arc::clone(&quiet));
 
-        let mut out = ConsoleBuffer::new(ConsoleStream::Stdout);
+        let mut out = ConsoleStream::new(ConsoleStreamType::Stdout);
         out.quiet = Some(Arc::clone(&quiet));
 
         Self {
             err_handle: err.handle.take(),
-            err: Arc::new(err),
+            err,
             out_handle: out.handle.take(),
-            out: Arc::new(out),
+            out,
             quiet,
             reporter: None,
             #[cfg(feature = "prompts")]
@@ -50,9 +50,9 @@ impl<R: Reporter> Console<R> {
 
     pub fn new_testing() -> Self {
         Self {
-            err: Arc::new(ConsoleBuffer::new_testing(ConsoleStream::Stderr)),
+            err: ConsoleStream::new_testing(ConsoleStreamType::Stderr),
             err_handle: None,
-            out: Arc::new(ConsoleBuffer::new_testing(ConsoleStream::Stdout)),
+            out: ConsoleStream::new_testing(ConsoleStreamType::Stdout),
             out_handle: None,
             quiet: Arc::new(AtomicBool::new(false)),
             reporter: None,
@@ -82,12 +82,12 @@ impl<R: Reporter> Console<R> {
         self.quiet.store(true, Ordering::Release);
     }
 
-    pub fn stderr(&self) -> Arc<ConsoleBuffer> {
-        Arc::clone(&self.err)
+    pub fn stderr(&self) -> ConsoleStream {
+        self.err.clone()
     }
 
-    pub fn stdout(&self) -> Arc<ConsoleBuffer> {
-        Arc::clone(&self.out)
+    pub fn stdout(&self) -> ConsoleStream {
+        self.out.clone()
     }
 
     pub fn reporter(&self) -> Arc<Box<R>> {
