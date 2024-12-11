@@ -19,6 +19,19 @@ async fn render(session: TestSession, ui: String) {
     let con = &session.console;
 
     match ui.as_str() {
+        "confirm" => {
+            con.render_interactive(element! {
+                Confirm(
+                    label: "Are you sure?",
+                    description: "This operation cannot be undone!".to_owned(),
+                    on_confirm: |confirmed| {
+                        dbg!(confirmed);
+                    }
+                )
+            })
+            .await
+            .unwrap();
+        }
         "list" => {
             con.render(element! {
                 Container {

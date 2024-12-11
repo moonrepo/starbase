@@ -1,4 +1,6 @@
+mod confirm;
 mod entry;
+mod input_field;
 mod layout;
 mod list;
 mod map;
@@ -8,6 +10,7 @@ mod section;
 mod styled_text;
 mod table;
 
+pub use confirm::*;
 pub use entry::*;
 pub use layout::*;
 pub use list::*;
