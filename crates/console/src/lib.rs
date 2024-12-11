@@ -2,8 +2,6 @@ mod buffer;
 #[cfg(feature = "ui")]
 mod components;
 mod console;
-#[cfg(feature = "prompts")]
-pub mod prompts;
 mod reporter;
 mod stream;
 #[cfg(feature = "ui")]

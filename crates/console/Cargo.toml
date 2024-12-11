@@ -11,17 +11,14 @@ rust-version = "1.80.0"
 starbase_styles = { version = "0.4.4", path = "../styles" }
 crossterm = { workspace = true, optional = true }
 flume = { version = "0.11.1", features = ["async"] }
-inquire = { version = "0.7.5", optional = true }
 iocraft = { workspace = true, optional = true }
 miette = { workspace = true }
 parking_lot = "0.12.3"
 tracing = { workspace = true }
-tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
-starbase_console = { path = ".", features = ["prompts", "ui"] }
+starbase_console = { path = ".", features = ["ui"] }
 
 [features]
 default = []
-prompts = ["dep:inquire"]
-ui = ["dep:crossterm", "dep:iocraft", "dep:tokio"]
+ui = ["dep:crossterm", "dep:iocraft"]

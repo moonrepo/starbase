@@ -7,9 +7,6 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use tracing::trace;
 
-#[cfg(feature = "prompts")]
-pub type ConsoleTheme = inquire::ui::RenderConfig<'static>;
-
 pub struct Console<R: Reporter> {
     pub err: ConsoleStream,
     err_handle: Option<JoinHandle<()>>,
@@ -19,9 +16,6 @@ pub struct Console<R: Reporter> {
 
     quiet: Arc<AtomicBool>,
     reporter: Option<Arc<Box<R>>>,
-
-    #[cfg(feature = "prompts")]
-    theme: Arc<ConsoleTheme>,
 }
 
 impl<R: Reporter> Console<R> {
@@ -43,8 +37,6 @@ impl<R: Reporter> Console<R> {
             out,
             quiet,
             reporter: None,
-            #[cfg(feature = "prompts")]
-            theme: Arc::new(crate::prompts::create_theme()),
         }
     }
 
@@ -56,8 +48,6 @@ impl<R: Reporter> Console<R> {
             out_handle: None,
             quiet: Arc::new(AtomicBool::new(false)),
             reporter: None,
-            #[cfg(feature = "prompts")]
-            theme: Arc::new(ConsoleTheme::empty()),
         }
     }
 
@@ -98,24 +88,19 @@ impl<R: Reporter> Console<R> {
         )
     }
 
-    #[cfg(feature = "prompts")]
-    pub fn theme(&self) -> Arc<ConsoleTheme> {
-        Arc::clone(&self.theme)
-    }
-
     pub fn set_reporter(&mut self, mut reporter: R) {
         reporter.inherit_streams(self.stderr(), self.stdout());
 
-        #[cfg(feature = "prompts")]
-        reporter.inherit_theme(self.theme());
+        // #[cfg(feature = "ui")]
+        // reporter.inherit_theme(self.theme());
 
         self.reporter = Some(Arc::new(Box::new(reporter)));
     }
 
-    #[cfg(feature = "prompts")]
-    pub fn set_theme(&mut self, theme: ConsoleTheme) {
-        self.theme = Arc::new(theme);
-    }
+    // #[cfg(feature = "ui")]
+    // pub fn set_theme(&mut self, theme: ConsoleTheme) {
+    //     self.theme = Arc::new(theme);
+    // }
 }
 
 impl<R: Reporter> Clone for Console<R> {
@@ -127,8 +112,6 @@ impl<R: Reporter> Clone for Console<R> {
             out_handle: None,
             quiet: self.quiet.clone(),
             reporter: self.reporter.clone(),
-            #[cfg(feature = "prompts")]
-            theme: self.theme.clone(),
         }
     }
 }

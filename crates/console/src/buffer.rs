@@ -1,8 +1,8 @@
 use crate::stream::ConsoleStreamType;
+use flume::{Receiver, TryRecvError};
 use parking_lot::Mutex;
 use std::io::{self, Write};
 use std::mem;
-use std::sync::mpsc::{Receiver, TryRecvError};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;

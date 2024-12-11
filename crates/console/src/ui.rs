@@ -22,15 +22,12 @@ impl<R: Reporter> Console<R> {
             None
         });
 
-        // Block is required to drop the mutex lock
-        {
-            let buffer = self.out.buffer();
+        let buffer = self.out.buffer();
 
-            if is_tty {
-                canvas.write_ansi(buffer).into_diagnostic()?;
-            } else {
-                canvas.write(buffer).into_diagnostic()?;
-            }
+        if is_tty {
+            canvas.write_ansi(buffer).into_diagnostic()?;
+        } else {
+            canvas.write(buffer).into_diagnostic()?;
         }
 
         self.out.flush()?;

@@ -1,10 +1,10 @@
 use crate::buffer::*;
+use flume::Sender;
 use miette::IntoDiagnostic;
 use parking_lot::Mutex;
 use std::fmt;
 use std::io::{self, IsTerminal};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
 use std::thread::{spawn, JoinHandle};
 use tracing::trace;
@@ -29,7 +29,7 @@ impl ConsoleStream {
     fn internal_new(stream: ConsoleStreamType, with_handle: bool) -> Self {
         let buffer = Arc::new(Mutex::new(Vec::new()));
         let buffer_clone = Arc::clone(&buffer);
-        let (tx, rx) = mpsc::channel();
+        let (tx, rx) = flume::unbounded();
 
         // Every 100ms, flush the buffer
         let handle = if with_handle {
