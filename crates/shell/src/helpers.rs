@@ -55,6 +55,12 @@ impl ProfileSet {
         Self { items: self.items }
     }
 
+    pub fn insert_unordered(self, path: PathBuf) -> Self {
+        let len = self.items.len();
+
+        self.insert(path, len as u8)
+    }
+
     pub fn into_list(self) -> Vec<PathBuf> {
         let mut items = self.items.into_iter().collect::<Vec<_>>();
         items.sort_by(|a, d| a.1.cmp(&d.1));

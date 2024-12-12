@@ -140,26 +140,19 @@ $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         let mut profiles = ProfileSet::default();
 
-        for (index, name) in vec!["config.nu", "env.nu"].iter().enumerate() {
+        for name in ["config.nu", "env.nu"] {
             profiles = profiles
-                .insert(
-                    get_config_dir(home_dir).join("nushell").join(name),
-                    (index + 1) as u8,
-                )
-                .insert(
-                    home_dir.join(".config").join("nushell").join(name),
-                    (index + 2) as u8,
-                );
+                .insert_unordered(get_config_dir(home_dir).join("nushell").join(name))
+                .insert_unordered(home_dir.join(".config").join("nushell").join(name));
 
             #[cfg(windows)]
             {
-                profiles = profiles.insert(
+                profiles = profiles.insert_unordered(
                     home_dir
                         .join("AppData")
                         .join("Roaming")
                         .join("nushell")
                         .join(name),
-                    (index + 3) as u8,
                 );
             }
         }
