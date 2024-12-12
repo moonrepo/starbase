@@ -9,7 +9,7 @@ def _starbase_hook [] {
 
   $data | get env | items { |k, v|
     if $v == null {
-        hide_env $k
+        hide-env $k
     } else {
         load-env { ($k): $v }
     }
