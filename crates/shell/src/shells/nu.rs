@@ -293,12 +293,12 @@ mod tests {
                     .join("Roaming")
                     .join("nushell")
                     .join("config.nu"),
-                home_dir.join(".config").join("nushell").join("env.nu"),
                 home_dir
                     .join("AppData")
                     .join("Roaming")
                     .join("nushell")
                     .join("env.nu"),
+                home_dir.join(".config").join("nushell").join("env.nu"),
             ]
         );
     }
