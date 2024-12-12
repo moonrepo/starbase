@@ -10,7 +10,7 @@ pub struct ConfirmProps {
     pub legend: bool,
     pub no_label: String,
     pub no_value: char,
-    pub on_confirm: Handler<'static, bool>,
+    pub on_confirmed: Handler<'static, bool>,
     pub yes_label: String,
     pub yes_value: char,
 }
@@ -23,7 +23,7 @@ impl Default for ConfirmProps {
             legend: true,
             no_label: "No".into(),
             no_value: 'n',
-            on_confirm: Handler::default(),
+            on_confirmed: Handler::default(),
             yes_label: "Yes".into(),
             yes_value: 'y',
         }
@@ -91,7 +91,7 @@ pub fn Confirm<'a>(props: &'a mut ConfirmProps, mut hooks: Hooks) -> impl Into<A
     });
 
     if should_exit.get() {
-        (props.on_confirm)(confirmed.get());
+        (props.on_confirmed)(confirmed.get());
         system.exit();
 
         return element!(Box).into_any();

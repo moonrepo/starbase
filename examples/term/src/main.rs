@@ -24,45 +24,12 @@ async fn render(session: TestSession, ui: String) {
                 Confirm(
                     label: "Are you sure?",
                     description: "This operation cannot be undone!".to_owned(),
-                    on_confirm: |confirmed| {
+                    on_confirmed: |confirmed| {
                         dbg!(confirmed);
                     }
                 )
             })
             .await
-            .unwrap();
-        }
-        "list" => {
-            con.render(element! {
-                Container {
-                    Section(title: "Default") {
-                        List {
-                            ListItem {
-                                Text(content: "One")
-                            }
-                            ListItem {
-                                Text(content: "Two")
-                            }
-                            ListItem {
-                                Text(content: "Three")
-                            }
-                        }
-                    }
-                    Section(title: "Custom bullets") {
-                        List {
-                            ListItem(bullet: ">>".to_owned()) {
-                                Text(content: "One")
-                            }
-                            ListItem(bullet: ">>".to_owned()) {
-                                Text(content: "Two")
-                            }
-                            ListItem(bullet: ">>".to_owned()) {
-                                Text(content: "Three")
-                            }
-                        }
-                    }
-                }
-            })
             .unwrap();
         }
         "entry" => {
@@ -127,6 +94,52 @@ async fn render(session: TestSession, ui: String) {
                                 ListItem {
                                     Text(content: "Three")
                                 }
+                            }
+                        }
+                    }
+                }
+            })
+            .unwrap();
+        }
+        "input" => {
+            con.render_interactive(element! {
+                Input(
+                    label: "Are you sure?",
+                    description: "This operation cannot be undone!".to_owned(),
+                    on_changed: |value| {
+                        dbg!(confirmed);
+                    }
+                )
+            })
+            .await
+            .unwrap();
+        }
+        "list" => {
+            con.render(element! {
+                Container {
+                    Section(title: "Default") {
+                        List {
+                            ListItem {
+                                Text(content: "One")
+                            }
+                            ListItem {
+                                Text(content: "Two")
+                            }
+                            ListItem {
+                                Text(content: "Three")
+                            }
+                        }
+                    }
+                    Section(title: "Custom bullets") {
+                        List {
+                            ListItem(bullet: ">>".to_owned()) {
+                                Text(content: "One")
+                            }
+                            ListItem(bullet: ">>".to_owned()) {
+                                Text(content: "Two")
+                            }
+                            ListItem(bullet: ">>".to_owned()) {
+                                Text(content: "Three")
                             }
                         }
                     }
