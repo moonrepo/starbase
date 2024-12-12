@@ -107,11 +107,10 @@ def {function} [] {{
     }}
   }}
 
-  let path_list = $env.__ORIG_PATH | split row (char esep)
-
-  $data | get paths | reverse | each {{ |p|
-    let path_list = ($path_list | prepend $p)
-  }}
+  let path_list = [
+    ...($data | get paths | default [])
+    ...($env.__ORIG_PATH | split row (char esep))
+  ];
 
   $env.{path_name} = ($path_list | uniq)
 }}
