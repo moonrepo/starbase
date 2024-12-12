@@ -263,6 +263,7 @@ mod tests {
         assert_snapshot!(Nu.format_hook(hook).unwrap());
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_profile_paths() {
         #[allow(deprecated)]
@@ -273,6 +274,31 @@ mod tests {
             vec![
                 home_dir.join(".config").join("nushell").join("config.nu"),
                 home_dir.join(".config").join("nushell").join("env.nu"),
+            ]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Nu::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".config").join("nushell").join("config.nu"),
+                home_dir
+                    .join("AppData")
+                    .join("Roaming")
+                    .join("nushell")
+                    .join("config.nu"),
+                home_dir.join(".config").join("nushell").join("env.nu"),
+                home_dir
+                    .join("AppData")
+                    .join("Roaming")
+                    .join("nushell")
+                    .join("env.nu"),
             ]
         );
     }
