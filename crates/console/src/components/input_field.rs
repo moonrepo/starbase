@@ -5,8 +5,10 @@ use iocraft::prelude::*;
 #[derive(Default, Props)]
 pub struct InputFieldProps<'a> {
     pub children: Vec<AnyElement<'a>>,
-    pub description: Option<String>,
-    pub label: String,
+    pub description: Option<&'a str>,
+    pub error: Option<State<String>>,
+    pub footer: Option<AnyElement<'a>>,
+    pub label: &'a str,
     pub label_color: Option<Color>,
 }
 
@@ -23,18 +25,41 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
             padding_left: 1,
         ) {
             Text(
-                content: &props.label,
+                content: props.label,
                 color: props.label_color.unwrap_or(theme.brand_color),
                 weight: Weight::Bold,
             )
 
-            #(props.description.as_ref().map(|desc| {
+            #(props.description.map(|desc| {
                 element! {
                     StyledText(content: desc)
                 }
             }))
 
-            #(&mut props.children)
+            Box(margin_top: 1) {
+                #(&mut props.children)
+            }
+
+            #(if props.error.is_some() || props.footer.is_some() {
+                Some(
+                    element! {
+                        Box(margin_top: 1, flex_direction: FlexDirection::Column) {
+                            #(props.error.map(|error| {
+                                element! {
+                                    StyledText(
+                                        content: error.read().as_str(),
+                                        style: Style::Failure,
+                                    )
+                                }
+                            }))
+
+                            #(&mut props.footer)
+                        }
+                    }
+                )
+            } else {
+                None
+            })
         }
     }
 }

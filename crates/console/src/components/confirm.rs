@@ -31,12 +31,13 @@ impl Default for ConfirmProps {
 }
 
 #[component]
-pub fn Confirm<'a>(props: &mut ConfirmProps, mut hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn Confirm<'a>(props: &'a mut ConfirmProps, mut hooks: Hooks) -> impl Into<AnyElement<'a>> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut focused = hooks.use_state(|| 0);
     let mut confirmed = hooks.use_state(|| false);
     let mut should_exit = hooks.use_state(|| false);
+    let mut error = hooks.use_state(String::new);
 
     let yes = props.yes_value;
     let no = props.no_value;
@@ -63,9 +64,15 @@ pub fn Confirm<'a>(props: &mut ConfirmProps, mut hooks: Hooks) -> impl Into<AnyE
     hooks.use_local_terminal_events({
         move |event| match event {
             TerminalEvent::Key(KeyEvent { code, kind, .. }) if kind != KeyEventKind::Release => {
+                error.set(String::new());
+
                 match code {
-                    KeyCode::Char(ch) if ch == yes || ch == no => {
-                        handle_confirm(ch == yes);
+                    KeyCode::Char(ch) => {
+                        if ch == yes || ch == no {
+                            handle_confirm(ch == yes);
+                        } else {
+                            error.set(format!("Please press [{yes}] or [{no}] to confirm"));
+                        }
                     }
                     KeyCode::Esc => {
                         handle_confirm(false);
@@ -86,62 +93,67 @@ pub fn Confirm<'a>(props: &mut ConfirmProps, mut hooks: Hooks) -> impl Into<AnyE
     if should_exit.get() {
         (props.on_confirm)(confirmed.get());
         system.exit();
+
+        return element!(Box).into_any();
     }
 
     element! {
-        InputField(label: &props.label, description: props.description.clone()) {
-            Box(margin_top: 1) {
-                Button(
-                    has_focus: focused == 0,
-                    handler: move |_|  {
-                        handle_confirm_via_focus();
-                    }
-                ) {
-                    Box(
-                        padding_left: 1,
-                        padding_right: 1,
-                        background_color: if focused == 0 {
-                            theme.border_focus_color
-                        } else {
-                            theme.border_color
-                        },
-                    ) {
-                        StyledText(content: &props.yes_label)
-                    }
+        InputField(
+            label: props.label.as_str(),
+            description: props.description.as_deref(),
+            error: if error.read().is_empty() {
+                None
+            } else {
+                Some(error.clone())
+            },
+            footer: props.legend.then(|| {
+                element! {
+                    StyledText(
+                        content: format!("<mutedlight>{yes}/{no}</mutedlight> confirm ⁃ <mutedlight>←/→</mutedlight> toggle ⁃ <mutedlight>ent/spc</mutedlight> select ⁃ <mutedlight>esc</mutedlight> cancel"),
+                        style: Style::Muted
+                    )
+                }.into_any()
+            })
+        ) {
+            Button(
+                has_focus: focused == 0,
+                handler: move |_|  {
+                    handle_confirm_via_focus();
                 }
-
-                Box(width: 1)
-
-                Button(
-                    has_focus: focused == 1,
-                    handler: move |_|  {
-                        handle_confirm_via_focus();
-                    }
+            ) {
+                Box(
+                    padding_left: 1,
+                    padding_right: 1,
+                    background_color: if focused == 0 {
+                        theme.border_focus_color
+                    } else {
+                        theme.border_color
+                    },
                 ) {
-                    Box(
-                        padding_left: 1,
-                        padding_right: 1,
-                        background_color: if focused == 1 {
-                            theme.border_focus_color
-                        } else {
-                            theme.border_color
-                        },
-                    ) {
-                        StyledText(content: &props.no_label)
-                    }
+                    StyledText(content: &props.yes_label)
                 }
             }
 
-            #(props.legend.then(|| {
-                element! {
-                    Box(margin_top: 1) {
-                        StyledText(
-                            content: format!("<mutedlight>{yes}/{no}</mutedlight> confirm ⁃ <mutedlight>←/→</mutedlight> toggle ⁃ <mutedlight>ent/spc</mutedlight> select ⁃ <mutedlight>esc</mutedlight> cancel"),
-                            style: Style::Muted
-                        )
-                    }
+            Box(width: 1)
+
+            Button(
+                has_focus: focused == 1,
+                handler: move |_|  {
+                    handle_confirm_via_focus();
                 }
-            }))
+            ) {
+                Box(
+                    padding_left: 1,
+                    padding_right: 1,
+                    background_color: if focused == 1 {
+                        theme.border_focus_color
+                    } else {
+                        theme.border_color
+                    },
+                ) {
+                    StyledText(content: &props.no_label)
+                }
+            }
         }
-    }
+    }.into_any()
 }
