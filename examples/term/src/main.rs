@@ -20,13 +20,13 @@ async fn render(session: TestSession, ui: String) {
 
     match ui.as_str() {
         "confirm" => {
+            let mut value = false;
+
             con.render_interactive(element! {
                 Confirm(
                     label: "Are you sure?",
                     description: "This operation cannot be undone!".to_owned(),
-                    on_confirmed: |confirmed| {
-                        dbg!(confirmed);
-                    }
+                    value: &mut value
                 )
             })
             .await
@@ -102,12 +102,18 @@ async fn render(session: TestSession, ui: String) {
             .unwrap();
         }
         "input" => {
+            let mut value = String::new();
+
             con.render_interactive(element! {
                 Input(
-                    label: "Are you sure?",
-                    description: "This operation cannot be undone!".to_owned(),
-                    on_changed: |value| {
-                        dbg!(confirmed);
+                    label: "What is your name?",
+                    value: &mut value,
+                    validate: |new_value: String| {
+                        if new_value.is_empty() {
+                            Some("Field is required".into())
+                        } else {
+                            None
+                        }
                     }
                 )
             })

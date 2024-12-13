@@ -52,6 +52,8 @@ impl<R: Reporter> Console<R> {
         .await
         .into_diagnostic()?;
 
+        self.out.flush()?;
+
         Ok(())
     }
 }

@@ -5,10 +5,10 @@ use iocraft::prelude::*;
 #[derive(Default, Props)]
 pub struct InputFieldProps<'a> {
     pub children: Vec<AnyElement<'a>>,
-    pub description: Option<&'a str>,
+    pub description: Option<String>,
     pub error: Option<State<String>>,
     pub footer: Option<AnyElement<'a>>,
-    pub label: &'a str,
+    pub label: String,
     pub label_color: Option<Color>,
 }
 
@@ -25,41 +25,82 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
             padding_left: 1,
         ) {
             Text(
-                content: props.label,
+                content: &props.label,
                 color: props.label_color.unwrap_or(theme.brand_color),
                 weight: Weight::Bold,
             )
 
-            #(props.description.map(|desc| {
+            #(props.description.as_ref().map(|desc| {
                 element! {
                     StyledText(content: desc)
                 }
             }))
 
-            Box(margin_top: 1) {
+            Box(width: Size::Percent(100.0)) {
                 #(&mut props.children)
             }
 
-            #(if props.error.is_some() || props.footer.is_some() {
-                Some(
-                    element! {
-                        Box(margin_top: 1, flex_direction: FlexDirection::Column) {
-                            #(props.error.map(|error| {
-                                element! {
-                                    StyledText(
-                                        content: error.read().as_str(),
-                                        style: Style::Failure,
-                                    )
-                                }
-                            }))
+            #(props.error.and_then(|error| {
+                if error.read().is_empty() {
+                    None
+                } else {
+                    Some(element! {
+                        StyledText(
+                            content: format!("✘ {}", error.read().as_str()),
+                            style: Style::Failure,
+                        )
+                    })
+                }
+            }))
 
-                            #(&mut props.footer)
-                        }
-                    }
-                )
+            #(&mut props.footer)
+        }
+    }
+}
+
+#[derive(Default, Props)]
+pub struct InputFieldValueProps {
+    pub label: String,
+    pub label_color: Option<Color>,
+    pub value: String,
+}
+
+#[component]
+pub fn InputFieldValue<'a>(
+    props: &InputFieldValueProps,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> {
+    let theme = hooks.use_context::<ConsoleTheme>();
+    let failed = props.value.is_empty() || props.value == "false";
+
+    element! {
+        Box {
+            #(if failed {
+                element!(Text(
+                    content: "✘",
+                    color: theme.variant_failure
+                ))
             } else {
-                None
+                element!(Text(
+                    content: "✔",
+                    color: theme.variant_success
+                ))
             })
+
+            Box(width: 1)
+
+            Text(
+                content: &props.label,
+                color: props.label_color.unwrap_or(theme.brand_color),
+                weight: Weight::Bold,
+            )
+
+            Box(width: 1)
+
+            StyledText(
+                content: &props.value,
+                style: Style::MutedLight
+            )
         }
     }
 }

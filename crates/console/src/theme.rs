@@ -1,6 +1,6 @@
 use crate::ui::style_to_color;
 use iocraft::Color;
-use starbase_styles::Style;
+use starbase_styles::{color::Color as NativeColor, Style};
 
 // https://www.ditig.com/publications/256-colors-cheat-sheet
 pub struct ConsoleTheme {
@@ -19,6 +19,11 @@ pub struct ConsoleTheme {
     pub variant_info: Color,
     pub variant_neutral: Color,
     pub variant_success: Color,
+
+    // Forms
+    pub input_prefix_color: Color,
+    pub input_prefix_active_color: Color,
+    pub input_prefix_selected_color: Color,
 }
 
 impl Default for ConsoleTheme {
@@ -33,6 +38,9 @@ impl Default for ConsoleTheme {
             variant_info: style_to_color(Style::Label),
             variant_neutral: style_to_color(Style::Muted),
             variant_success: style_to_color(Style::Success),
+            input_prefix_color: Color::AnsiValue(NativeColor::Teal as u8),
+            input_prefix_active_color: Color::AnsiValue(NativeColor::Cyan as u8),
+            input_prefix_selected_color: Color::AnsiValue(NativeColor::Green as u8),
         }
     }
 }
