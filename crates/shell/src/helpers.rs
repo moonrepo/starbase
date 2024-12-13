@@ -43,9 +43,9 @@ pub fn normalize_newlines(content: impl AsRef<str>) -> String {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ProfileSet {
-    items: HashMap<PathBuf, u8>,
+    pub items: HashMap<PathBuf, u8>,
 }
 
 impl ProfileSet {

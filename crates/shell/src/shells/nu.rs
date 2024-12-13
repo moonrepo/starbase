@@ -101,17 +101,16 @@ def {function} [] {{
 
   $data | get env | items {{ |k, v|
     if $v == null {{
-        hide_env $k
+        hide-env $k
     }} else {{
         load-env {{ ($k): $v }}
     }}
   }}
 
-  let path_list = $env.__ORIG_PATH | split row (char esep)
-
-  $data | get paths | reverse | each {{ |p|
-    let path_list = ($path_list | prepend $p)
-  }}
+  let path_list = [
+    ...($data | get paths | default [])
+    ...($env.__ORIG_PATH | split row (char esep))
+  ];
 
   $env.{path_name} = ($path_list | uniq)
 }}
@@ -138,18 +137,32 @@ $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
 
     // https://www.nushell.sh/book/configuration.html
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        ProfileSet::default()
-            .insert(
-                get_config_dir(home_dir).join("nushell").join("config.nu"),
-                1,
-            )
-            .insert(
-                home_dir.join(".config").join("nushell").join("config.nu"),
-                2,
-            )
-            .insert(get_config_dir(home_dir).join("nushell").join("env.nu"), 3)
-            .insert(home_dir.join(".config").join("nushell").join("env.nu"), 4)
-            .into_list()
+        let mut profiles = ProfileSet::default();
+        let mut order = 0;
+        let mut inc = || {
+            order += 1;
+            order
+        };
+
+        for name in ["config.nu", "env.nu"] {
+            profiles = profiles
+                .insert(get_config_dir(home_dir).join("nushell").join(name), inc())
+                .insert(home_dir.join(".config").join("nushell").join(name), inc());
+
+            #[cfg(windows)]
+            {
+                profiles = profiles.insert(
+                    home_dir
+                        .join("AppData")
+                        .join("Roaming")
+                        .join("nushell")
+                        .join(name),
+                    inc(),
+                );
+            }
+        }
+
+        profiles.into_list()
     }
 
     /// Quotes a string according to Nu shell quoting rules.
@@ -256,6 +269,7 @@ mod tests {
         assert_snapshot!(Nu.format_hook(hook).unwrap());
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_profile_paths() {
         #[allow(deprecated)]
@@ -266,6 +280,31 @@ mod tests {
             vec![
                 home_dir.join(".config").join("nushell").join("config.nu"),
                 home_dir.join(".config").join("nushell").join("env.nu"),
+            ]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_profile_paths() {
+        #[allow(deprecated)]
+        let home_dir = std::env::home_dir().unwrap();
+
+        assert_eq!(
+            Nu::new().get_profile_paths(&home_dir),
+            vec![
+                home_dir.join(".config").join("nushell").join("config.nu"),
+                home_dir
+                    .join("AppData")
+                    .join("Roaming")
+                    .join("nushell")
+                    .join("config.nu"),
+                home_dir.join(".config").join("nushell").join("env.nu"),
+                home_dir
+                    .join("AppData")
+                    .join("Roaming")
+                    .join("nushell")
+                    .join("env.nu"),
             ]
         );
     }
