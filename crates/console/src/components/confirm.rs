@@ -37,7 +37,7 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
     let mut focused = hooks.use_state(|| 0);
     let mut confirmed = hooks.use_state(|| false);
     let mut should_exit = hooks.use_state(|| false);
-    let mut error = hooks.use_state(String::new);
+    let mut error = hooks.use_state(|| None);
 
     let yes = props.yes_char;
     let no = props.no_char;
@@ -64,14 +64,14 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
     hooks.use_local_terminal_events({
         move |event| match event {
             TerminalEvent::Key(KeyEvent { code, kind, .. }) if kind != KeyEventKind::Release => {
-                error.set(String::new());
+                error.set(None);
 
                 match code {
                     KeyCode::Char(ch) => {
                         if ch == yes || ch == no {
                             handle_confirm(ch == yes);
                         } else {
-                            error.set(format!("Please press [{yes}] or [{no}] to confirm"));
+                            error.set(Some(format!("Please press [{yes}] or [{no}] to confirm")));
                         }
                     }
                     KeyCode::Esc => {
@@ -110,7 +110,7 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
         InputField(
             label: &props.label,
             description: props.description.clone(),
-            error: Some(error.clone()),
+            error: Some(error),
             footer: props.legend.then(|| {
                 element! {
                     StyledText(

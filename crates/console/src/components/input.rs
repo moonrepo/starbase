@@ -8,7 +8,6 @@ pub struct InputProps<'a> {
     pub default_value: String,
     pub description: Option<String>,
     pub label: String,
-    pub on_changed: Handler<'static, String>,
     pub prefix_char: char,
     pub validate: Validator<'static, String>,
     pub value: Option<&'a mut String>,
@@ -20,7 +19,6 @@ impl Default for InputProps<'_> {
             default_value: String::new(),
             description: None,
             label: String::new(),
-            on_changed: Handler::default(),
             prefix_char: '❯',
             validate: Validator::default(),
             value: None,
@@ -35,7 +33,7 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
     let mut value = hooks.use_state(|| props.default_value.clone());
     let mut submitted = hooks.use_state(|| false);
     let mut should_exit = hooks.use_state(|| false);
-    let mut error = hooks.use_state(String::new);
+    let mut error = hooks.use_state(|| None);
 
     let validate = props.validate.take();
 
@@ -45,10 +43,10 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
                 match code {
                     KeyCode::Enter => {
                         if let Some(msg) = validate(value.to_string()) {
-                            error.set(msg);
+                            error.set(Some(msg));
                             return;
                         } else {
-                            error.set(String::new());
+                            error.set(None);
                         }
 
                         submitted.set(true);
@@ -90,7 +88,7 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
         InputField(
             label: &props.label,
             description: props.description.clone(),
-            error: Some(error.clone()),
+            error: Some(error),
         ) {
             Box {
                 Box(margin_right: 1) {

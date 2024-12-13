@@ -15,7 +15,7 @@ pub struct Console<R: Reporter> {
     out_handle: Option<JoinHandle<()>>,
 
     quiet: Arc<AtomicBool>,
-    reporter: Option<Arc<Box<R>>>,
+    reporter: Option<Arc<R>>,
 }
 
 impl<R: Reporter> Console<R> {
@@ -80,7 +80,7 @@ impl<R: Reporter> Console<R> {
         self.out.clone()
     }
 
-    pub fn reporter(&self) -> Arc<Box<R>> {
+    pub fn reporter(&self) -> Arc<R> {
         Arc::clone(
             self.reporter
                 .as_ref()
@@ -94,7 +94,7 @@ impl<R: Reporter> Console<R> {
         // #[cfg(feature = "ui")]
         // reporter.inherit_theme(self.theme());
 
-        self.reporter = Some(Arc::new(Box::new(reporter)));
+        self.reporter = Some(Arc::new(reporter));
     }
 
     // #[cfg(feature = "ui")]

@@ -28,14 +28,14 @@ pub use iocraft::prelude::{Box as View, Button, Text};
 
 pub struct Validator<'a, T>(Box<dyn Fn(T) -> Option<String> + Send + Sync + 'a>);
 
-impl<'a, T> Validator<'a, T> {
+impl<T> Validator<'_, T> {
     /// Takes the handler, leaving a default-initialized handler in its place.
     pub fn take(&mut self) -> Self {
         std::mem::take(self)
     }
 }
 
-impl<'a, T> Default for Validator<'a, T> {
+impl<T> Default for Validator<'_, T> {
     fn default() -> Self {
         Self(Box::new(|_| None))
     }

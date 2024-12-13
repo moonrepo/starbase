@@ -93,9 +93,9 @@ pub fn ProgressBar<'a>(
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
 
-    let mut prefix = hooks.use_state(|| String::new());
+    let mut prefix = hooks.use_state(String::new);
     let mut message = hooks.use_state(|| props.default_message.clone());
-    let mut suffix = hooks.use_state(|| String::new());
+    let mut suffix = hooks.use_state(String::new);
     let mut length = hooks.use_state(|| props.default_length);
     let mut position = hooks.use_state(|| props.default_position);
     let mut should_exit = hooks.use_state(|| false);

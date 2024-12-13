@@ -6,7 +6,7 @@ use iocraft::prelude::*;
 pub struct InputFieldProps<'a> {
     pub children: Vec<AnyElement<'a>>,
     pub description: Option<String>,
-    pub error: Option<State<String>>,
+    pub error: Option<State<Option<String>>>,
     pub footer: Option<AnyElement<'a>>,
     pub label: String,
     pub label_color: Option<Color>,
@@ -41,12 +41,14 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
             }
 
             #(props.error.and_then(|error| {
-                if error.read().is_empty() {
+                let error_value = error.read();
+
+                if error_value.is_none() || error_value.as_ref().is_some_and(|v| v.is_empty()) {
                     None
                 } else {
                     Some(element! {
                         StyledText(
-                            content: format!("✘ {}", error.read().as_str()),
+                            content: format!("✘ {}", error_value.as_ref().unwrap().as_str()),
                             style: Style::Failure,
                         )
                     })
