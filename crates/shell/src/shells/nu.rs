@@ -138,20 +138,26 @@ $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
     // https://www.nushell.sh/book/configuration.html
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         let mut profiles = ProfileSet::default();
+        let mut order = 0;
+        let mut inc = || {
+            order += 1;
+            order
+        };
 
         for name in ["config.nu", "env.nu"] {
             profiles = profiles
-                .insert_unordered(get_config_dir(home_dir).join("nushell").join(name))
-                .insert_unordered(home_dir.join(".config").join("nushell").join(name));
+                .insert(get_config_dir(home_dir).join("nushell").join(name), inc())
+                .insert(home_dir.join(".config").join("nushell").join(name), inc());
 
             #[cfg(windows)]
             {
-                profiles = profiles.insert_unordered(
+                profiles = profiles.insert(
                     home_dir
                         .join("AppData")
                         .join("Roaming")
                         .join("nushell")
                         .join(name),
+                    inc(),
                 );
             }
         }
@@ -293,12 +299,12 @@ mod tests {
                     .join("Roaming")
                     .join("nushell")
                     .join("config.nu"),
+                home_dir.join(".config").join("nushell").join("env.nu"),
                 home_dir
                     .join("AppData")
                     .join("Roaming")
                     .join("nushell")
                     .join("env.nu"),
-                home_dir.join(".config").join("nushell").join("env.nu"),
             ]
         );
     }

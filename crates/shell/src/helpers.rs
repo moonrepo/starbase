@@ -43,9 +43,9 @@ pub fn normalize_newlines(content: impl AsRef<str>) -> String {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ProfileSet {
-    items: HashMap<PathBuf, u8>,
+    pub items: HashMap<PathBuf, u8>,
 }
 
 impl ProfileSet {
@@ -53,12 +53,6 @@ impl ProfileSet {
         self.items.insert(path, order);
 
         Self { items: self.items }
-    }
-
-    pub fn insert_unordered(self, path: PathBuf) -> Self {
-        let len = self.items.len();
-
-        self.insert(path, len as u8)
     }
 
     pub fn into_list(self) -> Vec<PathBuf> {
