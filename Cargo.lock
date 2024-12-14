@@ -2140,6 +2140,7 @@ dependencies = [
  "parking_lot",
  "starbase_console",
  "starbase_styles",
+ "tokio",
  "tracing",
 ]
 

@@ -6,6 +6,7 @@ use starbase::{App, AppSession, MainResult};
 use starbase_console::ui::*;
 use starbase_console::{Console, EmptyReporter};
 use std::process::ExitCode;
+use std::time::Duration;
 
 #[derive(Clone, Debug)]
 struct TestSession {
@@ -189,11 +190,16 @@ async fn render(session: TestSession, ui: String) {
                     )
                     ProgressBar(
                         default_message: "Partially filled".to_owned(),
-                        default_position: 50 as usize
+                        default_value: 50
                     )
                     ProgressBar(
                         default_message: "Filled".to_owned(),
-                        default_position: 100 as usize
+                        default_value: 100
+                    )
+                    ProgressBar(
+                        default_message: "Automatic ticking".to_owned(),
+                        auto_tick: Duration::from_millis(100),
+                        tick_loop: true,
                     )
                 }
             })

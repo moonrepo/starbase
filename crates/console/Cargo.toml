@@ -14,6 +14,7 @@ flume = { version = "0.11.1", features = ["async"] }
 iocraft = { workspace = true, optional = true }
 miette = { workspace = true }
 parking_lot = "0.12.3"
+tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
@@ -21,4 +22,4 @@ starbase_console = { path = ".", features = ["ui"] }
 
 [features]
 default = []
-ui = ["dep:crossterm", "dep:iocraft"]
+ui = ["dep:crossterm", "dep:iocraft", "dep:tokio"]
