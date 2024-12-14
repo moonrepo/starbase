@@ -189,7 +189,10 @@ async fn render(session: TestSession, ui: String) {
                         default_message: "Unfilled".to_owned()
                     )
                     ProgressBar(
-                        default_message: "Partially filled".to_owned(),
+                        char_filled: '━',
+                        char_position: '╾',
+                        char_unfilled: '─',
+                        default_message: "Partially filled (custom bar)".to_owned(),
                         default_value: 50
                     )
                     ProgressBar(

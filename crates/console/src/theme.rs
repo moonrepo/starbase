@@ -13,6 +13,11 @@ pub struct ConsoleTheme {
     pub border_color: Color,
     pub border_focus_color: Color,
 
+    // Progress
+    pub progress_bar_filled_char: char,
+    pub progress_bar_position_char: char,
+    pub progress_bar_unfilled_char: char,
+
     // Variants
     pub variant_caution: Color,
     pub variant_failure: Color,
@@ -33,6 +38,9 @@ impl Default for ConsoleTheme {
             bg_alt_color: Color::AnsiValue(234),
             border_color: style_to_color(Style::Muted),
             border_focus_color: style_to_color(Style::MutedLight),
+            progress_bar_filled_char: '█',
+            progress_bar_position_char: '▒',
+            progress_bar_unfilled_char: '░',
             variant_caution: style_to_color(Style::Caution),
             variant_failure: style_to_color(Style::Failure),
             variant_info: style_to_color(Style::Label),

@@ -68,9 +68,9 @@ pub struct ProgressBarProps {
     pub auto_tick: Option<Duration>,
     pub bar_color: Option<Color>,
     pub bar_width: i32,
-    pub char_filled: char,
-    pub char_position: char,
-    pub char_unfilled: char,
+    pub char_filled: Option<char>,
+    pub char_position: Option<char>,
+    pub char_unfilled: Option<char>,
     pub default_max: i32,
     pub default_message: String,
     pub default_value: i32,
@@ -85,9 +85,9 @@ impl Default for ProgressBarProps {
             auto_tick: None,
             bar_color: None,
             bar_width: 30,
-            char_filled: '█',
-            char_position: '▒',
-            char_unfilled: '░',
+            char_filled: None,
+            char_position: None,
+            char_unfilled: None,
             default_max: 100,
             default_message: "".into(),
             default_value: 0,
@@ -173,6 +173,13 @@ pub fn ProgressBar<'a>(
         }
     });
 
+    let char_filled = props.char_filled.unwrap_or(theme.progress_bar_filled_char);
+    let char_unfilled = props
+        .char_unfilled
+        .unwrap_or(theme.progress_bar_unfilled_char);
+    let char_position = props
+        .char_position
+        .unwrap_or(theme.progress_bar_position_char);
     let bar_color = props.bar_color.unwrap_or(theme.brand_color);
     let bar_percent = max.get() as f32 * (value.get() as f32 / 100.0);
     let bar_total_width = props.bar_width as u32;
@@ -194,7 +201,7 @@ pub fn ProgressBar<'a>(
         Group(gap: 1) {
             Box(width: Size::Length(bar_total_width)) {
                 Text(content:
-                    String::from(props.char_filled).repeat(bar_filled_width as usize),
+                    String::from(char_filled).repeat(bar_filled_width as usize),
                     color: bar_color,
                 )
 
@@ -203,14 +210,14 @@ pub fn ProgressBar<'a>(
                 } else {
                     Some(element! {
                         Text(
-                            content: String::from(props.char_position),
+                            content: String::from(char_position),
                             color: bar_color,
                         )
                     })
                 })
 
                 Text(
-                    content: String::from(props.char_unfilled).repeat(bar_unfilled_width as usize),
+                    content: String::from(char_unfilled).repeat(bar_unfilled_width as usize),
                     color: bar_color,
                 )
             }
