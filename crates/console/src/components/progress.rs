@@ -12,7 +12,7 @@ pub enum ProgressState {
     Message(String),
     Prefix(String),
     Suffix(String),
-    Tick(Option<Duration>),
+    Tick(Duration),
     Value(u32),
 }
 
@@ -55,7 +55,7 @@ impl ProgressReporter {
         self.set(ProgressState::Suffix(value.as_ref().to_owned()));
     }
 
-    pub fn set_tick(&self, value: Option<Duration>) {
+    pub fn set_tick(&self, value: Duration) {
         self.set(ProgressState::Tick(value));
     }
 
@@ -66,7 +66,6 @@ impl ProgressReporter {
 
 #[derive(Props)]
 pub struct ProgressBarProps {
-    pub auto_tick: Option<Duration>,
     pub bar_color: Option<Color>,
     pub bar_width: i32,
     pub char_filled: Option<char>,
@@ -76,14 +75,11 @@ pub struct ProgressBarProps {
     pub default_message: String,
     pub default_value: i32,
     pub reporter: ProgressReporter,
-    pub tick_step: i32,
-    pub tick_loop: bool,
 }
 
 impl Default for ProgressBarProps {
     fn default() -> Self {
         Self {
-            auto_tick: None,
             bar_color: None,
             bar_width: 30,
             char_filled: None,
@@ -93,8 +89,6 @@ impl Default for ProgressBarProps {
             default_message: "".into(),
             default_value: 0,
             reporter: Default::default(),
-            tick_step: 2,
-            tick_loop: false,
         }
     }
 }
@@ -111,13 +105,10 @@ pub fn ProgressBar<'a>(
     let mut suffix = hooks.use_state(String::new);
     let mut max = hooks.use_state(|| props.default_max as u32);
     let mut value = hooks.use_state(|| props.default_value as u32);
-    let mut tick = hooks.use_state(|| props.auto_tick);
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
 
     let receiver = props.reporter.rx.clone();
-    let tick_step = props.tick_step as u32;
-    let tick_loop = props.tick_loop;
 
     hooks.use_future(async move {
         loop {
@@ -138,9 +129,6 @@ pub fn ProgressBar<'a>(
                     ProgressState::Suffix(val) => {
                         suffix.set(val);
                     }
-                    ProgressState::Tick(val) => {
-                        tick.set(val);
-                    }
                     ProgressState::Value(val) => {
                         if val >= max.get() {
                             value.set(max.get());
@@ -149,29 +137,18 @@ pub fn ProgressBar<'a>(
                             value.set(val);
                         }
                     }
+                    _ => {}
                 };
             }
         }
     });
 
+    // This purely exists to trigger a re-render so that tokens within the
+    // message are dynamically updated with the latest information
     hooks.use_future(async move {
-        let Some(duration) = tick.get() else {
-            return;
-        };
-
         loop {
-            tokio::time::sleep(duration).await;
-
-            let next_value = value.get() + tick_step;
-            let max_length = max.get();
-
-            if next_value <= max_length {
-                value.set(next_value);
-            } else if tick_loop {
-                value.set(0);
-            } else {
-                should_exit.set(true);
-            }
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            max.set(max.get());
         }
     });
 
@@ -202,8 +179,8 @@ pub fn ProgressBar<'a>(
     element! {
         Group(gap: 1) {
             Box(width: Size::Length(bar_total_width)) {
-                Text(content:
-                    String::from(char_filled).repeat(bar_filled_width as usize),
+                Text(
+                    content: String::from(char_filled).repeat(bar_filled_width as usize),
                     color: bar_color,
                 )
 
@@ -228,6 +205,120 @@ pub fn ProgressBar<'a>(
                     content: format!(
                         "{prefix}{}{suffix}",
                         get_message(message.read().as_str(), value.get(), max.get(), started.get())
+                    )
+                )
+            }
+        }
+    }
+    .into_any()
+}
+
+#[derive(Props)]
+pub struct ProgressLoaderProps {
+    pub loader_color: Option<Color>,
+    pub loader_frames: Option<Vec<String>>,
+    pub default_message: String,
+    pub reporter: ProgressReporter,
+    pub tick_interval: Duration,
+}
+
+impl Default for ProgressLoaderProps {
+    fn default() -> Self {
+        Self {
+            loader_color: None,
+            loader_frames: None,
+            default_message: "".into(),
+            reporter: Default::default(),
+            tick_interval: Duration::from_millis(100),
+        }
+    }
+}
+
+#[component]
+pub fn ProgressLoader<'a>(
+    props: &mut ProgressLoaderProps,
+    mut hooks: Hooks,
+) -> impl Into<AnyElement<'a>> {
+    let theme = hooks.use_context::<ConsoleTheme>();
+    let mut system = hooks.use_context_mut::<SystemContext>();
+    let mut prefix = hooks.use_state(String::new);
+    let mut message = hooks.use_state(|| props.default_message.clone());
+    let mut suffix = hooks.use_state(String::new);
+    let mut frame_index = hooks.use_state(|| 0);
+    let mut tick_interval = hooks.use_state(|| props.tick_interval);
+    let mut should_exit = hooks.use_state(|| false);
+    let started = hooks.use_state(Instant::now);
+
+    let receiver = props.reporter.rx.clone();
+    let frames = props
+        .loader_frames
+        .clone()
+        .unwrap_or_else(|| theme.progress_loader_frames.clone());
+    let frames_total = frames.len() as u32;
+
+    hooks.use_future(async move {
+        loop {
+            while let Ok(state) = receiver.recv_async().await {
+                match state {
+                    ProgressState::Exit => {
+                        should_exit.set(true);
+                    }
+                    ProgressState::Message(val) => {
+                        message.set(val);
+                    }
+                    ProgressState::Prefix(val) => {
+                        prefix.set(val);
+                    }
+                    ProgressState::Suffix(val) => {
+                        suffix.set(val);
+                    }
+                    ProgressState::Tick(val) => {
+                        tick_interval.set(val);
+                    }
+                    _ => {}
+                };
+            }
+        }
+    });
+
+    hooks.use_future(async move {
+        loop {
+            tokio::time::sleep(tick_interval.get()).await;
+
+            let next_index = frame_index.get() + 1;
+
+            if next_index >= frames_total {
+                frame_index.set(0);
+            } else {
+                frame_index.set(next_index);
+            }
+        }
+    });
+
+    if should_exit.get() {
+        system.exit();
+
+        return element!(Box).into_any();
+    }
+
+    element! {
+        Group(gap: 1) {
+            Box {
+                Text(
+                    content: &frames[frame_index.get() as usize],
+                    color: props.loader_color.unwrap_or(theme.brand_color),
+                )
+            }
+            Box {
+                StyledText(
+                    content: format!(
+                        "{prefix}{}{suffix}",
+                        get_message(
+                            message.read().as_str(),
+                            frame_index.get(),
+                            frames_total,
+                            started.get()
+                        )
                     )
                 )
             }

@@ -186,24 +186,44 @@ async fn render(session: TestSession, ui: String) {
             con.render_interactive(element! {
                 Container {
                     ProgressBar(
-                        default_message: "Unfilled - {elapsed}".to_owned()
+                        default_message: "Unfilled - {elapsed} - {duration} - {eta}".to_owned()
                     )
                     ProgressBar(
-                        char_filled: '━',
-                        char_position: '╾',
-                        char_unfilled: '─',
-                        default_message: "Partially filled (custom bar) - {percent}%".to_owned(),
-                        default_value: 50
-                    )
-                    ProgressBar(
+                        bar_color: Color::Cyan,
                         default_message: "Filled - {bytes}/{total_bytes} - {decimal_bytes}/{decimal_total_bytes}".to_owned(),
                         default_max: 5432,
                         default_value: 5432
                     )
                     ProgressBar(
-                        default_message: "Automatic ticking - {value}/{max}".to_owned(),
-                        auto_tick: Duration::from_millis(100),
-                        tick_loop: true,
+                        bar_color: Color::Red,
+                        char_filled: '━',
+                        char_position: '╾',
+                        char_unfilled: '─',
+                        default_message: "Partially filled with custom bar - {percent}%".to_owned(),
+                        default_value: 53
+                    )
+                }
+            })
+            .await
+            .unwrap();
+        }
+        "progressloader" => {
+            con.render_interactive(element! {
+                Container {
+                    ProgressLoader(
+                        default_message: "Default - {elapsed}".to_owned()
+                    )
+                    ProgressLoader(
+                        default_message: "Custom frames".to_owned(),
+                        loader_color: Color::Yellow,
+                        loader_frames: vec![
+                            "∙∙∙".into(),
+                            "●∙∙".into(),
+                            "∙●∙".into(),
+                            "∙∙●".into(),
+                            "∙∙∙".into(),
+                        ],
+                        tick_interval: Duration::from_millis(125)
                     )
                 }
             })

@@ -26,7 +26,7 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
         ) {
             Text(
                 content: &props.label,
-                color: props.label_color.unwrap_or(theme.brand_color),
+                color: props.label_color.unwrap_or(theme.form_label_color),
                 weight: Weight::Bold,
             )
 
@@ -93,7 +93,7 @@ pub fn InputFieldValue<'a>(
 
             Text(
                 content: &props.label,
-                color: props.label_color.unwrap_or(theme.brand_color),
+                color: props.label_color.unwrap_or(theme.form_label_color),
                 weight: Weight::Bold,
             )
 
