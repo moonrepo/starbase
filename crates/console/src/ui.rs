@@ -8,7 +8,7 @@ pub use crate::theme::*;
 
 impl<R: Reporter> Console<R> {
     pub fn render<T: Component>(&self, element: Element<'_, T>) -> miette::Result<()> {
-        let theme = ConsoleTheme::default();
+        let theme = self.theme();
         let is_tty = self.out.is_terminal();
 
         let canvas = element! {
@@ -39,7 +39,7 @@ impl<R: Reporter> Console<R> {
         &self,
         element: Element<'_, T>,
     ) -> miette::Result<()> {
-        let theme = ConsoleTheme::default();
+        let theme = self.theme();
 
         self.out.flush()?;
 

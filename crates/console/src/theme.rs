@@ -3,6 +3,7 @@ use iocraft::Color;
 use starbase_styles::{color::Color as NativeColor, Style};
 
 // https://www.ditig.com/publications/256-colors-cheat-sheet
+#[derive(Clone, Debug)]
 pub struct ConsoleTheme {
     pub brand_color: Color,
 

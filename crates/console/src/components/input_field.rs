@@ -21,10 +21,10 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
             flex_direction: FlexDirection::Column,
             border_color: theme.border_color,
             border_edges: Edges::Left,
-            border_style: BorderStyle::Bold,
+            border_style: BorderStyle::Single,
             padding_left: 1,
         ) {
-            Text(
+            StyledText(
                 content: &props.label,
                 color: props.label_color.unwrap_or(theme.form_label_color),
                 weight: Weight::Bold,
@@ -91,7 +91,7 @@ pub fn InputFieldValue<'a>(
 
             Box(width: 1)
 
-            Text(
+            StyledText(
                 content: &props.label,
                 color: props.label_color.unwrap_or(theme.form_label_color),
                 weight: Weight::Bold,

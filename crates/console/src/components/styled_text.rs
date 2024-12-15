@@ -9,6 +9,7 @@ pub fn style_to_color(style: Style) -> Color {
 
 #[derive(Default, Props)]
 pub struct StyledTextProps {
+    pub color: Option<Color>,
     pub style: Option<Style>,
     pub content: String,
     pub weight: Weight,
@@ -26,7 +27,7 @@ pub fn StyledText<'a>(props: &StyledTextProps) -> impl Into<AnyElement<'a>> {
             #(parts.into_iter().map(|(text, style)| {
                 element! {
                     Text(
-                        color: style.or(props.style).map(style_to_color),
+                        color: style.or(props.style).map(style_to_color).or(props.color),
                         content: text,
                         weight: props.weight,
                         wrap: props.wrap,

@@ -1,5 +1,7 @@
 use crate::reporter::*;
 use crate::stream::*;
+#[cfg(feature = "ui")]
+use crate::theme::ConsoleTheme;
 use std::fmt;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,6 +18,9 @@ pub struct Console<R: Reporter> {
 
     quiet: Arc<AtomicBool>,
     reporter: Option<Arc<R>>,
+
+    #[cfg(feature = "ui")]
+    theme: ConsoleTheme,
 }
 
 impl<R: Reporter> Console<R> {
@@ -37,6 +42,8 @@ impl<R: Reporter> Console<R> {
             out,
             quiet,
             reporter: None,
+            #[cfg(feature = "ui")]
+            theme: Default::default(),
         }
     }
 
@@ -48,6 +55,8 @@ impl<R: Reporter> Console<R> {
             out_handle: None,
             quiet: Arc::new(AtomicBool::new(false)),
             reporter: None,
+            #[cfg(feature = "ui")]
+            theme: Default::default(),
         }
     }
 
@@ -88,19 +97,23 @@ impl<R: Reporter> Console<R> {
         )
     }
 
+    pub fn theme(&self) -> ConsoleTheme {
+        self.theme.clone()
+    }
+
     pub fn set_reporter(&mut self, mut reporter: R) {
         reporter.inherit_streams(self.stderr(), self.stdout());
 
-        // #[cfg(feature = "ui")]
-        // reporter.inherit_theme(self.theme());
+        #[cfg(feature = "ui")]
+        reporter.inherit_theme(self.theme());
 
         self.reporter = Some(Arc::new(reporter));
     }
 
-    // #[cfg(feature = "ui")]
-    // pub fn set_theme(&mut self, theme: ConsoleTheme) {
-    //     self.theme = Arc::new(theme);
-    // }
+    #[cfg(feature = "ui")]
+    pub fn set_theme(&mut self, theme: crate::theme::ConsoleTheme) {
+        self.theme = theme;
+    }
 }
 
 impl<R: Reporter> Clone for Console<R> {
@@ -112,18 +125,24 @@ impl<R: Reporter> Clone for Console<R> {
             out_handle: None,
             quiet: self.quiet.clone(),
             reporter: self.reporter.clone(),
+            theme: self.theme.clone(),
         }
     }
 }
 
 impl<R: Reporter> fmt::Debug for Console<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Console")
-            .field("err", &self.err)
+        let mut dbg = f.debug_struct("Console");
+
+        dbg.field("err", &self.err)
             .field("out", &self.out)
             .field("quiet", &self.quiet)
-            .field("reporter", &self.reporter)
-            .finish()
+            .field("reporter", &self.reporter);
+
+        #[cfg(feature = "ui")]
+        dbg.field("theme", &self.theme);
+
+        dbg.finish()
     }
 }
 

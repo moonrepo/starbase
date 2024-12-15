@@ -6,7 +6,6 @@ use std::mem;
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
-use tracing::warn;
 
 pub struct ConsoleBuffer {
     buffer: Arc<Mutex<Vec<u8>>>,
@@ -56,11 +55,7 @@ pub fn flush_on_loop(
 
         // Has the thread been closed?
         match receiver.try_recv() {
-            Ok(true) => {
-                break;
-            }
-            Err(TryRecvError::Disconnected) => {
-                warn!("Console auto-flush has been disconnected, output will be heavily buffered");
+            Ok(true) | Err(TryRecvError::Disconnected) => {
                 break;
             }
             _ => {}
