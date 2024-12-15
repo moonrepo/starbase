@@ -1,9 +1,10 @@
 use super::layout::Group;
 use super::styled_text::StyledText;
 use crate::ui::ConsoleTheme;
+use crate::utils::formats::*;
 use flume::{Receiver, Sender};
 use iocraft::prelude::*;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub enum ProgressState {
     Exit,
@@ -112,6 +113,7 @@ pub fn ProgressBar<'a>(
     let mut value = hooks.use_state(|| props.default_value as u32);
     let mut tick = hooks.use_state(|| props.auto_tick);
     let mut should_exit = hooks.use_state(|| false);
+    let started = hooks.use_state(Instant::now);
 
     let receiver = props.reporter.rx.clone();
     let tick_step = props.tick_step as u32;
@@ -181,7 +183,7 @@ pub fn ProgressBar<'a>(
         .char_position
         .unwrap_or(theme.progress_bar_position_char);
     let bar_color = props.bar_color.unwrap_or(theme.brand_color);
-    let bar_percent = max.get() as f32 * (value.get() as f32 / 100.0);
+    let bar_percent = calculate_percent(value.get(), max.get());
     let bar_total_width = props.bar_width as u32;
     let bar_filled_width = (bar_total_width as f32 * (bar_percent / 100.0)) as u32;
     let mut bar_unfilled_width = bar_total_width - bar_filled_width;
@@ -222,9 +224,97 @@ pub fn ProgressBar<'a>(
                 )
             }
             Box {
-                StyledText(content: format!("{prefix}{message}{suffix}"))
+                StyledText(
+                    content: format!(
+                        "{prefix}{}{suffix}",
+                        get_message(message.read().as_str(), value.get(), max.get(), started.get())
+                    )
+                )
             }
         }
     }
     .into_any()
+}
+
+fn calculate_percent(value: u32, max: u32) -> f32 {
+    (max as f32 * (value as f32 / 100.0)).clamp(0.0, 100.0)
+}
+
+// fn calculate_eta(value: u32, max: u32) -> Duration {
+//     let steps_per_second = 0.0;
+
+//     if steps_per_second == 0.0 {
+//         return Duration::new(0, 0);
+//     }
+
+//     let s = max.saturating_sub(value) as f64 / steps_per_second;
+//     let secs = s.trunc() as u64;
+//     let nanos = (s.fract() * 1_000_000_000f64) as u32;
+
+//     Duration::new(secs, nanos)
+// }
+
+// TODO: eta, per_sec, duration
+fn get_message(message: &str, value: u32, max: u32, started: Instant) -> String {
+    let mut message = message.to_owned();
+
+    if message.contains("{value}") {
+        message = message.replace("{value}", &value.to_string());
+    }
+
+    if message.contains("{total}") {
+        message = message.replace("{total}", &max.to_string());
+    }
+
+    if message.contains("{max}") {
+        message = message.replace("{max}", &max.to_string());
+    }
+
+    if message.contains("{percent}") {
+        message = message.replace("{percent}", &calculate_percent(value, max).to_string());
+    }
+
+    if message.contains("{bytes}") {
+        message = message.replace("{bytes}", &format_bytes_binary(value as u64));
+    }
+
+    if message.contains("{total_bytes}") {
+        message = message.replace("{total_bytes}", &format_bytes_binary(max as u64));
+    }
+
+    if message.contains("{binary_bytes}") {
+        message = message.replace("{binary_bytes}", &format_bytes_binary(value as u64));
+    }
+
+    if message.contains("{binary_total_bytes}") {
+        message = message.replace("{binary_total_bytes}", &format_bytes_binary(max as u64));
+    }
+
+    if message.contains("{decimal_bytes}") {
+        message = message.replace("{decimal_bytes}", &format_bytes_decimal(value as u64));
+    }
+
+    if message.contains("{decimal_total_bytes}") {
+        message = message.replace("{decimal_total_bytes}", &format_bytes_decimal(max as u64));
+    }
+
+    if message.contains("{elapsed}") {
+        message = message.replace("{elapsed}", &format_duration(started.elapsed(), true));
+    }
+
+    // if message.contains("{eta}") {
+    //     message = message.replace("{eta}", &format_duration(calculate_eta(value, max), true));
+    // }
+
+    // if message.contains("{duration}") {
+    //     message = message.replace(
+    //         "{duration}",
+    //         &format_duration(
+    //             started.elapsed().saturating_add(calculate_eta(value, max)),
+    //             true,
+    //         ),
+    //     );
+    // }
+
+    message
 }

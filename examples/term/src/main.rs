@@ -186,21 +186,22 @@ async fn render(session: TestSession, ui: String) {
             con.render_interactive(element! {
                 Container {
                     ProgressBar(
-                        default_message: "Unfilled".to_owned()
+                        default_message: "Unfilled - {elapsed}".to_owned()
                     )
                     ProgressBar(
                         char_filled: '━',
                         char_position: '╾',
                         char_unfilled: '─',
-                        default_message: "Partially filled (custom bar)".to_owned(),
+                        default_message: "Partially filled (custom bar) - {percent}%".to_owned(),
                         default_value: 50
                     )
                     ProgressBar(
-                        default_message: "Filled".to_owned(),
-                        default_value: 100
+                        default_message: "Filled - {bytes}/{total_bytes} - {decimal_bytes}/{decimal_total_bytes}".to_owned(),
+                        default_max: 5432,
+                        default_value: 5432
                     )
                     ProgressBar(
-                        default_message: "Automatic ticking".to_owned(),
+                        default_message: "Automatic ticking - {value}/{max}".to_owned(),
                         auto_tick: Duration::from_millis(100),
                         tick_loop: true,
                     )
