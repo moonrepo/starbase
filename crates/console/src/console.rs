@@ -97,6 +97,7 @@ impl<R: Reporter> Console<R> {
         )
     }
 
+    #[cfg(feature = "ui")]
     pub fn theme(&self) -> ConsoleTheme {
         self.theme.clone()
     }
@@ -125,6 +126,7 @@ impl<R: Reporter> Clone for Console<R> {
             out_handle: None,
             quiet: self.quiet.clone(),
             reporter: self.reporter.clone(),
+            #[cfg(feature = "ui")]
             theme: self.theme.clone(),
         }
     }
