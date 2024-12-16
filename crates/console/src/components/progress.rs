@@ -159,7 +159,7 @@ pub fn ProgressBar<'a>(
     let char_position = props
         .char_position
         .unwrap_or(theme.progress_bar_position_char);
-    let bar_color = props.bar_color.unwrap_or(theme.brand_color);
+    let bar_color = props.bar_color.unwrap_or(theme.progress_bar_color);
     let bar_percent = calculate_percent(value.get(), max.get());
     let bar_total_width = props.bar_width as u32;
     let bar_filled_width = (bar_total_width as f32 * (bar_percent / 100.0)) as u32;
@@ -306,7 +306,7 @@ pub fn ProgressLoader<'a>(
             Box {
                 Text(
                     content: &frames[frame_index.get() as usize],
-                    color: props.loader_color.unwrap_or(theme.brand_color),
+                    color: props.loader_color.unwrap_or(theme.progress_loader_color),
                 )
             }
             Box {

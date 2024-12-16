@@ -1,5 +1,6 @@
+use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
-use starbase_styles::color::parse_style_tags;
+use starbase_styles::color::parse_tags;
 
 pub use starbase_styles::Style;
 
@@ -19,15 +20,19 @@ pub struct StyledTextProps {
 }
 
 #[component]
-pub fn StyledText<'a>(props: &StyledTextProps) -> impl Into<AnyElement<'a>> {
-    let parts = parse_style_tags(&props.content);
+pub fn StyledText<'a>(props: &StyledTextProps, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+    let theme = hooks.use_context::<ConsoleTheme>();
+    let parts = parse_tags(&props.content);
 
     element! {
         Box {
-            #(parts.into_iter().map(|(text, style)| {
+            #(parts.into_iter().map(|(text, tag)| {
                 element! {
                     Text(
-                        color: style.or(props.style).map(style_to_color).or(props.color),
+                        color: tag.and_then(tag_to_style)
+                            .or(props.style)
+                            .map(|style| theme.style(style))
+                            .or(props.color),
                         content: text,
                         weight: props.weight,
                         wrap: props.wrap,
@@ -38,4 +43,26 @@ pub fn StyledText<'a>(props: &StyledTextProps) -> impl Into<AnyElement<'a>> {
             }))
         }
     }
+}
+
+fn tag_to_style(tag: String) -> Option<Style> {
+    let style = match tag.as_str() {
+        "caution" => Style::Caution,
+        "failure" => Style::Failure,
+        "invalid" => Style::Invalid,
+        "muted" => Style::Muted,
+        "mutedlight" | "muted_light" => Style::MutedLight,
+        "success" => Style::Success,
+        "file" => Style::File,
+        "hash" | "version" => Style::Hash,
+        "id" => Style::Id,
+        "label" => Style::Label,
+        "path" => Style::Path,
+        "property" => Style::Property,
+        "shell" => Style::Shell,
+        "url" => Style::Url,
+        _ => return None,
+    };
+
+    Some(style)
 }

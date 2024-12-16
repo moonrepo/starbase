@@ -1,5 +1,6 @@
 use super::layout::*;
 use super::styled_text::*;
+use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
 #[derive(Default, Props)]
@@ -14,7 +15,8 @@ pub struct EntryProps<'a> {
 }
 
 #[component]
-pub fn Entry<'a>(props: &mut EntryProps<'a>) -> impl Into<AnyElement<'a>> {
+pub fn Entry<'a>(props: &mut EntryProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+    let theme = hooks.use_context::<ConsoleTheme>();
     let no_children = props.no_children || props.children.is_empty();
 
     element! {
@@ -41,7 +43,8 @@ pub fn Entry<'a>(props: &mut EntryProps<'a>) -> impl Into<AnyElement<'a>> {
                     Some(element! {
                         Box {
                             StyledText(
-                                content: props.fallback.as_deref().unwrap_or("—"),
+                                content: props.fallback.as_deref()
+                                    .unwrap_or(&theme.layout_fallback_symbol),
                                 style: Style::Muted,
                             )
                         }

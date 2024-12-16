@@ -37,7 +37,7 @@ pub fn Notice<'a>(props: &mut NoticeProps<'a>, hooks: Hooks) -> impl Into<AnyEle
             flex_direction: FlexDirection::Column,
             border_color: color,
             border_edges: Edges::Left,
-            border_style: BorderStyle::Bold,
+            border_style: BorderStyle::Single,
             margin_top: 1,
             margin_bottom: 1,
             padding_left: 1,

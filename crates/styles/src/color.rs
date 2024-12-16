@@ -5,6 +5,7 @@ use owo_colors::{OwoColorize, XtermColors};
 use std::collections::HashMap;
 use std::env;
 use std::path::Path;
+use std::sync::LazyLock;
 
 pub use owo_colors as owo;
 pub use owo_colors::Style as OwoStyle;
@@ -97,48 +98,26 @@ pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
     }
 }
 
-/// Parses a string with HTML-like tags into a list of styled pieces.
+/// Parses a string with HTML-like tags into a list of tagged pieces.
 /// For example: `<file>starbase.json</file>`
-pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<Style>)> {
+pub fn parse_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<String>)> {
     let message = value.as_ref().to_owned();
 
     if !message.contains('<') {
         return vec![(message, None)];
     }
 
-    let tags_map = HashMap::<String, Style>::from_iter(
-        [
-            Style::Caution,
-            Style::Failure,
-            Style::File,
-            Style::Hash,
-            Style::Id,
-            Style::Invalid,
-            Style::Label,
-            Style::Muted,
-            Style::MutedLight,
-            Style::Path,
-            Style::Property,
-            Style::Shell,
-            Style::Success,
-            Style::Symbol,
-            Style::Url,
-        ]
-        .into_iter()
-        .map(|style| (format!("{:?}", style).to_lowercase(), style)),
-    );
+    let mut results: Vec<(String, Option<String>)> = vec![];
 
-    let mut results: Vec<(String, Option<Style>)> = vec![];
-
-    let mut add_result = |text: &str, style: Option<Style>| {
+    let mut add_result = |text: &str, tag: Option<String>| {
         if let Some(last) = results.last_mut() {
-            if last.1 == style {
+            if last.1 == tag {
                 last.0.push_str(text);
                 return;
             }
         }
 
-        results.push((text.to_owned(), style));
+        results.push((text.to_owned(), tag));
     };
 
     let mut text = message.as_str();
@@ -175,28 +154,15 @@ pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<Style>)>
                     );
                 }
 
-                add_result(
-                    prev_text,
-                    Some(
-                        tags_map
-                            .get(tag)
-                            .cloned()
-                            .unwrap_or_else(|| panic!("Unknown tag `{}`!", tag)),
-                    ),
-                );
+                add_result(prev_text, Some(tag.to_owned()));
 
                 tag_stack.pop();
             }
             // Open tag, preserve the current tag
             else {
-                add_result(
-                    prev_text,
-                    tag_stack
-                        .last()
-                        .and_then(|in_tag| tags_map.get(*in_tag).cloned()),
-                );
+                add_result(prev_text, tag_stack.last().cloned());
 
-                tag_stack.push(tag);
+                tag_stack.push(tag.to_owned());
             }
 
             text = text.get(close_index + 1..).unwrap();
@@ -214,6 +180,55 @@ pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<Style>)>
     results
         .into_iter()
         .filter(|item| !item.0.is_empty())
+        .collect()
+}
+
+static TAGS_MAP: LazyLock<HashMap<String, Style>> = LazyLock::new(|| {
+    HashMap::from_iter(
+        [
+            Style::Caution,
+            Style::Failure,
+            Style::File,
+            Style::Hash,
+            Style::Id,
+            Style::Invalid,
+            Style::Label,
+            Style::Muted,
+            Style::MutedLight,
+            Style::Path,
+            Style::Property,
+            Style::Shell,
+            Style::Success,
+            Style::Symbol,
+            Style::Url,
+        ]
+        .into_iter()
+        .map(|style| (format!("{:?}", style).to_lowercase(), style)),
+    )
+});
+
+/// Parses a string with HTML-like tags into a list of styled pieces.
+/// For example: `<file>starbase.json</file>`
+pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<Style>)> {
+    let message = value.as_ref();
+
+    if !message.contains('<') {
+        return vec![(message.to_owned(), None)];
+    }
+
+    parse_tags(message)
+        .into_iter()
+        .map(|(text, tag)| {
+            (
+                text,
+                tag.map(|tag| {
+                    TAGS_MAP
+                        .get(&tag)
+                        .cloned()
+                        .unwrap_or_else(|| panic!("Unknown tag `{}`!", tag))
+                }),
+            )
+        })
         .collect()
 }
 

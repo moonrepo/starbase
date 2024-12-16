@@ -136,7 +136,7 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                             theme.border_color
                         },
                     ) {
-                        StyledText(content: &props.yes_label)
+                        Text(content: &props.yes_label)
                     }
                 }
 
@@ -157,7 +157,7 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                             theme.border_color
                         },
                     ) {
-                        StyledText(content: &props.no_label)
+                        Text(content: &props.no_label)
                     }
                 }
             }

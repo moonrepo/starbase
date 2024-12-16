@@ -8,8 +8,8 @@ pub struct InputFieldProps<'a> {
     pub description: Option<String>,
     pub error: Option<State<Option<String>>>,
     pub footer: Option<AnyElement<'a>>,
+    pub has_focus: bool,
     pub label: String,
-    pub label_color: Option<Color>,
 }
 
 #[component]
@@ -19,14 +19,18 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
     element! {
         Box(
             flex_direction: FlexDirection::Column,
-            border_color: theme.border_color,
+            border_color: if props.has_focus {
+                theme.border_focus_color
+            } else {
+                theme.border_color
+            },
             border_edges: Edges::Left,
             border_style: BorderStyle::Single,
             padding_left: 1,
         ) {
             StyledText(
                 content: &props.label,
-                color: props.label_color.unwrap_or(theme.form_label_color),
+                color: theme.form_label_color,
                 weight: Weight::Bold,
             )
 
@@ -48,7 +52,11 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
                 } else {
                     Some(element! {
                         StyledText(
-                            content: format!("✘ {}", error_value.as_ref().unwrap().as_str()),
+                            content: format!(
+                                "{} {}",
+                                theme.form_failure_symbol,
+                                error_value.as_ref().unwrap().as_str(),
+                            ),
                             style: Style::Failure,
                         )
                     })
@@ -63,7 +71,6 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
 #[derive(Default, Props)]
 pub struct InputFieldValueProps {
     pub label: String,
-    pub label_color: Option<Color>,
     pub value: String,
 }
 
@@ -78,14 +85,14 @@ pub fn InputFieldValue<'a>(
     element! {
         Box {
             #(if failed {
-                element!(Text(
-                    content: "✘",
-                    color: theme.variant_failure
+                element!(StyledText(
+                    content: &theme.form_failure_symbol,
+                    style: Style::Failure
                 ))
             } else {
-                element!(Text(
-                    content: "✔",
-                    color: theme.variant_success
+                element!(StyledText(
+                    content: &theme.form_success_symbol,
+                    style: Style::Success
                 ))
             })
 
@@ -93,14 +100,18 @@ pub fn InputFieldValue<'a>(
 
             StyledText(
                 content: &props.label,
-                color: props.label_color.unwrap_or(theme.form_label_color),
+                color: theme.form_label_color,
                 weight: Weight::Bold,
             )
 
             Box(width: 1)
 
             StyledText(
-                content: &props.value,
+                content: if props.value.is_empty() {
+                    &theme.layout_fallback_symbol
+                } else {
+                    &props.value
+                },
                 style: Style::MutedLight
             )
         }
