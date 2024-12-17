@@ -1,6 +1,6 @@
 [package]
 name = "starbase_console"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "Console reporting layer."
@@ -8,7 +8,7 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.80.0"
 
 [dependencies]
-starbase_styles = { version = "0.4.8", path = "../styles" }
+starbase_styles = { version = "0.4.9", path = "../styles" }
 crossterm = { workspace = true, optional = true }
 flume = { version = "0.11.1", features = ["async"] }
 iocraft = { workspace = true, optional = true }
