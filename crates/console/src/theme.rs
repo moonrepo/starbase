@@ -105,6 +105,16 @@ impl Default for ConsoleTheme {
 }
 
 impl ConsoleTheme {
+    pub fn branded(color: Color) -> Self {
+        Self {
+            brand_color: color,
+            form_label_color: color,
+            progress_bar_color: color,
+            progress_loader_color: color,
+            ..Self::default()
+        }
+    }
+
     pub fn style(&self, style: Style) -> Color {
         match style {
             Style::Caution => self.style_caution_color,
