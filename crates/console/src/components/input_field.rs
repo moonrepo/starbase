@@ -25,7 +25,7 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
                 theme.border_color
             },
             border_edges: Edges::Left,
-            border_style: BorderStyle::Single,
+            border_style: BorderStyle::Round,
             padding_left: 1,
         ) {
             StyledText(
@@ -100,7 +100,6 @@ pub fn InputFieldValue<'a>(
 
             StyledText(
                 content: &props.label,
-                color: theme.form_label_color,
                 weight: Weight::Bold,
             )
 

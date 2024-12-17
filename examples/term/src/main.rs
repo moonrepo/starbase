@@ -183,7 +183,7 @@ async fn render(session: TestSession, ui: String) {
             .unwrap();
         }
         "progressbar" => {
-            con.render_interactive(element! {
+            con.render_loop(element! {
                 Container {
                     ProgressBar(
                         default_message: "Unfilled - {elapsed} - {duration} - {eta}".to_owned()
@@ -208,7 +208,7 @@ async fn render(session: TestSession, ui: String) {
             .unwrap();
         }
         "progressloader" => {
-            con.render_interactive(element! {
+            con.render_loop(element! {
                 Container {
                     ProgressLoader(
                         default_message: "Default - {elapsed}".to_owned()
@@ -245,19 +245,6 @@ async fn render(session: TestSession, ui: String) {
             .unwrap();
         }
         "styledtext" => {
-            con.render(element! {
-                Container {
-                    StyledText(content: "Unstyled")
-                    StyledText(content: "Styled success", style: Style::Success)
-                    StyledText(content: "Styled failure with weight", style: Style::Failure, weight: Weight::Bold)
-                    StyledText(content: "Styled file with decoration", style: Style::File, decoration: TextDecoration::Underline)
-                    StyledText(content: "Styled <file>with</file> <path>tags</path>")
-                }
-            })
-            .unwrap();
-        }
-        "table" => {
-            // let headers = vec![TableHeader {}];
             con.render(element! {
                 Container {
                     StyledText(content: "Unstyled")
