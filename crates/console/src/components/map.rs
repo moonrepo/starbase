@@ -1,4 +1,5 @@
 use super::layout::*;
+use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
 #[derive(Default, Props)]
@@ -23,7 +24,9 @@ pub struct MapItemProps<'a> {
 }
 
 #[component]
-pub fn MapItem<'a>(props: &mut MapItemProps<'a>) -> impl Into<AnyElement<'a>> {
+pub fn MapItem<'a>(props: &mut MapItemProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+    let theme = hooks.use_context::<ConsoleTheme>();
+
     element! {
         Box(
             flex_direction: FlexDirection::Row,
@@ -32,7 +35,7 @@ pub fn MapItem<'a>(props: &mut MapItemProps<'a>) -> impl Into<AnyElement<'a>> {
                 #(&mut props.name)
             }
             Box(padding_left: 1, padding_right: 1) {
-                Separator(value: props.separator.as_deref().unwrap_or("="))
+                Separator(value: props.separator.as_deref().unwrap_or(&theme.layout_map_separator))
             }
             Box(flex_direction: FlexDirection::Column) {
                 #(&mut props.value)

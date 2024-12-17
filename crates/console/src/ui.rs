@@ -39,6 +39,15 @@ impl<R: Reporter> Console<R> {
         &self,
         element: Element<'_, T>,
     ) -> miette::Result<()> {
+        // If not a TTY, exit immediately
+        if !self.out.is_terminal() {
+            return Ok(());
+        }
+
+        self.render_loop(element).await
+    }
+
+    pub async fn render_loop<T: Component>(&self, element: Element<'_, T>) -> miette::Result<()> {
         let theme = self.theme();
 
         self.out.flush()?;

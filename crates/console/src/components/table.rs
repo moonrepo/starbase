@@ -63,7 +63,7 @@ pub fn Table<'a>(props: &mut TableProps<'a>, hooks: Hooks) -> impl Into<AnyEleme
                 Box(
                     border_edges: Edges::Bottom,
                     border_color: theme.border_color,
-                    border_style: BorderStyle::Single,
+                    border_style: BorderStyle::Round,
                 ) {
                     #(props.headers.iter().enumerate().map(|(index, header)| {
                         element! {

@@ -1,4 +1,5 @@
 use super::layout::*;
+use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
 #[derive(Default, Props)]
@@ -23,13 +24,15 @@ pub struct ListItemProps<'a> {
 }
 
 #[component]
-pub fn ListItem<'a>(props: &mut ListItemProps<'a>) -> impl Into<AnyElement<'a>> {
+pub fn ListItem<'a>(props: &mut ListItemProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+    let theme = hooks.use_context::<ConsoleTheme>();
+
     element! {
         Box(
             flex_direction: FlexDirection::Row,
         ) {
             Box(padding_right: 1) {
-                Separator(value: props.bullet.as_deref().unwrap_or("-"))
+                Separator(value: props.bullet.as_deref().unwrap_or(&theme.layout_list_bullet))
             }
             Box(flex_direction: FlexDirection::Column) {
                 #(&mut props.children)

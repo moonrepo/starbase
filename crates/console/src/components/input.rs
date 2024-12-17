@@ -3,27 +3,14 @@ use super::Validator;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
-#[derive(Props)]
+#[derive(Default, Props)]
 pub struct InputProps<'a> {
     pub default_value: String,
     pub description: Option<String>,
     pub label: String,
-    pub prefix_char: char,
+    pub prefix_symbol: Option<String>,
     pub validate: Validator<'static, String>,
     pub value: Option<&'a mut String>,
-}
-
-impl Default for InputProps<'_> {
-    fn default() -> Self {
-        Self {
-            default_value: String::new(),
-            description: None,
-            label: String::new(),
-            prefix_char: '❯',
-            validate: Validator::default(),
-            value: None,
-        }
-    }
 }
 
 #[component]
@@ -92,7 +79,10 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
         ) {
             Box {
                 Box(margin_right: 1) {
-                    Text(content: props.prefix_char, color: theme.input_prefix_color)
+                    Text(
+                        content: props.prefix_symbol.as_ref().unwrap_or(&theme.input_prefix_symbol),
+                        color: theme.input_prefix_color,
+                    )
                 }
                 Box(width: 50) {
                     TextInput(

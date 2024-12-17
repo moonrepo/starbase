@@ -22,7 +22,7 @@ pub fn Section<'a>(props: &mut SectionProps<'a>, hooks: Hooks) -> impl Into<AnyE
                 flex_direction: FlexDirection::Row,
                 border_color: theme.border_color,
                 border_edges: Edges::Top,
-                border_style: BorderStyle::Single,
+                border_style: BorderStyle::Round,
                 width: Size::Percent(40.0)
             ) {
                 Box(margin_top: -1) {
