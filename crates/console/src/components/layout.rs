@@ -12,7 +12,15 @@ pub fn Container<'a>(
     props: &mut ContainerProps<'a>,
     mut hooks: Hooks,
 ) -> impl Into<AnyElement<'a>> {
-    let (width, _) = hooks.use_terminal_size();
+    let (mut width, _) = hooks.use_terminal_size();
+
+    if width == 0 {
+        if cfg!(debug_assertions) {
+            width = 60;
+        } else {
+            panic!("Terminal width is zero, unable to render container!");
+        }
+    }
 
     element! {
         Box(
