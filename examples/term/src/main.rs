@@ -245,7 +245,7 @@ async fn render(session: TestSession, ui: String) {
             .unwrap();
         }
         "select" => {
-            let mut value = String::new();
+            let mut value = 0usize;
 
             con.render_interactive(element! {
                 Select(

@@ -44,7 +44,7 @@ pub struct SelectProps<'a> {
     pub options: Vec<SelectOption>,
     pub prefix_symbol: Option<String>,
     pub selected_symbol: Option<String>,
-    pub value: Option<&'a mut String>,
+    pub value: Option<&'a mut usize>,
 }
 
 impl Default for SelectProps<'_> {
@@ -104,8 +104,12 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                         }
                     }
                     KeyCode::Enter => {
-                        submitted.set(true);
-                        should_exit.set(true);
+                        if selected_index.read().is_none() {
+                            error.set(Some("Please select an option".into()));
+                        } else {
+                            submitted.set(true);
+                            should_exit.set(true);
+                        }
                     }
                     KeyCode::Esc => {
                         should_exit.set(true);
@@ -144,15 +148,9 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
     });
 
     if should_exit.get() {
-        let value = selected_index
-            .get()
-            .and_then(|index| props.options.get(index))
-            .map(|opt| opt.value.to_owned())
-            .unwrap_or_else(String::new);
-
         if submitted.get() {
-            if let Some(outer_value) = &mut props.value {
-                **outer_value = value.clone();
+            if let (Some(outer_value), Some(index)) = (&mut props.value, selected_index.get()) {
+                **outer_value = index;
             }
         }
 
@@ -162,7 +160,10 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
             InputFieldValue(
                 label: &props.label,
                 value: if submitted.get() {
-                    value
+                    selected_index.read()
+                        .and_then(|index| props.options.get(index))
+                        .map(|opt| opt.value.to_owned())
+                        .unwrap_or_else(String::new)
                 } else {
                     String::new()
                 }
@@ -189,8 +190,8 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
         ) {
             Box(flex_direction: FlexDirection::Column, margin_top: 1, margin_bottom: 1) {
                 #(props.options.iter().enumerate().map(|(index, opt)| {
-                    let active = index == active_index.get();
-                    let selected = selected_index.get().is_some_and(|i| i == index);
+                    let active = active_index.get() == index;
+                    let selected = selected_index.read().is_some_and(|i| i == index);
 
                     element! {
                         Box {
