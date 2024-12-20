@@ -73,9 +73,6 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                             error.set(Some(format!("Please press [{yes}] or [{no}] to confirm")));
                         }
                     }
-                    KeyCode::Esc => {
-                        handle_confirm(false);
-                    }
                     KeyCode::Left | KeyCode::Up | KeyCode::BackTab => {
                         set_focused(focused.get() - 1);
                     }
@@ -116,7 +113,6 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                         (format!("{yes}/{no}"), "confirm".into()),
                         ("↔".into(), "toggle".into()),
                         ("↵".into(), "submit".into()),
-                        ("⊘".into(), "cancel".into()),
                     ])
                 }.into_any()
             })

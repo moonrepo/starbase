@@ -1,6 +1,7 @@
 use super::input_field::*;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
+use std::collections::HashSet;
 
 #[derive(Clone, Default)]
 pub struct SelectOption {
@@ -38,26 +39,32 @@ impl SelectOption {
 #[derive(Props)]
 pub struct SelectProps<'a> {
     pub default_index: Option<usize>,
+    pub default_indexes: Vec<usize>,
     pub description: Option<String>,
     pub label: String,
     pub legend: bool,
+    pub multiple: bool,
     pub options: Vec<SelectOption>,
     pub prefix_symbol: Option<String>,
     pub selected_symbol: Option<String>,
     pub on_index: Option<&'a mut usize>,
+    pub on_indexes: Option<&'a mut Vec<usize>>,
 }
 
 impl Default for SelectProps<'_> {
     fn default() -> Self {
         Self {
             default_index: None,
+            default_indexes: vec![],
             description: None,
             label: "".into(),
             legend: true,
+            multiple: false,
             options: vec![],
             prefix_symbol: None,
             selected_symbol: None,
             on_index: None,
+            on_indexes: None,
         }
     }
 }
@@ -67,11 +74,20 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut active_index = hooks.use_state(|| 0);
-    let mut selected_index = hooks.use_state(|| props.default_index);
-    let mut submitted = hooks.use_state(|| false);
+    let mut selected_index = hooks.use_state(|| {
+        HashSet::<usize>::from_iter(if props.multiple {
+            props.default_indexes.clone()
+        } else {
+            props
+                .default_index
+                .map(|index| vec![index])
+                .unwrap_or_default()
+        })
+    });
     let mut should_exit = hooks.use_state(|| false);
     let mut error = hooks.use_state(|| None);
 
+    let multiple = props.multiple;
     let options = props.options.clone();
     let option_last_index = options.len() - 1;
 
@@ -94,25 +110,23 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
 
                 match code {
                     KeyCode::Char(' ') => {
-                        if selected_index
-                            .read()
-                            .is_some_and(|i| i == active_index.get())
-                        {
-                            selected_index.set(None);
+                        let index = active_index.get();
+
+                        if selected_index.read().contains(&index) {
+                            selected_index.write().remove(&index);
                         } else {
-                            selected_index.set(Some(active_index.get()));
+                            if !multiple {
+                                selected_index.write().clear();
+                            }
+                            selected_index.write().insert(index);
                         }
                     }
                     KeyCode::Enter => {
-                        if selected_index.read().is_none() {
+                        if selected_index.read().is_empty() {
                             error.set(Some("Please select an option".into()));
                         } else {
-                            submitted.set(true);
                             should_exit.set(true);
                         }
-                    }
-                    KeyCode::Esc => {
-                        should_exit.set(true);
                     }
                     KeyCode::Left | KeyCode::Up => {
                         let mut next_index = match code {
@@ -148,9 +162,17 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
     });
 
     if should_exit.get() {
-        if submitted.get() {
-            if let (Some(outer_index), Some(index)) = (&mut props.on_index, selected_index.get()) {
-                **outer_index = index;
+        for index in selected_index.read().iter() {
+            if multiple {
+                if let Some(outer_indexes) = &mut props.on_indexes {
+                    outer_indexes.push(*index);
+                }
+            } else {
+                if let Some(outer_index) = &mut props.on_index {
+                    **outer_index = *index;
+                }
+
+                break;
             }
         }
 
@@ -159,14 +181,11 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
         return element! {
             InputFieldValue(
                 label: &props.label,
-                value: if submitted.get() {
-                    selected_index.read()
-                        .and_then(|index| props.options.get(index))
-                        .map(|opt| opt.value.to_owned())
-                        .unwrap_or_else(String::new)
-                } else {
-                    String::new()
-                }
+                value: selected_index.read()
+                    .iter()
+                    .map(|index| props.options[*index].value.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         }
         .into_any();
@@ -181,9 +200,8 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                 element! {
                     InputLegend(legend: vec![
                         ("⎵".into(), "select".into()),
-                        ("↕".into(), "move".into()),
+                        ("↕".into(), "cycle".into()),
                         ("↵".into(), "submit".into()),
-                        ("⊘".into(), "cancel".into()),
                     ])
                 }.into_any()
             })
@@ -191,7 +209,7 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
             Box(flex_direction: FlexDirection::Column, margin_top: 1, margin_bottom: 1) {
                 #(props.options.iter().enumerate().map(|(index, opt)| {
                     let active = active_index.get() == index;
-                    let selected = selected_index.read().is_some_and(|i| i == index);
+                    let selected = selected_index.read().contains(&index);
 
                     element! {
                         Box {

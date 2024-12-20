@@ -265,6 +265,30 @@ async fn render(session: TestSession, ui: String) {
             .await
             .unwrap();
         }
+        "selectmulti" => {
+            let mut indexes = vec![];
+
+            con.render_interactive(element! {
+                Select(
+                    default_indexes: vec![2, 4],
+                    label: "What is your favorite color?",
+                    description: "Can choose multiple values.".to_owned(),
+                    multiple: true,
+                    on_indexes: &mut indexes,
+                    options: vec![
+                        SelectOption::new("red"),
+                        SelectOption::new("blue").label("Blue").disabled(),
+                        SelectOption::new("green"),
+                        SelectOption::new("yellow").disabled(),
+                        SelectOption::new("pink").label("Pink"),
+                        SelectOption::new("black"),
+                        SelectOption::new("white"),
+                    ]
+                )
+            })
+            .await
+            .unwrap();
+        }
         "styledtext" => {
             con.render(element! {
                 Container {
