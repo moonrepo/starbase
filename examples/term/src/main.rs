@@ -191,8 +191,8 @@ async fn render(session: TestSession, ui: String) {
                     ProgressBar(
                         bar_color: Color::Cyan,
                         default_message: "Filled - {bytes}/{total_bytes} - {decimal_bytes}/{decimal_total_bytes}".to_owned(),
-                        default_max: 5432,
-                        default_value: 5432
+                        default_max: 5432u64,
+                        default_value: 5432u64
                     )
                     ProgressBar(
                         bar_color: Color::Red,
@@ -200,7 +200,7 @@ async fn render(session: TestSession, ui: String) {
                         char_position: '╾',
                         char_unfilled: '─',
                         default_message: "Partially filled with custom bar - {percent}%".to_owned(),
-                        default_value: 53
+                        default_value: 53u64
                     )
                 }
             })

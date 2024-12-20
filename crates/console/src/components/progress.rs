@@ -9,12 +9,12 @@ use std::time::{Duration, Instant};
 
 pub enum ProgressState {
     Exit,
-    Max(u32),
+    Max(u64),
     Message(String),
     Prefix(String),
     Suffix(String),
     Tick(Duration),
-    Value(u32),
+    Value(u64),
 }
 
 #[derive(Clone)]
@@ -40,7 +40,7 @@ impl ProgressReporter {
         let _ = self.tx.send(state);
     }
 
-    pub fn set_max(&self, value: u32) {
+    pub fn set_max(&self, value: u64) {
         self.set(ProgressState::Max(value));
     }
 
@@ -60,7 +60,7 @@ impl ProgressReporter {
         self.set(ProgressState::Tick(value));
     }
 
-    pub fn set_value(&self, value: u32) {
+    pub fn set_value(&self, value: u64) {
         self.set(ProgressState::Value(value));
     }
 }
@@ -68,13 +68,13 @@ impl ProgressReporter {
 #[derive(Props)]
 pub struct ProgressBarProps {
     pub bar_color: Option<Color>,
-    pub bar_width: i32,
+    pub bar_width: u32,
     pub char_filled: Option<char>,
     pub char_position: Option<char>,
     pub char_unfilled: Option<char>,
-    pub default_max: i32,
+    pub default_max: u64,
     pub default_message: String,
-    pub default_value: i32,
+    pub default_value: u64,
     pub reporter: ProgressReporter,
 }
 
@@ -104,8 +104,8 @@ pub fn ProgressBar<'a>(
     let mut prefix = hooks.use_state(String::new);
     let mut message = hooks.use_state(|| props.default_message.clone());
     let mut suffix = hooks.use_state(String::new);
-    let mut max = hooks.use_state(|| props.default_max as u32);
-    let mut value = hooks.use_state(|| props.default_value as u32);
+    let mut max = hooks.use_state(|| props.default_max);
+    let mut value = hooks.use_state(|| props.default_value);
     let mut estimator = hooks.use_state(Estimator::new);
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
@@ -145,12 +145,10 @@ pub fn ProgressBar<'a>(
         }
     });
 
-    // This purely exists to trigger a re-render so that tokens within the
-    // message are dynamically updated with the latest information
     hooks.use_future(async move {
         loop {
             tokio::time::sleep(Duration::from_millis(150)).await;
-            estimator.write().record(value.get() as u64, Instant::now());
+            estimator.write().record(value.get(), Instant::now());
         }
     });
 
@@ -162,9 +160,9 @@ pub fn ProgressBar<'a>(
         .char_position
         .unwrap_or(theme.progress_bar_position_char);
     let bar_color = props.bar_color.unwrap_or(theme.progress_bar_color);
-    let bar_percent = calculate_percent(value.get() as u64, max.get() as u64);
-    let bar_total_width = props.bar_width as u32;
-    let bar_filled_width = (bar_total_width as f32 * (bar_percent / 100.0)) as u32;
+    let bar_percent = calculate_percent(value.get(), max.get());
+    let bar_total_width = props.bar_width as u64;
+    let bar_filled_width = (bar_total_width as f64 * (bar_percent / 100.0)) as u64;
     let mut bar_unfilled_width = bar_total_width - bar_filled_width;
 
     // When theres a position to show, we need to reduce the unfilled bar by 1
@@ -180,7 +178,7 @@ pub fn ProgressBar<'a>(
 
     element! {
         Group(gap: 1) {
-            Box(width: Size::Length(bar_total_width)) {
+            Box(width: Size::Length(props.bar_width)) {
                 Text(
                     content: String::from(char_filled).repeat(bar_filled_width as usize),
                     color: bar_color,
@@ -208,10 +206,10 @@ pub fn ProgressBar<'a>(
                         "{prefix}{}{suffix}",
                         get_message(MessageData {
                             estimator: Some(estimator.read()),
-                            max: max.get() as u64,
+                            max: max.get(),
                             message: message.read(),
                             started: started.get(),
-                            value: value.get() as u64,
+                            value: value.get(),
                         })
                     )
                 )
@@ -262,7 +260,7 @@ pub fn ProgressLoader<'a>(
         .loader_frames
         .clone()
         .unwrap_or_else(|| theme.progress_loader_frames.clone());
-    let frames_total = frames.len() as u32;
+    let frames_total = frames.len();
 
     hooks.use_future(async move {
         loop {
@@ -306,7 +304,7 @@ pub fn ProgressLoader<'a>(
         Group(gap: 1) {
             Box {
                 Text(
-                    content: &frames[frame_index.get() as usize],
+                    content: &frames[frame_index.get()],
                     color: props.loader_color.unwrap_or(theme.progress_loader_color),
                 )
             }
@@ -329,8 +327,8 @@ pub fn ProgressLoader<'a>(
     .into_any()
 }
 
-fn calculate_percent(value: u64, max: u64) -> f32 {
-    (max as f32 * (value as f32 / 100.0)).clamp(0.0, 100.0)
+fn calculate_percent(value: u64, max: u64) -> f64 {
+    (max as f64 * (value as f64 / 100.0)).clamp(0.0, 100.0)
 }
 
 struct MessageData<'a> {
@@ -359,7 +357,7 @@ fn get_message(data: MessageData) -> String {
     if message.contains("{percent}") {
         message = message.replace(
             "{percent}",
-            &format_float(calculate_percent(data.value, data.max) as f64),
+            &format_float(calculate_percent(data.value, data.max)),
         );
     }
 
