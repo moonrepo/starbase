@@ -8,6 +8,7 @@ mod map;
 mod notice;
 mod progress;
 mod section;
+mod select;
 mod styled_text;
 mod table;
 
@@ -20,6 +21,7 @@ pub use map::*;
 pub use notice::*;
 pub use progress::*;
 pub use section::*;
+pub use select::*;
 pub use styled_text::*;
 pub use table::*;
 

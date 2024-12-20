@@ -244,6 +244,26 @@ async fn render(session: TestSession, ui: String) {
             })
             .unwrap();
         }
+        "select" => {
+            let mut value = String::new();
+
+            con.render_interactive(element! {
+                Select(
+                    label: "What is your favorite color?",
+                    description: "Only choose 1 value.".to_owned(),
+                    value: &mut value,
+                    options: vec![
+                        SelectOption::new("red"),
+                        SelectOption::new("blue").label("Blue").disabled(),
+                        SelectOption::new("green"),
+                        SelectOption::new("yellow").disabled(),
+                        SelectOption::new("pink").label("Pink"),
+                    ]
+                )
+            })
+            .await
+            .unwrap();
+        }
         "styledtext" => {
             con.render(element! {
                 Container {

@@ -114,7 +114,7 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
             footer: props.legend.then(|| {
                 element! {
                     StyledText(
-                        content: format!("<mutedlight>{yes}/{no}</mutedlight> confirm ⁃ <mutedlight>←/→</mutedlight> toggle ⁃ <mutedlight>ent/spc</mutedlight> select ⁃ <mutedlight>esc</mutedlight> cancel"),
+                        content: format!("<mutedlight>{yes}/{no}</mutedlight> confirm ⁃ <mutedlight>↔</mutedlight> toggle ⁃ <mutedlight>ent/spc</mutedlight> select ⁃ <mutedlight>esc</mutedlight> cancel"),
                         style: Style::Muted
                     )
                 }.into_any()
