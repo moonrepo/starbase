@@ -1,6 +1,7 @@
 use super::layout::Group;
 use super::styled_text::StyledText;
 use crate::ui::ConsoleTheme;
+use crate::utils::estimator::Estimator;
 use crate::utils::formats::*;
 use flume::{Receiver, Sender};
 use iocraft::prelude::*;
@@ -8,12 +9,12 @@ use std::time::{Duration, Instant};
 
 pub enum ProgressState {
     Exit,
-    Max(u32),
+    Max(u64),
     Message(String),
     Prefix(String),
     Suffix(String),
     Tick(Duration),
-    Value(u32),
+    Value(u64),
 }
 
 #[derive(Clone)]
@@ -39,7 +40,7 @@ impl ProgressReporter {
         let _ = self.tx.send(state);
     }
 
-    pub fn set_max(&self, value: u32) {
+    pub fn set_max(&self, value: u64) {
         self.set(ProgressState::Max(value));
     }
 
@@ -59,7 +60,7 @@ impl ProgressReporter {
         self.set(ProgressState::Tick(value));
     }
 
-    pub fn set_value(&self, value: u32) {
+    pub fn set_value(&self, value: u64) {
         self.set(ProgressState::Value(value));
     }
 }
@@ -67,13 +68,13 @@ impl ProgressReporter {
 #[derive(Props)]
 pub struct ProgressBarProps {
     pub bar_color: Option<Color>,
-    pub bar_width: i32,
+    pub bar_width: u32,
     pub char_filled: Option<char>,
     pub char_position: Option<char>,
     pub char_unfilled: Option<char>,
-    pub default_max: i32,
+    pub default_max: u64,
     pub default_message: String,
-    pub default_value: i32,
+    pub default_value: u64,
     pub reporter: ProgressReporter,
 }
 
@@ -103,8 +104,9 @@ pub fn ProgressBar<'a>(
     let mut prefix = hooks.use_state(String::new);
     let mut message = hooks.use_state(|| props.default_message.clone());
     let mut suffix = hooks.use_state(String::new);
-    let mut max = hooks.use_state(|| props.default_max as u32);
-    let mut value = hooks.use_state(|| props.default_value as u32);
+    let mut max = hooks.use_state(|| props.default_max);
+    let mut value = hooks.use_state(|| props.default_value);
+    let mut estimator = hooks.use_state(Estimator::new);
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
 
@@ -143,12 +145,10 @@ pub fn ProgressBar<'a>(
         }
     });
 
-    // This purely exists to trigger a re-render so that tokens within the
-    // message are dynamically updated with the latest information
     hooks.use_future(async move {
         loop {
             tokio::time::sleep(Duration::from_millis(150)).await;
-            max.set(max.get());
+            estimator.write().record(value.get(), Instant::now());
         }
     });
 
@@ -161,8 +161,8 @@ pub fn ProgressBar<'a>(
         .unwrap_or(theme.progress_bar_position_char);
     let bar_color = props.bar_color.unwrap_or(theme.progress_bar_color);
     let bar_percent = calculate_percent(value.get(), max.get());
-    let bar_total_width = props.bar_width as u32;
-    let bar_filled_width = (bar_total_width as f32 * (bar_percent / 100.0)) as u32;
+    let bar_total_width = props.bar_width as u64;
+    let bar_filled_width = (bar_total_width as f64 * (bar_percent / 100.0)) as u64;
     let mut bar_unfilled_width = bar_total_width - bar_filled_width;
 
     // When theres a position to show, we need to reduce the unfilled bar by 1
@@ -178,7 +178,7 @@ pub fn ProgressBar<'a>(
 
     element! {
         Group(gap: 1) {
-            Box(width: Size::Length(bar_total_width)) {
+            Box(width: Size::Length(props.bar_width)) {
                 Text(
                     content: String::from(char_filled).repeat(bar_filled_width as usize),
                     color: bar_color,
@@ -204,7 +204,13 @@ pub fn ProgressBar<'a>(
                 StyledText(
                     content: format!(
                         "{prefix}{}{suffix}",
-                        get_message(message.read().as_str(), value.get(), max.get(), started.get())
+                        get_message(MessageData {
+                            estimator: Some(estimator.read()),
+                            max: max.get(),
+                            message: message.read(),
+                            started: started.get(),
+                            value: value.get(),
+                        })
                     )
                 )
             }
@@ -254,7 +260,7 @@ pub fn ProgressLoader<'a>(
         .loader_frames
         .clone()
         .unwrap_or_else(|| theme.progress_loader_frames.clone());
-    let frames_total = frames.len() as u32;
+    let frames_total = frames.len();
 
     hooks.use_future(async move {
         loop {
@@ -284,14 +290,7 @@ pub fn ProgressLoader<'a>(
     hooks.use_future(async move {
         loop {
             tokio::time::sleep(tick_interval.get()).await;
-
-            let next_index = frame_index.get() + 1;
-
-            if next_index >= frames_total {
-                frame_index.set(0);
-            } else {
-                frame_index.set(next_index);
-            }
+            frame_index.set((frame_index + 1) % frames_total);
         }
     });
 
@@ -305,7 +304,7 @@ pub fn ProgressLoader<'a>(
         Group(gap: 1) {
             Box {
                 Text(
-                    content: &frames[frame_index.get() as usize],
+                    content: &frames[frame_index.get()],
                     color: props.loader_color.unwrap_or(theme.progress_loader_color),
                 )
             }
@@ -313,12 +312,13 @@ pub fn ProgressLoader<'a>(
                 StyledText(
                     content: format!(
                         "{prefix}{}{suffix}",
-                        get_message(
-                            message.read().as_str(),
-                            frame_index.get(),
-                            frames_total,
-                            started.get()
-                        )
+                        get_message(MessageData {
+                            estimator: None,
+                            max: frames_total as u64,
+                            message: message.read(),
+                            started: started.get(),
+                            value: frame_index.get() as u64,
+                        })
                     )
                 )
             }
@@ -327,85 +327,108 @@ pub fn ProgressLoader<'a>(
     .into_any()
 }
 
-fn calculate_percent(value: u32, max: u32) -> f32 {
-    (max as f32 * (value as f32 / 100.0)).clamp(0.0, 100.0)
+fn calculate_percent(value: u64, max: u64) -> f64 {
+    (max as f64 * (value as f64 / 100.0)).clamp(0.0, 100.0)
 }
 
-// fn calculate_eta(value: u32, max: u32) -> Duration {
-//     let steps_per_second = 0.0;
+struct MessageData<'a> {
+    estimator: Option<StateRef<'a, Estimator>>,
+    max: u64,
+    message: StateRef<'a, String>,
+    started: Instant,
+    value: u64,
+}
 
-//     if steps_per_second == 0.0 {
-//         return Duration::new(0, 0);
-//     }
-
-//     let s = max.saturating_sub(value) as f64 / steps_per_second;
-//     let secs = s.trunc() as u64;
-//     let nanos = (s.fract() * 1_000_000_000f64) as u32;
-
-//     Duration::new(secs, nanos)
-// }
-
-// TODO: eta, per_sec, duration
-fn get_message(message: &str, value: u32, max: u32, started: Instant) -> String {
-    let mut message = message.to_owned();
+fn get_message(data: MessageData) -> String {
+    let mut message = data.message.to_owned();
 
     if message.contains("{value}") {
-        message = message.replace("{value}", &value.to_string());
+        message = message.replace("{value}", &data.value.to_string());
     }
 
     if message.contains("{total}") {
-        message = message.replace("{total}", &max.to_string());
+        message = message.replace("{total}", &data.max.to_string());
     }
 
     if message.contains("{max}") {
-        message = message.replace("{max}", &max.to_string());
+        message = message.replace("{max}", &data.max.to_string());
     }
 
     if message.contains("{percent}") {
-        message = message.replace("{percent}", &calculate_percent(value, max).to_string());
+        message = message.replace(
+            "{percent}",
+            &format_float(calculate_percent(data.value, data.max)),
+        );
     }
 
     if message.contains("{bytes}") {
-        message = message.replace("{bytes}", &format_bytes_binary(value as u64));
+        message = message.replace("{bytes}", &format_bytes_binary(data.value));
     }
 
     if message.contains("{total_bytes}") {
-        message = message.replace("{total_bytes}", &format_bytes_binary(max as u64));
+        message = message.replace("{total_bytes}", &format_bytes_binary(data.max));
     }
 
     if message.contains("{binary_bytes}") {
-        message = message.replace("{binary_bytes}", &format_bytes_binary(value as u64));
+        message = message.replace("{binary_bytes}", &format_bytes_binary(data.value));
     }
 
     if message.contains("{binary_total_bytes}") {
-        message = message.replace("{binary_total_bytes}", &format_bytes_binary(max as u64));
+        message = message.replace("{binary_total_bytes}", &format_bytes_binary(data.max));
     }
 
     if message.contains("{decimal_bytes}") {
-        message = message.replace("{decimal_bytes}", &format_bytes_decimal(value as u64));
+        message = message.replace("{decimal_bytes}", &format_bytes_decimal(data.value));
     }
 
     if message.contains("{decimal_total_bytes}") {
-        message = message.replace("{decimal_total_bytes}", &format_bytes_decimal(max as u64));
+        message = message.replace("{decimal_total_bytes}", &format_bytes_decimal(data.max));
     }
 
     if message.contains("{elapsed}") {
-        message = message.replace("{elapsed}", &format_duration(started.elapsed(), true));
+        message = message.replace("{elapsed}", &format_duration(data.started.elapsed(), true));
     }
 
-    // if message.contains("{eta}") {
-    //     message = message.replace("{eta}", &format_duration(calculate_eta(value, max), true));
-    // }
+    if let Some(estimator) = data.estimator {
+        let eta = estimator.calculate_eta(data.value, data.max);
+        let sps = estimator.calculate_sps();
 
-    // if message.contains("{duration}") {
-    //     message = message.replace(
-    //         "{duration}",
-    //         &format_duration(
-    //             started.elapsed().saturating_add(calculate_eta(value, max)),
-    //             true,
-    //         ),
-    //     );
-    // }
+        if message.contains("{eta}") {
+            message = message.replace("{eta}", &format_duration(eta, true));
+        }
+
+        if message.contains("{duration}") {
+            message = message.replace(
+                "{duration}",
+                &format_duration(data.started.elapsed().saturating_add(eta), true),
+            );
+        }
+
+        if message.contains("{per_sec}") {
+            message = message.replace("{per_sec}", &format!("{:.1}/s", sps));
+        }
+
+        if message.contains("{bytes_per_sec}") {
+            message = message.replace(
+                "{bytes_per_sec}",
+                &format!("{}/s", format_bytes_binary(sps as u64)),
+            );
+        }
+
+        if message.contains("{binary_bytes_per_sec}") {
+            message = message.replace(
+                "{binary_bytes_per_sec}",
+                &format!("{}/s", format_bytes_binary(sps as u64)),
+            );
+        }
+
+        if message.contains("{decimal_bytes_per_sec}") {
+            message = message.replace(
+                "{decimal_bytes_per_sec}",
+                &format!("{}/s", format_bytes_decimal(sps as u64)),
+            );
+        }
+    }
 
     message
 }

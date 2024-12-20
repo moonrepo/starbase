@@ -27,7 +27,7 @@ async fn render(session: TestSession, ui: String) {
                 Confirm(
                     label: "Are you sure?",
                     description: "This operation cannot be undone!".to_owned(),
-                    value: &mut value
+                    on_confirm: &mut value
                 )
             })
             .await
@@ -108,7 +108,7 @@ async fn render(session: TestSession, ui: String) {
             con.render_interactive(element! {
                 Input(
                     label: "What is your name?",
-                    value: &mut value,
+                    on_value: &mut value,
                     validate: |new_value: String| {
                         if new_value.is_empty() {
                             Some("Field is required".into())
@@ -191,8 +191,8 @@ async fn render(session: TestSession, ui: String) {
                     ProgressBar(
                         bar_color: Color::Cyan,
                         default_message: "Filled - {bytes}/{total_bytes} - {decimal_bytes}/{decimal_total_bytes}".to_owned(),
-                        default_max: 5432,
-                        default_value: 5432
+                        default_max: 5432u64,
+                        default_value: 5432u64
                     )
                     ProgressBar(
                         bar_color: Color::Red,
@@ -200,7 +200,45 @@ async fn render(session: TestSession, ui: String) {
                         char_position: '╾',
                         char_unfilled: '─',
                         default_message: "Partially filled with custom bar - {percent}%".to_owned(),
-                        default_value: 53
+                        default_value: 53u64
+                    )
+                }
+            })
+            .await
+            .unwrap();
+        }
+        "progressreporter" => {
+            let reporter = ProgressReporter::default();
+            let reporter_clone = reporter.clone();
+
+            tokio::task::spawn(async move {
+                let mut count = 0;
+
+                loop {
+                    if count >= 100 {
+                        break;
+                    } else if count == 50 {
+                        reporter_clone.set_message(
+                            "Loading {value}/{max} ({per_sec}) - {elapsed} - {duration} - {eta}",
+                        );
+                    } else if count == 25 {
+                        reporter_clone.set_prefix("[prefix] ");
+                    } else if count == 75 {
+                        reporter_clone.set_suffix(" [suffix]");
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+
+                    count += 1;
+                    reporter_clone.set_value(count);
+                }
+            });
+
+            con.render_loop(element! {
+                Container {
+                    ProgressBar(
+                        default_message: "Loading {value}/{max} ({per_sec})".to_owned(),
+                        reporter
                     )
                 }
             })
@@ -242,6 +280,51 @@ async fn render(session: TestSession, ui: String) {
                     }
                 }
             })
+            .unwrap();
+        }
+        "select" => {
+            let mut index = 0usize;
+
+            con.render_interactive(element! {
+                Select(
+                    default_index: 2,
+                    label: "What is your favorite color?",
+                    description: "Only choose 1 value.".to_owned(),
+                    on_index: &mut index,
+                    options: vec![
+                        SelectOption::new("red"),
+                        SelectOption::new("blue").label("Blue").disabled(),
+                        SelectOption::new("green"),
+                        SelectOption::new("yellow").disabled(),
+                        SelectOption::new("pink").label("Pink"),
+                    ]
+                )
+            })
+            .await
+            .unwrap();
+        }
+        "selectmulti" => {
+            let mut indexes = vec![];
+
+            con.render_interactive(element! {
+                Select(
+                    default_indexes: vec![2, 4],
+                    label: "What is your favorite color?",
+                    description: "Can choose multiple values.".to_owned(),
+                    multiple: true,
+                    on_indexes: &mut indexes,
+                    options: vec![
+                        SelectOption::new("red"),
+                        SelectOption::new("blue").label("Blue").disabled(),
+                        SelectOption::new("green"),
+                        SelectOption::new("yellow").disabled(),
+                        SelectOption::new("pink").label("Pink"),
+                        SelectOption::new("black"),
+                        SelectOption::new("white"),
+                    ]
+                )
+            })
+            .await
             .unwrap();
         }
         "styledtext" => {

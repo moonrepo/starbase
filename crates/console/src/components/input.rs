@@ -10,7 +10,7 @@ pub struct InputProps<'a> {
     pub label: String,
     pub prefix_symbol: Option<String>,
     pub validate: Validator<'static, String>,
-    pub value: Option<&'a mut String>,
+    pub on_value: Option<&'a mut String>,
 }
 
 #[component]
@@ -18,7 +18,6 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut value = hooks.use_state(|| props.default_value.clone());
-    let mut submitted = hooks.use_state(|| false);
     let mut should_exit = hooks.use_state(|| false);
     let mut error = hooks.use_state(|| None);
 
@@ -26,34 +25,27 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
 
     hooks.use_local_terminal_events({
         move |event| match event {
-            TerminalEvent::Key(KeyEvent { code, kind, .. }) if kind != KeyEventKind::Release => {
-                match code {
-                    KeyCode::Enter => {
-                        if let Some(msg) = validate(value.to_string()) {
-                            error.set(Some(msg));
-                            return;
-                        } else {
-                            error.set(None);
-                        }
-
-                        submitted.set(true);
-                        should_exit.set(true);
-                    }
-                    KeyCode::Esc => {
-                        should_exit.set(true);
-                    }
-                    _ => {}
+            TerminalEvent::Key(KeyEvent {
+                code: KeyCode::Enter,
+                kind,
+                ..
+            }) if kind != KeyEventKind::Release => {
+                if let Some(msg) = validate(value.to_string()) {
+                    error.set(Some(msg));
+                    return;
+                } else {
+                    error.set(None);
                 }
+
+                should_exit.set(true);
             }
             _ => {}
         }
     });
 
     if should_exit.get() {
-        if submitted.get() {
-            if let Some(outer_value) = &mut props.value {
-                **outer_value = value.to_string();
-            }
+        if let Some(outer_value) = &mut props.on_value {
+            **outer_value = value.to_string();
         }
 
         system.exit();
@@ -61,11 +53,7 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
         return element! {
             InputFieldValue(
                 label: &props.label,
-                value: if submitted.get() {
-                    value.to_string()
-                } else {
-                    String::new()
-                }
+                value: value.read().as_str(),
             )
         }
         .into_any();

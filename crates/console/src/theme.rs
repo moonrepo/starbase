@@ -20,10 +20,11 @@ pub struct ConsoleTheme {
     pub form_success_symbol: String,
 
     // Inputs
-    pub input_prefix_symbol: String,
+    pub input_active_color: Color,
     pub input_prefix_color: Color,
-    pub input_prefix_active_color: Color,
-    pub input_prefix_selected_color: Color,
+    pub input_prefix_symbol: String,
+    pub input_selected_color: Color,
+    pub input_selected_symbol: String,
 
     // Layout
     pub layout_fallback_symbol: String,
@@ -70,10 +71,11 @@ impl Default for ConsoleTheme {
             form_label_color: Color::White,
             form_failure_symbol: "✘".into(),
             form_success_symbol: "✔".into(),
+            input_active_color: Color::AnsiValue(NativeColor::Cyan as u8),
+            input_prefix_color: Color::White,
             input_prefix_symbol: "❯".into(),
-            input_prefix_color: Color::AnsiValue(NativeColor::Teal as u8),
-            input_prefix_active_color: Color::AnsiValue(NativeColor::Cyan as u8),
-            input_prefix_selected_color: Color::AnsiValue(NativeColor::Green as u8),
+            input_selected_color: Color::AnsiValue(NativeColor::Teal as u8),
+            input_selected_symbol: "✔".into(),
             layout_fallback_symbol: "—".into(),
             layout_list_bullet: "-".into(),
             layout_map_separator: "=".into(),
@@ -108,6 +110,7 @@ impl ConsoleTheme {
     pub fn branded(color: Color) -> Self {
         Self {
             brand_color: color,
+            input_prefix_color: color,
             progress_bar_color: color,
             progress_loader_color: color,
             ..Self::default()

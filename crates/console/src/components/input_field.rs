@@ -116,3 +116,22 @@ pub fn InputFieldValue<'a>(
         }
     }
 }
+
+#[derive(Default, Props)]
+pub struct InputLegendProps {
+    pub legend: Vec<(String, String)>,
+}
+
+#[component]
+pub fn InputLegend<'a>(props: &InputLegendProps) -> impl Into<AnyElement<'a>> {
+    element! {
+        StyledText(
+            content: props.legend
+                .iter()
+                .map(|(key, label)| format!("<mutedlight>{key}</mutedlight> {label}"))
+                .collect::<Vec<_>>()
+                .join(" ⁃ "),
+            style: Style::Muted
+        )
+    }
+}
