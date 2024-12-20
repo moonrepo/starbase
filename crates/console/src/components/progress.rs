@@ -1,6 +1,7 @@
 use super::layout::Group;
 use super::styled_text::StyledText;
 use crate::ui::ConsoleTheme;
+use crate::utils::estimator::Estimator;
 use crate::utils::formats::*;
 use flume::{Receiver, Sender};
 use iocraft::prelude::*;
@@ -105,6 +106,7 @@ pub fn ProgressBar<'a>(
     let mut suffix = hooks.use_state(String::new);
     let mut max = hooks.use_state(|| props.default_max as u32);
     let mut value = hooks.use_state(|| props.default_value as u32);
+    let mut estimator = hooks.use_state(Estimator::new);
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
 
@@ -148,7 +150,7 @@ pub fn ProgressBar<'a>(
     hooks.use_future(async move {
         loop {
             tokio::time::sleep(Duration::from_millis(150)).await;
-            max.set(max.get());
+            estimator.write().record(value.get() as u64, Instant::now());
         }
     });
 
@@ -160,7 +162,7 @@ pub fn ProgressBar<'a>(
         .char_position
         .unwrap_or(theme.progress_bar_position_char);
     let bar_color = props.bar_color.unwrap_or(theme.progress_bar_color);
-    let bar_percent = calculate_percent(value.get(), max.get());
+    let bar_percent = calculate_percent(value.get() as u64, max.get() as u64);
     let bar_total_width = props.bar_width as u32;
     let bar_filled_width = (bar_total_width as f32 * (bar_percent / 100.0)) as u32;
     let mut bar_unfilled_width = bar_total_width - bar_filled_width;
@@ -204,7 +206,13 @@ pub fn ProgressBar<'a>(
                 StyledText(
                     content: format!(
                         "{prefix}{}{suffix}",
-                        get_message(message.read().as_str(), value.get(), max.get(), started.get())
+                        get_message(MessageData {
+                            estimator: Some(estimator.read()),
+                            max: max.get() as u64,
+                            message: message.read(),
+                            started: started.get(),
+                            value: value.get() as u64,
+                        })
                     )
                 )
             }
@@ -306,12 +314,13 @@ pub fn ProgressLoader<'a>(
                 StyledText(
                     content: format!(
                         "{prefix}{}{suffix}",
-                        get_message(
-                            message.read().as_str(),
-                            frame_index.get(),
-                            frames_total,
-                            started.get()
-                        )
+                        get_message(MessageData {
+                            estimator: None,
+                            max: frames_total as u64,
+                            message: message.read(),
+                            started: started.get(),
+                            value: frame_index.get() as u64,
+                        })
                     )
                 )
             }
@@ -320,85 +329,108 @@ pub fn ProgressLoader<'a>(
     .into_any()
 }
 
-fn calculate_percent(value: u32, max: u32) -> f32 {
+fn calculate_percent(value: u64, max: u64) -> f32 {
     (max as f32 * (value as f32 / 100.0)).clamp(0.0, 100.0)
 }
 
-// fn calculate_eta(value: u32, max: u32) -> Duration {
-//     let steps_per_second = 0.0;
+struct MessageData<'a> {
+    estimator: Option<StateRef<'a, Estimator>>,
+    max: u64,
+    message: StateRef<'a, String>,
+    started: Instant,
+    value: u64,
+}
 
-//     if steps_per_second == 0.0 {
-//         return Duration::new(0, 0);
-//     }
-
-//     let s = max.saturating_sub(value) as f64 / steps_per_second;
-//     let secs = s.trunc() as u64;
-//     let nanos = (s.fract() * 1_000_000_000f64) as u32;
-
-//     Duration::new(secs, nanos)
-// }
-
-// TODO: eta, per_sec, duration
-fn get_message(message: &str, value: u32, max: u32, started: Instant) -> String {
-    let mut message = message.to_owned();
+fn get_message(data: MessageData) -> String {
+    let mut message = data.message.to_owned();
 
     if message.contains("{value}") {
-        message = message.replace("{value}", &value.to_string());
+        message = message.replace("{value}", &data.value.to_string());
     }
 
     if message.contains("{total}") {
-        message = message.replace("{total}", &max.to_string());
+        message = message.replace("{total}", &data.max.to_string());
     }
 
     if message.contains("{max}") {
-        message = message.replace("{max}", &max.to_string());
+        message = message.replace("{max}", &data.max.to_string());
     }
 
     if message.contains("{percent}") {
-        message = message.replace("{percent}", &calculate_percent(value, max).to_string());
+        message = message.replace(
+            "{percent}",
+            &format_float(calculate_percent(data.value, data.max) as f64),
+        );
     }
 
     if message.contains("{bytes}") {
-        message = message.replace("{bytes}", &format_bytes_binary(value as u64));
+        message = message.replace("{bytes}", &format_bytes_binary(data.value));
     }
 
     if message.contains("{total_bytes}") {
-        message = message.replace("{total_bytes}", &format_bytes_binary(max as u64));
+        message = message.replace("{total_bytes}", &format_bytes_binary(data.max));
     }
 
     if message.contains("{binary_bytes}") {
-        message = message.replace("{binary_bytes}", &format_bytes_binary(value as u64));
+        message = message.replace("{binary_bytes}", &format_bytes_binary(data.value));
     }
 
     if message.contains("{binary_total_bytes}") {
-        message = message.replace("{binary_total_bytes}", &format_bytes_binary(max as u64));
+        message = message.replace("{binary_total_bytes}", &format_bytes_binary(data.max));
     }
 
     if message.contains("{decimal_bytes}") {
-        message = message.replace("{decimal_bytes}", &format_bytes_decimal(value as u64));
+        message = message.replace("{decimal_bytes}", &format_bytes_decimal(data.value));
     }
 
     if message.contains("{decimal_total_bytes}") {
-        message = message.replace("{decimal_total_bytes}", &format_bytes_decimal(max as u64));
+        message = message.replace("{decimal_total_bytes}", &format_bytes_decimal(data.max));
     }
 
     if message.contains("{elapsed}") {
-        message = message.replace("{elapsed}", &format_duration(started.elapsed(), true));
+        message = message.replace("{elapsed}", &format_duration(data.started.elapsed(), true));
     }
 
-    // if message.contains("{eta}") {
-    //     message = message.replace("{eta}", &format_duration(calculate_eta(value, max), true));
-    // }
+    if let Some(estimator) = data.estimator {
+        let eta = estimator.calculate_eta(data.value, data.max);
+        let sps = estimator.calculate_sps();
 
-    // if message.contains("{duration}") {
-    //     message = message.replace(
-    //         "{duration}",
-    //         &format_duration(
-    //             started.elapsed().saturating_add(calculate_eta(value, max)),
-    //             true,
-    //         ),
-    //     );
-    // }
+        if message.contains("{eta}") {
+            message = message.replace("{eta}", &format_duration(eta, true));
+        }
+
+        if message.contains("{duration}") {
+            message = message.replace(
+                "{duration}",
+                &format_duration(data.started.elapsed().saturating_add(eta), true),
+            );
+        }
+
+        if message.contains("{per_sec}") {
+            message = message.replace("{per_sec}", &format!("{:.1}/s", sps));
+        }
+
+        if message.contains("{bytes_per_sec}") {
+            message = message.replace(
+                "{bytes_per_sec}",
+                &format!("{}/s", format_bytes_binary(sps as u64)),
+            );
+        }
+
+        if message.contains("{binary_bytes_per_sec}") {
+            message = message.replace(
+                "{binary_bytes_per_sec}",
+                &format!("{}/s", format_bytes_binary(sps as u64)),
+            );
+        }
+
+        if message.contains("{decimal_bytes_per_sec}") {
+            message = message.replace(
+                "{decimal_bytes_per_sec}",
+                &format!("{}/s", format_bytes_decimal(sps as u64)),
+            );
+        }
+    }
 
     message
 }

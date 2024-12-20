@@ -1,5 +1,9 @@
 use std::time::Duration;
 
+pub fn format_float(value: f64) -> String {
+    format!("{value:.1}").replace(".0", "")
+}
+
 pub const DECIMAL_BYTE_UNITS: &[&str] = &["B", "kB", "MB", "GB", "TB", "PB"];
 pub const BINARY_BYTE_UNITS: &[&str] = &["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
 
@@ -15,7 +19,7 @@ fn format_bytes(mut size: f64, kb: f64, units: &[&str]) -> String {
         prefix += 1;
     }
 
-    format!("{size:.1} {}", units[prefix - 1]).replace(".0", "")
+    format!("{} {}", format_float(size), units[prefix - 1])
 }
 
 pub fn format_bytes_binary(size: u64) -> String {

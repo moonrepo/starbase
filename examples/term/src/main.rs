@@ -218,8 +218,9 @@ async fn render(session: TestSession, ui: String) {
                     if count >= 100 {
                         break;
                     } else if count == 50 {
-                        reporter_clone
-                            .set_message("Loading {value}/{max} - {elapsed} - {duration} - {eta}");
+                        reporter_clone.set_message(
+                            "Loading {value}/{max} ({per_sec}) - {elapsed} - {duration} - {eta}",
+                        );
                     } else if count == 25 {
                         reporter_clone.set_prefix("[prefix] ");
                     } else if count == 75 {
@@ -236,7 +237,7 @@ async fn render(session: TestSession, ui: String) {
             con.render_loop(element! {
                 Container {
                     ProgressBar(
-                        default_message: "Loading {value}/{max}".to_owned(),
+                        default_message: "Loading {value}/{max} ({per_sec})".to_owned(),
                         reporter
                     )
                 }
