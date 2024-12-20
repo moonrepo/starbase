@@ -1081,8 +1081,9 @@ dependencies = [
 
 [[package]]
 name = "iocraft"
-version = "0.5.0"
-source = "git+https://github.com/ccbrown/iocraft?branch=main#b59213bb578eff61a5b9b99c8045baef4a8c8565"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6aa17731846833a741c47f7c4c7b319c8174f69c2c558dd916fe70495f804de7"
 dependencies = [
  "any_key",
  "bitflags",
@@ -1100,7 +1101,8 @@ dependencies = [
 [[package]]
 name = "iocraft-macros"
 version = "0.1.8"
-source = "git+https://github.com/ccbrown/iocraft?branch=main#b59213bb578eff61a5b9b99c8045baef4a8c8565"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d0e726dcb066433b8c3f9c3fb49df64428fbd33777099be6426ab691fa38e33"
 dependencies = [
  "proc-macro2",
  "quote",

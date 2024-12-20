@@ -207,6 +207,43 @@ async fn render(session: TestSession, ui: String) {
             .await
             .unwrap();
         }
+        "progressreporter" => {
+            let reporter = ProgressReporter::default();
+            let reporter_clone = reporter.clone();
+
+            tokio::task::spawn(async move {
+                let mut count = 0;
+
+                loop {
+                    if count >= 100 {
+                        break;
+                    } else if count == 50 {
+                        reporter_clone
+                            .set_message("Loading {value}/{max} - {elapsed} - {duration} - {eta}");
+                    } else if count == 25 {
+                        reporter_clone.set_prefix("[prefix] ");
+                    } else if count == 75 {
+                        reporter_clone.set_suffix(" [suffix]");
+                    }
+
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+
+                    count += 1;
+                    reporter_clone.set_value(count);
+                }
+            });
+
+            con.render_loop(element! {
+                Container {
+                    ProgressBar(
+                        default_message: "Loading {value}/{max}".to_owned(),
+                        reporter
+                    )
+                }
+            })
+            .await
+            .unwrap();
+        }
         "progressloader" => {
             con.render_loop(element! {
                 Container {

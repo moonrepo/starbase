@@ -284,14 +284,7 @@ pub fn ProgressLoader<'a>(
     hooks.use_future(async move {
         loop {
             tokio::time::sleep(tick_interval.get()).await;
-
-            let next_index = frame_index.get() + 1;
-
-            if next_index >= frames_total {
-                frame_index.set(0);
-            } else {
-                frame_index.set(next_index);
-            }
+            frame_index.set((frame_index + 1) % frames_total);
         }
     });
 
