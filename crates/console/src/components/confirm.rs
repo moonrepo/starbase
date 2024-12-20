@@ -1,5 +1,4 @@
 use super::input_field::*;
-use super::styled_text::*;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
@@ -113,10 +112,12 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
             error: Some(error),
             footer: props.legend.then(|| {
                 element! {
-                    StyledText(
-                        content: format!("<mutedlight>{yes}/{no}</mutedlight> confirm ⁃ <mutedlight>↔</mutedlight> toggle ⁃ <mutedlight>ent/spc</mutedlight> select ⁃ <mutedlight>esc</mutedlight> cancel"),
-                        style: Style::Muted
-                    )
+                    InputLegend(legend: vec![
+                        (format!("{yes}/{no}"), "confirm".into()),
+                        ("↔".into(), "toggle".into()),
+                        ("↵".into(), "submit".into()),
+                        ("⊘".into(), "cancel".into()),
+                    ])
                 }.into_any()
             })
         ) {
@@ -162,5 +163,6 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                 }
             }
         }
-    }.into_any()
+    }
+    .into_any()
 }

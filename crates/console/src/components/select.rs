@@ -1,5 +1,4 @@
 use super::input_field::*;
-use super::styled_text::*;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
@@ -179,10 +178,12 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
             error: Some(error),
             footer: props.legend.then(|| {
                 element! {
-                    StyledText(
-                        content: format!("<mutedlight>↕</mutedlight> move ⁃ <mutedlight>spc</mutedlight> select ⁃ <mutedlight>ent</mutedlight> submit ⁃ <mutedlight>esc</mutedlight> cancel"),
-                        style: Style::Muted
-                    )
+                    InputLegend(legend: vec![
+                        ("⎵".into(), "select".into()),
+                        ("↕".into(), "move".into()),
+                        ("↵".into(), "submit".into()),
+                        ("⊘".into(), "cancel".into()),
+                    ])
                 }.into_any()
             })
         ) {
@@ -235,5 +236,6 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                 }))
             }
         }
-    }.into_any()
+    }
+    .into_any()
 }
