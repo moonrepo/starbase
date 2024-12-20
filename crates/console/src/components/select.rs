@@ -37,14 +37,14 @@ impl SelectOption {
 
 #[derive(Props)]
 pub struct SelectProps<'a> {
-    pub default_index: Option<u32>,
+    pub default_index: Option<usize>,
     pub description: Option<String>,
     pub label: String,
     pub legend: bool,
     pub options: Vec<SelectOption>,
     pub prefix_symbol: Option<String>,
     pub selected_symbol: Option<String>,
-    pub value: Option<&'a mut usize>,
+    pub on_index: Option<&'a mut usize>,
 }
 
 impl Default for SelectProps<'_> {
@@ -57,7 +57,7 @@ impl Default for SelectProps<'_> {
             options: vec![],
             prefix_symbol: None,
             selected_symbol: None,
-            value: None,
+            on_index: None,
         }
     }
 }
@@ -67,7 +67,7 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut active_index = hooks.use_state(|| 0);
-    let mut selected_index = hooks.use_state(|| props.default_index.map(|i| i as usize));
+    let mut selected_index = hooks.use_state(|| props.default_index);
     let mut submitted = hooks.use_state(|| false);
     let mut should_exit = hooks.use_state(|| false);
     let mut error = hooks.use_state(|| None);
@@ -95,7 +95,7 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                 match code {
                     KeyCode::Char(' ') => {
                         if selected_index
-                            .get()
+                            .read()
                             .is_some_and(|i| i == active_index.get())
                         {
                             selected_index.set(None);
@@ -149,8 +149,8 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
 
     if should_exit.get() {
         if submitted.get() {
-            if let (Some(outer_value), Some(index)) = (&mut props.value, selected_index.get()) {
-                **outer_value = index;
+            if let (Some(outer_index), Some(index)) = (&mut props.on_index, selected_index.get()) {
+                **outer_index = index;
             }
         }
 

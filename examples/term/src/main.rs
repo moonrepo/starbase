@@ -27,7 +27,7 @@ async fn render(session: TestSession, ui: String) {
                 Confirm(
                     label: "Are you sure?",
                     description: "This operation cannot be undone!".to_owned(),
-                    value: &mut value
+                    on_confirm: &mut value
                 )
             })
             .await
@@ -108,7 +108,7 @@ async fn render(session: TestSession, ui: String) {
             con.render_interactive(element! {
                 Input(
                     label: "What is your name?",
-                    value: &mut value,
+                    on_value: &mut value,
                     validate: |new_value: String| {
                         if new_value.is_empty() {
                             Some("Field is required".into())
@@ -245,13 +245,14 @@ async fn render(session: TestSession, ui: String) {
             .unwrap();
         }
         "select" => {
-            let mut value = 0usize;
+            let mut index = 0usize;
 
             con.render_interactive(element! {
                 Select(
+                    default_index: 2,
                     label: "What is your favorite color?",
                     description: "Only choose 1 value.".to_owned(),
-                    value: &mut value,
+                    on_index: &mut index,
                     options: vec![
                         SelectOption::new("red"),
                         SelectOption::new("blue").label("Blue").disabled(),

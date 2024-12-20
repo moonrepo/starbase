@@ -10,7 +10,7 @@ pub struct InputProps<'a> {
     pub label: String,
     pub prefix_symbol: Option<String>,
     pub validate: Validator<'static, String>,
-    pub value: Option<&'a mut String>,
+    pub on_value: Option<&'a mut String>,
 }
 
 #[component]
@@ -51,7 +51,7 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
 
     if should_exit.get() {
         if submitted.get() {
-            if let Some(outer_value) = &mut props.value {
+            if let Some(outer_value) = &mut props.on_value {
                 **outer_value = value.to_string();
             }
         }

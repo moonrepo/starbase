@@ -11,7 +11,7 @@ pub struct ConfirmProps<'a> {
     pub no_char: char,
     pub yes_label: String,
     pub yes_char: char,
-    pub value: Option<&'a mut bool>,
+    pub on_confirm: Option<&'a mut bool>,
 }
 
 impl Default for ConfirmProps<'_> {
@@ -24,7 +24,7 @@ impl Default for ConfirmProps<'_> {
             no_char: 'n',
             yes_label: "Yes".into(),
             yes_char: 'y',
-            value: None,
+            on_confirm: None,
         }
     }
 }
@@ -90,7 +90,7 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
     });
 
     if should_exit.get() {
-        if let Some(outer_value) = &mut props.value {
+        if let Some(outer_value) = &mut props.on_confirm {
             **outer_value = confirmed.get();
         }
 
