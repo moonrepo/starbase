@@ -252,17 +252,19 @@ pub fn ProgressLoader<'a>(
     let mut prefix = hooks.use_state(String::new);
     let mut message = hooks.use_state(|| props.default_message.clone());
     let mut suffix = hooks.use_state(String::new);
+    let frames = hooks.use_state(|| {
+        props
+            .loader_frames
+            .clone()
+            .unwrap_or_else(|| theme.progress_loader_frames.clone())
+    });
     let mut frame_index = hooks.use_state(|| 0);
     let mut tick_interval = hooks.use_state(|| props.tick_interval);
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
 
     let receiver = props.reporter.rx.clone();
-    let frames = props
-        .loader_frames
-        .clone()
-        .unwrap_or_else(|| theme.progress_loader_frames.clone());
-    let frames_total = frames.len();
+    let frames_total = frames.read().len();
 
     hooks.use_future(async move {
         loop {
@@ -306,7 +308,7 @@ pub fn ProgressLoader<'a>(
         Group(gap: 1) {
             Box {
                 Text(
-                    content: &frames[frame_index.get()],
+                    content: &frames.read()[frame_index.get()],
                     color: props.loader_color.unwrap_or(theme.progress_loader_color),
                 )
             }
