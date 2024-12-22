@@ -7,6 +7,7 @@ use iocraft::prelude::*;
 use std::time::{Duration, Instant};
 use tokio::spawn;
 use tokio::sync::broadcast::{self, Receiver, Sender};
+use tokio::time::sleep;
 
 #[derive(Clone, Debug)]
 pub enum ProgressState {
@@ -17,31 +18,21 @@ pub enum ProgressState {
     Message(String),
     Prefix(String),
     Suffix(String),
-    Stop,
     Tick(Duration),
     Value(u64),
+    Wait(Duration),
 }
 
+#[derive(Clone)]
 pub struct ProgressReporter {
     tx: Sender<ProgressState>,
-    #[allow(dead_code)]
-    rx: Option<Receiver<ProgressState>>,
-}
-
-impl Clone for ProgressReporter {
-    fn clone(&self) -> Self {
-        Self {
-            tx: self.tx.clone(),
-            rx: None,
-        }
-    }
 }
 
 impl Default for ProgressReporter {
     fn default() -> Self {
-        let (tx, rx) = broadcast::channel::<ProgressState>(1000);
+        let (tx, _rx) = broadcast::channel::<ProgressState>(1000);
 
-        Self { tx, rx: Some(rx) }
+        Self { tx }
     }
 }
 
@@ -54,12 +45,14 @@ impl ProgressReporter {
         self.set(ProgressState::Exit);
     }
 
-    pub fn stop(&self) {
-        self.set(ProgressState::Stop);
+    pub fn wait(&self, value: Duration) {
+        self.set(ProgressState::Wait(value));
     }
 
     pub fn set(&self, state: ProgressState) {
-        self.tx.send(state).unwrap();
+        // Will panic if there are no receivers, which can happen
+        // while waiting for the components to start rendering!
+        let _ = self.tx.send(state);
     }
 
     pub fn set_max(&self, value: u64) {
@@ -138,7 +131,7 @@ pub fn ProgressBar<'a>(
     hooks.use_future(async move {
         let handle = spawn(async move {
             loop {
-                tokio::time::sleep(Duration::from_millis(150)).await;
+                sleep(Duration::from_millis(150)).await;
                 estimator.write().record(value.get(), Instant::now());
             }
         });
@@ -146,11 +139,9 @@ pub fn ProgressBar<'a>(
         let mut receiver = reporter.subscribe();
 
         while let Ok(state) = receiver.recv().await {
-            println!("ProgressBar = {state:#?}");
-
             match state {
-                ProgressState::Stop => {
-                    break;
+                ProgressState::Wait(val) => {
+                    sleep(val).await;
                 }
                 ProgressState::Exit => {
                     should_exit.set(true);
@@ -299,7 +290,7 @@ pub fn ProgressLoader<'a>(
     hooks.use_future(async move {
         let handle = spawn(async move {
             loop {
-                tokio::time::sleep(tick_interval.get()).await;
+                sleep(tick_interval.get()).await;
                 frame_index.set((frame_index + 1) % frames_total);
             }
         });
@@ -307,11 +298,9 @@ pub fn ProgressLoader<'a>(
         let mut receiver = reporter.subscribe();
 
         while let Ok(state) = receiver.recv().await {
-            println!("ProgressLoader = {state:#?}");
-
             match state {
-                ProgressState::Stop => {
-                    break;
+                ProgressState::Wait(val) => {
+                    sleep(val).await;
                 }
                 ProgressState::Exit => {
                     should_exit.set(true);
