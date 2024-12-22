@@ -3,10 +3,12 @@ use super::styled_text::StyledText;
 use crate::ui::ConsoleTheme;
 use crate::utils::estimator::Estimator;
 use crate::utils::formats::*;
-use flume::{Receiver, Sender};
 use iocraft::prelude::*;
 use std::time::{Duration, Instant};
+use tokio::spawn;
+use tokio::sync::broadcast::{self, Receiver, Sender};
 
+#[derive(Clone, Debug)]
 pub enum ProgressState {
     CustomInt(usize),
     CustomString(String),
@@ -15,31 +17,49 @@ pub enum ProgressState {
     Message(String),
     Prefix(String),
     Suffix(String),
+    Stop,
     Tick(Duration),
     Value(u64),
 }
 
-#[derive(Clone)]
 pub struct ProgressReporter {
-    pub tx: Sender<ProgressState>,
-    pub rx: Receiver<ProgressState>,
+    tx: Sender<ProgressState>,
+    #[allow(dead_code)]
+    rx: Option<Receiver<ProgressState>>,
+}
+
+impl Clone for ProgressReporter {
+    fn clone(&self) -> Self {
+        Self {
+            tx: self.tx.clone(),
+            rx: None,
+        }
+    }
 }
 
 impl Default for ProgressReporter {
     fn default() -> Self {
-        let (tx, rx) = flume::unbounded::<ProgressState>();
+        let (tx, rx) = broadcast::channel::<ProgressState>(1000);
 
-        Self { tx, rx }
+        Self { tx, rx: Some(rx) }
     }
 }
 
 impl ProgressReporter {
+    pub fn subscribe(&self) -> Receiver<ProgressState> {
+        self.tx.subscribe()
+    }
+
     pub fn exit(&self) {
         self.set(ProgressState::Exit);
     }
 
+    pub fn stop(&self) {
+        self.set(ProgressState::Stop);
+    }
+
     pub fn set(&self, state: ProgressState) {
-        let _ = self.tx.send(state);
+        self.tx.send(state).unwrap();
     }
 
     pub fn set_max(&self, value: u64) {
@@ -112,47 +132,62 @@ pub fn ProgressBar<'a>(
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
 
-    let receiver = props.reporter.rx.clone();
+    // Clone the reporter, not the receiver, as this is less costly
+    let reporter = props.reporter.clone();
 
     hooks.use_future(async move {
-        loop {
-            while let Ok(state) = receiver.recv_async().await {
-                match state {
-                    ProgressState::Exit => {
-                        should_exit.set(true);
-                    }
-                    ProgressState::Max(val) => {
-                        max.set(val);
-                    }
-                    ProgressState::Message(val) => {
-                        message.set(val);
-                    }
-                    ProgressState::Prefix(val) => {
-                        prefix.set(val);
-                    }
-                    ProgressState::Suffix(val) => {
-                        suffix.set(val);
-                    }
-                    ProgressState::Value(val) => {
-                        if val >= max.get() {
-                            value.set(max.get());
-                            should_exit.set(true);
-                        } else {
-                            value.set(val);
-                        }
-                    }
-                    _ => {}
-                };
+        let handle = spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_millis(150)).await;
+                estimator.write().record(value.get(), Instant::now());
             }
+        });
+
+        let mut receiver = reporter.subscribe();
+
+        while let Ok(state) = receiver.recv().await {
+            println!("ProgressBar = {state:#?}");
+
+            match state {
+                ProgressState::Stop => {
+                    break;
+                }
+                ProgressState::Exit => {
+                    should_exit.set(true);
+                    break;
+                }
+                ProgressState::Max(val) => {
+                    max.set(val);
+                }
+                ProgressState::Message(val) => {
+                    message.set(val);
+                }
+                ProgressState::Prefix(val) => {
+                    prefix.set(val);
+                }
+                ProgressState::Suffix(val) => {
+                    suffix.set(val);
+                }
+                ProgressState::Value(val) => {
+                    if val >= max.get() {
+                        value.set(max.get());
+                        should_exit.set(true);
+                    } else {
+                        value.set(val);
+                    }
+                }
+                _ => {}
+            };
         }
+
+        handle.abort();
     });
 
-    hooks.use_future(async move {
-        loop {
-            tokio::time::sleep(Duration::from_millis(150)).await;
-            estimator.write().record(value.get(), Instant::now());
-        }
-    });
+    if should_exit.get() {
+        system.exit();
+
+        return element!(Box).into_any();
+    }
 
     let char_filled = props.char_filled.unwrap_or(theme.progress_bar_filled_char);
     let char_unfilled = props
@@ -170,12 +205,6 @@ pub fn ProgressBar<'a>(
     // When theres a position to show, we need to reduce the unfilled bar by 1
     if bar_percent > 0.0 && bar_percent < 100.0 {
         bar_unfilled_width -= 1;
-    }
-
-    if should_exit.get() {
-        system.exit();
-
-        return element!(Box).into_any();
     }
 
     element! {
@@ -263,39 +292,48 @@ pub fn ProgressLoader<'a>(
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
 
-    let receiver = props.reporter.rx.clone();
+    // Clone the reporter, not the receiver, as this is less costly
+    let reporter = props.reporter.clone();
     let frames_total = frames.read().len();
 
     hooks.use_future(async move {
-        loop {
-            while let Ok(state) = receiver.recv_async().await {
-                match state {
-                    ProgressState::Exit => {
-                        should_exit.set(true);
-                    }
-                    ProgressState::Message(val) => {
-                        message.set(val);
-                    }
-                    ProgressState::Prefix(val) => {
-                        prefix.set(val);
-                    }
-                    ProgressState::Suffix(val) => {
-                        suffix.set(val);
-                    }
-                    ProgressState::Tick(val) => {
-                        tick_interval.set(val);
-                    }
-                    _ => {}
-                };
+        let handle = spawn(async move {
+            loop {
+                tokio::time::sleep(tick_interval.get()).await;
+                frame_index.set((frame_index + 1) % frames_total);
             }
-        }
-    });
+        });
 
-    hooks.use_future(async move {
-        loop {
-            tokio::time::sleep(tick_interval.get()).await;
-            frame_index.set((frame_index + 1) % frames_total);
+        let mut receiver = reporter.subscribe();
+
+        while let Ok(state) = receiver.recv().await {
+            println!("ProgressLoader = {state:#?}");
+
+            match state {
+                ProgressState::Stop => {
+                    break;
+                }
+                ProgressState::Exit => {
+                    should_exit.set(true);
+                    break;
+                }
+                ProgressState::Message(val) => {
+                    message.set(val);
+                }
+                ProgressState::Prefix(val) => {
+                    prefix.set(val);
+                }
+                ProgressState::Suffix(val) => {
+                    suffix.set(val);
+                }
+                ProgressState::Tick(val) => {
+                    tick_interval.set(val);
+                }
+                _ => {}
+            };
         }
+
+        handle.abort();
     });
 
     if should_exit.get() {

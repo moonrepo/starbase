@@ -73,6 +73,7 @@ impl Default for SelectProps<'_> {
 pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<AnyElement<'a>> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
+    let options = hooks.use_state(|| props.options.clone());
     let mut active_index = hooks.use_state(|| 0);
     let mut selected_index = hooks.use_state(|| {
         HashSet::<usize>::from_iter(if props.multiple {
@@ -88,8 +89,7 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
     let mut error = hooks.use_state(|| None);
 
     let multiple = props.multiple;
-    let options = props.options.clone();
-    let option_last_index = options.len() - 1;
+    let option_last_index = options.read().len() - 1;
 
     let get_next_index = move |current: usize, step: isize| -> usize {
         let next = current as isize - step;
@@ -135,7 +135,11 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                             _ => unimplemented!(),
                         };
 
-                        while options.get(next_index).is_some_and(|opt| opt.disabled) {
+                        while options
+                            .read()
+                            .get(next_index)
+                            .is_some_and(|opt| opt.disabled)
+                        {
                             next_index = get_next_index(next_index, 1);
                         }
 
@@ -148,7 +152,11 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                             _ => unimplemented!(),
                         };
 
-                        while options.get(next_index).is_some_and(|opt| opt.disabled) {
+                        while options
+                            .read()
+                            .get(next_index)
+                            .is_some_and(|opt| opt.disabled)
+                        {
                             next_index = get_next_index(next_index, -1);
                         }
 
