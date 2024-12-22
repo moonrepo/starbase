@@ -8,6 +8,8 @@ use iocraft::prelude::*;
 use std::time::{Duration, Instant};
 
 pub enum ProgressState {
+    CustomInt(usize),
+    CustomString(String),
     Exit,
     Max(u64),
     Message(String),
