@@ -163,6 +163,7 @@ pub fn ProgressBar<'a>(
                     if val >= max.get() {
                         value.set(max.get());
                         should_exit.set(true);
+                        break;
                     } else {
                         value.set(val);
                     }
