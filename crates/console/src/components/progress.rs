@@ -8,16 +8,23 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::time::sleep;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ProgressDisplay {
+    Bar,
+    Loader,
+}
+
 #[derive(Clone, Debug)]
 pub enum ProgressState {
     CustomInt(usize),
     CustomString(String),
+    Display(ProgressDisplay),
     Exit,
     Max(u64),
     Message(String),
     Prefix(String),
     Suffix(String),
-    Tick(Duration),
+    Tick(Option<Duration>),
     Value(u64),
     Wait(Duration),
 }
@@ -40,94 +47,136 @@ impl ProgressReporter {
         self.tx.subscribe()
     }
 
-    pub fn exit(&self) {
-        self.set(ProgressState::Exit);
+    pub fn exit(&self) -> &Self {
+        self.set(ProgressState::Exit)
     }
 
-    pub fn wait(&self, value: Duration) {
-        self.set(ProgressState::Wait(value));
+    pub fn wait(&self, value: Duration) -> &Self {
+        self.set(ProgressState::Wait(value))
     }
 
-    pub fn set(&self, state: ProgressState) {
+    pub fn set(&self, state: ProgressState) -> &Self {
         // Will panic if there are no receivers, which can happen
         // while waiting for the components to start rendering!
         let _ = self.tx.send(state);
+
+        self
     }
 
-    pub fn set_max(&self, value: u64) {
-        self.set(ProgressState::Max(value));
+    pub fn set_display(&self, value: ProgressDisplay) -> &Self {
+        self.set(ProgressState::Display(value))
     }
 
-    pub fn set_message(&self, value: impl AsRef<str>) {
-        self.set(ProgressState::Message(value.as_ref().to_owned()));
+    pub fn set_max(&self, value: u64) -> &Self {
+        self.set(ProgressState::Max(value))
     }
 
-    pub fn set_prefix(&self, value: impl AsRef<str>) {
-        self.set(ProgressState::Prefix(value.as_ref().to_owned()));
+    pub fn set_message(&self, value: impl AsRef<str>) -> &Self {
+        self.set(ProgressState::Message(value.as_ref().to_owned()))
     }
 
-    pub fn set_suffix(&self, value: impl AsRef<str>) {
-        self.set(ProgressState::Suffix(value.as_ref().to_owned()));
+    pub fn set_prefix(&self, value: impl AsRef<str>) -> &Self {
+        self.set(ProgressState::Prefix(value.as_ref().to_owned()))
     }
 
-    pub fn set_tick(&self, value: Duration) {
-        self.set(ProgressState::Tick(value));
+    pub fn set_suffix(&self, value: impl AsRef<str>) -> &Self {
+        self.set(ProgressState::Suffix(value.as_ref().to_owned()))
     }
 
-    pub fn set_value(&self, value: u64) {
-        self.set(ProgressState::Value(value));
+    pub fn set_tick(&self, value: Option<Duration>) -> &Self {
+        self.set(ProgressState::Tick(value))
+    }
+
+    pub fn set_value(&self, value: u64) -> &Self {
+        self.set(ProgressState::Value(value))
     }
 }
 
 #[derive(Props)]
-pub struct ProgressBarProps {
-    pub bar_color: Option<Color>,
+pub struct ProgressProps {
+    // Bar
     pub bar_width: u32,
-    pub char_filled: Option<char>,
-    pub char_position: Option<char>,
-    pub char_unfilled: Option<char>,
+    pub bar_filled_char: Option<char>,
+    pub bar_position_char: Option<char>,
+    pub bar_unfilled_char: Option<char>,
+    // Loader
+    pub loader_frames: Option<Vec<String>>,
+    pub loader_interval: Duration,
+    // Shared
+    pub color: Option<Color>,
     pub default_max: u64,
     pub default_message: String,
     pub default_value: u64,
+    pub display: ProgressDisplay,
     pub reporter: Option<ProgressReporter>,
 }
 
-impl Default for ProgressBarProps {
+impl Default for ProgressProps {
     fn default() -> Self {
         Self {
-            bar_color: None,
+            color: None,
             bar_width: 30,
-            char_filled: None,
-            char_position: None,
-            char_unfilled: None,
+            bar_filled_char: None,
+            bar_position_char: None,
+            bar_unfilled_char: None,
+            loader_frames: None,
+            loader_interval: Duration::from_millis(100),
             default_max: 100,
             default_message: "".into(),
             default_value: 0,
+            display: ProgressDisplay::Bar,
             reporter: Default::default(),
         }
     }
 }
 
 #[component]
-pub fn ProgressBar<'a>(
-    props: &mut ProgressBarProps,
-    mut hooks: Hooks,
-) -> impl Into<AnyElement<'a>> {
+pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<AnyElement<'a>> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
+    let mut should_exit = hooks.use_state(|| false);
     let mut prefix = hooks.use_state(String::new);
     let mut message = hooks.use_state(|| props.default_message.clone());
     let mut suffix = hooks.use_state(String::new);
     let mut max = hooks.use_state(|| props.default_max);
     let mut value = hooks.use_state(|| props.default_value);
     let mut estimator = hooks.use_state(Estimator::new);
-    let mut should_exit = hooks.use_state(|| false);
+    let mut display = hooks.use_state(|| props.display);
     let started = hooks.use_state(Instant::now);
 
+    // Loader
+    let frames = hooks.use_state(|| {
+        props
+            .loader_frames
+            .clone()
+            .unwrap_or_else(|| theme.progress_loader_frames.clone())
+    });
+    let mut frame_index = hooks.use_state(|| 0);
+    let mut tick_interval = hooks.use_state(|| Some(props.loader_interval));
+
+    let (stdout, _) = hooks.use_output();
+    let o1 = stdout.clone();
+    let o2 = stdout.clone();
     let reporter = props.reporter.take();
 
     hooks.use_future(async move {
-        println!("ProgressBar REPORTER");
+        o1.println("Progress LOOP");
+
+        loop {
+            let interval = tick_interval.get();
+
+            sleep(interval.unwrap_or(Duration::from_millis(150))).await;
+
+            if interval.is_some() && display.get() == ProgressDisplay::Loader {
+                frame_index.set((frame_index + 1) % frames.read().len());
+            }
+
+            estimator.write().record(value.get(), Instant::now());
+        }
+    });
+
+    hooks.use_future(async move {
+        o2.println("Progress REPORTER");
 
         let Some(reporter) = reporter else {
             return;
@@ -136,6 +185,8 @@ pub fn ProgressBar<'a>(
         let mut receiver = reporter.subscribe();
 
         while let Ok(state) = receiver.recv().await {
+            o2.println(format!("Progress {state:#?}"));
+
             match state {
                 ProgressState::Wait(val) => {
                     sleep(val).await;
@@ -157,179 +208,16 @@ pub fn ProgressBar<'a>(
                     suffix.set(val);
                 }
                 ProgressState::Value(val) => {
-                    if val >= max.get() {
-                        value.set(max.get());
-                        should_exit.set(true);
-                        break;
-                    } else {
-                        value.set(val);
-                    }
-                }
-                _ => {}
-            };
-        }
-    });
-
-    hooks.use_future(async move {
-        println!("ProgressBar LOOP");
-
-        loop {
-            sleep(Duration::from_millis(150)).await;
-            estimator.write().record(value.get(), Instant::now());
-        }
-    });
-
-    if should_exit.get() {
-        system.exit();
-
-        return element!(Box).into_any();
-    }
-
-    let char_filled = props.char_filled.unwrap_or(theme.progress_bar_filled_char);
-    let char_unfilled = props
-        .char_unfilled
-        .unwrap_or(theme.progress_bar_unfilled_char);
-    let char_position = props
-        .char_position
-        .unwrap_or(theme.progress_bar_position_char);
-    let bar_color = props.bar_color.unwrap_or(theme.progress_bar_color);
-    let bar_percent = calculate_percent(value.get(), max.get());
-    let bar_total_width = props.bar_width as u64;
-    let bar_filled_width = (bar_total_width as f64 * (bar_percent / 100.0)) as u64;
-    let mut bar_unfilled_width = bar_total_width - bar_filled_width;
-
-    // When theres a position to show, we need to reduce the unfilled bar by 1
-    if bar_percent > 0.0 && bar_percent < 100.0 {
-        bar_unfilled_width -= 1;
-    }
-
-    element! {
-        Group(gap: 1) {
-            Box(width: Size::Length(props.bar_width)) {
-                Text(
-                    content: String::from(char_filled).repeat(bar_filled_width as usize),
-                    color: bar_color,
-                )
-
-                #(if bar_percent == 0.0 || bar_percent == 100.0 {
-                    None
-                } else {
-                    Some(element! {
-                        Text(
-                            content: String::from(char_position),
-                            color: bar_color,
-                        )
-                    })
-                })
-
-                Text(
-                    content: String::from(char_unfilled).repeat(bar_unfilled_width as usize),
-                    color: bar_color,
-                )
-            }
-            Box {
-                StyledText(
-                    content: format!(
-                        "{prefix}{}{suffix}",
-                        get_message(MessageData {
-                            estimator: Some(estimator.read()),
-                            max: max.get(),
-                            message: message.read(),
-                            started: started.get(),
-                            value: value.get(),
-                        })
-                    )
-                )
-            }
-        }
-    }
-    .into_any()
-}
-
-#[derive(Props)]
-pub struct ProgressLoaderProps {
-    pub loader_color: Option<Color>,
-    pub loader_frames: Option<Vec<String>>,
-    pub default_message: String,
-    pub reporter: Option<ProgressReporter>,
-    pub tick_interval: Duration,
-}
-
-impl Default for ProgressLoaderProps {
-    fn default() -> Self {
-        Self {
-            loader_color: None,
-            loader_frames: None,
-            default_message: "".into(),
-            reporter: Default::default(),
-            tick_interval: Duration::from_millis(100),
-        }
-    }
-}
-
-#[component]
-pub fn ProgressLoader<'a>(
-    props: &mut ProgressLoaderProps,
-    mut hooks: Hooks,
-) -> impl Into<AnyElement<'a>> {
-    let theme = hooks.use_context::<ConsoleTheme>();
-    let mut system = hooks.use_context_mut::<SystemContext>();
-    let mut prefix = hooks.use_state(String::new);
-    let mut message = hooks.use_state(|| props.default_message.clone());
-    let mut suffix = hooks.use_state(String::new);
-    let frames = hooks.use_state(|| {
-        props
-            .loader_frames
-            .clone()
-            .unwrap_or_else(|| theme.progress_loader_frames.clone())
-    });
-    let mut frame_index = hooks.use_state(|| 0);
-    let mut tick_interval = hooks.use_state(|| props.tick_interval);
-    let mut should_exit = hooks.use_state(|| false);
-    let started = hooks.use_state(Instant::now);
-
-    let reporter = props.reporter.take();
-    let frames_total = frames.read().len();
-
-    hooks.use_future(async move {
-        println!("ProgressLoader REPORTER");
-        let Some(reporter) = reporter else {
-            return;
-        };
-
-        let mut receiver = reporter.subscribe();
-
-        while let Ok(state) = receiver.recv().await {
-            match state {
-                ProgressState::Wait(val) => {
-                    sleep(val).await;
-                }
-                ProgressState::Exit => {
-                    should_exit.set(true);
-                    break;
-                }
-                ProgressState::Message(val) => {
-                    message.set(val);
-                }
-                ProgressState::Prefix(val) => {
-                    prefix.set(val);
-                }
-                ProgressState::Suffix(val) => {
-                    suffix.set(val);
+                    value.set(val);
                 }
                 ProgressState::Tick(val) => {
                     tick_interval.set(val);
                 }
+                ProgressState::Display(val) => {
+                    display.set(val);
+                }
                 _ => {}
             };
-        }
-    });
-
-    hooks.use_future(async move {
-        println!("ProgressLoader LOOP");
-        loop {
-            sleep(tick_interval.get()).await;
-            frame_index.set((frame_index + 1) % frames_total);
         }
     });
 
@@ -339,31 +227,96 @@ pub fn ProgressLoader<'a>(
         return element!(Box).into_any();
     }
 
-    element! {
-        Group(gap: 1) {
-            Box {
-                Text(
-                    content: &frames.read()[frame_index.get()],
-                    color: props.loader_color.unwrap_or(theme.progress_loader_color),
-                )
+    match display.get() {
+        ProgressDisplay::Bar => {
+            let char_filled = props
+                .bar_filled_char
+                .unwrap_or(theme.progress_bar_filled_char);
+            let char_unfilled = props
+                .bar_unfilled_char
+                .unwrap_or(theme.progress_bar_unfilled_char);
+            let char_position = props
+                .bar_position_char
+                .unwrap_or(theme.progress_bar_position_char);
+            let bar_color = props.color.unwrap_or(theme.progress_bar_color);
+            let bar_percent = calculate_percent(value.get(), max.get());
+            let bar_total_width = props.bar_width as u64;
+            let bar_filled_width = (bar_total_width as f64 * (bar_percent / 100.0)) as u64;
+            let mut bar_unfilled_width = bar_total_width - bar_filled_width;
+
+            // When theres a position to show, we need to reduce the unfilled bar by 1
+            if bar_percent > 0.0 && bar_percent < 100.0 {
+                bar_unfilled_width -= 1;
             }
-            Box {
-                StyledText(
-                    content: format!(
-                        "{prefix}{}{suffix}",
-                        get_message(MessageData {
-                            estimator: None,
-                            max: frames_total as u64,
-                            message: message.read(),
-                            started: started.get(),
-                            value: frame_index.get() as u64,
+
+            element! {
+                Group(gap: 1) {
+                    Box(width: Size::Length(props.bar_width)) {
+                        Text(
+                            content: String::from(char_filled).repeat(bar_filled_width as usize),
+                            color: bar_color,
+                        )
+
+                        #(if bar_percent == 0.0 || bar_percent == 100.0 {
+                            None
+                        } else {
+                            Some(element! {
+                                Text(
+                                    content: String::from(char_position),
+                                    color: bar_color,
+                                )
+                            })
                         })
+
+                        Text(
+                            content: String::from(char_unfilled).repeat(bar_unfilled_width as usize),
+                            color: bar_color,
+                        )
+                    }
+                    Box {
+                        StyledText(
+                            content: format!(
+                                "{prefix}{}{suffix}",
+                                get_message(MessageData {
+                                    estimator: estimator.read(),
+                                    max: max.get(),
+                                    message: message.read(),
+                                    started: started.get(),
+                                    value: value.get(),
+                                })
+                            )
+                        )
+                    }
+                }
+            }
+            .into_any()
+        }
+        ProgressDisplay::Loader => element! {
+            Group(gap: 1) {
+                Box {
+                    Text(
+                        content: &frames.read()[frame_index.get()],
+                        color: props.color.unwrap_or(theme.progress_loader_color),
                     )
-                )
+                }
+                Box {
+                    StyledText(
+                        content: format!(
+                            "{prefix}{}{suffix}",
+                            get_message(MessageData {
+                                estimator: estimator.read(),
+                                max: frames.read().len() as u64,
+                                message: message.read(),
+                                started: started.get(),
+                                value: frame_index.get() as u64,
+                            })
+                        )
+                    )
+                }
             }
         }
+        .into_any(),
     }
-    .into_any()
 }
 
 fn calculate_percent(value: u64, max: u64) -> f64 {
@@ -371,7 +324,7 @@ fn calculate_percent(value: u64, max: u64) -> f64 {
 }
 
 struct MessageData<'a> {
-    estimator: Option<StateRef<'a, Estimator>>,
+    estimator: StateRef<'a, Estimator>,
     max: u64,
     message: StateRef<'a, String>,
     started: Instant,
@@ -428,45 +381,43 @@ fn get_message(data: MessageData) -> String {
         message = message.replace("{elapsed}", &format_duration(data.started.elapsed(), true));
     }
 
-    if let Some(estimator) = data.estimator {
-        let eta = estimator.calculate_eta(data.value, data.max);
-        let sps = estimator.calculate_sps();
+    let eta = data.estimator.calculate_eta(data.value, data.max);
+    let sps = data.estimator.calculate_sps();
 
-        if message.contains("{eta}") {
-            message = message.replace("{eta}", &format_duration(eta, true));
-        }
+    if message.contains("{eta}") {
+        message = message.replace("{eta}", &format_duration(eta, true));
+    }
 
-        if message.contains("{duration}") {
-            message = message.replace(
-                "{duration}",
-                &format_duration(data.started.elapsed().saturating_add(eta), true),
-            );
-        }
+    if message.contains("{duration}") {
+        message = message.replace(
+            "{duration}",
+            &format_duration(data.started.elapsed().saturating_add(eta), true),
+        );
+    }
 
-        if message.contains("{per_sec}") {
-            message = message.replace("{per_sec}", &format!("{:.1}/s", sps));
-        }
+    if message.contains("{per_sec}") {
+        message = message.replace("{per_sec}", &format!("{:.1}/s", sps));
+    }
 
-        if message.contains("{bytes_per_sec}") {
-            message = message.replace(
-                "{bytes_per_sec}",
-                &format!("{}/s", format_bytes_binary(sps as u64)),
-            );
-        }
+    if message.contains("{bytes_per_sec}") {
+        message = message.replace(
+            "{bytes_per_sec}",
+            &format!("{}/s", format_bytes_binary(sps as u64)),
+        );
+    }
 
-        if message.contains("{binary_bytes_per_sec}") {
-            message = message.replace(
-                "{binary_bytes_per_sec}",
-                &format!("{}/s", format_bytes_binary(sps as u64)),
-            );
-        }
+    if message.contains("{binary_bytes_per_sec}") {
+        message = message.replace(
+            "{binary_bytes_per_sec}",
+            &format!("{}/s", format_bytes_binary(sps as u64)),
+        );
+    }
 
-        if message.contains("{decimal_bytes_per_sec}") {
-            message = message.replace(
-                "{decimal_bytes_per_sec}",
-                &format!("{}/s", format_bytes_decimal(sps as u64)),
-            );
-        }
+    if message.contains("{decimal_bytes_per_sec}") {
+        message = message.replace(
+            "{decimal_bytes_per_sec}",
+            &format!("{}/s", format_bytes_decimal(sps as u64)),
+        );
     }
 
     message
