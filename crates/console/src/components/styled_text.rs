@@ -60,6 +60,7 @@ fn tag_to_style(tag: String) -> Option<Style> {
         "path" => Style::Path,
         "property" => Style::Property,
         "shell" => Style::Shell,
+        "symbol" => Style::Symbol,
         "url" => Style::Url,
         _ => return None,
     };

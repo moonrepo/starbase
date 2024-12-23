@@ -5,7 +5,6 @@ use crate::utils::estimator::Estimator;
 use crate::utils::formats::*;
 use iocraft::prelude::*;
 use std::time::{Duration, Instant};
-use tokio::spawn;
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::time::sleep;
 
@@ -90,7 +89,7 @@ pub struct ProgressBarProps {
     pub default_max: u64,
     pub default_message: String,
     pub default_value: u64,
-    pub reporter: ProgressReporter,
+    pub reporter: Option<ProgressReporter>,
 }
 
 impl Default for ProgressBarProps {
@@ -125,16 +124,14 @@ pub fn ProgressBar<'a>(
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
 
-    // Clone the reporter, not the receiver, as this is less costly
-    let reporter = props.reporter.clone();
+    let reporter = props.reporter.take();
 
     hooks.use_future(async move {
-        let handle = spawn(async move {
-            loop {
-                sleep(Duration::from_millis(150)).await;
-                estimator.write().record(value.get(), Instant::now());
-            }
-        });
+        println!("ProgressBar REPORTER");
+
+        let Some(reporter) = reporter else {
+            return;
+        };
 
         let mut receiver = reporter.subscribe();
 
@@ -171,8 +168,15 @@ pub fn ProgressBar<'a>(
                 _ => {}
             };
         }
+    });
 
-        handle.abort();
+    hooks.use_future(async move {
+        println!("ProgressBar LOOP");
+
+        loop {
+            sleep(Duration::from_millis(150)).await;
+            estimator.write().record(value.get(), Instant::now());
+        }
     });
 
     if should_exit.get() {
@@ -247,7 +251,7 @@ pub struct ProgressLoaderProps {
     pub loader_color: Option<Color>,
     pub loader_frames: Option<Vec<String>>,
     pub default_message: String,
-    pub reporter: ProgressReporter,
+    pub reporter: Option<ProgressReporter>,
     pub tick_interval: Duration,
 }
 
@@ -284,17 +288,14 @@ pub fn ProgressLoader<'a>(
     let mut should_exit = hooks.use_state(|| false);
     let started = hooks.use_state(Instant::now);
 
-    // Clone the reporter, not the receiver, as this is less costly
-    let reporter = props.reporter.clone();
+    let reporter = props.reporter.take();
     let frames_total = frames.read().len();
 
     hooks.use_future(async move {
-        let handle = spawn(async move {
-            loop {
-                sleep(tick_interval.get()).await;
-                frame_index.set((frame_index + 1) % frames_total);
-            }
-        });
+        println!("ProgressLoader REPORTER");
+        let Some(reporter) = reporter else {
+            return;
+        };
 
         let mut receiver = reporter.subscribe();
 
@@ -322,8 +323,14 @@ pub fn ProgressLoader<'a>(
                 _ => {}
             };
         }
+    });
 
-        handle.abort();
+    hooks.use_future(async move {
+        println!("ProgressLoader LOOP");
+        loop {
+            sleep(tick_interval.get()).await;
+            frame_index.set((frame_index + 1) % frames_total);
+        }
     });
 
     if should_exit.get() {
