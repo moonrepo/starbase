@@ -101,7 +101,7 @@ pub struct ProgressProps {
     pub bar_unfilled_char: Option<char>,
     // Loader
     pub loader_frames: Option<Vec<String>>,
-    pub loader_interval: Duration,
+    pub loader_interval: Option<Duration>,
     // Shared
     pub color: Option<Color>,
     pub default_max: u64,
@@ -120,7 +120,7 @@ impl Default for ProgressProps {
             bar_position_char: None,
             bar_unfilled_char: None,
             loader_frames: None,
-            loader_interval: Duration::from_millis(100),
+            loader_interval: None,
             default_max: 100,
             default_message: "".into(),
             default_value: 0,
@@ -152,20 +152,23 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
             .unwrap_or_else(|| theme.progress_loader_frames.clone())
     });
     let mut frame_index = hooks.use_state(|| 0);
-    let mut tick_interval = hooks.use_state(|| Some(props.loader_interval));
+    let mut tick_interval = hooks.use_state(|| {
+        props.loader_interval.or_else(|| {
+            if props.display == ProgressDisplay::Loader {
+                Some(Duration::from_millis(100))
+            } else {
+                None
+            }
+        })
+    });
 
-    let (stdout, _) = hooks.use_output();
-    let o1 = stdout.clone();
-    let o2 = stdout.clone();
     let reporter = props.reporter.take();
 
     hooks.use_future(async move {
-        o1.println("Progress LOOP");
-
         loop {
             let interval = tick_interval.get();
 
-            sleep(interval.unwrap_or(Duration::from_millis(150))).await;
+            sleep(interval.unwrap_or(Duration::from_millis(250))).await;
 
             if interval.is_some() && display.get() == ProgressDisplay::Loader {
                 frame_index.set((frame_index + 1) % frames.read().len());
@@ -176,8 +179,6 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
     });
 
     hooks.use_future(async move {
-        o2.println("Progress REPORTER");
-
         let Some(reporter) = reporter else {
             return;
         };
@@ -185,8 +186,6 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
         let mut receiver = reporter.subscribe();
 
         while let Ok(state) = receiver.recv().await {
-            o2.println(format!("Progress {state:#?}"));
-
             match state {
                 ProgressState::Wait(val) => {
                     sleep(val).await;
