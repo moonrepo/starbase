@@ -220,7 +220,7 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                     let selected = selected_index.read().contains(&index);
 
                     element! {
-                        Box {
+                        Box(key: opt.value.clone()) {
                             Box(margin_right: 1) {
                                 #(if active {
                                     element! {
