@@ -1,5 +1,6 @@
 use super::layout::Group;
 use super::styled_text::StyledText;
+use super::OwnedOrShared;
 use crate::ui::ConsoleTheme;
 use crate::utils::estimator::Estimator;
 use crate::utils::formats::*;
@@ -39,6 +40,12 @@ impl Default for ProgressReporter {
         let (tx, _rx) = broadcast::channel::<ProgressState>(1000);
 
         Self { tx }
+    }
+}
+
+impl From<ProgressReporter> for Option<OwnedOrShared<ProgressReporter>> {
+    fn from(value: ProgressReporter) -> Self {
+        Some(OwnedOrShared::Owned(value))
     }
 }
 
@@ -108,7 +115,7 @@ pub struct ProgressProps {
     pub default_message: String,
     pub default_value: u64,
     pub display: ProgressDisplay,
-    pub reporter: Option<ProgressReporter>,
+    pub reporter: Option<OwnedOrShared<ProgressReporter>>,
 }
 
 impl Default for ProgressProps {
@@ -125,7 +132,7 @@ impl Default for ProgressProps {
             default_message: "".into(),
             default_value: 0,
             display: ProgressDisplay::Bar,
-            reporter: Default::default(),
+            reporter: None,
         }
     }
 }
