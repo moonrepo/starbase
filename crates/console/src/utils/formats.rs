@@ -40,23 +40,23 @@ pub const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 pub const WEEK: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 pub const YEAR: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 
-pub const DURATION_UNITS: &[(Duration, &str, &str)] = &[
-    (NANOSECOND, "nanosecond", "ns"),
-    (MICROSECOND, "microsecond", "μs"),
-    (MILLISECOND, "millisecond", "ms"),
-    (SECOND, "second", "s"),
-    (MINUTE, "minute", "m"),
-    (HOUR, "hour", "h"),
-    (DAY, "day", "d"),
-    (WEEK, "week", "w"),
-    (YEAR, "year", "y"),
+pub const DURATION_UNITS: &[(Duration, &str, &str, &str)] = &[
+    (NANOSECOND, "nanosecond", "nanoseconds", "ns"),
+    (MICROSECOND, "microsecond", "microseconds", "μs"),
+    (MILLISECOND, "millisecond", "milliseconds", "ms"),
+    (SECOND, "second", "seconds", "s"),
+    (MINUTE, "minute", "minutes", "m"),
+    (HOUR, "hour", "hours", "h"),
+    (DAY, "day", "days", "d"),
+    (WEEK, "week", "weeks", "w"),
+    (YEAR, "year", "years", "y"),
 ];
 
 pub fn format_duration(duration: Duration, short_suffix: bool) -> String {
     let mut nanos = duration.as_nanos();
     let mut output: Vec<String> = vec![];
 
-    for (d, long, short) in DURATION_UNITS.iter().rev() {
+    for (d, long, long_plural, short) in DURATION_UNITS.iter().rev() {
         if nanos == 0 {
             break;
         }
@@ -70,10 +70,13 @@ pub fn format_duration(duration: Duration, short_suffix: bool) -> String {
         }
 
         if count > 0 {
-            output.push(format!(
-                "{count}{}",
-                if short_suffix { short } else { long }
-            ));
+            output.push(if short_suffix {
+                format!("{count}{short}")
+            } else if count == 1 {
+                format!("{count} {long}")
+            } else {
+                format!("{count} {long_plural}")
+            });
         }
     }
 

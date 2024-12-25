@@ -1,4 +1,3 @@
-use super::layout::Group;
 use super::styled_text::StyledText;
 use super::OwnedOrShared;
 use crate::ui::ConsoleTheme;
@@ -256,8 +255,8 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
             }
 
             element! {
-                Group(gap: 1) {
-                    Box(width: Size::Length(props.bar_width)) {
+                Box {
+                    Box(width: Size::Length(props.bar_width), margin_right: 1) {
                         Text(
                             content: String::from(char_filled).repeat(bar_filled_width as usize),
                             color: bar_color,
@@ -298,8 +297,8 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
             .into_any()
         }
         ProgressDisplay::Loader => element! {
-            Group(gap: 1) {
-                Box {
+            Box {
+                Box(margin_right: 1) {
                     Text(
                         content: &frames.read()[frame_index.get()],
                         color: props.color.unwrap_or(theme.progress_loader_color),
