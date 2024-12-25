@@ -30,7 +30,7 @@ pub fn Notice<'a>(props: &mut NoticeProps<'a>, hooks: Hooks) -> impl Into<AnyEle
     let color = props
         .variant
         .map(|v| theme.variant(v))
-        .unwrap_or(theme.border_color);
+        .or_else(|| Some(theme.border_color));
 
     element! {
         Box(
@@ -44,7 +44,15 @@ pub fn Notice<'a>(props: &mut NoticeProps<'a>, hooks: Hooks) -> impl Into<AnyEle
         ) {
             #(title.map(|title| {
                 element! {
-                    Text(content: title.to_uppercase(), color, weight: Weight::Bold)
+                    Text(
+                        content: title.to_uppercase(),
+                        color: if theme.supports_color {
+                            color
+                        } else {
+                            None
+                        },
+                        weight: Weight::Bold,
+                    )
                 }
             }))
 

@@ -247,7 +247,9 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                             Box {
                                 Text(
                                     content: &opt.label,
-                                    color: if opt.disabled {
+                                    color: if !theme.supports_color {
+                                        None
+                                    } else if opt.disabled {
                                         Some(theme.style_muted_light_color)
                                     } else if selected {
                                         Some(theme.input_selected_color)

@@ -30,7 +30,11 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
         ) {
             StyledText(
                 content: &props.label,
-                color: theme.form_label_color,
+                color: if theme.supports_color {
+                    Some(theme.form_label_color)
+                } else {
+                    None
+                },
                 weight: Weight::Bold,
             )
 

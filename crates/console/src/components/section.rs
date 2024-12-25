@@ -28,10 +28,13 @@ pub fn Section<'a>(props: &mut SectionProps<'a>, hooks: Hooks) -> impl Into<AnyE
                 Box(margin_top: -1) {
                     Text(
                         content: format!("{} ", props.title),
-                        color: props
-                            .title_color
-                            .or_else(|| props.variant.map(|v| theme.variant(v)))
-                            .unwrap_or(theme.border_focus_color),
+                        color: if theme.supports_color {
+                            props.title_color
+                                .or_else(|| props.variant.map(|v| theme.variant(v)))
+                                .or_else(|| Some(theme.border_focus_color))
+                        } else {
+                            None
+                        },
                         weight: Weight::Bold,
                         wrap: TextWrap::NoWrap,
                     )

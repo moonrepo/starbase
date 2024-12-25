@@ -5,6 +5,7 @@ use starbase_styles::{color::Color as NativeColor, Style};
 // https://www.ditig.com/publications/256-colors-cheat-sheet
 #[derive(Clone, Debug)]
 pub struct ConsoleTheme {
+    pub supports_color: bool,
     pub brand_color: Color,
 
     // Backgrounds
@@ -102,6 +103,7 @@ impl Default for ConsoleTheme {
             style_shell_color: style_to_color(Style::Shell),
             style_symbol_color: style_to_color(Style::Symbol),
             style_url_color: style_to_color(Style::Url),
+            supports_color: true,
         }
     }
 }

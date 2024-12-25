@@ -29,10 +29,14 @@ pub fn StyledText<'a>(props: &StyledTextProps, hooks: Hooks) -> impl Into<AnyEle
             #(parts.into_iter().map(|(text, tag)| {
                 element! {
                     Text(
-                        color: tag.and_then(tag_to_style)
-                            .or(props.style)
-                            .map(|style| theme.style(style))
-                            .or(props.color),
+                        color: if theme.supports_color {
+                            tag.and_then(tag_to_style)
+                                .or(props.style)
+                                .map(|style| theme.style(style))
+                                .or(props.color)
+                        } else {
+                            None
+                        },
                         content: text,
                         weight: props.weight,
                         wrap: props.wrap,
