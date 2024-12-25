@@ -1,9 +1,8 @@
 use crate::stream::ConsoleStreamType;
-use flume::{Receiver, TryRecvError};
 use parking_lot::Mutex;
 use std::io::{self, Write};
 use std::mem;
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -46,7 +45,7 @@ pub fn flush(buffer: &mut Vec<u8>, stream: ConsoleStreamType) -> io::Result<()> 
 pub fn flush_on_loop(
     buffer: Arc<Mutex<Vec<u8>>>,
     stream: ConsoleStreamType,
-    receiver: Receiver<bool>,
+    receiver: mpsc::Receiver<bool>,
 ) {
     loop {
         sleep(Duration::from_millis(100));
@@ -55,7 +54,7 @@ pub fn flush_on_loop(
 
         // Has the thread been closed?
         match receiver.try_recv() {
-            Ok(true) | Err(TryRecvError::Disconnected) => {
+            Ok(true) | Err(mpsc::TryRecvError::Disconnected) => {
                 break;
             }
             _ => {}

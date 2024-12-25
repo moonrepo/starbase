@@ -185,20 +185,20 @@ async fn render(session: TestSession, ui: String) {
         "progressbar" => {
             con.render_loop(element! {
                 Container {
-                    ProgressBar(
+                    Progress(
                         default_message: "Unfilled - {elapsed} - {duration} - {eta}".to_owned()
                     )
-                    ProgressBar(
-                        bar_color: Color::Cyan,
+                    Progress(
+                        color: Color::Cyan,
                         default_message: "Filled - {bytes}/{total_bytes} - {decimal_bytes}/{decimal_total_bytes}".to_owned(),
                         default_max: 5432u64,
                         default_value: 5432u64
                     )
-                    ProgressBar(
-                        bar_color: Color::Red,
-                        char_filled: '━',
-                        char_position: '╾',
-                        char_unfilled: '─',
+                    Progress(
+                        color: Color::Red,
+                        bar_filled_char: '━',
+                        bar_position_char: '╾',
+                        bar_unfilled_char: '─',
                         default_message: "Partially filled with custom bar - {percent}%".to_owned(),
                         default_value: 53u64
                     )
@@ -216,10 +216,11 @@ async fn render(session: TestSession, ui: String) {
 
                 loop {
                     if count >= 100 {
+                        reporter_clone.exit();
                         break;
                     } else if count == 50 {
                         reporter_clone.set_message(
-                            "Loading {value}/{max} ({per_sec}) - {elapsed} - {duration} - {eta}",
+                            "Loading {value}/{max} ({per_sec}) - {elapsed} elapsed - {duration} duration - {eta} eta",
                         );
                     } else if count == 25 {
                         reporter_clone.set_prefix("[prefix] ");
@@ -236,7 +237,7 @@ async fn render(session: TestSession, ui: String) {
 
             con.render_loop(element! {
                 Container {
-                    ProgressBar(
+                    Progress(
                         default_message: "Loading {value}/{max} ({per_sec})".to_owned(),
                         reporter
                     )
@@ -248,12 +249,14 @@ async fn render(session: TestSession, ui: String) {
         "progressloader" => {
             con.render_loop(element! {
                 Container {
-                    ProgressLoader(
+                    Progress(
+                        display: ProgressDisplay::Loader,
                         default_message: "Default - {elapsed}".to_owned()
                     )
-                    ProgressLoader(
+                    Progress(
+                        display: ProgressDisplay::Loader,
                         default_message: "Custom frames".to_owned(),
-                        loader_color: Color::Yellow,
+                        color: Color::Yellow,
                         loader_frames: vec![
                             "∙∙∙".into(),
                             "●∙∙".into(),
@@ -261,7 +264,7 @@ async fn render(session: TestSession, ui: String) {
                             "∙∙●".into(),
                             "∙∙∙".into(),
                         ],
-                        tick_interval: Duration::from_millis(125)
+                        loader_interval: Duration::from_millis(125)
                     )
                 }
             })

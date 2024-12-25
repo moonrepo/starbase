@@ -28,6 +28,9 @@ pub use table::*;
 // Re-export iocraft components
 pub use iocraft::prelude::{Box as View, Button, Text};
 
+use std::ops::Deref;
+use std::sync::Arc;
+
 pub struct Validator<'a, T>(Box<dyn Fn(T) -> Option<String> + Send + Sync + 'a>);
 
 impl<T> Validator<'_, T> {
@@ -52,10 +55,39 @@ where
     }
 }
 
-impl<'a, T: 'a> std::ops::Deref for Validator<'a, T> {
+impl<'a, T: 'a> Deref for Validator<'a, T> {
     type Target = dyn Fn(T) -> Option<String> + Send + Sync + 'a;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+#[derive(Clone)]
+pub enum OwnedOrShared<T: Clone> {
+    Owned(T),
+    Shared(Arc<T>),
+}
+
+impl<T: Clone> From<T> for OwnedOrShared<T> {
+    fn from(value: T) -> OwnedOrShared<T> {
+        Self::Owned(value)
+    }
+}
+
+impl<T: Clone> From<Arc<T>> for OwnedOrShared<T> {
+    fn from(value: Arc<T>) -> OwnedOrShared<T> {
+        Self::Shared(value)
+    }
+}
+
+impl<T: Clone> Deref for OwnedOrShared<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(inner) => inner,
+            Self::Shared(inner) => inner,
+        }
     }
 }

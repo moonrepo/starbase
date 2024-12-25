@@ -10,11 +10,10 @@ rust-version = "1.80.0"
 [dependencies]
 starbase_styles = { version = "0.4.9", path = "../styles" }
 crossterm = { workspace = true, optional = true }
-flume = { version = "0.11.1", features = ["async"] }
 iocraft = { workspace = true, optional = true }
 miette = { workspace = true }
 parking_lot = "0.12.3"
-tokio = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

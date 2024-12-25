@@ -67,7 +67,7 @@ pub fn Table<'a>(props: &mut TableProps<'a>, hooks: Hooks) -> impl Into<AnyEleme
                 ) {
                     #(props.headers.iter().enumerate().map(|(index, header)| {
                         element! {
-                            TableCol(col: index as i32) {
+                            TableCol(col: index as i32, key: header.label.clone()) {
                                 Text(
                                     content: header.label.clone(),
                                     weight: Weight::Bold,
