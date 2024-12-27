@@ -516,7 +516,7 @@ dependencies = [
  "starbase",
  "starbase_shell",
  "starbase_utils",
- "thiserror 2.0.8",
+ "thiserror 2.0.9",
  "tokio",
  "tracing",
 ]
@@ -539,7 +539,7 @@ dependencies = [
  "miette",
  "starbase",
  "starbase_console",
- "thiserror 2.0.8",
+ "thiserror 2.0.9",
  "tokio",
  "tracing",
 ]
@@ -1067,21 +1067,19 @@ dependencies = [
 
 [[package]]
 name = "iocraft"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6aa17731846833a741c47f7c4c7b319c8174f69c2c558dd916fe70495f804de7"
+checksum = "b9f5ac7cf1a16f1ba24ac908b41c2f2dcdcf1b5e5f24c0f922517f140173c4a0"
 dependencies = [
  "any_key",
  "bitflags",
  "crossterm",
  "futures",
  "generational-box",
- "indexmap",
  "iocraft-macros",
  "taffy",
  "textwrap",
  "unicode-width",
- "uuid",
 ]
 
 [[package]]
@@ -1667,9 +1665,9 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 
 [[package]]
 name = "reqwest"
-version = "0.12.9"
+version = "0.12.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
+checksum = "3d3536321cfc54baa8cf3e273d5e1f63f889067829c4b410fcdbac8ca7b80994"
 dependencies = [
  "base64",
  "bytes",
@@ -1699,6 +1697,7 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tokio-rustls",
+ "tower",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -1890,9 +1889,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.133"
+version = "1.0.134"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7fceb2473b9166b2294ef05efcb65a3db80803f0b03ef86a5fc88a2b85ee377"
+checksum = "d00f4175c42ee48b15416f6193a959ba3a0d67fc699a0db9ad12df9f83991c7d"
 dependencies = [
  "itoa",
  "memchr",
@@ -2096,7 +2095,7 @@ dependencies = [
  "starbase_sandbox",
  "starbase_styles",
  "starbase_utils",
- "thiserror 2.0.8",
+ "thiserror 2.0.9",
  "tracing",
  "xz2",
  "zip",
@@ -2124,7 +2123,7 @@ dependencies = [
  "async-trait",
  "miette",
  "starbase_macros",
- "thiserror 2.0.8",
+ "thiserror 2.0.9",
  "tokio",
 ]
 
@@ -2160,7 +2159,7 @@ dependencies = [
  "serial_test",
  "starbase_sandbox",
  "sysinfo",
- "thiserror 2.0.8",
+ "thiserror 2.0.9",
  "tracing",
 ]
 
@@ -2193,7 +2192,7 @@ dependencies = [
  "starbase_sandbox",
  "starbase_styles",
  "starbase_utils",
- "thiserror 2.0.8",
+ "thiserror 2.0.9",
  "tokio",
  "toml",
  "tracing",
@@ -2342,11 +2341,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.8"
+version = "2.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08f5383f3e0071702bf93ab5ee99b52d26936be9dedd9413067cbdcddcb6141a"
+checksum = "f072643fd0190df67a8bab670c20ef5d8737177d6ac6b2e9a236cb096206b2cc"
 dependencies = [
- "thiserror-impl 2.0.8",
+ "thiserror-impl 2.0.9",
 ]
 
 [[package]]
@@ -2362,9 +2361,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.8"
+version = "2.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2f357fcec90b3caef6623a099691be676d033b40a058ac95d2a6ade6fa0c943"
+checksum = "7b50fa271071aae2e6ee85f842e2e28ba8cd2c5fb67f11fcb1fd70b276f9e7d4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2480,6 +2479,27 @@ dependencies = [
  "toml_datetime",
  "winnow",
 ]
+
+[[package]]
+name = "tower"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
+dependencies = [
+ "futures-core",
+ "futures-util",
+ "pin-project-lite",
+ "sync_wrapper",
+ "tokio",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "tower-layer"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e"
 
 [[package]]
 name = "tower-service"
@@ -3202,7 +3222,7 @@ dependencies = [
  "flate2",
  "indexmap",
  "memchr",
- "thiserror 2.0.8",
+ "thiserror 2.0.9",
  "zopfli",
 ]
 
