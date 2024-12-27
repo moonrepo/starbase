@@ -102,6 +102,31 @@ async fn render(session: TestSession, ui: String) {
             })
             .unwrap();
         }
+        "group" => {
+            con.render(element! {
+                Container {
+                    Section(title: "No gap") {
+                        Group {
+                            Text(content: "1")
+                            Text(content: "2")
+                            Text(content: "3")
+                            Text(content: "4")
+                            Text(content: "5")
+                        }
+                    }
+                    Section(title: "Gap 1") {
+                        Group(gap: 1) {
+                            Text(content: "1")
+                            Text(content: "2")
+                            Text(content: "3")
+                            Text(content: "4")
+                            Text(content: "5")
+                        }
+                    }
+                }
+            })
+            .unwrap();
+        }
         "input" => {
             let mut value = String::new();
 
@@ -328,6 +353,31 @@ async fn render(session: TestSession, ui: String) {
                 )
             })
             .await
+            .unwrap();
+        }
+        "stack" => {
+            con.render(element! {
+                Container {
+                    Section(title: "No gap") {
+                        Stack {
+                            Text(content: "1")
+                            Text(content: "2")
+                            Text(content: "3")
+                            Text(content: "4")
+                            Text(content: "5")
+                        }
+                    }
+                    Section(title: "Gap 1") {
+                        Stack(gap: 1) {
+                            Text(content: "1")
+                            Text(content: "2")
+                            Text(content: "3")
+                            Text(content: "4")
+                            Text(content: "5")
+                        }
+                    }
+                }
+            })
             .unwrap();
         }
         "styledtext" => {
