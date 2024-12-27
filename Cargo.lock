@@ -2165,7 +2165,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_styles"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "dirs",
  "miette",
