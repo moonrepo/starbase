@@ -123,8 +123,8 @@ pub fn TableCol<'a>(props: &mut TableColProps<'a>, hooks: Hooks) -> impl Into<An
     element! {
         Box(
             justify_content: align_to_justify(attrs.align),
-            padding_left: 1,
-            // padding_right: 1,
+            margin_left: 1,
+            margin_right: 1,
             width: attrs.width,
         ) {
             #(&mut props.children)

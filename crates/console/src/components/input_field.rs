@@ -27,6 +27,7 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
             border_edges: Edges::Left,
             border_style: BorderStyle::Round,
             padding_left: 1,
+            margin_top: 1,
         ) {
             StyledText(
                 content: &props.label,
