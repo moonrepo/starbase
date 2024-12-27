@@ -1,11 +1,11 @@
 use crate::ui::style_to_color;
 use iocraft::Color;
 use starbase_styles::{color::Color as NativeColor, Style};
+use std::collections::HashMap;
 
 // https://www.ditig.com/publications/256-colors-cheat-sheet
 #[derive(Clone, Debug)]
 pub struct ConsoleTheme {
-    pub supports_color: bool,
     pub brand_color: Color,
 
     // Backgrounds
@@ -60,6 +60,10 @@ pub struct ConsoleTheme {
     pub style_shell_color: Color,
     pub style_symbol_color: Color,
     pub style_url_color: Color,
+
+    // Misc
+    pub supports_color: bool,
+    pub custom_tags: HashMap<String, Color>,
 }
 
 impl Default for ConsoleTheme {
@@ -104,6 +108,7 @@ impl Default for ConsoleTheme {
             style_symbol_color: style_to_color(Style::Symbol),
             style_url_color: style_to_color(Style::Url),
             supports_color: true,
+            custom_tags: HashMap::new(),
         }
     }
 }
@@ -119,8 +124,8 @@ impl ConsoleTheme {
         }
     }
 
-    pub fn style(&self, style: Style) -> Color {
-        match style {
+    pub fn style_to_color(&self, style: &Style) -> Option<Color> {
+        let color = match style {
             Style::Caution => self.style_caution_color,
             Style::Failure => self.style_failure_color,
             Style::Invalid => self.style_invalid_color,
@@ -136,7 +141,31 @@ impl ConsoleTheme {
             Style::Shell => self.style_shell_color,
             Style::Symbol => self.style_symbol_color,
             Style::Url => self.style_url_color,
-        }
+            Style::Tag(tag) => return self.custom_tags.get(tag).cloned(),
+        };
+
+        Some(color)
+    }
+
+    pub fn tag_to_color(&self, tag: &str) -> Option<Color> {
+        self.style_to_color(&match tag {
+            "caution" => Style::Caution,
+            "failure" => Style::Failure,
+            "invalid" => Style::Invalid,
+            "muted" => Style::Muted,
+            "mutedlight" => Style::MutedLight,
+            "success" => Style::Success,
+            "file" => Style::File,
+            "hash" => Style::Hash,
+            "id" => Style::Id,
+            "label" => Style::Label,
+            "path" => Style::Path,
+            "property" => Style::Property,
+            "shell" => Style::Shell,
+            "symbol" => Style::Symbol,
+            "url" => Style::Url,
+            tag => Style::Tag(tag.to_owned()),
+        })
     }
 
     pub fn variant(&self, variant: Variant) -> Color {

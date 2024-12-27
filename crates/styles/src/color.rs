@@ -29,8 +29,10 @@ pub enum Color {
     GrayLight = 246,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Style {
+    Tag(String),
+
     // States
     Caution,
     Failure,
@@ -70,6 +72,7 @@ impl Style {
             Style::Shell => Color::Pink,
             Style::Symbol => Color::Lime,
             Style::Url => Color::Blue,
+            Style::Tag(_) => Color::White,
         }
     }
 }

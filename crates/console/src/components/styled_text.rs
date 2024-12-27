@@ -30,9 +30,9 @@ pub fn StyledText<'a>(props: &StyledTextProps, hooks: Hooks) -> impl Into<AnyEle
                 element! {
                     Text(
                         color: if theme.supports_color {
-                            tag.and_then(tag_to_style)
-                                .or(props.style)
-                                .map(|style| theme.style(style))
+                            tag.as_ref()
+                                .and_then(|tag| theme.tag_to_color(tag))
+                                .or_else(|| props.style.as_ref().and_then(|style| theme.style_to_color(style)))
                                 .or(props.color)
                         } else {
                             None
@@ -47,27 +47,4 @@ pub fn StyledText<'a>(props: &StyledTextProps, hooks: Hooks) -> impl Into<AnyEle
             }))
         }
     }
-}
-
-fn tag_to_style(tag: String) -> Option<Style> {
-    let style = match tag.as_str() {
-        "caution" => Style::Caution,
-        "failure" => Style::Failure,
-        "invalid" => Style::Invalid,
-        "muted" => Style::Muted,
-        "mutedlight" | "muted_light" => Style::MutedLight,
-        "success" => Style::Success,
-        "file" => Style::File,
-        "hash" | "version" => Style::Hash,
-        "id" => Style::Id,
-        "label" => Style::Label,
-        "path" => Style::Path,
-        "property" => Style::Property,
-        "shell" => Style::Shell,
-        "symbol" => Style::Symbol,
-        "url" => Style::Url,
-        _ => return None,
-    };
-
-    Some(style)
 }
