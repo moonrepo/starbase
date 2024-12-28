@@ -5,12 +5,13 @@ use iocraft::prelude::*;
 #[derive(Default, Props)]
 pub struct MapProps<'a> {
     pub children: Vec<AnyElement<'a>>,
+    pub gap: Gap,
 }
 
 #[component]
 pub fn Map<'a>(props: &mut MapProps<'a>) -> impl Into<AnyElement<'a>> {
     element! {
-        Stack(gap: 0) {
+        Stack(gap: props.gap) {
             #(&mut props.children)
         }
     }
@@ -28,16 +29,14 @@ pub fn MapItem<'a>(props: &mut MapItemProps<'a>, hooks: Hooks) -> impl Into<AnyE
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
-        Box(
-            flex_direction: FlexDirection::Row,
-        ) {
+        Group(gap: 1) {
             Box {
                 #(&mut props.name)
             }
-            Box(padding_left: 1, padding_right: 1) {
-                Separator(value: props.separator.as_deref().unwrap_or(&theme.layout_map_separator))
-            }
-            Box(flex_direction: FlexDirection::Column) {
+
+            Separator(value: props.separator.as_deref().unwrap_or(&theme.layout_map_separator))
+
+            Stack {
                 #(&mut props.value)
             }
         }

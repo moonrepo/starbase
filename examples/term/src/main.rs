@@ -162,8 +162,8 @@ async fn render(session: TestSession, ui: String) {
                             }
                         }
                     }
-                    Section(title: "Custom bullets") {
-                        List {
+                    Section(title: "Custom bullets & gap") {
+                        List(gap: 1) {
                             ListItem(bullet: ">>".to_owned()) {
                                 Text(content: "One")
                             }
@@ -173,6 +173,48 @@ async fn render(session: TestSession, ui: String) {
                             ListItem(bullet: ">>".to_owned()) {
                                 Text(content: "Three")
                             }
+                        }
+                    }
+                }
+            })
+            .unwrap();
+        }
+        "map" => {
+            con.render(element! {
+                Container {
+                    Section(title: "Default") {
+                        Map {
+                            MapItem(
+                                name: element! { Text(content: "One") }.into_any(),
+                                value: element! { Text(content: "Value") }.into_any(),
+                            )
+                            MapItem(
+                                name: element! { Text(content: "Two") }.into_any(),
+                                value: element! { Text(content: "Value") }.into_any(),
+                            )
+                            MapItem(
+                                name: element! { Text(content: "Three") }.into_any(),
+                                value: element! { Text(content: "Value") }.into_any(),
+                            )
+                        }
+                    }
+                    Section(title: "Custom separators & gap") {
+                        Map(gap: 1) {
+                            MapItem(
+                                separator: "~".to_owned(),
+                                name: element! { Text(content: "One") }.into_any(),
+                                value: element! { Text(content: "Value") }.into_any(),
+                            )
+                            MapItem(
+                                separator: "~".to_owned(),
+                                name: element! { Text(content: "Two") }.into_any(),
+                                value: element! { Text(content: "Value") }.into_any(),
+                            )
+                            MapItem(
+                                separator: "~".to_owned(),
+                                name: element! { Text(content: "Three") }.into_any(),
+                                value: element! { Text(content: "Value") }.into_any(),
+                            )
                         }
                     }
                 }
@@ -388,6 +430,44 @@ async fn render(session: TestSession, ui: String) {
                     StyledText(content: "Styled failure with weight", style: Style::Failure, weight: Weight::Bold)
                     StyledText(content: "Styled file with decoration", style: Style::File, decoration: TextDecoration::Underline)
                     StyledText(content: "Styled <file>with</file> <path>tags</path>")
+                }
+            })
+            .unwrap();
+        }
+        "table" => {
+            con.render(element! {
+                Container {
+                    Table(
+                        headers: vec![
+                            TableHeader::new("Length", Size::Length(40)),
+                            TableHeader::new("Percentage", Size::Percent(20.0)),
+                            TableHeader::new("Middle aligned", Size::Percent(20.0)).align(TextAlign::Center),
+                            TableHeader::new("Right aligned", Size::Percent(20.0)).align(TextAlign::Right),
+                            TableHeader::new("Auto", Size::Auto),
+                        ]
+                    ) {
+                        #((0..3).map(|row| {
+                            element! {
+                                TableRow(row) {
+                                    TableCol(col: 0) {
+                                        Text(content: "Lorem ipsum dolor sit amet")
+                                    }
+                                    TableCol(col: 1) {
+                                        Text(content: "consectetur adipiscing elit")
+                                    }
+                                    TableCol(col: 2) {
+                                        Text(content: "Nulla vel erat vulputate")
+                                    }
+                                    TableCol(col: 3) {
+                                        Text(content: "consequat justo eget")
+                                    }
+                                    TableCol(col: 4) {
+                                        Text(content: "gravida lorem")
+                                    }
+                                }
+                            }
+                        }))
+                    }
                 }
             })
             .unwrap();

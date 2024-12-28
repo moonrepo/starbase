@@ -5,13 +5,13 @@ use iocraft::prelude::*;
 #[derive(Default, Props)]
 pub struct ListProps<'a> {
     pub children: Vec<AnyElement<'a>>,
-    pub gap: Option<Gap>,
+    pub gap: Gap,
 }
 
 #[component]
 pub fn List<'a>(props: &mut ListProps<'a>) -> impl Into<AnyElement<'a>> {
     element! {
-        Stack(gap: props.gap.unwrap_or(Gap::Unset)) {
+        Stack(gap: props.gap) {
             #(&mut props.children)
         }
     }
@@ -28,13 +28,10 @@ pub fn ListItem<'a>(props: &mut ListItemProps<'a>, hooks: Hooks) -> impl Into<An
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
-        Box(
-            flex_direction: FlexDirection::Row,
-        ) {
-            Box(padding_right: 1) {
-                Separator(value: props.bullet.as_deref().unwrap_or(&theme.layout_list_bullet))
-            }
-            Box(flex_direction: FlexDirection::Column) {
+        Group(gap: 1) {
+            Separator(value: props.bullet.as_deref().unwrap_or(&theme.layout_list_bullet))
+
+            Stack {
                 #(&mut props.children)
             }
         }

@@ -117,7 +117,7 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                 }.into_any()
             })
         ) {
-            Box(margin_top: 1, margin_bottom: 1) {
+            Box(margin_top: 1, margin_bottom: 1, gap: 1) {
                 Button(
                     has_focus: focused == 0,
                     handler: move |_|  {
@@ -136,8 +136,6 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                         Text(content: &props.yes_label)
                     }
                 }
-
-                Box(width: 1)
 
                 Button(
                     has_focus: focused == 1,

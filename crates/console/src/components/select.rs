@@ -1,4 +1,5 @@
 use super::input_field::*;
+use super::layout::Group;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 use std::collections::HashSet;
@@ -220,46 +221,43 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                     let selected = selected_index.read().contains(&index);
 
                     element! {
-                        Box(key: opt.value.clone()) {
-                            Box(margin_right: 1) {
-                                #(if active {
-                                    element! {
-                                        Text(
-                                            content: props.prefix_symbol.as_ref()
-                                                .unwrap_or(&theme.input_prefix_symbol),
-                                            color: theme.input_prefix_color,
-                                        )
-                                    }
+                        Group(key: opt.value.clone(), gap: 1) {
+                            #(if active {
+                                element! {
+                                    Text(
+                                        content: props.prefix_symbol.as_ref()
+                                            .unwrap_or(&theme.input_prefix_symbol),
+                                        color: theme.input_prefix_color,
+                                    )
+                                }
+                            } else if selected {
+                                element! {
+                                    Text(
+                                        content: props.selected_symbol.as_ref()
+                                            .unwrap_or(&theme.input_selected_symbol),
+                                        color: theme.input_selected_color
+                                    )
+                                }
+                            } else {
+                                element! {
+                                    Text(content: " ")
+                                }
+                            })
+
+                            Text(
+                                content: &opt.label,
+                                color: if !theme.supports_color {
+                                    None
+                                } else if opt.disabled {
+                                    Some(theme.style_muted_light_color)
                                 } else if selected {
-                                    element! {
-                                        Text(
-                                            content: props.selected_symbol.as_ref()
-                                                .unwrap_or(&theme.input_selected_symbol),
-                                            color: theme.input_selected_color
-                                        )
-                                    }
+                                    Some(theme.input_selected_color)
+                                } else if active {
+                                    Some(theme.input_active_color)
                                 } else {
-                                    element! {
-                                        Text(content: " ")
-                                    }
-                                })
-                            }
-                            Box {
-                                Text(
-                                    content: &opt.label,
-                                    color: if !theme.supports_color {
-                                        None
-                                    } else if opt.disabled {
-                                        Some(theme.style_muted_light_color)
-                                    } else if selected {
-                                        Some(theme.input_selected_color)
-                                    } else if active {
-                                        Some(theme.input_active_color)
-                                    } else {
-                                        None
-                                    }
-                                )
-                            }
+                                    None
+                                }
+                            )
                         }
                     }
                 }))

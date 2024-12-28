@@ -20,7 +20,7 @@ pub fn Entry<'a>(props: &mut EntryProps<'a>, hooks: Hooks) -> impl Into<AnyEleme
     let no_children = props.no_children || props.children.is_empty();
 
     element! {
-        Box(flex_direction: FlexDirection::Column) {
+        Stack {
             Box {
                 Box(margin_right: 1) {
                     Text(content: &props.name)

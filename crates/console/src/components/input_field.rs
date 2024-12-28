@@ -1,3 +1,4 @@
+use super::layout::Group;
 use super::styled_text::*;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
@@ -28,6 +29,7 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
             border_style: BorderStyle::Round,
             padding_left: 1,
             margin_top: 1,
+            margin_bottom: 1,
         ) {
             StyledText(
                 content: &props.label,
@@ -88,7 +90,7 @@ pub fn InputFieldValue<'a>(
     let failed = props.value.is_empty() || props.value == "false";
 
     element! {
-        Box {
+        Group(gap: 1) {
             #(if failed {
                 element!(StyledText(
                     content: &theme.form_failure_symbol,
@@ -101,14 +103,10 @@ pub fn InputFieldValue<'a>(
                 ))
             })
 
-            Box(width: 1)
-
             StyledText(
                 content: &props.label,
                 weight: Weight::Bold,
             )
-
-            Box(width: 1)
 
             StyledText(
                 content: if props.value.is_empty() {

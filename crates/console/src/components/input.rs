@@ -1,4 +1,5 @@
 use super::input_field::*;
+use super::layout::Group;
 use super::Validator;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
@@ -65,8 +66,8 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
             description: props.description.clone(),
             error: Some(error),
         ) {
-            Box {
-                Box(margin_right: 1) {
+            Group(gap: 1) {
+                Box {
                     Text(
                         content: props.prefix_symbol.as_ref().unwrap_or(&theme.input_prefix_symbol),
                         color: theme.input_prefix_color,

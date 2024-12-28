@@ -28,6 +28,10 @@ impl TableHeader {
             ..Default::default()
         }
     }
+
+    pub fn align(self, align: TextAlign) -> Self {
+        Self { align, ..self }
+    }
 }
 
 impl From<&str> for TableHeader {
@@ -64,6 +68,7 @@ pub fn Table<'a>(props: &mut TableProps<'a>, hooks: Hooks) -> impl Into<AnyEleme
                     border_edges: Edges::Bottom,
                     border_color: theme.border_color,
                     border_style: BorderStyle::Round,
+                    gap: 2
                 ) {
                     #(props.headers.iter().enumerate().map(|(index, header)| {
                         element! {
@@ -99,7 +104,8 @@ pub fn TableRow<'a>(props: &mut TableRowProps<'a>, hooks: Hooks) -> impl Into<An
                 None
             } else {
                 Some(theme.bg_alt_color)
-            }
+            },
+            gap: 2
         ) {
             #(&mut props.children)
         }
@@ -123,8 +129,6 @@ pub fn TableCol<'a>(props: &mut TableColProps<'a>, hooks: Hooks) -> impl Into<An
     element! {
         Box(
             justify_content: align_to_justify(attrs.align),
-            margin_left: 1,
-            margin_right: 1,
             width: attrs.width,
         ) {
             #(&mut props.children)
