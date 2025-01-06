@@ -117,14 +117,14 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                 }.into_any()
             })
         ) {
-            Box(margin_top: 1, margin_bottom: 1, gap: 1) {
+            View(margin_top: 1, margin_bottom: 1, gap: 1) {
                 Button(
                     has_focus: focused == 0,
                     handler: move |_|  {
                         handle_confirm_via_focus();
                     }
                 ) {
-                    Box(
+                    View(
                         padding_left: 1,
                         padding_right: 1,
                         background_color: if focused == 0 {
@@ -143,7 +143,7 @@ pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<
                         handle_confirm_via_focus();
                     }
                 ) {
-                    Box(
+                    View(
                         padding_left: 1,
                         padding_right: 1,
                         background_color: if focused == 1 {

@@ -23,7 +23,7 @@ pub fn Container<'a>(
     }
 
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Column,
             width,
         ) {
@@ -41,7 +41,7 @@ pub struct StackProps<'a> {
 #[component]
 pub fn Stack<'a>(props: &mut StackProps<'a>) -> impl Into<AnyElement<'a>> {
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Column,
             gap: props.gap,
         ) {
@@ -59,7 +59,7 @@ pub struct GroupProps<'a> {
 #[component]
 pub fn Group<'a>(props: &mut GroupProps<'a>) -> impl Into<AnyElement<'a>> {
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Row,
             gap: props.gap,
         ) {

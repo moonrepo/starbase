@@ -58,13 +58,13 @@ pub fn Table<'a>(props: &mut TableProps<'a>, hooks: Hooks) -> impl Into<AnyEleme
 
     element! {
         ContextProvider(value: Context::owned(context)) {
-            Box(
+            View(
                 border_color: theme.border_color,
                 border_style: BorderStyle::Round,
                 flex_direction: FlexDirection::Column,
                 width: Size::Auto,
             ) {
-                Box(
+                View(
                     border_edges: Edges::Bottom,
                     border_color: theme.border_color,
                     border_style: BorderStyle::Round,
@@ -99,7 +99,7 @@ pub fn TableRow<'a>(props: &mut TableRowProps<'a>, hooks: Hooks) -> impl Into<An
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
-        Box(
+        View(
             background_color: if props.row % 2 == 0 {
                 None
             } else {
@@ -127,7 +127,7 @@ pub fn TableCol<'a>(props: &mut TableColProps<'a>, hooks: Hooks) -> impl Into<An
         .unwrap_or_else(|| panic!("Unknown column index {}", props.col));
 
     element! {
-        Box(
+        View(
             justify_content: align_to_justify(attrs.align),
             width: attrs.width,
         ) {

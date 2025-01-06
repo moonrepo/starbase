@@ -30,7 +30,7 @@ pub fn MapItem<'a>(props: &mut MapItemProps<'a>, hooks: Hooks) -> impl Into<AnyE
 
     element! {
         Group(gap: 1) {
-            Box {
+            View {
                 #(&mut props.name)
             }
 

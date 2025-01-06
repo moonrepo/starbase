@@ -33,7 +33,7 @@ pub fn Notice<'a>(props: &mut NoticeProps<'a>, hooks: Hooks) -> impl Into<AnyEle
         .or_else(|| Some(theme.border_color));
 
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Column,
             border_color: color,
             border_edges: Edges::Left,

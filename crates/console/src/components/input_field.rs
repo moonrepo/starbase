@@ -18,7 +18,7 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Column,
             border_color: if props.has_focus {
                 theme.border_focus_color
@@ -47,7 +47,7 @@ pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Int
                 }
             }))
 
-            Box(width: Size::Percent(100.0)) {
+            View(width: Size::Percent(100.0)) {
                 #(&mut props.children)
             }
 

@@ -67,13 +67,13 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
             error: Some(error),
         ) {
             Group(gap: 1) {
-                Box {
+                View {
                     Text(
                         content: props.prefix_symbol.as_ref().unwrap_or(&theme.input_prefix_symbol),
                         color: theme.input_prefix_color,
                     )
                 }
-                Box(width: 50) {
+                View(width: 50) {
                     TextInput(
                         has_focus: true,
                         value: value.to_string(),

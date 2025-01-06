@@ -215,7 +215,7 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
                 }.into_any()
             })
         ) {
-            Box(flex_direction: FlexDirection::Column, margin_top: 1, margin_bottom: 1) {
+            View(flex_direction: FlexDirection::Column, margin_top: 1, margin_bottom: 1) {
                 #(options.read().iter().enumerate().map(|(index, opt)| {
                     let active = active_index.get() == index;
                     let selected = selected_index.read().contains(&index);
