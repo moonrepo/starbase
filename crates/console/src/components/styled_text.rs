@@ -25,7 +25,7 @@ pub fn StyledText<'a>(props: &StyledTextProps, hooks: Hooks) -> impl Into<AnyEle
     let parts = parse_tags(&props.content);
 
     element! {
-        Box {
+        View {
             #(parts.into_iter().map(|(text, tag)| {
                 element! {
                     Text(

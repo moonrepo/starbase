@@ -26,7 +26,7 @@ pub use styled_text::*;
 pub use table::*;
 
 // Re-export iocraft components
-pub use iocraft::prelude::{Box as View, Button, Text};
+pub use iocraft::prelude::{Button, Text, View};
 
 use std::ops::Deref;
 use std::sync::Arc;

@@ -229,7 +229,7 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
     if should_exit.get() {
         system.exit();
 
-        return element!(Box).into_any();
+        return element!(View).into_any();
     }
 
     match display.get() {
@@ -255,8 +255,8 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
             }
 
             element! {
-                Box {
-                    Box(width: Size::Length(props.bar_width), margin_right: 1) {
+                View {
+                    View(width: Size::Length(props.bar_width), margin_right: 1) {
                         Text(
                             content: String::from(char_filled).repeat(bar_filled_width as usize),
                             color: bar_color,
@@ -278,7 +278,7 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
                             color: bar_color,
                         )
                     }
-                    Box {
+                    View {
                         StyledText(
                             content: format!(
                                 "{prefix}{}{suffix}",
@@ -297,14 +297,14 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
             .into_any()
         }
         ProgressDisplay::Loader => element! {
-            Box {
-                Box(margin_right: 1) {
+            View {
+                View(margin_right: 1) {
                     Text(
                         content: &frames.read()[frame_index.get()],
                         color: props.color.unwrap_or(theme.progress_loader_color),
                     )
                 }
-                Box {
+                View {
                     StyledText(
                         content: format!(
                             "{prefix}{}{suffix}",

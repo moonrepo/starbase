@@ -14,18 +14,18 @@ pub fn Section<'a>(props: &mut SectionProps<'a>, hooks: Hooks) -> impl Into<AnyE
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Column,
             width: Size::Percent(100.0),
         ) {
-            Box(
+            View(
                 flex_direction: FlexDirection::Row,
                 border_color: theme.border_color,
                 border_edges: Edges::Top,
                 border_style: BorderStyle::Round,
                 width: Size::Percent(40.0)
             ) {
-                Box(margin_top: -1) {
+                View(margin_top: -1) {
                     Text(
                         content: format!("{} ", props.title),
                         color: if theme.supports_color {
@@ -44,7 +44,7 @@ pub fn Section<'a>(props: &mut SectionProps<'a>, hooks: Hooks) -> impl Into<AnyE
                 None
             } else {
                 Some(element! {
-                    Box(
+                    View(
                         flex_direction: FlexDirection::Column,
                         padding_top: 1,
                         padding_left: 2,

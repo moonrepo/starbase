@@ -21,27 +21,27 @@ pub fn Entry<'a>(props: &mut EntryProps<'a>, hooks: Hooks) -> impl Into<AnyEleme
 
     element! {
         Stack {
-            Box {
-                Box(margin_right: 1) {
+            View {
+                View(margin_right: 1) {
                     Text(content: &props.name)
                     Separator(value: props.separator.as_deref().unwrap_or(":"))
                 }
 
                 #(if props.value.is_some() {
                     Some(element! {
-                        Box {
+                        View {
                             #(&mut props.value)
                         }
                     })
                 } else if let Some(content) = &props.content {
                     Some(element! {
-                        Box {
+                        View {
                             StyledText(content, style: Style::MutedLight)
                         }
                     })
                 } else if no_children {
                     Some(element! {
-                        Box {
+                        View {
                             StyledText(
                                 content: props.fallback.as_deref()
                                     .unwrap_or(&theme.layout_fallback_symbol),
@@ -58,7 +58,7 @@ pub fn Entry<'a>(props: &mut EntryProps<'a>, hooks: Hooks) -> impl Into<AnyEleme
                 None
             } else {
                 Some(element! {
-                    Box(flex_direction: FlexDirection::Column, padding_left: 2) {
+                    View(flex_direction: FlexDirection::Column, padding_left: 2) {
                         #(&mut props.children)
                     }
                 })

@@ -14,16 +14,13 @@ pub fn Container<'a>(
 ) -> impl Into<AnyElement<'a>> {
     let (mut width, _) = hooks.use_terminal_size();
 
+    // Non-TTY's like CI environments
     if width == 0 {
-        if cfg!(debug_assertions) {
-            width = 60;
-        } else {
-            panic!("Terminal width is zero, unable to render container!");
-        }
+        width = 60;
     }
 
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Column,
             width,
         ) {
@@ -41,7 +38,7 @@ pub struct StackProps<'a> {
 #[component]
 pub fn Stack<'a>(props: &mut StackProps<'a>) -> impl Into<AnyElement<'a>> {
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Column,
             gap: props.gap,
         ) {
@@ -59,7 +56,7 @@ pub struct GroupProps<'a> {
 #[component]
 pub fn Group<'a>(props: &mut GroupProps<'a>) -> impl Into<AnyElement<'a>> {
     element! {
-        Box(
+        View(
             flex_direction: FlexDirection::Row,
             gap: props.gap,
         ) {
