@@ -109,7 +109,7 @@ $origPath = [Environment]::GetEnvironmentVariable('PATH')
 function {function} {{
   $exports = {command};
   if ($exports) {{
-    Invoke-Expression -Command $exports;
+    $exports | Out-String | Invoke-Expression;
   }}
 }}
 
