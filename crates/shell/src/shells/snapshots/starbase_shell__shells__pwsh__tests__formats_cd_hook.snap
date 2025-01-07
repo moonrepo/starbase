@@ -11,7 +11,7 @@ $origPath = [Environment]::GetEnvironmentVariable('PATH')
 function _starbase_hook {
   $exports = starbase hook pwsh;
   if ($exports) {
-    Invoke-Expression -Command $exports;
+    $exports | Out-String | Invoke-Expression;
   }
 }
 
