@@ -7,9 +7,13 @@ use std::env;
 pub use crate::components::*;
 pub use crate::theme::*;
 
+fn is_forced_tty() -> bool {
+    env::var("STARBASE_FORCE_TTY").is_ok()
+}
+
 impl<R: Reporter> Console<R> {
     pub fn render<T: Component>(&self, element: Element<'_, T>) -> miette::Result<()> {
-        let is_tty = self.out.is_terminal();
+        let is_tty = is_forced_tty() || self.out.is_terminal();
 
         let mut theme = self.theme();
         theme.supports_color = env::var("NO_COLOR").is_err() && is_tty;
@@ -42,8 +46,10 @@ impl<R: Reporter> Console<R> {
         &self,
         element: Element<'_, T>,
     ) -> miette::Result<()> {
+        let is_tty = is_forced_tty() || self.out.is_terminal();
+
         // If not a TTY, exit immediately
-        if !self.out.is_terminal() {
+        if !is_tty {
             return Ok(());
         }
 
@@ -51,8 +57,10 @@ impl<R: Reporter> Console<R> {
     }
 
     pub async fn render_loop<T: Component>(&self, element: Element<'_, T>) -> miette::Result<()> {
+        let is_tty = is_forced_tty() || self.out.is_terminal();
+
         let mut theme = self.theme();
-        theme.supports_color = env::var("NO_COLOR").is_err() && self.out.is_terminal();
+        theme.supports_color = env::var("NO_COLOR").is_err() && is_tty;
 
         self.out.flush()?;
 
