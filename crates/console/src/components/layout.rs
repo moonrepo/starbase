@@ -19,6 +19,8 @@ pub fn Container<'a>(
         width = 60;
     }
 
+    dbg!("width", width);
+
     element! {
         View(
             flex_direction: FlexDirection::Column,

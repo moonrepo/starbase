@@ -48,10 +48,14 @@ impl<R: Reporter> Console<R> {
     ) -> miette::Result<()> {
         let is_tty = is_forced_tty() || self.out.is_terminal();
 
+        dbg!("1", is_tty);
+
         // If not a TTY, exit immediately
         if !is_tty {
             return Ok(());
         }
+
+        dbg!("2");
 
         self.render_loop(element).await
     }
@@ -64,6 +68,8 @@ impl<R: Reporter> Console<R> {
 
         self.out.flush()?;
 
+        dbg!("3", is_tty);
+
         element! {
             ContextProvider(value: Context::owned(theme)) {
                 #(element)
@@ -73,7 +79,11 @@ impl<R: Reporter> Console<R> {
         .await
         .into_diagnostic()?;
 
+        dbg!("4");
+
         self.out.flush()?;
+
+        dbg!("5");
 
         Ok(())
     }
