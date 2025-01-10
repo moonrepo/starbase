@@ -98,7 +98,7 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
 pub fn is_supported_archive_extension(path: &Path) -> bool {
     path.file_name()
         .and_then(|file| file.to_str())
-        .map_or(false, |name| {
+        .is_some_and(|name| {
             get_supported_archive_extensions()
                 .into_iter()
                 .any(|ext| name.ends_with(&ext))
