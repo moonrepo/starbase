@@ -91,7 +91,11 @@ impl Shell for Pwsh {
                 }
             }
             Statement::UnsetEnv { key } => {
-                format!(r#"Remove-Item -LiteralPath "env:{key}";"#)
+                format!(
+                    r#"if (Test-Path "env:{key}") {{
+  Remove-Item -LiteralPath "env:{key}";
+}}"#
+                )
             }
         }
     }
