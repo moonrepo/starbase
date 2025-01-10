@@ -3,10 +3,10 @@ resolver = "2"
 members = ["crates/*", "examples/*"]
 
 [workspace.dependencies]
-async-trait = "0.1.84"
+async-trait = "0.1.85"
 crossterm = "0.28.1"
 dirs = "5.0.1"
-iocraft = "0.6.0"
+iocraft = "0.6.1"
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
 miette = "7.4.0"
 regex = { version = "1.11.1", default-features = false }
@@ -15,10 +15,10 @@ reqwest = { version = "0.12.12", default-features = false }
 rustc-hash = "2.1.0"
 serial_test = "3.2.0"
 serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.134"
+serde_json = "1.0.135"
 serde_yaml = "0.9.34"
-thiserror = "2.0.9"
-tokio = { version = "1.42.0", default-features = false, features = [
+thiserror = "2.0.10"
+tokio = { version = "1.43.0", default-features = false, features = [
     "io-util",
     "rt",
     "sync",

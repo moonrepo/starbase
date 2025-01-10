@@ -1,3 +1,5 @@
+#![allow(unstable_name_collisions)]
+
 use crate::fs::{self, FsError};
 use fs4::fs_std::FileExt;
 use std::fmt::Debug;
