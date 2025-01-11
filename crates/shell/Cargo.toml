@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT"
 description = "Utilities for detecting shells and managing profile files."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.65.0"
+rust-version = "1.74.0"
 
 [package.metadata.docs.rs]
 all-features = true
