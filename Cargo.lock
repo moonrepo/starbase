@@ -2069,7 +2069,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "starbase"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2152,7 +2152,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.6.11"
+version = "0.6.12"
 dependencies = [
  "miette",
  "regex",
@@ -2176,7 +2176,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "async-trait",
  "dirs",
