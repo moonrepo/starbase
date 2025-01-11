@@ -39,4 +39,37 @@ mod fs_lock {
             assert!(elapsed >= Duration::from_millis(2500));
         }
     }
+
+    mod lock_file {
+        use super::*;
+
+        #[test]
+        fn all_wait() {
+            let sandbox = create_empty_sandbox();
+            let file = sandbox.path().join(".lock");
+            let mut handles = vec![];
+            let start = Instant::now();
+
+            for i in 0..10 {
+                let file_clone = file.clone();
+
+                handles.push(thread::spawn(move || {
+                    // Stagger
+                    thread::sleep(Duration::from_millis(i * 25));
+
+                    let _lock = fs::lock_directory(file_clone).unwrap();
+
+                    thread::sleep(Duration::from_millis(250));
+                }));
+            }
+
+            for handle in handles {
+                handle.join().unwrap();
+            }
+
+            let elapsed = start.elapsed();
+
+            assert!(elapsed >= Duration::from_millis(2500));
+        }
+    }
 }

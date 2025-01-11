@@ -51,6 +51,9 @@ pub enum FsError {
     #[error("A directory is required for path {}.", .path.style(Style::Path))]
     RequireDir { path: PathBuf },
 
+    #[error("A file is required for path {}.", .path.style(Style::Path))]
+    RequireFile { path: PathBuf },
+
     #[error("Failed to rename {} to {}.\n{error}", .from.style(Style::Path), .to.style(Style::Path))]
     Rename {
         from: PathBuf,
@@ -129,6 +132,10 @@ pub enum FsError {
     #[diagnostic(code(fs::require_dir))]
     #[error("A directory is required for path {}.", .path.style(Style::Path))]
     RequireDir { path: PathBuf },
+
+    #[diagnostic(code(fs::require_file))]
+    #[error("A file is required for path {}.", .path.style(Style::Path))]
+    RequireFile { path: PathBuf },
 
     #[diagnostic(code(fs::rename), help("Does the source file exist?"))]
     #[error("Failed to rename {} to {}.", .from.style(Style::Path), .to.style(Style::Path))]

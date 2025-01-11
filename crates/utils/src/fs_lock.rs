@@ -9,19 +9,57 @@ use tracing::{instrument, trace};
 
 pub const LOCK_FILE: &str = ".lock";
 
-pub struct DirLock {
+pub struct FileLock {
     lock: PathBuf,
     file: File,
     unlocked: bool,
 }
 
-impl DirLock {
+impl FileLock {
+    pub fn new(path: PathBuf) -> Result<Self, FsError> {
+        use std::io::prelude::*;
+
+        let mut file = fs::create_file_if_missing(&path)?;
+
+        trace!(
+            lock = ?path,
+            "Waiting to acquire lock",
+        );
+
+        // This blocks if another process has access!
+        file.lock_exclusive().map_err(|error| FsError::Lock {
+            path: path.clone(),
+            error: Box::new(error),
+        })?;
+
+        let pid = std::process::id();
+
+        trace!(
+            lock = ?path,
+            pid,
+            "Acquired lock, writing PID",
+        );
+
+        // Let other processes know that we have locked it
+        file.write(format!("{}", pid).as_ref())
+            .map_err(|error| FsError::Write {
+                path: path.clone(),
+                error: Box::new(error),
+            })?;
+
+        Ok(Self {
+            lock: path,
+            file,
+            unlocked: false,
+        })
+    }
+
     pub fn unlock(&mut self) -> Result<(), FsError> {
         if self.unlocked {
             return Ok(());
         }
 
-        trace!(dir = ?self.lock.parent().unwrap(), "Unlocking directory");
+        trace!(path = ?self.lock.parent().unwrap(), "Unlocking path");
 
         let handle_error = |error: std::io::Error| FsError::Unlock {
             path: self.lock.to_path_buf(),
@@ -49,17 +87,15 @@ impl DirLock {
     }
 }
 
-impl Drop for DirLock {
+impl Drop for FileLock {
     fn drop(&mut self) {
         self.unlock().unwrap_or_else(|error| {
-            panic!(
-                "Failed to remove directory lock {}: {}",
-                self.lock.display(),
-                error
-            )
+            panic!("Failed to remove lock {}: {}", self.lock.display(), error)
         });
     }
 }
+
+pub type DirLock = FileLock;
 
 /// Return true if the directory is currently locked (via [`lock_directory`]).
 pub fn is_dir_locked<T: AsRef<Path>>(path: T) -> bool {
@@ -89,13 +125,11 @@ pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
 /// to lock the directory and the `.lock` file currently exists, it will
 /// block waiting for it to be unlocked.
 ///
-/// This function returns a `DirLock` instance that will automatically unlock
+/// This function returns a `DirLock` guard that will automatically unlock
 /// when being dropped.
 #[inline]
 #[instrument]
 pub fn lock_directory<T: AsRef<Path> + Debug>(path: T) -> Result<DirLock, FsError> {
-    use std::io::prelude::*;
-
     let path = path.as_ref();
 
     fs::create_dir_all(path)?;
@@ -116,40 +150,29 @@ pub fn lock_directory<T: AsRef<Path> + Debug>(path: T) -> Result<DirLock, FsErro
     // for write access, and will be "unlocked" automatically by the kernel.
     //
     // Context: https://www.reddit.com/r/rust/comments/14hlx8u/comment/jpbmsh2/?utm_source=reddit&utm_medium=web2x&context=3
-    let lock = path.join(LOCK_FILE);
-    let mut file = fs::create_file_if_missing(&lock)?;
+    DirLock::new(path.join(LOCK_FILE))
+}
 
-    trace!(
-        lock = ?lock,
-        "Waiting to acquire lock on directory",
-    );
+/// Lock the provided file with exclusive access and write the current process ID
+/// as content. If another process attempts to lock the file, it will
+/// block waiting for it to be unlocked.
+///
+/// This function returns a `FileLock` guard that will automatically unlock
+/// when being dropped.
+#[inline]
+#[instrument]
+pub fn lock_file<T: AsRef<Path> + Debug>(path: T) -> Result<FileLock, FsError> {
+    let path = path.as_ref();
 
-    // This blocks if another process has access!
-    file.lock_exclusive().map_err(|error| FsError::Lock {
-        path: path.to_path_buf(),
-        error: Box::new(error),
-    })?;
-
-    let pid = std::process::id();
-
-    trace!(
-        lock = ?lock,
-        pid,
-        "Acquired lock on directory, writing PID",
-    );
-
-    // Let other processes know that we have locked it
-    file.write(format!("{}", pid).as_ref())
-        .map_err(|error| FsError::Write {
+    if !path.is_file() {
+        return Err(FsError::RequireFile {
             path: path.to_path_buf(),
-            error: Box::new(error),
-        })?;
+        });
+    }
 
-    Ok(DirLock {
-        lock,
-        file,
-        unlocked: false,
-    })
+    trace!(file = ?path, "Locking file");
+
+    FileLock::new(path.to_path_buf())
 }
 
 /// Lock the provided file with exclusive access and execute the operation.
