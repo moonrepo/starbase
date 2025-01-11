@@ -164,7 +164,7 @@ pub fn lock_directory<T: AsRef<Path> + Debug>(path: T) -> Result<DirLock, FsErro
 pub fn lock_file<T: AsRef<Path> + Debug>(path: T) -> Result<FileLock, FsError> {
     let path = path.as_ref();
 
-    if !path.is_file() {
+    if path.is_dir() {
         return Err(FsError::RequireFile {
             path: path.to_path_buf(),
         });
