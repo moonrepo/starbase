@@ -59,7 +59,7 @@ impl FileLock {
             return Ok(());
         }
 
-        trace!(path = ?self.lock.parent().unwrap(), "Unlocking path");
+        trace!(path = ?self.lock, "Unlocking path");
 
         let handle_error = |error: std::io::Error| FsError::Unlock {
             path: self.lock.to_path_buf(),
