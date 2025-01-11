@@ -66,9 +66,9 @@ pub struct EventFormatter {
 
 impl FormatTime for EventFormatter {
     fn format_time(&self, writer: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
-        if TEST_ENV.load(Ordering::Relaxed) {
-            return write!(writer, "YYYY-MM-DD");
-        }
+        // if TEST_ENV.load(Ordering::Relaxed) {
+        //     return write!(writer, "YYYY-MM-DD");
+        // }
 
         let mut date_format = "%Y-%m-%d %H:%M:%S%.3f";
         let current_timestamp = Local::now();
