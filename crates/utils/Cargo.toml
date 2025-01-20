@@ -37,7 +37,7 @@ serde_json = { workspace = true, optional = true }
 toml = { version = "0.8.19", optional = true }
 
 # yaml
-serde_yaml = { workspace = true, optional = true }
+serde_yml = { workspace = true, optional = true }
 
 # net
 async-trait = { workspace = true, optional = true }
@@ -54,7 +54,7 @@ miette = ["dep:miette"]
 net = ["dep:reqwest", "dep:url", "dep:async-trait"]
 json = ["dep:json-strip-comments", "dep:serde", "dep:serde_json"]
 toml = ["dep:toml", "dep:serde"]
-yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
+yaml = ["dep:regex", "dep:serde", "dep:serde_yml"]
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
