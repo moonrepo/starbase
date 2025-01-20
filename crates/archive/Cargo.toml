@@ -11,7 +11,7 @@ rust-version = "1.80.0"
 all-features = true
 
 [dependencies]
-starbase_styles = { version = "0.4.11", path = "../styles" }
+starbase_styles = { version = "0.4.12", path = "../styles" }
 starbase_utils = { version = "0.9.4", path = "../utils", default-features = false, features = [
 	"glob",
 ] }
