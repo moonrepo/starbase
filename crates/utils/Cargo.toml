@@ -17,7 +17,6 @@ miette = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 # editor-config
@@ -47,7 +46,7 @@ url = { version = "2.5.4", optional = true }
 [features]
 default = []
 editor-config = ["dep:ec4rs"]
-fs-lock = ["dep:fs4", "dep:tokio"]
+fs-lock = ["dep:fs4"]
 glob = ["dep:wax"]
 # glob-miette = ["glob", "miette", "wax/miette"]
 miette = ["dep:miette"]
@@ -70,3 +69,4 @@ starbase_utils = { path = ".", features = [
     "toml",
     "yaml",
 ] }
+tokio = { workspace = true }
