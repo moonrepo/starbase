@@ -1,6 +1,6 @@
 [package]
 name = "starbase_events"
-version = "0.6.7"
+version = "0.6.8"
 edition = "2021"
 license = "MIT"
 description = "Async and mutable event system."
@@ -8,7 +8,7 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.70.0"
 
 [dependencies]
-starbase_macros = { version = "0.7.10", path = "../macros", features = [
+starbase_macros = { version = "0.7.11", path = "../macros", features = [
 	"events",
 ] }
 async-trait = { workspace = true }
