@@ -17,7 +17,6 @@ miette = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 # editor-config
@@ -37,7 +36,7 @@ serde_json = { workspace = true, optional = true }
 toml = { version = "0.8.19", optional = true }
 
 # yaml
-serde_yaml = { workspace = true, optional = true }
+serde_yml = { workspace = true, optional = true }
 
 # net
 async-trait = { workspace = true, optional = true }
@@ -47,14 +46,14 @@ url = { version = "2.5.4", optional = true }
 [features]
 default = []
 editor-config = ["dep:ec4rs"]
-fs-lock = ["dep:fs4", "dep:tokio"]
+fs-lock = ["dep:fs4"]
 glob = ["dep:wax"]
 # glob-miette = ["glob", "miette", "wax/miette"]
 miette = ["dep:miette"]
 net = ["dep:reqwest", "dep:url", "dep:async-trait"]
 json = ["dep:json-strip-comments", "dep:serde", "dep:serde_json"]
 toml = ["dep:toml", "dep:serde"]
-yaml = ["dep:regex", "dep:serde", "dep:serde_yaml"]
+yaml = ["dep:regex", "dep:serde", "dep:serde_yml"]
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
@@ -70,3 +69,4 @@ starbase_utils = { path = ".", features = [
     "toml",
     "yaml",
 ] }
+tokio = { workspace = true }

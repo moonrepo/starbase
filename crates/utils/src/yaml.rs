@@ -8,8 +8,8 @@ use std::sync::LazyLock;
 use tracing::{instrument, trace};
 
 pub use crate::yaml_error::YamlError;
-pub use serde_yaml;
-pub use serde_yaml::{
+pub use serde_yml;
+pub use serde_yml::{
     Mapping as YamlMapping, Number as YamlNumber, Sequence as YamlSequence, Value as YamlValue,
 };
 
@@ -47,7 +47,7 @@ where
 {
     trace!("Parsing YAML");
 
-    serde_yaml::from_str(data.as_ref()).map_err(|error| YamlError::Parse {
+    serde_yml::from_str(data.as_ref()).map_err(|error| YamlError::Parse {
         error: Box::new(error),
     })
 }
@@ -61,7 +61,7 @@ where
 {
     trace!("Formatting YAML");
 
-    serde_yaml::to_string(&data).map_err(|error| YamlError::Format {
+    serde_yml::to_string(&data).map_err(|error| YamlError::Format {
         error: Box::new(error),
     })
 }
@@ -76,14 +76,14 @@ where
 {
     trace!("Formatting YAML with preserved indentation");
 
-    let mut data = serde_yaml::to_string(data)
+    let mut data = serde_yml::to_string(data)
         .map_err(|error| YamlError::Format {
             error: Box::new(error),
         })?
         .trim()
         .to_string();
 
-    // serde_yaml does not support customizing the indentation character. So to work around
+    // serde_yml does not support customizing the indentation character. So to work around
     // this, we do it manually on the YAML string, but only if the indent is different than
     // a double space (the default), which can be customized with `.editorconfig`.
     if indent != "  " {
@@ -121,7 +121,7 @@ where
 
     trace!(file = ?path, "Reading YAML file");
 
-    serde_yaml::from_str(&contents).map_err(|error| YamlError::ReadFile {
+    serde_yml::from_str(&contents).map_err(|error| YamlError::ReadFile {
         path: path.to_path_buf(),
         error: Box::new(error),
     })
@@ -142,7 +142,7 @@ where
 
     trace!(file = ?path, "Writing YAML file");
 
-    let data = serde_yaml::to_string(&yaml).map_err(|error| YamlError::WriteFile {
+    let data = serde_yml::to_string(&yaml).map_err(|error| YamlError::WriteFile {
         path: path.to_path_buf(),
         error: Box::new(error),
     })?;

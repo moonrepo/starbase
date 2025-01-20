@@ -32,7 +32,7 @@ pub mod toml;
 mod toml_error;
 
 #[cfg(feature = "yaml")]
-/// Utilities for parsing and formatting YAML, backed by `serde_yaml`.
+/// Utilities for parsing and formatting YAML, backed by `serde_yml`.
 pub mod yaml;
 #[cfg(feature = "yaml")]
 mod yaml_error;

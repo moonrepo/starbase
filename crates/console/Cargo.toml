@@ -13,7 +13,7 @@ crossterm = { workspace = true, optional = true }
 iocraft = { workspace = true, optional = true }
 miette = { workspace = true }
 parking_lot = "0.12.3"
-tokio = { workspace = true, optional = true, features = ["sync"] }
+tokio = { workspace = true, optional = true, features = ["sync", "time"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
