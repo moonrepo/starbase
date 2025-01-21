@@ -170,8 +170,13 @@ impl ArchiveUnpacker for ZipUnpacker {
 
             // Remove the prefix
             #[allow(clippy::assigning_clones)]
-            if !prefix.is_empty() && path.starts_with(prefix) {
-                path = path.strip_prefix(prefix).unwrap().to_owned();
+            if !prefix.is_empty() {
+                if let Ok(suffix) = path.strip_prefix(prefix) {
+                    path = suffix.to_owned();
+                } else {
+                    // Ignore files outside this prefix
+                    continue;
+                }
             }
 
             let output_path = self.output_dir.join(&path);
