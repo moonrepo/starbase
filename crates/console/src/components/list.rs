@@ -1,4 +1,5 @@
 use super::layout::*;
+use super::styled_text::*;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
@@ -30,6 +31,37 @@ pub fn ListItem<'a>(props: &mut ListItemProps<'a>, hooks: Hooks) -> impl Into<An
     element! {
         Group(gap: 1) {
             Separator(value: props.bullet.as_deref().unwrap_or(&theme.layout_list_bullet))
+
+            Stack {
+                #(&mut props.children)
+            }
+        }
+    }
+}
+
+#[derive(Default, Props)]
+pub struct ListCheckProps<'a> {
+    pub checked: bool,
+    pub children: Vec<AnyElement<'a>>,
+}
+
+#[component]
+pub fn ListCheck<'a>(props: &mut ListCheckProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+    let theme = hooks.use_context::<ConsoleTheme>();
+
+    element! {
+        Group(gap: 1) {
+            #(if props.checked {
+                element!(StyledText(
+                    content: &theme.form_success_symbol,
+                    style: Style::Success
+                ))
+            } else {
+                element!(StyledText(
+                    content: &theme.form_failure_symbol,
+                    style: Style::Failure
+                ))
+            })
 
             Stack {
                 #(&mut props.children)
