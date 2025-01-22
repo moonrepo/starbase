@@ -169,13 +169,9 @@ impl ArchiveUnpacker for ZipUnpacker {
             };
 
             // Remove the prefix
-            #[allow(clippy::assigning_clones)]
             if !prefix.is_empty() {
                 if let Ok(suffix) = path.strip_prefix(prefix) {
                     path = suffix.to_owned();
-                } else {
-                    // Ignore files outside this prefix
-                    continue;
                 }
             }
 
