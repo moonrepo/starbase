@@ -89,9 +89,14 @@ impl FileLock {
 
 impl Drop for FileLock {
     fn drop(&mut self) {
-        self.unlock().unwrap_or_else(|error| {
-            panic!("Failed to remove lock {}: {}", self.lock.display(), error)
-        });
+        if let Err(error) = self.unlock() {
+            // Only panic if the unlock error has been thrown, because that's a
+            // critical error. If the remove has failed, that's not important,
+            // because the file can simply be ignored and locked again.
+            if matches!(error, FsError::Unlock { .. }) {
+                panic!("Failed to remove lock {}: {}", self.lock.display(), error);
+            }
+        }
     }
 }
 
