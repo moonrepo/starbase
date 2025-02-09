@@ -631,6 +631,51 @@ pub fn remove_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Remove a directory, and all of its contents recursively, except for the provided list
+/// of relative paths. If the directory does not exist, this is a no-op.
+#[inline]
+#[instrument]
+pub fn remove_dir_all_except<T: AsRef<Path> + Debug>(
+    path: T,
+    exceptions: Vec<PathBuf>,
+) -> Result<(), FsError> {
+    let base_dir = path.as_ref();
+
+    if base_dir.exists() {
+        trace!(dir = ?base_dir, exceptions = ?exceptions, "Removing directory with exceptions");
+
+        fn traverse(
+            base_dir: &Path,
+            traverse_dir: &Path,
+            exclude: &[PathBuf],
+        ) -> Result<(), FsError> {
+            for entry in read_dir(traverse_dir)? {
+                let abs_path = entry.path();
+                let rel_path = abs_path.strip_prefix(base_dir).unwrap_or(&abs_path);
+                let is_excluded = exclude
+                    .iter()
+                    .any(|ex| rel_path == ex || ex.starts_with(rel_path));
+
+                // Is excluded, but the relative path may be a directory,
+                // so we need to continue traversing
+                if is_excluded {
+                    if abs_path.is_dir() {
+                        traverse(base_dir, &abs_path, exclude)?;
+                    }
+                } else {
+                    remove(abs_path)?;
+                }
+            }
+
+            Ok(())
+        }
+
+        traverse(base_dir, base_dir, &exceptions)?;
+    }
+
+    Ok(())
+}
+
 pub struct RemoveDirContentsResult {
     pub files_deleted: usize,
     pub bytes_saved: u64,
