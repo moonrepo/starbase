@@ -280,16 +280,13 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
                     }
                     View {
                         StyledText(
-                            content: format!(
-                                "{prefix}{}{suffix}",
-                                get_message(MessageData {
-                                    estimator: estimator.read(),
-                                    max: max.get(),
-                                    message: message.read(),
-                                    started: started.get(),
-                                    value: value.get(),
-                                })
-                            )
+                            content: get_message(MessageData {
+                                estimator: estimator.read(),
+                                max: max.get(),
+                                message: format!("{prefix}{message}{suffix}"),
+                                started: started.get(),
+                                value: value.get(),
+                            })
                         )
                     }
                 }
@@ -306,16 +303,13 @@ pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<An
                 }
                 View {
                     StyledText(
-                        content: format!(
-                            "{prefix}{}{suffix}",
-                            get_message(MessageData {
-                                estimator: estimator.read(),
-                                max: frames.read().len() as u64,
-                                message: message.read(),
-                                started: started.get(),
-                                value: frame_index.get() as u64,
-                            })
-                        )
+                        content: get_message(MessageData {
+                            estimator: estimator.read(),
+                            max: frames.read().len() as u64,
+                            message: format!("{prefix}{message}{suffix}"),
+                            started: started.get(),
+                            value: frame_index.get() as u64,
+                        })
                     )
                 }
             }
@@ -331,13 +325,13 @@ fn calculate_percent(value: u64, max: u64) -> f64 {
 struct MessageData<'a> {
     estimator: StateRef<'a, Estimator>,
     max: u64,
-    message: StateRef<'a, String>,
+    message: String,
     started: Instant,
     value: u64,
 }
 
 fn get_message(data: MessageData) -> String {
-    let mut message = data.message.to_owned();
+    let mut message = data.message;
 
     if message.contains("{value}") {
         message = message.replace("{value}", &data.value.to_string());

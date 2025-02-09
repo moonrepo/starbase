@@ -75,7 +75,7 @@ pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<An
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let options = hooks.use_state(|| props.options.clone());
-    let mut active_index = hooks.use_state(|| 0);
+    let mut active_index = hooks.use_state(|| props.default_index.unwrap_or_default());
     let mut selected_index = hooks.use_state(|| {
         HashSet::<usize>::from_iter(if props.multiple {
             props.default_indexes.clone()
