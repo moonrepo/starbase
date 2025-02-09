@@ -631,6 +631,27 @@ pub fn remove_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
+/// Remove a directory, and all of its contents recursively, at the provided path.
+/// If the directory does not exist, this is a no-op.
+#[inline]
+pub fn remove_dir_all_except<T: AsRef<Path> + Debug, F: Fn(&Path) -> bool>(
+    path: T,
+    op: F,
+) -> Result<(), FsError> {
+    let path = path.as_ref();
+
+    if path.exists() {
+        trace!(dir = ?path, "Removing directory");
+
+        fs::remove_dir_all(path).map_err(|error| FsError::Remove {
+            path: path.to_path_buf(),
+            error: Box::new(error),
+        })?;
+    }
+
+    Ok(())
+}
+
 pub struct RemoveDirContentsResult {
     pub files_deleted: usize,
     pub bytes_saved: u64,
