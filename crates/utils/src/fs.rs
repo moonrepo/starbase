@@ -631,8 +631,8 @@ pub fn remove_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
-/// Remove a directory, and all of its contents recursively, at the provided path.
-/// If the directory does not exist, this is a no-op.
+/// Remove a directory, and all of its contents recursively, except for the provided list
+/// of relative paths. If the directory does not exist, this is a no-op.
 #[inline]
 #[instrument]
 pub fn remove_dir_all_except<T: AsRef<Path> + Debug>(
