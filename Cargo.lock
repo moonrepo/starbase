@@ -2122,7 +2122,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_console"
-version = "0.4.6"
+version = "0.4.7"
 dependencies = [
  "crossterm",
  "iocraft",
