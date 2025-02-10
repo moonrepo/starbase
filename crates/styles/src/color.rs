@@ -250,6 +250,17 @@ pub fn apply_style_tags<T: AsRef<str>>(value: T) -> String {
     result.join("")
 }
 
+/// Remove style and tag specific markup from a string.
+pub fn remove_style_tags<T: AsRef<str>>(value: T) -> String {
+    let mut result = vec![];
+
+    for (text, _) in parse_style_tags(value) {
+        result.push(text);
+    }
+
+    result.join("")
+}
+
 // States
 
 /// Paint a caution state.
