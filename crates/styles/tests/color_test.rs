@@ -118,7 +118,7 @@ mod parse_tags {
     fn ignores_lt_char() {
         assert_eq!(
             parse_style_tags("this is < 3"),
-            vec![("this is < 3".to_owned(), None),]
+            vec![("this is < 3".to_owned(), None)]
         );
     }
 
@@ -126,7 +126,7 @@ mod parse_tags {
     fn ignores_gt_char() {
         assert_eq!(
             parse_style_tags("this is > 3"),
-            vec![("this is > 3".to_owned(), None),]
+            vec![("this is > 3".to_owned(), None)]
         );
     }
 
@@ -134,7 +134,7 @@ mod parse_tags {
     fn ignores_gt_and_lt_not_being_a_tag() {
         assert_eq!(
             parse_style_tags("this is > 3 and < 5"),
-            vec![("this is > 3 and < 5".to_owned(), None),]
+            vec![("this is > 3 and < 5".to_owned(), None)]
         );
     }
 
@@ -142,14 +142,16 @@ mod parse_tags {
     fn ignores_lt_and_gt_not_being_a_tag() {
         assert_eq!(
             parse_style_tags("this is < 3 and > 5"),
-            vec![("this is < 3 and > 5".to_owned(), None),]
+            vec![("this is < 3 and > 5".to_owned(), None)]
         );
     }
 
     #[test]
-    #[should_panic(expected = "Unknown tag `unknown`!")]
-    fn errors_unknown_tag() {
-        parse_style_tags("<unknown>tag</unknown>");
+    fn ignores_unknown_tag() {
+        assert_eq!(
+            parse_style_tags("<unknown>tag</unknown>"),
+            vec![("tag".to_owned(), None)]
+        );
     }
 
     #[test]

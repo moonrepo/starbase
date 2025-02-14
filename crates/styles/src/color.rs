@@ -221,17 +221,7 @@ pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<Style>)>
 
     parse_tags(message)
         .into_iter()
-        .map(|(text, tag)| {
-            (
-                text,
-                tag.map(|tag| {
-                    TAGS_MAP
-                        .get(&tag)
-                        .cloned()
-                        .unwrap_or_else(|| panic!("Unknown tag `{}`!", tag))
-                }),
-            )
-        })
+        .map(|(text, tag)| (text, tag.and_then(|tag| TAGS_MAP.get(&tag).cloned())))
         .collect()
 }
 
