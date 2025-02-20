@@ -25,7 +25,7 @@ pub fn StyledText<'a>(
     hooks: Hooks,
 ) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
-    let parts = parse_tags(&props.content);
+    let parts = parse_tags(&props.content, false);
 
     element! {
         View {

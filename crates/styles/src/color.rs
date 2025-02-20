@@ -103,7 +103,7 @@ pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
 
 /// Parses a string with HTML-like tags into a list of tagged pieces.
 /// For example: `<file>starbase.json</file>`
-pub fn parse_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<String>)> {
+pub fn parse_tags<T: AsRef<str>>(value: T, panic: bool) -> Vec<(String, Option<String>)> {
     let message = value.as_ref().to_owned();
 
     if !message.contains('<') {
@@ -125,6 +125,7 @@ pub fn parse_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<String>)> {
 
     let mut text = message.as_str();
     let mut tag_stack = vec![];
+    let mut tag_count = 0;
 
     while let Some(open_index) = text.find('<') {
         if let Some(close_index) = text.find('>') {
@@ -144,20 +145,21 @@ pub fn parse_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<String>)> {
             if tag.starts_with('/') {
                 tag = tag.strip_prefix('/').unwrap();
 
-                if tag_stack.is_empty() {
-                    panic!("Close tag `{}` found without an open tag", tag)
+                if tag_stack.is_empty() && panic {
+                    panic!("Close tag `{}` found without an open tag", tag);
                 }
 
-                let in_tag = tag_stack.last().unwrap();
+                let in_tag = tag_stack.last();
 
-                if tag != *in_tag {
+                if in_tag.is_some_and(|inner| tag != inner) && panic {
                     panic!(
                         "Close tag `{}` does not much the open tag `{}`",
-                        tag, in_tag
+                        tag,
+                        in_tag.as_ref().unwrap()
                     );
                 }
 
-                add_result(prev_text, Some(tag.to_owned()));
+                add_result(prev_text, in_tag.map(|_| tag.to_owned()));
 
                 tag_stack.pop();
             }
@@ -166,6 +168,7 @@ pub fn parse_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<String>)> {
                 add_result(prev_text, tag_stack.last().cloned());
 
                 tag_stack.push(tag.to_owned());
+                tag_count += 1;
             }
 
             text = text.get(close_index + 1..).unwrap();
@@ -174,6 +177,13 @@ pub fn parse_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<String>)> {
 
             text = text.get(open_index + 1..).unwrap();
         }
+    }
+
+    // If stack is the same length as the count, then we have a
+    // bunch of open tags without closing tags. Let's assume these
+    // aren't meant to be style tags...
+    if tag_count > 0 && tag_stack.len() == tag_count {
+        return vec![(message, None)];
     }
 
     if !text.is_empty() {
@@ -219,7 +229,7 @@ pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<Style>)>
         return vec![(message.to_owned(), None)];
     }
 
-    parse_tags(message)
+    parse_tags(message, false)
         .into_iter()
         .map(|(text, tag)| (text, tag.and_then(|tag| TAGS_MAP.get(&tag).cloned())))
         .collect()
