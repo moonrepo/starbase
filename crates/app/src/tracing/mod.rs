@@ -69,23 +69,25 @@ pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
     // Determine modules to log
     let level = env::var(&options.log_env).unwrap_or_else(|_| options.default_level.to_string());
 
-    env::set_var(
-        &options.log_env,
-        if options.filter_modules.is_empty()
-            || level == "off"
-            || level.contains(',')
-            || level.contains('=')
-        {
-            level
-        } else {
-            options
-                .filter_modules
-                .iter()
-                .map(|prefix| format!("{prefix}={level}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        },
-    );
+    unsafe {
+        env::set_var(
+            &options.log_env,
+            if options.filter_modules.is_empty()
+                || level == "off"
+                || level.contains(',')
+                || level.contains('=')
+            {
+                level
+            } else {
+                options
+                    .filter_modules
+                    .iter()
+                    .map(|prefix| format!("{prefix}={level}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            },
+        )
+    };
 
     #[cfg(feature = "log-compat")]
     if options.intercept_log {

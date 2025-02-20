@@ -30,7 +30,7 @@ impl Default for ConfirmProps<'_> {
 }
 
 #[component]
-pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn Confirm<'a>(props: &mut ConfirmProps<'a>, mut hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut focused = hooks.use_state(|| 0);

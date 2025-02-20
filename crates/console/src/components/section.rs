@@ -10,7 +10,7 @@ pub struct SectionProps<'a> {
 }
 
 #[component]
-pub fn Section<'a>(props: &mut SectionProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn Section<'a>(props: &mut SectionProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {

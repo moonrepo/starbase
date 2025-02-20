@@ -137,7 +137,7 @@ impl Default for ProgressProps {
 }
 
 #[component]
-pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn Progress<'a>(props: &mut ProgressProps, mut hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut should_exit = hooks.use_state(|| false);

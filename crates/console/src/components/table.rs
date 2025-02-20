@@ -50,7 +50,7 @@ pub struct TableProps<'a> {
 }
 
 #[component]
-pub fn Table<'a>(props: &mut TableProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn Table<'a>(props: &mut TableProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let context = TableContext {
         col_data: props.headers.clone(),
@@ -95,7 +95,7 @@ pub struct TableRowProps<'a> {
 }
 
 #[component]
-pub fn TableRow<'a>(props: &mut TableRowProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn TableRow<'a>(props: &mut TableRowProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
@@ -119,7 +119,7 @@ pub struct TableColProps<'a> {
 }
 
 #[component]
-pub fn TableCol<'a>(props: &mut TableColProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn TableCol<'a>(props: &mut TableColProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let context = hooks.use_context::<TableContext>();
     let attrs = context
         .col_data

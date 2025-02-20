@@ -10,7 +10,7 @@ pub struct ListProps<'a> {
 }
 
 #[component]
-pub fn List<'a>(props: &mut ListProps<'a>) -> impl Into<AnyElement<'a>> {
+pub fn List<'a>(props: &mut ListProps<'a>) -> impl Into<AnyElement<'a>> + use<'a> {
     element! {
         Stack(gap: props.gap) {
             #(&mut props.children)
@@ -25,7 +25,7 @@ pub struct ListItemProps<'a> {
 }
 
 #[component]
-pub fn ListItem<'a>(props: &mut ListItemProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn ListItem<'a>(props: &mut ListItemProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
@@ -46,7 +46,7 @@ pub struct ListCheckProps<'a> {
 }
 
 #[component]
-pub fn ListCheck<'a>(props: &mut ListCheckProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn ListCheck<'a>(props: &mut ListCheckProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {

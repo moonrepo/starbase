@@ -15,7 +15,7 @@ pub struct EntryProps<'a> {
 }
 
 #[component]
-pub fn Entry<'a>(props: &mut EntryProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn Entry<'a>(props: &mut EntryProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let no_children = props.no_children || props.children.is_empty();
 

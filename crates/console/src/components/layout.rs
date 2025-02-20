@@ -11,7 +11,7 @@ pub struct ContainerProps<'a> {
 pub fn Container<'a>(
     props: &mut ContainerProps<'a>,
     mut hooks: Hooks,
-) -> impl Into<AnyElement<'a>> {
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let (mut width, _) = hooks.use_terminal_size();
 
     // Non-TTY's like CI environments
@@ -36,7 +36,7 @@ pub struct StackProps<'a> {
 }
 
 #[component]
-pub fn Stack<'a>(props: &mut StackProps<'a>) -> impl Into<AnyElement<'a>> {
+pub fn Stack<'a>(props: &mut StackProps<'a>) -> impl Into<AnyElement<'a>> + use<'a> {
     element! {
         View(
             flex_direction: FlexDirection::Column,
@@ -54,7 +54,7 @@ pub struct GroupProps<'a> {
 }
 
 #[component]
-pub fn Group<'a>(props: &mut GroupProps<'a>) -> impl Into<AnyElement<'a>> {
+pub fn Group<'a>(props: &mut GroupProps<'a>) -> impl Into<AnyElement<'a>> + use<'a> {
     element! {
         View(
             flex_direction: FlexDirection::Row,
@@ -71,7 +71,7 @@ pub struct SeparatorProps {
 }
 
 #[component]
-pub fn Separator<'a>(props: &SeparatorProps) -> impl Into<AnyElement<'a>> {
+pub fn Separator<'a>(props: &SeparatorProps) -> impl Into<AnyElement<'a>> + use<'a> {
     element! {
         StyledText(
             content: &props.value,
