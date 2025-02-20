@@ -1,5 +1,5 @@
 use starbase_styles::Style;
-use starbase_styles::color::{apply_style_tags, parse_style_tags};
+use starbase_styles::color::{apply_style_tags, parse_style_tags, parse_tags};
 use std::env;
 
 #[test]
@@ -162,8 +162,24 @@ mod parse_tags {
     }
 
     #[test]
+    fn handles_no_close_tag() {
+        assert_eq!(
+            parse_style_tags("tag <command> does something"),
+            vec![("tag <command> does something".to_owned(), None)]
+        );
+    }
+
+    #[test]
+    fn handles_no_open_tag() {
+        assert_eq!(
+            parse_style_tags("tag</file>"),
+            vec![("tag".to_owned(), None)]
+        );
+    }
+
+    #[test]
     #[should_panic(expected = "Close tag `file` found without an open tag")]
     fn errors_no_open_tag() {
-        parse_style_tags("tag</file>");
+        parse_tags("tag</file>", true);
     }
 }
