@@ -25,7 +25,10 @@ pub struct MapItemProps<'a> {
 }
 
 #[component]
-pub fn MapItem<'a>(props: &mut MapItemProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn MapItem<'a>(
+    props: &mut MapItemProps<'a>,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {

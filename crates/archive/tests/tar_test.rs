@@ -1,7 +1,7 @@
 mod utils;
 
-use starbase_archive::tar::*;
 use starbase_archive::Archiver;
+use starbase_archive::tar::*;
 use starbase_sandbox::create_sandbox;
 use std::path::Path;
 

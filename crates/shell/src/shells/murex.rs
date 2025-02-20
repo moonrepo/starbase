@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{normalize_newlines, PATH_DELIMITER};
+use crate::helpers::{PATH_DELIMITER, normalize_newlines};
 use crate::hooks::*;
 use std::fmt;
 use std::path::{Path, PathBuf};

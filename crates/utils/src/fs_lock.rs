@@ -266,7 +266,7 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
     path: T,
     data: D,
 ) -> Result<(), FsError> {
-    use std::io::{prelude::*, SeekFrom};
+    use std::io::{SeekFrom, prelude::*};
 
     let path = path.as_ref();
     let handle_error = |error: std::io::Error| FsError::Write {

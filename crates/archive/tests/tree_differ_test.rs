@@ -1,5 +1,5 @@
 use starbase_archive::TreeDiffer;
-use starbase_sandbox::{create_empty_sandbox, Sandbox};
+use starbase_sandbox::{Sandbox, create_empty_sandbox};
 use std::fs::{self, File};
 
 fn create_differ_sandbox() -> Sandbox {

@@ -14,7 +14,10 @@ pub struct InputFieldProps<'a> {
 }
 
 #[component]
-pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn InputField<'a>(
+    props: &mut InputFieldProps<'a>,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {

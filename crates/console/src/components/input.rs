@@ -1,6 +1,6 @@
+use super::Validator;
 use super::input_field::*;
 use super::layout::Group;
-use super::Validator;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 

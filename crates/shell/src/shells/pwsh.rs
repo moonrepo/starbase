@@ -1,5 +1,5 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{get_env_var_regex, normalize_newlines, ProfileSet};
+use crate::helpers::{ProfileSet, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use std::env;
 use std::fmt;

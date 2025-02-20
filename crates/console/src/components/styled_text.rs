@@ -20,7 +20,10 @@ pub struct StyledTextProps {
 }
 
 #[component]
-pub fn StyledText<'a>(props: &StyledTextProps, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn StyledText<'a>(
+    props: &StyledTextProps,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let parts = parse_tags(&props.content);
 

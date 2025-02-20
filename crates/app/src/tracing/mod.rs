@@ -5,14 +5,14 @@ use crate::tracing::format::*;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 use std::{env, fs};
 use tracing::subscriber::set_global_default;
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
 use tracing_subscriber::fmt::{self, SubscriberBuilder};
-use tracing_subscriber::{prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, prelude::*};
 
 pub use crate::tracing::level::LogLevel;
 pub use tracing::{

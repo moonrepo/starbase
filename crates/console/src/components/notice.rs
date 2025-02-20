@@ -10,7 +10,10 @@ pub struct NoticeProps<'a> {
 }
 
 #[component]
-pub fn Notice<'a>(props: &mut NoticeProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn Notice<'a>(
+    props: &mut NoticeProps<'a>,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     let title = if props.no_title {

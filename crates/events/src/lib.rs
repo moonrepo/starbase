@@ -4,5 +4,5 @@ mod subscriber;
 
 pub use emitter::*;
 pub use event::*;
-pub use starbase_macros::{subscriber, Event};
+pub use starbase_macros::{Event, subscriber};
 pub use subscriber::*;

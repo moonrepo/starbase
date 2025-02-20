@@ -1,9 +1,9 @@
 use crate::fixture::locate_fixture;
-use crate::process::{create_command_with_name, output_to_string, SandboxAssert};
+use crate::process::{SandboxAssert, create_command_with_name, output_to_string};
 use crate::settings::SandboxSettings;
 use assert_cmd::Command;
-use assert_fs::prelude::*;
 use assert_fs::TempDir;
+use assert_fs::prelude::*;
 use starbase_utils::fs;
 use std::fs::OpenOptions;
 use std::io::Write;

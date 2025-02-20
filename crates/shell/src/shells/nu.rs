@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines, ProfileSet};
+use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use std::env::consts;
 use std::fmt;

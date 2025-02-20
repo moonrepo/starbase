@@ -71,7 +71,10 @@ impl Default for SelectProps<'_> {
 }
 
 #[component]
-pub fn Select<'a>(props: &mut SelectProps<'a>, mut hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn Select<'a>(
+    props: &mut SelectProps<'a>,
+    mut hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let options = hooks.use_state(|| props.options.clone());

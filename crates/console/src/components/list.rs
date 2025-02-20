@@ -25,7 +25,10 @@ pub struct ListItemProps<'a> {
 }
 
 #[component]
-pub fn ListItem<'a>(props: &mut ListItemProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn ListItem<'a>(
+    props: &mut ListItemProps<'a>,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
@@ -46,7 +49,10 @@ pub struct ListCheckProps<'a> {
 }
 
 #[component]
-pub fn ListCheck<'a>(props: &mut ListCheckProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn ListCheck<'a>(
+    props: &mut ListCheckProps<'a>,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {

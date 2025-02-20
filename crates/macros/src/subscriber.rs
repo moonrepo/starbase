@@ -1,7 +1,7 @@
 use darling::FromMeta;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Expr, ExprCall, ExprPath, FnArg, Pat, Stmt, Type, TypePath};
+use syn::{Expr, ExprCall, ExprPath, FnArg, Pat, Stmt, Type, TypePath, parse_macro_input};
 
 fn is_event_state(path: &ExprPath) -> bool {
     let Some(state) = path.path.segments.first() else {

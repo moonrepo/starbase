@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use async_trait::async_trait;
-use miette::{bail, IntoDiagnostic};
+use miette::{IntoDiagnostic, bail};
 use starbase::{App, AppPhase, AppResult, AppSession};
 use std::sync::Arc;
 use tokio::sync::RwLock;
