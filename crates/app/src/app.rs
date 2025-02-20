@@ -1,7 +1,6 @@
 use crate::session::{AppResult, AppSession};
 use crate::tracing::TracingOptions;
 use miette::IntoDiagnostic;
-use std::future::Future;
 use std::process::ExitCode;
 use tokio::spawn;
 use tokio::task::JoinHandle;
