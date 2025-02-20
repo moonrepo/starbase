@@ -1,6 +1,6 @@
 use super::Shell;
 use crate::helpers::{
-    get_config_dir, get_env_var_regex, normalize_newlines, ProfileSet, PATH_DELIMITER,
+    PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines,
 };
 use crate::hooks::*;
 use std::fmt;

@@ -1,6 +1,6 @@
 #[macro_export]
 macro_rules! generate_tests {
-    ($filename:expr, $packer:expr, $unpacker:expr) => {
+    ($filename:expr_2021, $packer:expr_2021, $unpacker:expr_2021) => {
         fn file_contents_match(a: &Path, b: &Path) -> bool {
             std::fs::read_to_string(a).unwrap() == std::fs::read_to_string(b).unwrap()
         }

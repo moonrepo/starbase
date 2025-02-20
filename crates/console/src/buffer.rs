@@ -2,7 +2,7 @@ use crate::stream::ConsoleStreamType;
 use parking_lot::Mutex;
 use std::io::{self, Write};
 use std::mem;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread::sleep;
 use std::time::Duration;
 

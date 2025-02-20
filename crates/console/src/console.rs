@@ -4,8 +4,8 @@ use crate::stream::*;
 use crate::theme::ConsoleTheme;
 use std::fmt;
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use tracing::trace;
 

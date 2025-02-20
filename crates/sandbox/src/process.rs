@@ -1,4 +1,4 @@
-use crate::sandbox::{debug_process_output, debug_sandbox_files, Sandbox};
+use crate::sandbox::{Sandbox, debug_process_output, debug_sandbox_files};
 use crate::settings::SandboxSettings;
 use assert_cmd::assert::Assert;
 use starbase_utils::dirs::home_dir;

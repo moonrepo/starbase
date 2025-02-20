@@ -1,6 +1,6 @@
 use super::Shell;
-use crate::helpers::get_config_dir;
 use crate::helpers::ProfileSet;
+use crate::helpers::get_config_dir;
 use crate::hooks::*;
 use std::fmt;
 use std::path::{Path, PathBuf};

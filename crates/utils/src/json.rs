@@ -1,13 +1,13 @@
 use crate::fs;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use std::path::Path;
 use tracing::{instrument, trace};
 
 pub use crate::json_error::JsonError;
 pub use serde_json;
-pub use serde_json::{json, Map as JsonMap, Number as JsonNumber, Value as JsonValue};
+pub use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue, json};
 
 /// Clean a JSON string by removing comments and trailing commas.
 #[inline]
@@ -91,8 +91,8 @@ pub fn format_with_identation<D>(data: &D, indent: &str) -> Result<String, JsonE
 where
     D: ?Sized + Serialize,
 {
-    use serde_json::ser::PrettyFormatter;
     use serde_json::Serializer;
+    use serde_json::ser::PrettyFormatter;
 
     trace!(indent, "Formatting JSON with preserved indentation");
 

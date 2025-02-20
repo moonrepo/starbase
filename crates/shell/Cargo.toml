@@ -1,11 +1,11 @@
 [package]
 name = "starbase_shell"
 version = "0.6.13"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 description = "Utilities for detecting shells and managing profile files."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.74.0"
+rust-version = "1.85.0"
 
 [package.metadata.docs.rs]
 all-features = true

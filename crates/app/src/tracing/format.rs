@@ -2,10 +2,10 @@ use chrono::{Local, Timelike};
 use starbase_styles::color;
 use starbase_styles::color::apply_style_tags;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use tracing::{field::Visit, metadata::LevelFilter, Level, Metadata, Subscriber};
+use tracing::{Level, Metadata, Subscriber, field::Visit, metadata::LevelFilter};
 use tracing_subscriber::{
     field::RecordFields,
-    fmt::{self, time::FormatTime, FormatEvent, FormatFields},
+    fmt::{self, FormatEvent, FormatFields, time::FormatTime},
     registry::LookupSpan,
 };
 

@@ -1,11 +1,11 @@
 [package]
 name = "starbase_macros"
 version = "0.7.11"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 description = "Macros for the starbase framework."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.64.0"
+rust-version = "1.85.0"
 
 [lib]
 proc-macro = true
@@ -14,7 +14,7 @@ proc-macro = true
 darling = "0.20.10"
 proc-macro2 = "1.0.93"
 quote = "1.0.38"
-syn = { version = "2.0.96", features = ["full"] }
+syn = { version = "2.0.98", features = ["full"] }
 
 [features]
 events = []

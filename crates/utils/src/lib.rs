@@ -45,7 +45,7 @@ macro_rules! string_vec {
     () => {{
         Vec::<String>::new()
     }};
-    ($($item:expr),+ $(,)?) => {{
+    ($($item:expr_2021),+ $(,)?) => {{
         vec![
             $( String::from($item), )*
         ]

@@ -1,11 +1,11 @@
 [package]
 name = "starbase"
 version = "0.9.9"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 description = "Framework for building performant command line applications and developer tools."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.80.0"
+rust-version = "1.85.0"
 
 [package.metadata.docs.rs]
 all-features = true

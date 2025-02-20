@@ -4,8 +4,8 @@ use parking_lot::Mutex;
 use std::fmt;
 use std::io::{self, IsTerminal};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
-use std::thread::{spawn, JoinHandle};
+use std::sync::{Arc, mpsc};
+use std::thread::{JoinHandle, spawn};
 use tracing::trace;
 
 #[derive(Clone, Copy, Debug)]

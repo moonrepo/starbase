@@ -20,9 +20,9 @@ pub use sh::*;
 pub use xonsh::*;
 pub use zsh::*;
 
+use crate::Statement;
 use crate::hooks::Hook;
 use crate::shell_error::ShellError;
-use crate::Statement;
 use std::ffi::OsString;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};

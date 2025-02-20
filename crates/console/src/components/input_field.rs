@@ -14,7 +14,10 @@ pub struct InputFieldProps<'a> {
 }
 
 #[component]
-pub fn InputField<'a>(props: &mut InputFieldProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn InputField<'a>(
+    props: &mut InputFieldProps<'a>,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {
@@ -85,7 +88,7 @@ pub struct InputFieldValueProps {
 pub fn InputFieldValue<'a>(
     props: &InputFieldValueProps,
     hooks: Hooks,
-) -> impl Into<AnyElement<'a>> {
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let failed = props.value.is_empty() || props.value == "false";
 
@@ -126,7 +129,7 @@ pub struct InputLegendProps {
 }
 
 #[component]
-pub fn InputLegend<'a>(props: &InputLegendProps) -> impl Into<AnyElement<'a>> {
+pub fn InputLegend<'a>(props: &InputLegendProps) -> impl Into<AnyElement<'a>> + use<'a> {
     element! {
         StyledText(
             content: props.legend

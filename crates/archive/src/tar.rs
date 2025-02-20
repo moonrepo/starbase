@@ -2,7 +2,7 @@ use crate::archive::{ArchivePacker, ArchiveResult, ArchiveUnpacker};
 use crate::tree_differ::TreeDiffer;
 use binstall_tar::{Archive as TarArchive, Builder as TarBuilder};
 use starbase_utils::fs;
-use std::io::{prelude::*, Write};
+use std::io::{Write, prelude::*};
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 

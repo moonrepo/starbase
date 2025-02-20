@@ -3,19 +3,19 @@ resolver = "2"
 members = ["crates/*", "examples/*"]
 
 [workspace.dependencies]
-async-trait = "0.1.85"
+async-trait = "0.1.86"
 crossterm = "0.28.1"
 dirs = "6.0.0"
-iocraft = "0.6.2"
+iocraft = "0.6.4"
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
-miette = "7.4.0"
+miette = "7.5.0"
 regex = { version = "1.11.1", default-features = false }
 relative-path = "1.9.3"
 reqwest = { version = "0.12.12", default-features = false }
-rustc-hash = "2.1.0"
+rustc-hash = "2.1.1"
 serial_test = "3.2.0"
-serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.137"
+serde = { version = "1.0.218", features = ["derive"] }
+serde_json = "1.0.139"
 serde_yml = "0.0.12"
 thiserror = "2.0.11"
 tokio = { version = "1.43.0", default-features = false, features = [

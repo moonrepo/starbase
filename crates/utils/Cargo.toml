@@ -1,11 +1,11 @@
 [package]
 name = "starbase_utils"
 version = "0.10.2"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 description = "General fs, io, serde, net, etc, utilities."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.80.0"
+rust-version = "1.85.0"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -33,7 +33,7 @@ json-strip-comments = { version = "1.0.4", optional = true }
 serde_json = { workspace = true, optional = true }
 
 # toml
-toml = { version = "0.8.19", optional = true }
+toml = { version = "0.8.20", optional = true }
 
 # yaml
 serde_yml = { workspace = true, optional = true }

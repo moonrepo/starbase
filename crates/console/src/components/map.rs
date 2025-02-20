@@ -9,7 +9,7 @@ pub struct MapProps<'a> {
 }
 
 #[component]
-pub fn Map<'a>(props: &mut MapProps<'a>) -> impl Into<AnyElement<'a>> {
+pub fn Map<'a>(props: &mut MapProps<'a>) -> impl Into<AnyElement<'a>> + use<'a> {
     element! {
         Stack(gap: props.gap) {
             #(&mut props.children)
@@ -25,7 +25,10 @@ pub struct MapItemProps<'a> {
 }
 
 #[component]
-pub fn MapItem<'a>(props: &mut MapItemProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn MapItem<'a>(
+    props: &mut MapItemProps<'a>,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
 
     element! {

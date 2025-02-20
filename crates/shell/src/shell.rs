@@ -282,7 +282,7 @@ mod unix {
 #[cfg(windows)]
 mod windows {
     use super::*;
-    use sysinfo::{get_current_pid, ProcessesToUpdate, System};
+    use sysinfo::{ProcessesToUpdate, System, get_current_pid};
     use tracing::trace;
 
     pub fn detect() -> Option<ShellType> {

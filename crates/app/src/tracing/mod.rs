@@ -5,14 +5,14 @@ use crate::tracing::format::*;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 use std::{env, fs};
 use tracing::subscriber::set_global_default;
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
 use tracing_subscriber::fmt::{self, SubscriberBuilder};
-use tracing_subscriber::{prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, prelude::*};
 
 pub use crate::tracing::level::LogLevel;
 pub use tracing::{
@@ -69,23 +69,25 @@ pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
     // Determine modules to log
     let level = env::var(&options.log_env).unwrap_or_else(|_| options.default_level.to_string());
 
-    env::set_var(
-        &options.log_env,
-        if options.filter_modules.is_empty()
-            || level == "off"
-            || level.contains(',')
-            || level.contains('=')
-        {
-            level
-        } else {
-            options
-                .filter_modules
-                .iter()
-                .map(|prefix| format!("{prefix}={level}"))
-                .collect::<Vec<_>>()
-                .join(",")
-        },
-    );
+    unsafe {
+        env::set_var(
+            &options.log_env,
+            if options.filter_modules.is_empty()
+                || level == "off"
+                || level.contains(',')
+                || level.contains('=')
+            {
+                level
+            } else {
+                options
+                    .filter_modules
+                    .iter()
+                    .map(|prefix| format!("{prefix}={level}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            },
+        )
+    };
 
     #[cfg(feature = "log-compat")]
     if options.intercept_log {

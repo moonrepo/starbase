@@ -1,6 +1,6 @@
+use super::Validator;
 use super::input_field::*;
 use super::layout::Group;
-use super::Validator;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
@@ -15,7 +15,10 @@ pub struct InputProps<'a> {
 }
 
 #[component]
-pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyElement<'a>> {
+pub fn Input<'a>(
+    props: &mut InputProps<'a>,
+    mut hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let mut value = hooks.use_state(|| props.default_value.clone());
@@ -31,11 +34,14 @@ pub fn Input<'a>(props: &mut InputProps<'a>, mut hooks: Hooks) -> impl Into<AnyE
                 kind,
                 ..
             }) if kind != KeyEventKind::Release => {
-                if let Some(msg) = validate(value.to_string()) {
-                    error.set(Some(msg));
-                    return;
-                } else {
-                    error.set(None);
+                match validate(value.to_string()) {
+                    Some(msg) => {
+                        error.set(Some(msg));
+                        return;
+                    }
+                    _ => {
+                        error.set(None);
+                    }
                 }
 
                 should_exit.set(true);

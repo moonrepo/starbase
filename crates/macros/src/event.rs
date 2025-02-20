@@ -1,7 +1,7 @@
 use darling::FromDeriveInput;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, ExprPath};
+use syn::{DeriveInput, ExprPath, parse_macro_input};
 
 #[derive(FromDeriveInput, Default)]
 #[darling(default, attributes(event))]

@@ -5,7 +5,7 @@ use std::env;
 #[test]
 #[serial]
 fn detects_a_shell_with_env_var() {
-    env::set_var("SHELL", "zsh");
+    unsafe { env::set_var("SHELL", "zsh") };
 
     assert_eq!(ShellType::detect().unwrap(), ShellType::Zsh);
 }
@@ -13,7 +13,7 @@ fn detects_a_shell_with_env_var() {
 #[test]
 #[serial]
 fn detects_a_shell_from_os() {
-    env::remove_var("SHELL");
+    unsafe { env::remove_var("SHELL") };
 
     assert!(ShellType::detect().is_some());
 }

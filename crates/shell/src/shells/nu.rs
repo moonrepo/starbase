@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{get_config_dir, get_env_var_regex, normalize_newlines, ProfileSet};
+use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use std::env::consts;
 use std::fmt;
@@ -49,16 +49,19 @@ impl Shell for Nu {
                 for path in paths.iter().rev() {
                     value.push_str("  | prepend ");
 
-                    if let Some(cap) = env_regex.captures(path) {
-                        let path_without_env = path.replace(cap.get(0).unwrap().as_str(), "");
+                    match env_regex.captures(path) {
+                        Some(cap) => {
+                            let path_without_env = path.replace(cap.get(0).unwrap().as_str(), "");
 
-                        value.push('(');
-                        value.push_str(&format!("$env.{}", cap.name("name").unwrap().as_str()));
-                        value.push_str(" | ");
-                        value.push_str(&join_path(path_without_env));
-                        value.push(')');
-                    } else {
-                        value.push_str(path);
+                            value.push('(');
+                            value.push_str(&format!("$env.{}", cap.name("name").unwrap().as_str()));
+                            value.push_str(" | ");
+                            value.push_str(&join_path(path_without_env));
+                            value.push(')');
+                        }
+                        _ => {
+                            value.push_str(path);
+                        }
                     }
 
                     value.push('\n');

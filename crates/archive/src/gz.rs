@@ -1,8 +1,8 @@
 use crate::archive::{ArchivePacker, ArchiveResult, ArchiveUnpacker};
 use crate::tree_differ::TreeDiffer;
+use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use flate2::Compression;
 use starbase_utils::fs;
 use std::fs::File;
 use std::io::prelude::*;
