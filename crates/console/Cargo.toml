@@ -1,11 +1,11 @@
 [package]
 name = "starbase_console"
 version = "0.4.7"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 description = "Console reporting layer."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.80.0"
+rust-version = "1.85.0"
 
 [dependencies]
 starbase_styles = { version = "0.4.14", path = "../styles" }

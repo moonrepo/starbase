@@ -1,11 +1,11 @@
 [package]
 name = "starbase_macros"
 version = "0.7.11"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 description = "Macros for the starbase framework."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.64.0"
+rust-version = "1.85.0"
 
 [lib]
 proc-macro = true
