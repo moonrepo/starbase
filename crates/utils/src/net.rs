@@ -4,7 +4,7 @@ use reqwest::{Client, Response};
 use std::cmp;
 use std::fmt::Debug;
 use std::io::Write;
-use std::net::{Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
+use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
@@ -207,12 +207,29 @@ mod offline {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct OfflineOptions {
     pub check_default_hosts: bool,
     pub check_default_ips: bool,
     pub custom_hosts: Vec<String>,
+    pub custom_ips: Vec<IpAddr>,
+    pub ip_v4: bool,
+    pub ip_v6: bool,
     pub timeout: u64,
+}
+
+impl Default for OfflineOptions {
+    fn default() -> Self {
+        Self {
+            check_default_hosts: true,
+            check_default_ips: true,
+            custom_hosts: vec![],
+            custom_ips: vec![],
+            ip_v4: true,
+            ip_v6: true,
+            timeout: 1000,
+        }
+    }
 }
 
 /// Detect if there is an internet connection, or the user is offline,
@@ -240,24 +257,45 @@ pub fn is_offline_with_options(options: OfflineOptions) -> bool {
 
     // Check these first as they do not need to resolve IP addresses!
     // These typically happen in milliseconds.
+    let mut ips = vec![];
+
     if options.check_default_ips {
-        let online = [
-            // Cloudflare DNS: https://1.1.1.1/dns/
-            SocketAddr::from(([1, 1, 1, 1], 53)),
-            SocketAddr::from(([1, 0, 0, 1], 53)),
-            // Google DNS: https://developers.google.com/speed/public-dns
-            SocketAddr::from(([8, 8, 8, 8], 53)),
-            SocketAddr::from(([8, 8, 4, 4], 53)),
-        ]
+        if options.ip_v4 {
+            ips.extend([
+                // Cloudflare DNS: https://1.1.1.1/dns/
+                SocketAddr::from(([1, 1, 1, 1], 53)),
+                SocketAddr::from(([1, 0, 0, 1], 53)),
+                // Google DNS: https://developers.google.com/speed/public-dns
+                SocketAddr::from(([8, 8, 8, 8], 53)),
+                SocketAddr::from(([8, 8, 4, 4], 53)),
+            ]);
+        }
+
+        if options.ip_v6 {
+            ips.extend([
+                // Cloudflare DNS: https://1.1.1.1/dns/
+                SocketAddr::from(([2606, 4700, 4700, 0, 0, 0, 0, 1111], 53)),
+                SocketAddr::from(([2606, 4700, 4700, 0, 0, 0, 0, 1001], 53)),
+                // Google DNS: https://developers.google.com/speed/public-dns
+                SocketAddr::from(([2001, 4860, 4860, 0, 0, 0, 0, 8888], 53)),
+                SocketAddr::from(([2001, 4860, 4860, 0, 0, 0, 0, 8844], 53)),
+            ]);
+        }
+    }
+
+    for custom_ip in options.custom_ips {
+        ips.push(SocketAddr::new(custom_ip, 53));
+    }
+
+    let online = ips
         .into_iter()
         .map(|address| thread::spawn(move || offline::check_connection(address, options.timeout)))
         .any(|handle| handle.join().is_ok_and(|v| v));
 
-        if online {
-            trace!("Online!");
+    if online {
+        trace!("Online!");
 
-            return false;
-        }
+        return false;
     }
 
     // Check these second as they need to resolve IP addresses,

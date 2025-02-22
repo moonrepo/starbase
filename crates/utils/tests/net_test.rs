@@ -4,6 +4,11 @@ use starbase_utils::net;
 mod download {
     use super::*;
 
+    #[test]
+    fn checks_online() {
+        assert!(!net::is_offline_with_options(Default::default()));
+    }
+
     #[should_panic(expected = "UrlParseFailed")]
     #[tokio::test]
     async fn errors_invalid_url() {
