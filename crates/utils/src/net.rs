@@ -4,7 +4,7 @@ use reqwest::{Client, Response};
 use std::cmp;
 use std::fmt::Debug;
 use std::io::Write;
-use std::net::{Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
+use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
@@ -212,6 +212,7 @@ pub struct OfflineOptions {
     pub check_default_hosts: bool,
     pub check_default_ips: bool,
     pub custom_hosts: Vec<String>,
+    pub custom_ips: Vec<IpAddr>,
     pub ip_v4: bool,
     pub ip_v6: bool,
     pub timeout: u64,
@@ -223,6 +224,7 @@ impl Default for OfflineOptions {
             check_default_hosts: true,
             check_default_ips: true,
             custom_hosts: vec![],
+            custom_ips: vec![],
             ip_v4: true,
             ip_v6: true,
             timeout: 1000,
@@ -255,9 +257,9 @@ pub fn is_offline_with_options(options: OfflineOptions) -> bool {
 
     // Check these first as they do not need to resolve IP addresses!
     // These typically happen in milliseconds.
-    if options.check_default_ips {
-        let mut ips = vec![];
+    let mut ips = vec![];
 
+    if options.check_default_ips {
         if options.ip_v4 {
             ips.extend([
                 // Cloudflare DNS: https://1.1.1.1/dns/
@@ -279,19 +281,21 @@ pub fn is_offline_with_options(options: OfflineOptions) -> bool {
                 SocketAddr::from(([2001, 4860, 4860, 0, 0, 0, 0, 8844], 53)),
             ]);
         }
+    }
 
-        let online = ips
-            .into_iter()
-            .map(|address| {
-                thread::spawn(move || offline::check_connection(address, options.timeout))
-            })
-            .any(|handle| handle.join().is_ok_and(|v| v));
+    for custom_ip in options.custom_ips {
+        ips.push(SocketAddr::new(custom_ip, 53));
+    }
 
-        if online {
-            trace!("Online!");
+    let online = ips
+        .into_iter()
+        .map(|address| thread::spawn(move || offline::check_connection(address, options.timeout)))
+        .any(|handle| handle.join().is_ok_and(|v| v));
 
-            return false;
-        }
+    if online {
+        trace!("Online!");
+
+        return false;
     }
 
     // Check these second as they need to resolve IP addresses,
