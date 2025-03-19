@@ -1,3 +1,4 @@
+use crate::console_error::ConsoleError;
 use crate::reporter::*;
 use crate::stream::*;
 #[cfg(feature = "ui")]
@@ -60,7 +61,7 @@ impl<R: Reporter> Console<R> {
         }
     }
 
-    pub fn close(&mut self) -> miette::Result<()> {
+    pub fn close(&mut self) -> Result<(), ConsoleError> {
         trace!("Closing console and flushing buffered output");
 
         self.err.close()?;
