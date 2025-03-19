@@ -1,5 +1,5 @@
 use crate::buffer::*;
-use miette::IntoDiagnostic;
+use crate::console_error::ConsoleError;
 use parking_lot::Mutex;
 use std::fmt;
 use std::io::{self, IsTerminal};
@@ -85,7 +85,7 @@ impl ConsoleStream {
         ConsoleBuffer::new(self.buffer.clone(), self.stream)
     }
 
-    pub fn close(&self) -> miette::Result<()> {
+    pub fn close(&self) -> Result<(), ConsoleError> {
         trace!(
             "Closing {} stream",
             match self.stream {
@@ -104,8 +104,10 @@ impl ConsoleStream {
         Ok(())
     }
 
-    pub fn flush(&self) -> miette::Result<()> {
-        flush(&mut self.buffer.lock(), self.stream).into_diagnostic()?;
+    pub fn flush(&self) -> Result<(), ConsoleError> {
+        flush(&mut self.buffer.lock(), self.stream).map_err(|error| ConsoleError::FlushFailed {
+            error: Box::new(error),
+        })?;
 
         Ok(())
     }
@@ -113,31 +115,35 @@ impl ConsoleStream {
     pub fn write_raw<F: FnMut(&mut Vec<u8>) -> io::Result<()>>(
         &self,
         mut op: F,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ConsoleError> {
+        let handle_error = |error: io::Error| ConsoleError::WriteFailed {
+            error: Box::new(error),
+        };
+
         // When testing just flush immediately
         if self.test_mode {
             let mut buffer = Vec::new();
 
-            op(&mut buffer).into_diagnostic()?;
+            op(&mut buffer).map_err(handle_error)?;
 
-            flush(&mut buffer, self.stream).into_diagnostic()?;
+            flush(&mut buffer, self.stream).map_err(handle_error)?;
         }
         // Otherwise just write to the buffer and flush
         // when its length grows too large
         else {
             let mut buffer = self.buffer.lock();
 
-            op(&mut buffer).into_diagnostic()?;
+            op(&mut buffer).map_err(handle_error)?;
 
             if buffer.len() >= 1024 {
-                flush(&mut buffer, self.stream).into_diagnostic()?;
+                flush(&mut buffer, self.stream).map_err(handle_error)?;
             }
         }
 
         Ok(())
     }
 
-    pub fn write<T: AsRef<[u8]>>(&self, data: T) -> miette::Result<()> {
+    pub fn write<T: AsRef<[u8]>>(&self, data: T) -> Result<(), ConsoleError> {
         let data = data.as_ref();
 
         if data.is_empty() {
@@ -150,7 +156,7 @@ impl ConsoleStream {
         })
     }
 
-    pub fn write_line<T: AsRef<[u8]>>(&self, data: T) -> miette::Result<()> {
+    pub fn write_line<T: AsRef<[u8]>>(&self, data: T) -> Result<(), ConsoleError> {
         let data = data.as_ref();
 
         self.write_raw(|buffer| {
@@ -167,7 +173,7 @@ impl ConsoleStream {
         &self,
         data: T,
         prefix: &str,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ConsoleError> {
         let data = data.as_ref();
         let lines = data
             .lines()
@@ -178,7 +184,7 @@ impl ConsoleStream {
         self.write_line(lines)
     }
 
-    pub fn write_newline(&self) -> miette::Result<()> {
+    pub fn write_newline(&self) -> Result<(), ConsoleError> {
         self.write_line("")
     }
 }
