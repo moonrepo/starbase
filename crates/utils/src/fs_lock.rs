@@ -116,7 +116,7 @@ pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
     };
 
     match file.try_lock_exclusive() {
-        Ok(()) => {
+        Ok(_) => {
             file.unlock().unwrap();
             false
         }

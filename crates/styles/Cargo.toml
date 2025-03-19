@@ -13,7 +13,7 @@ all-features = true
 [dependencies]
 dirs = { workspace = true }
 miette = { workspace = true, optional = true, features = ["fancy"] }
-owo-colors = "4.1.0"
+owo-colors = "4.2.0"
 relative-path = { workspace = true, optional = true }
 supports-color = "3.0.2"
 
