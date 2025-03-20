@@ -1,6 +1,7 @@
 use super::styled_text::StyledText;
 use iocraft::prelude::*;
 use starbase_styles::Style;
+use std::env;
 
 #[derive(Default, Props)]
 pub struct ContainerProps<'a> {
@@ -15,7 +16,7 @@ pub fn Container<'a>(
     let (mut width, _) = hooks.use_terminal_size();
 
     // Non-TTY's like CI environments
-    if width == 0 {
+    if width == 0 || env::var("STARBASE_TEST").is_ok() {
         width = 60;
     }
 
