@@ -17,7 +17,7 @@ pub fn Container<'a>(
 
     // Non-TTY's like CI environments
     if width == 0 || env::var("STARBASE_TEST").is_ok() {
-        width = 60;
+        width = env::var("COLUMNS").unwrap_or("60".into()).parse().unwrap();
     }
 
     element! {
