@@ -430,6 +430,9 @@ async fn render(session: TestSession, ui: String) {
                     StyledText(content: "Styled failure with weight", style: Style::Failure, weight: Weight::Bold)
                     StyledText(content: "Styled file with decoration", style: Style::File, decoration: TextDecoration::Underline)
                     StyledText(content: "Styled <file>with</file> <path>tags</path>")
+                    View(width: 25) {
+                        StyledText(content: "Styled <file>with</file> <path>tags</path> and <file>with</file> <path>tags</path>")
+                    }
                 }
             })
             .unwrap();

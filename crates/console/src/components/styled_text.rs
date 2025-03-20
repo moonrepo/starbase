@@ -28,7 +28,7 @@ pub fn StyledText<'a>(
     let parts = parse_tags(&props.content, false);
 
     element! {
-        View {
+        View(flex_wrap: FlexWrap::Wrap) {
             #(parts.into_iter().map(|(text, tag)| {
                 element! {
                     Text(
