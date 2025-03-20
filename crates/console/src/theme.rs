@@ -1,7 +1,10 @@
-use crate::ui::style_to_color;
 use iocraft::Color;
 use starbase_styles::{Style, color::Color as NativeColor};
 use std::collections::HashMap;
+
+pub fn style_to_color(style: Style) -> Color {
+    Color::AnsiValue(style.color() as u8)
+}
 
 // https://www.ditig.com/publications/256-colors-cheat-sheet
 #[derive(Clone, Debug)]
