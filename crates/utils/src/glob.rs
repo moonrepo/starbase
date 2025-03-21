@@ -45,7 +45,7 @@ pub struct GlobSet<'glob> {
     enabled: bool,
 }
 
-impl<'glob> GlobSet<'glob> {
+impl GlobSet<'_> {
     /// Create a new glob set from the list of patterns.
     /// Negated patterns must start with `!`.
     pub fn new<'new, I, V>(patterns: I) -> Result<GlobSet<'new>, GlobError>
@@ -353,28 +353,32 @@ where
 {
     let mut paths = vec![];
     let base_dir = base_dir.as_ref();
-    let globset = GlobSet::new_owned(patterns)?;
 
-    let walker = jwalk::WalkDir::new(base_dir)
-        .follow_links(false)
-        .skip_hidden(false);
-
-    // .process_read_dir(move |_depth, _dir_path, _read_dir_state, children| {
-    //     children.retain(|entry_result| {
-    //         entry_result
-    //             .as_ref()
-    //             .map(|entry| {
-    //                 if entry.file_type().is_dir() {
-    //                     true
-    //                 } else {
-    //                     globset.matches(entry.path())
-    //                 }
-    //             })
-    //             .unwrap_or(false)
+    // let globset = GlobSet::new_owned(patterns)?;
+    // let walker = jwalk::WalkDir::new(base_dir)
+    //     .follow_links(false)
+    //     .skip_hidden(false)
+    //     .process_read_dir(move |_depth, _dir_path, _read_dir_state, children| {
+    //         children.retain(|entry_result| {
+    //             entry_result
+    //                 .as_ref()
+    //                 .map(|entry| {
+    //                     if entry.file_type().is_dir() {
+    //                         true
+    //                     } else {
+    //                         globset.matches(entry.path())
+    //                     }
+    //                 })
+    //                 .unwrap_or(false)
+    //         });
     //     });
-    // });
 
-    for entry in walker {
+    let globset = GlobSet::new(patterns)?;
+
+    for entry in jwalk::WalkDir::new(base_dir)
+        .follow_links(false)
+        .skip_hidden(false)
+    {
         match entry {
             Ok(e) => {
                 let path = e.path();

@@ -45,7 +45,7 @@ fn brace_expansion(c: &mut Criterion) {
 fn create_sandbox() -> Sandbox {
     let sandbox = create_empty_sandbox();
 
-    for c in 'a'..'z' {
+    for c in 'a'..='z' {
         let dir = sandbox.path().join(c.to_string());
 
         fs::create_dir_all(&dir).unwrap();
@@ -54,7 +54,7 @@ fn create_sandbox() -> Sandbox {
             fs::write(dir.join(i.to_string()), "").unwrap();
         }
 
-        for c in 'A'..'Z' {
+        for c in 'A'..='Z' {
             let sub_dir = dir.join(c.to_string());
 
             fs::create_dir_all(&sub_dir).unwrap();
