@@ -118,3 +118,41 @@ mod split_patterns {
         );
     }
 }
+
+mod walk {
+    use super::*;
+
+    #[test]
+    fn fast_and_slow_return_same_list() {
+        let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+
+        let slow = walk(&dir, ["**/*"]).unwrap();
+        let fast = walk_fast(&dir, ["**/*"]).unwrap();
+
+        assert_eq!(slow.len(), fast.len());
+
+        let slow = walk(&dir, ["**/*.snap"]).unwrap();
+        let fast = walk_fast(&dir, ["**/*.snap"]).unwrap();
+
+        assert_eq!(slow.len(), fast.len());
+    }
+}
+
+mod walk_files {
+    use super::*;
+
+    #[test]
+    fn fast_and_slow_return_same_list() {
+        let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+
+        let slow = walk_files(&dir, ["**/*"]).unwrap();
+        let fast = walk_files_fast(&dir, ["**/*"]).unwrap();
+
+        assert_eq!(slow.len(), fast.len());
+
+        let slow = walk_files(&dir, ["**/*.snap"]).unwrap();
+        let fast = walk_files_fast(&dir, ["**/*.snap"]).unwrap();
+
+        assert_eq!(slow.len(), fast.len());
+    }
+}

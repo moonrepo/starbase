@@ -46,25 +46,41 @@ pub struct GlobSet<'glob> {
 }
 
 impl<'glob> GlobSet<'glob> {
-    /// Create a new glob set from the list of patterns. Negated patterns must start with `!`.
-    pub fn new<I, V>(patterns: I) -> Result<Self, GlobError>
+    /// Create a new glob set from the list of patterns.
+    /// Negated patterns must start with `!`.
+    pub fn new<'new, I, V>(patterns: I) -> Result<GlobSet<'new>, GlobError>
     where
-        I: IntoIterator<Item = &'glob V> + Debug,
-        V: AsRef<str> + 'glob + ?Sized,
+        I: IntoIterator<Item = &'new V> + Debug,
+        V: AsRef<str> + 'new + ?Sized,
     {
         let (expressions, negations) = split_patterns(patterns);
 
         GlobSet::new_split(expressions, negations)
     }
 
+    /// Create a new owned/static glob set from the list of patterns.
+    /// Negated patterns must start with `!`.
+    pub fn new_owned<'new, I, V>(patterns: I) -> Result<GlobSet<'static>, GlobError>
+    where
+        I: IntoIterator<Item = &'new V> + Debug,
+        V: AsRef<str> + 'new + ?Sized,
+    {
+        let (expressions, negations) = split_patterns(patterns);
+
+        GlobSet::new_split_owned(expressions, negations)
+    }
+
     /// Create a new glob set with explicitly separate expressions and negations.
     /// Negated patterns must not start with `!`.
-    pub fn new_split<I1, V1, I2, V2>(expressions: I1, negations: I2) -> Result<Self, GlobError>
+    pub fn new_split<'new, I1, V1, I2, V2>(
+        expressions: I1,
+        negations: I2,
+    ) -> Result<GlobSet<'new>, GlobError>
     where
-        I1: IntoIterator<Item = &'glob V1>,
-        V1: AsRef<str> + 'glob + ?Sized,
-        I2: IntoIterator<Item = &'glob V2>,
-        V2: AsRef<str> + 'glob + ?Sized,
+        I1: IntoIterator<Item = &'new V1>,
+        V1: AsRef<str> + 'new + ?Sized,
+        I2: IntoIterator<Item = &'new V2>,
+        V2: AsRef<str> + 'new + ?Sized,
     {
         let mut ex = vec![];
         let mut ng = vec![];
@@ -84,6 +100,46 @@ impl<'glob> GlobSet<'glob> {
 
         for pattern in global_negations.iter() {
             ng.push(create_glob(pattern)?);
+            count += 1;
+        }
+
+        Ok(GlobSet {
+            expressions: wax::any(ex).unwrap(),
+            negations: wax::any(ng).unwrap(),
+            enabled: count > 0,
+        })
+    }
+
+    /// Create a new owned/static glob set with explicitly separate expressions and negations.
+    /// Negated patterns must not start with `!`.
+    pub fn new_split_owned<'new, I1, V1, I2, V2>(
+        expressions: I1,
+        negations: I2,
+    ) -> Result<GlobSet<'static>, GlobError>
+    where
+        I1: IntoIterator<Item = &'new V1>,
+        V1: AsRef<str> + 'new + ?Sized,
+        I2: IntoIterator<Item = &'new V2>,
+        V2: AsRef<str> + 'new + ?Sized,
+    {
+        let mut ex = vec![];
+        let mut ng = vec![];
+        let mut count = 0;
+
+        for pattern in expressions.into_iter() {
+            ex.push(create_glob(pattern.as_ref())?.into_owned());
+            count += 1;
+        }
+
+        for pattern in negations.into_iter() {
+            ng.push(create_glob(pattern.as_ref())?.into_owned());
+            count += 1;
+        }
+
+        let global_negations = GLOBAL_NEGATIONS.read().unwrap();
+
+        for pattern in global_negations.iter() {
+            ng.push(create_glob(pattern)?.into_owned());
             count += 1;
         }
 
@@ -278,6 +334,75 @@ where
     V: AsRef<str> + 'glob + ?Sized,
 {
     let paths = walk(base_dir, patterns)?;
+
+    Ok(paths
+        .into_iter()
+        .filter(|p| p.is_file())
+        .collect::<Vec<_>>())
+}
+
+/// Walk the file system starting from the provided directory, and return all files and directories
+/// that match the provided glob patterns. Use [`walk_files_fast`] if you only want to return files.
+#[inline]
+#[instrument]
+pub fn walk_fast<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
+where
+    P: AsRef<Path> + Debug,
+    I: IntoIterator<Item = &'glob V> + Debug,
+    V: AsRef<str> + 'glob + ?Sized,
+{
+    let mut paths = vec![];
+    let base_dir = base_dir.as_ref();
+    let globset = GlobSet::new_owned(patterns)?;
+
+    let walker = jwalk::WalkDir::new(base_dir)
+        .follow_links(false)
+        .skip_hidden(false);
+
+    // .process_read_dir(move |_depth, _dir_path, _read_dir_state, children| {
+    //     children.retain(|entry_result| {
+    //         entry_result
+    //             .as_ref()
+    //             .map(|entry| {
+    //                 if entry.file_type().is_dir() {
+    //                     true
+    //                 } else {
+    //                     globset.matches(entry.path())
+    //                 }
+    //             })
+    //             .unwrap_or(false)
+    //     });
+    // });
+
+    for entry in walker {
+        match entry {
+            Ok(e) => {
+                let path = e.path();
+
+                if globset.matches(&path) {
+                    paths.push(path);
+                }
+            }
+            Err(_) => {
+                // Will crash if the file doesn't exist
+                continue;
+            }
+        };
+    }
+
+    Ok(paths)
+}
+
+/// Walk the file system starting from the provided directory, and return all files
+/// that match the provided glob patterns. Use [`walk_fast`] if you need directories as well.
+#[inline]
+pub fn walk_files_fast<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
+where
+    P: AsRef<Path> + Debug,
+    I: IntoIterator<Item = &'glob V> + Debug,
+    V: AsRef<str> + 'glob + ?Sized,
+{
+    let paths = walk_fast(base_dir, patterns)?;
 
     Ok(paths
         .into_iter()
