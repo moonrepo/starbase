@@ -1,12 +1,17 @@
+use crate::fs;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::sync::{LazyLock, RwLock};
+use std::time::Instant;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
-use tracing::instrument;
+use tracing::{instrument, trace};
 use wax::{Any, LinkBehavior, Pattern};
 
+#[cfg(feature = "glob-cache")]
+pub use crate::glob_cache::GlobCache;
 pub use crate::glob_error::GlobError;
 pub use wax::{self, Glob};
 
@@ -39,6 +44,7 @@ where
 }
 
 /// Match values against a set of glob patterns.
+#[derive(Debug)]
 pub struct GlobSet<'glob> {
     expressions: Any<'glob>,
     negations: Any<'glob>,
@@ -341,75 +347,209 @@ where
         .collect::<Vec<_>>())
 }
 
+/// Options to customize walking behavior.
+#[derive(Default)]
+pub struct GlobWalkOptions {
+    #[cfg(feature = "glob-cache")]
+    pub cache: bool,
+    pub only_dirs: bool,
+    pub only_files: bool,
+}
+
+impl GlobWalkOptions {
+    #[cfg(feature = "glob-cache")]
+    /// Cache the results globally.
+    pub fn cache(mut self) -> Self {
+        self.cache = true;
+        self
+    }
+
+    /// Only return directories.
+    pub fn dirs(mut self) -> Self {
+        self.only_dirs = true;
+        self
+    }
+
+    /// Only return files.
+    pub fn files(mut self) -> Self {
+        self.only_files = true;
+        self
+    }
+}
+
 /// Walk the file system starting from the provided directory, and return all files and directories
-/// that match the provided glob patterns. Use [`walk_files_fast`] if you only want to return files.
+/// that match the provided glob patterns.
 #[inline]
-#[instrument]
 pub fn walk_fast<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
 where
     P: AsRef<Path> + Debug,
     I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
-    let mut paths = vec![];
-    let base_dir = base_dir.as_ref();
-
-    // let globset = GlobSet::new_owned(patterns)?;
-    // let walker = jwalk::WalkDir::new(base_dir)
-    //     .follow_links(false)
-    //     .skip_hidden(false)
-    //     .process_read_dir(move |_depth, _dir_path, _read_dir_state, children| {
-    //         children.retain(|entry_result| {
-    //             entry_result
-    //                 .as_ref()
-    //                 .map(|entry| {
-    //                     if entry.file_type().is_dir() {
-    //                         true
-    //                     } else {
-    //                         globset.matches(entry.path())
-    //                     }
-    //                 })
-    //                 .unwrap_or(false)
-    //         });
-    //     });
-
-    let globset = GlobSet::new(patterns)?;
-
-    for entry in jwalk::WalkDir::new(base_dir)
-        .follow_links(false)
-        .skip_hidden(false)
-    {
-        match entry {
-            Ok(e) => {
-                let path = e.path();
-
-                if globset.matches(&path) {
-                    paths.push(path);
-                }
-            }
-            Err(_) => {
-                // Will crash if the file doesn't exist
-                continue;
-            }
-        };
-    }
-
-    Ok(paths)
+    walk_fast_with_options(base_dir, patterns, GlobWalkOptions::default())
 }
 
-/// Walk the file system starting from the provided directory, and return all files
-/// that match the provided glob patterns. Use [`walk_fast`] if you need directories as well.
+/// Walk the file system starting from the provided directory, and return all files and directories
+/// that match the provided glob patterns, and customize further with the provided options.
 #[inline]
-pub fn walk_files_fast<'glob, P, I, V>(base_dir: P, patterns: I) -> Result<Vec<PathBuf>, GlobError>
+#[instrument(skip(options))]
+pub fn walk_fast_with_options<'glob, P, I, V>(
+    base_dir: P,
+    patterns: I,
+    options: GlobWalkOptions,
+) -> Result<Vec<PathBuf>, GlobError>
 where
     P: AsRef<Path> + Debug,
     I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
-    let paths = walk_fast(base_dir, patterns)?;
+    let mut paths = vec![];
 
-    Ok(paths
-        .into_iter()
-        .filter(|p| p.is_file())
-        .collect::<Vec<_>>())
+    for (dir, mut patterns) in partition_patterns(base_dir, patterns) {
+        patterns.sort();
+
+        #[cfg(feature = "glob-cache")]
+        if options.cache {
+            paths.extend(
+                GlobCache::instance()
+                    .cache(&dir, &patterns, |d, p| internal_walk(d, p, &options))?,
+            );
+
+            continue;
+        }
+
+        paths.extend(internal_walk(&dir, &patterns, &options)?);
+    }
+
+    Ok(paths)
+}
+
+fn internal_walk(
+    dir: &Path,
+    patterns: &[String],
+    options: &GlobWalkOptions,
+) -> Result<Vec<PathBuf>, GlobError> {
+    trace!(dir = ?dir, globs = ?patterns, "Finding files");
+
+    let instant = Instant::now();
+    let traverse = should_traverse_deep(&patterns);
+    let globset = GlobSet::new(patterns)?;
+    let mut paths = vec![];
+
+    let mut add_path = |path: PathBuf, base_dir: &Path, globset: &GlobSet<'_>| {
+        if options.only_files && !path.is_file() || options.only_dirs && !path.is_dir() {
+            return;
+        }
+
+        if let Ok(suffix) = path.strip_prefix(base_dir) {
+            if globset.matches(&suffix) {
+                paths.push(path);
+            }
+        }
+    };
+
+    if traverse {
+        for entry in jwalk::WalkDir::new(&dir)
+            .follow_links(false)
+            .skip_hidden(false)
+        {
+            if let Ok(entry) = entry {
+                add_path(entry.path(), &dir, &globset);
+            }
+        }
+    } else {
+        for entry in fs::read_dir(&dir).unwrap() {
+            add_path(entry.path(), &dir, &globset);
+        }
+    }
+
+    trace!(dir = ?dir, results = paths.len(), "Found in {:?}", instant.elapsed());
+
+    Ok(paths)
+}
+
+/// Partition a list of patterns and a base directory into buckets, keyed by the common
+/// parent directory. This helps to alleviate over-globbing on large directories.
+pub fn partition_patterns<'glob, P, I, V>(
+    base_dir: P,
+    patterns: I,
+) -> BTreeMap<PathBuf, Vec<String>>
+where
+    P: AsRef<Path> + Debug,
+    I: IntoIterator<Item = &'glob V> + Debug,
+    V: AsRef<str> + 'glob + ?Sized,
+{
+    let base_dir = base_dir.as_ref();
+    let mut partitions = BTreeMap::new();
+
+    // Sort patterns from smallest to longest glob,
+    // so that we can create the necessary buckets correctly
+    let mut patterns = patterns.into_iter().map(|p| p.as_ref()).collect::<Vec<_>>();
+    patterns.sort_by(|a, d| a.len().cmp(&d.len()));
+
+    // Global negations (!**) need to applied to all buckets
+    let mut global_negations = vec![];
+
+    for mut pattern in patterns {
+        if pattern.starts_with("!**") {
+            global_negations.push(pattern.to_owned());
+            continue;
+        }
+
+        let mut negated = false;
+
+        if let Some(suffix) = pattern.strip_prefix('!') {
+            negated = true;
+            pattern = suffix;
+        }
+
+        let mut dir = base_dir.to_path_buf();
+        let mut glob_parts = vec![];
+        let mut found = false;
+
+        let parts = pattern
+            .trim_start_matches("./")
+            .split('/')
+            .collect::<Vec<_>>();
+        let last_index = parts.len() - 1;
+
+        for (index, part) in parts.into_iter().enumerate() {
+            if part.is_empty() {
+                continue;
+            }
+
+            if found || index == last_index || is_glob(part) {
+                glob_parts.push(part);
+                found = true;
+            } else {
+                dir = dir.join(part);
+
+                if partitions.contains_key(&dir) {
+                    found = true;
+                }
+            }
+        }
+
+        let glob = glob_parts.join("/");
+
+        partitions.entry(dir).or_insert(vec![]).push(if negated {
+            format!("!{glob}")
+        } else {
+            glob
+        });
+    }
+
+    if !global_negations.is_empty() {
+        partitions.iter_mut().for_each(|(_key, value)| {
+            value.extend(global_negations.clone());
+        });
+    }
+
+    partitions
+}
+
+fn should_traverse_deep(patterns: &[String]) -> bool {
+    patterns
+        .iter()
+        .any(|pattern| pattern.contains("**") || pattern.contains("/"))
 }
