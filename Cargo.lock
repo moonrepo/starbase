@@ -2407,6 +2407,7 @@ dependencies = [
  "miette",
  "regex",
  "reqwest",
+ "scc",
  "serde",
  "serde_json",
  "serde_yml",

@@ -10,6 +10,8 @@ mod fs_lock; // Exported from fs
 #[cfg(feature = "glob")]
 /// Utilities for globbing the file system.
 pub mod glob;
+#[cfg(feature = "glob-cache")]
+mod glob_cache;
 #[cfg(feature = "glob")]
 mod glob_error;
 
