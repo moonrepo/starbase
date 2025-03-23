@@ -432,7 +432,7 @@ fn internal_walk(
     trace!(dir = ?dir, globs = ?patterns, "Finding files");
 
     let instant = Instant::now();
-    let traverse = should_traverse_deep(&patterns);
+    let traverse = should_traverse_deep(patterns);
     let globset = GlobSet::new(patterns)?;
     let mut paths = vec![];
 
@@ -442,24 +442,24 @@ fn internal_walk(
         }
 
         if let Ok(suffix) = path.strip_prefix(base_dir) {
-            if globset.matches(&suffix) {
+            if globset.matches(suffix) {
                 paths.push(path);
             }
         }
     };
 
     if traverse {
-        for entry in jwalk::WalkDir::new(&dir)
+        for entry in jwalk::WalkDir::new(dir)
             .follow_links(false)
             .skip_hidden(false)
+            .into_iter()
+            .flatten()
         {
-            if let Ok(entry) = entry {
-                add_path(entry.path(), &dir, &globset);
-            }
+            add_path(entry.path(), dir, &globset);
         }
     } else {
-        for entry in fs::read_dir(&dir).unwrap() {
-            add_path(entry.path(), &dir, &globset);
+        for entry in fs::read_dir(dir).unwrap() {
+            add_path(entry.path(), dir, &globset);
         }
     }
 
@@ -485,7 +485,7 @@ where
     // Sort patterns from smallest to longest glob,
     // so that we can create the necessary buckets correctly
     let mut patterns = patterns.into_iter().map(|p| p.as_ref()).collect::<Vec<_>>();
-    patterns.sort_by(|a, d| a.len().cmp(&d.len()));
+    patterns.sort_by_key(|a| a.len());
 
     // Global negations (!**) need to applied to all buckets
     let mut global_negations = vec![];
