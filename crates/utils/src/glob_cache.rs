@@ -50,7 +50,7 @@ impl GlobCache {
         }
 
         // Otherwise use an entry so that it creates a lock that avoids parallel writes
-        match self.cache.entry(self.create_key(dir, globs)) {
+        match self.cache.entry(key) {
             Entry::Occupied(entry) => {
                 let value = entry.get().to_vec();
 

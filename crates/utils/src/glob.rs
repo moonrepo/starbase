@@ -44,7 +44,6 @@ where
 }
 
 /// Match values against a set of glob patterns.
-#[derive(Debug)]
 pub struct GlobSet<'glob> {
     expressions: Any<'glob>,
     negations: Any<'glob>,
