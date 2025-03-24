@@ -303,14 +303,18 @@ where
     I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
+    let base_dir = base_dir.as_ref();
+    let instant = Instant::now();
+    let mut paths = vec![];
+
+    trace!(dir = ?base_dir, globs = ?patterns, "Finding files");
+
     let (expressions, mut negations) = split_patterns(patterns);
     negations.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
-    let mut paths = vec![];
-
     for expression in expressions {
         for entry in create_glob(expression)?
-            .walk_with_behavior(base_dir.as_ref(), LinkBehavior::ReadFile)
+            .walk_with_behavior(base_dir, LinkBehavior::ReadFile)
             .not(negations.clone())
             .unwrap()
         {
@@ -325,6 +329,8 @@ where
             };
         }
     }
+
+    trace!(dir = ?base_dir, results = paths.len(), "Found in {:?}", instant.elapsed());
 
     Ok(paths)
 }
