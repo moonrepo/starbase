@@ -8,7 +8,7 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.85.0"
 
 [dependencies]
-starbase_utils = { version = "0.11.4", path = "../utils", default-features = false }
+starbase_utils = { version = "0.11.5", path = "../utils", default-features = false }
 assert_cmd = "2.0.16"
 assert_fs = "1.1.2"
 clean-path = "0.2.1"
