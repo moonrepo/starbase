@@ -6,7 +6,7 @@ members = ["crates/*", "examples/*"]
 async-trait = "0.1.88"
 crossterm = "0.28.1"
 dirs = "6.0.0"
-iocraft = "0.7.1"
+iocraft = "0.7.3"
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
 miette = "7.5.0"
 regex = { version = "1.11.1", default-features = false }
