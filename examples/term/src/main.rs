@@ -431,7 +431,7 @@ async fn render(session: TestSession, ui: String) {
                     StyledText(content: "Styled file with decoration", style: Style::File, decoration: TextDecoration::Underline)
                     StyledText(content: "Styled <file>with</file> <path>tags</path>")
                     View(width: 20, padding_top: 1, padding_bottom: 1) {
-                        StyledText(content: "Styled <file>with</file> <path>tags</path> and <id>content</id> <symbol>that</symbol> should wrap")
+                        StyledText(content: "Styled <file>with</file> <path>tags</path> and <id>content</id> <symbol>that should</symbol> wrap")
                     }
                 }
             })
