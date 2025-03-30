@@ -259,7 +259,7 @@ mod unix {
         let mut depth = 0;
 
         while let Some(current_pid) = pid {
-            if depth > 10 {
+            if depth > 10 || pid.is_some_and(|id| id == 0) {
                 return None;
             }
 
