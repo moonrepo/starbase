@@ -446,6 +446,8 @@ async fn render(session: TestSession, ui: String) {
                             TableHeader::new("Percentage", Size::Percent(16.0)),
                             TableHeader::new("Middle aligned", Size::Percent(16.0)).align(TextAlign::Center),
                             TableHeader::new("Right aligned", Size::Percent(16.0)).align(TextAlign::Right),
+                            TableHeader::new("Hide above", Size::Length(30)).hide_above(100),
+                            TableHeader::new("Hide below", Size::Length(30)).hide_below(200),
                             TableHeader::new("Auto", Size::Auto),
                         ]
                     ) {
@@ -465,6 +467,12 @@ async fn render(session: TestSession, ui: String) {
                                         Text(content: "consequat justo eget")
                                     }
                                     TableCol(col: 4) {
+                                        Text(content: "this should be hidden above 100")
+                                    }
+                                    TableCol(col: 5) {
+                                        Text(content: "this should be hidden below 200")
+                                    }
+                                    TableCol(col: 6) {
                                         Text(content: "gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. ")
                                     }
                                 }
