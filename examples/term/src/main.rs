@@ -442,10 +442,10 @@ async fn render(session: TestSession, ui: String) {
                 Container {
                     Table(
                         headers: vec![
-                            TableHeader::new("Length", Size::Length(40)),
-                            TableHeader::new("Percentage", Size::Percent(20.0)),
-                            TableHeader::new("Middle aligned", Size::Percent(20.0)).align(TextAlign::Center),
-                            TableHeader::new("Right aligned", Size::Percent(20.0)).align(TextAlign::Right),
+                            TableHeader::new("Length", Size::Length(30)),
+                            TableHeader::new("Percentage", Size::Percent(16.0)),
+                            TableHeader::new("Middle aligned", Size::Percent(16.0)).align(TextAlign::Center),
+                            TableHeader::new("Right aligned", Size::Percent(16.0)).align(TextAlign::Right),
                             TableHeader::new("Auto", Size::Auto),
                         ]
                     ) {
@@ -465,7 +465,7 @@ async fn render(session: TestSession, ui: String) {
                                         Text(content: "consequat justo eget")
                                     }
                                     TableCol(col: 4) {
-                                        Text(content: "gravida lorem")
+                                        Text(content: "gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. gravida lorem. ")
                                     }
                                 }
                             }

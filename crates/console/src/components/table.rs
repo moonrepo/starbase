@@ -134,6 +134,11 @@ pub fn TableCol<'a>(
 
     element! {
         View(
+            flex_shrink: if attrs.width == Size::Auto {
+                None
+            } else {
+                Some(0.0)
+            },
             justify_content: align_to_justify(attrs.align),
             width: attrs.width,
         ) {
