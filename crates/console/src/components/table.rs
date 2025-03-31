@@ -11,6 +11,7 @@ fn align_to_justify(align: TextAlign) -> JustifyContent {
 
 struct TableContext {
     pub col_data: Vec<TableHeader>,
+    pub term_width: u16,
 }
 
 #[derive(Clone, Default)]
@@ -18,6 +19,9 @@ pub struct TableHeader {
     pub align: TextAlign,
     pub label: String,
     pub width: Size,
+
+    above_width: Option<u16>,
+    below_width: Option<u16>,
 }
 
 impl TableHeader {
@@ -29,8 +33,19 @@ impl TableHeader {
         }
     }
 
-    pub fn align(self, align: TextAlign) -> Self {
-        Self { align, ..self }
+    pub fn align(mut self, align: TextAlign) -> Self {
+        self.align = align;
+        self
+    }
+
+    pub fn hide_above(mut self, width: u16) -> Self {
+        self.above_width = Some(width);
+        self
+    }
+
+    pub fn hide_below(mut self, width: u16) -> Self {
+        self.below_width = Some(width);
+        self
     }
 }
 
@@ -50,10 +65,15 @@ pub struct TableProps<'a> {
 }
 
 #[component]
-pub fn Table<'a>(props: &mut TableProps<'a>, hooks: Hooks) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn Table<'a>(
+    props: &mut TableProps<'a>,
+    mut hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
+    let (term_width, _) = hooks.use_terminal_size();
     let context = TableContext {
         col_data: props.headers.clone(),
+        term_width,
     };
 
     element! {
@@ -132,8 +152,26 @@ pub fn TableCol<'a>(
         .get(props.col as usize)
         .unwrap_or_else(|| panic!("Unknown column index {}", props.col));
 
+    if context.term_width > 0 {
+        let hide = attrs
+            .above_width
+            .is_some_and(|above| context.term_width > above)
+            || attrs
+                .below_width
+                .is_some_and(|below| context.term_width < below);
+
+        if hide {
+            return element!(View(display: Display::None));
+        }
+    }
+
     element! {
         View(
+            flex_shrink: if attrs.width == Size::Auto {
+                None
+            } else {
+                Some(0.0)
+            },
             justify_content: align_to_justify(attrs.align),
             width: attrs.width,
         ) {
