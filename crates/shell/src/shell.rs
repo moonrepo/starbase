@@ -6,6 +6,7 @@ use tracing::{debug, instrument};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ShellType {
+    Ash,
     Bash,
     Elvish,
     Fish,
@@ -22,6 +23,7 @@ impl ShellType {
     /// Return a list of all shell types.
     pub fn variants() -> Vec<Self> {
         vec![
+            Self::Ash,
             Self::Bash,
             Self::Elvish,
             Self::Fish,
@@ -103,6 +105,7 @@ impl ShellType {
     /// Build a [`Shell`] instance from the current type.
     pub fn build(&self) -> BoxedShell {
         match self {
+            Self::Ash => Box::new(Ash::new()),
             Self::Bash => Box::new(Bash::new()),
             Self::Elvish => Box::new(Elvish::new()),
             Self::Fish => Box::new(Fish::new()),
@@ -136,6 +139,7 @@ impl fmt::Display for ShellType {
             f,
             "{}",
             match self {
+                Self::Ash => "ash",
                 Self::Bash => "bash",
                 Self::Elvish => "elvish",
                 Self::Fish => "fish",
@@ -156,6 +160,7 @@ impl FromStr for ShellType {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
+            "ash" => Ok(ShellType::Ash),
             "bash" => Ok(ShellType::Bash),
             "elv" | "elvish" => Ok(ShellType::Elvish),
             "fish" => Ok(ShellType::Fish),
