@@ -1,7 +1,5 @@
-use crate::color::paint_style;
+use crate::color::{Style, paint_style};
 use std::path::PathBuf;
-
-pub use crate::color::Style;
 
 pub trait Stylize {
     /// Wrap the current value in the given style (an ANSI color escape code).

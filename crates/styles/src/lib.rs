@@ -1,7 +1,8 @@
 pub mod color;
 mod stylize;
-
-#[cfg(feature = "theme")]
+mod tags;
 pub mod theme;
 
+pub use color::{DarkColor, LightColor, Style};
 pub use stylize::*;
+pub use tags::*;
