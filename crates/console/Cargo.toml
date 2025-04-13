@@ -8,7 +8,7 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.85.0"
 
 [dependencies]
-starbase_styles = { version = "0.5.1", path = "../styles" }
+starbase_styles = { version = "0.6.0", path = "../styles" }
 crossterm = { workspace = true, optional = true }
 iocraft = { workspace = true, optional = true }
 miette = { workspace = true, optional = true }
