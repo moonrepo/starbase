@@ -1,6 +1,6 @@
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
-use starbase_styles::color::parse_tags;
+use starbase_styles::parse_tags;
 
 pub use starbase_styles::Style;
 
