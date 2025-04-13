@@ -37,15 +37,15 @@ pub enum LightColor {
     White = 15,
     Black = 16,
     Teal = 29,
-    Cyan = 31,
-    Blue = 26,
+    Cyan = 30,
+    Blue = 25,
     Green = 28,
-    Purple = 99,
-    Lime = 107,
-    Lavender = 141,
+    Purple = 93,
+    Lime = 101,
+    Lavender = 135,
     Red = 160,
     Brown = 94,
-    Pink = 176,
+    Pink = 170,
     Yellow = 178,
     Orange = 202,
     Gray = 238,
@@ -272,9 +272,17 @@ pub fn log_target<T: AsRef<str>>(value: T) -> String {
 
     // Lot of casting going on here...
     if supports_color() >= 2 {
-        let index = i32::abs(hash as i32) as usize % COLOR_LIST.len();
+        let mut list = vec![];
 
-        return paint(COLOR_LIST[index], value);
+        if is_light_theme() {
+            list.extend(COLOR_LIST_LIGHT);
+        } else {
+            list.extend(COLOR_LIST_DARK);
+        };
+
+        let index = i32::abs(hash as i32) as usize % list.len();
+
+        return paint(list[index], value);
     }
 
     let index = i32::abs(hash as i32) as usize % COLOR_LIST_UNSUPPORTED.len();
@@ -313,11 +321,18 @@ pub fn supports_color() -> u8 {
     1
 }
 
-pub(crate) const COLOR_LIST: [u8; 76] = [
+pub(crate) const COLOR_LIST_DARK: [u8; 76] = [
     20, 21, 26, 27, 32, 33, 38, 39, 40, 41, 42, 43, 44, 45, 56, 57, 62, 63, 68, 69, 74, 75, 76, 77,
     78, 79, 80, 81, 92, 93, 98, 99, 112, 113, 128, 129, 134, 135, 148, 149, 160, 161, 162, 163,
     164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 178, 179, 184, 185, 196, 197, 198, 199, 200,
     201, 202, 203, 204, 205, 206, 207, 208, 209, 214, 215, 220, 221,
+];
+
+pub(crate) const COLOR_LIST_LIGHT: [u8; 72] = [
+    20, 21, 26, 27, 32, 33, 38, 39, 40, 41, 42, 43, 44, 45, 56, 57, 62, 63, 68, 69, 74, 75, 76, 77,
+    78, 79, 80, 81, 92, 93, 98, 99, 112, 113, 128, 129, 127, 126, 142, 143, 160, 161, 162, 163,
+    164, 165, 166, 167, 168, 169, 172, 173, 178, 179, 196, 197, 198, 199, 200, 201, 202, 203, 204,
+    205, 206, 207, 208, 209, 214, 215, 220, 221,
 ];
 
 pub(crate) const COLOR_LIST_UNSUPPORTED: [u8; 6] = [6, 2, 3, 4, 5, 1];
