@@ -1,6 +1,6 @@
 [package]
 name = "starbase"
-version = "0.10.1"
+version = "0.10.2"
 edition = "2024"
 license = "MIT"
 description = "Framework for building performant command line applications and developer tools."
