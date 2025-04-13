@@ -1,15 +1,15 @@
 // Colors based on 4th column, except for gray:
 // https://upload.wikimedia.org/wikipedia/commons/1/15/Xterm_256color_chart.svg
 
+use crate::theme::is_light_theme;
 use owo_colors::{OwoColorize, XtermColors};
-use std::collections::HashMap;
 use std::env;
 use std::path::Path;
-use std::sync::LazyLock;
 
 pub use owo_colors as owo;
 pub use owo_colors::Style as OwoStyle;
 
+/// ANSI colors for a dark theme.
 pub enum Color {
     White = 15,
     Black = 16,
@@ -29,6 +29,30 @@ pub enum Color {
     GrayLight = 246,
 }
 
+/// ANSI colors for a dark theme.
+pub type DarkColor = Color;
+
+/// ANSI colors for a light theme.
+pub enum LightColor {
+    White = 15,
+    Black = 16,
+    Teal = 29,
+    Cyan = 30,
+    Blue = 25,
+    Green = 28,
+    Purple = 93,
+    Lime = 101,
+    Lavender = 135,
+    Red = 160,
+    Brown = 94,
+    Pink = 170,
+    Yellow = 178,
+    Orange = 202,
+    Gray = 238,
+    GrayLight = 241,
+}
+
+/// Types of colors based on state and usage.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Style {
     Tag(String),
@@ -54,25 +78,61 @@ pub enum Style {
 }
 
 impl Style {
+    /// Convert the style a specific ANSI color code, based on the current theme.
+    pub fn ansi_color(&self) -> u8 {
+        if is_light_theme() {
+            self.light_color() as u8
+        } else {
+            self.dark_color() as u8
+        }
+    }
+
     /// Convert the style to a specific [Color].
     pub fn color(&self) -> Color {
+        self.dark_color()
+    }
+
+    /// Convert the style to a specific [DarkColor].
+    pub fn dark_color(&self) -> DarkColor {
         match self {
-            Style::Caution => Color::Orange,
-            Style::Failure => Color::Red,
-            Style::Invalid => Color::Yellow,
-            Style::Muted => Color::Gray,
-            Style::MutedLight => Color::GrayLight,
-            Style::Success => Color::Green,
-            Style::File => Color::Teal,
-            Style::Hash => Color::Green,
-            Style::Id => Color::Purple,
-            Style::Label => Color::Blue,
-            Style::Path => Color::Cyan,
-            Style::Property => Color::Lavender,
-            Style::Shell => Color::Pink,
-            Style::Symbol => Color::Lime,
-            Style::Url => Color::Blue,
-            Style::Tag(_) => Color::White,
+            Style::Caution => DarkColor::Orange,
+            Style::Failure => DarkColor::Red,
+            Style::Invalid => DarkColor::Yellow,
+            Style::Muted => DarkColor::Gray,
+            Style::MutedLight => DarkColor::GrayLight,
+            Style::Success => DarkColor::Green,
+            Style::File => DarkColor::Teal,
+            Style::Hash => DarkColor::Green,
+            Style::Id => DarkColor::Purple,
+            Style::Label => DarkColor::Blue,
+            Style::Path => DarkColor::Cyan,
+            Style::Property => DarkColor::Lavender,
+            Style::Shell => DarkColor::Pink,
+            Style::Symbol => DarkColor::Lime,
+            Style::Url => DarkColor::Blue,
+            Style::Tag(_) => DarkColor::White,
+        }
+    }
+
+    /// Convert the style to a specific [LightColor].
+    pub fn light_color(&self) -> LightColor {
+        match self {
+            Style::Caution => LightColor::Orange,
+            Style::Failure => LightColor::Red,
+            Style::Invalid => LightColor::Yellow,
+            Style::Muted => LightColor::Gray,
+            Style::MutedLight => LightColor::GrayLight,
+            Style::Success => LightColor::Green,
+            Style::File => LightColor::Teal,
+            Style::Hash => LightColor::Green,
+            Style::Id => LightColor::Purple,
+            Style::Label => LightColor::Blue,
+            Style::Path => LightColor::Cyan,
+            Style::Property => LightColor::Lavender,
+            Style::Shell => LightColor::Pink,
+            Style::Symbol => LightColor::Lime,
+            Style::Url => LightColor::Blue,
+            Style::Tag(_) => LightColor::Black,
         }
     }
 }
@@ -95,170 +155,10 @@ pub fn paint<T: AsRef<str>>(color: u8, value: T) -> String {
 /// Paint the string with the given style.
 pub fn paint_style<T: AsRef<str>>(style: Style, value: T) -> String {
     if matches!(style, Style::File | Style::Path | Style::Shell) {
-        paint(style.color() as u8, clean_path(value.as_ref()))
+        paint(style.ansi_color(), clean_path(value.as_ref()))
     } else {
-        paint(style.color() as u8, value)
+        paint(style.ansi_color(), value)
     }
-}
-
-/// Parses a string with HTML-like tags into a list of tagged pieces.
-/// For example: `<file>starbase.json</file>`
-pub fn parse_tags<T: AsRef<str>>(value: T, panic: bool) -> Vec<(String, Option<String>)> {
-    let message = value.as_ref().to_owned();
-
-    if !message.contains('<') {
-        return vec![(message, None)];
-    }
-
-    let mut results: Vec<(String, Option<String>)> = vec![];
-
-    let mut add_result = |text: &str, tag: Option<String>| {
-        if let Some(last) = results.last_mut() {
-            if last.1 == tag {
-                last.0.push_str(text);
-                return;
-            }
-        }
-
-        results.push((text.to_owned(), tag));
-    };
-
-    let mut text = message.as_str();
-    let mut tag_stack = vec![];
-    let mut tag_count = 0;
-
-    while let Some(open_index) = text.find('<') {
-        if let Some(close_index) = text.find('>') {
-            let mut tag = text.get(open_index + 1..close_index).unwrap_or_default();
-
-            // Definitely not a tag
-            if tag.is_empty() || tag.contains(' ') {
-                add_result(text.get(..=open_index).unwrap(), None);
-
-                text = text.get(open_index + 1..).unwrap();
-                continue;
-            }
-
-            let prev_text = text.get(..open_index).unwrap();
-
-            // Close tag, extract with style
-            if tag.starts_with('/') {
-                tag = tag.strip_prefix('/').unwrap();
-
-                if tag_stack.is_empty() && panic {
-                    panic!("Close tag `{}` found without an open tag", tag);
-                }
-
-                let in_tag = tag_stack.last();
-
-                if in_tag.is_some_and(|inner| tag != inner) && panic {
-                    panic!(
-                        "Close tag `{}` does not much the open tag `{}`",
-                        tag,
-                        in_tag.as_ref().unwrap()
-                    );
-                }
-
-                add_result(prev_text, in_tag.map(|_| tag.to_owned()));
-
-                tag_stack.pop();
-            }
-            // Open tag, preserve the current tag
-            else {
-                add_result(prev_text, tag_stack.last().cloned());
-
-                tag_stack.push(tag.to_owned());
-                tag_count += 1;
-            }
-
-            text = text.get(close_index + 1..).unwrap();
-        } else {
-            add_result(text.get(..=open_index).unwrap(), None);
-
-            text = text.get(open_index + 1..).unwrap();
-        }
-    }
-
-    // If stack is the same length as the count, then we have a
-    // bunch of open tags without closing tags. Let's assume these
-    // aren't meant to be style tags...
-    if tag_count > 0 && tag_stack.len() == tag_count {
-        return vec![(message, None)];
-    }
-
-    if !text.is_empty() {
-        add_result(text, None);
-    }
-
-    results
-        .into_iter()
-        .filter(|item| !item.0.is_empty())
-        .collect()
-}
-
-static TAGS_MAP: LazyLock<HashMap<String, Style>> = LazyLock::new(|| {
-    HashMap::from_iter(
-        [
-            Style::Caution,
-            Style::Failure,
-            Style::File,
-            Style::Hash,
-            Style::Id,
-            Style::Invalid,
-            Style::Label,
-            Style::Muted,
-            Style::MutedLight,
-            Style::Path,
-            Style::Property,
-            Style::Shell,
-            Style::Success,
-            Style::Symbol,
-            Style::Url,
-        ]
-        .into_iter()
-        .map(|style| (format!("{:?}", style).to_lowercase(), style)),
-    )
-});
-
-/// Parses a string with HTML-like tags into a list of styled pieces.
-/// For example: `<file>starbase.json</file>`
-pub fn parse_style_tags<T: AsRef<str>>(value: T) -> Vec<(String, Option<Style>)> {
-    let message = value.as_ref();
-
-    if !message.contains('<') {
-        return vec![(message.to_owned(), None)];
-    }
-
-    parse_tags(message, false)
-        .into_iter()
-        .map(|(text, tag)| (text, tag.and_then(|tag| TAGS_MAP.get(&tag).cloned())))
-        .collect()
-}
-
-/// Apply styles to a string by replacing style specific tags.
-/// For example: `<file>starbase.json</file>`
-pub fn apply_style_tags<T: AsRef<str>>(value: T) -> String {
-    let mut result = vec![];
-
-    for (text, style) in parse_style_tags(value) {
-        result.push(match style {
-            Some(with) => paint_style(with, text),
-            None => text,
-        });
-    }
-
-    result.join("")
-}
-
-/// Remove style and tag specific markup from a string.
-pub fn remove_style_tags<T: AsRef<str>>(value: T) -> String {
-    let mut result = vec![];
-
-    for (text, _) in parse_style_tags(value) {
-        result.push(text);
-    }
-
-    result.join("")
 }
 
 // States
@@ -372,9 +272,17 @@ pub fn log_target<T: AsRef<str>>(value: T) -> String {
 
     // Lot of casting going on here...
     if supports_color() >= 2 {
-        let index = i32::abs(hash as i32) as usize % COLOR_LIST.len();
+        let mut list = vec![];
 
-        return paint(COLOR_LIST[index], value);
+        if is_light_theme() {
+            list.extend(COLOR_LIST_LIGHT);
+        } else {
+            list.extend(COLOR_LIST_DARK);
+        };
+
+        let index = i32::abs(hash as i32) as usize % list.len();
+
+        return paint(list[index], value);
     }
 
     let index = i32::abs(hash as i32) as usize % COLOR_LIST_UNSUPPORTED.len();
@@ -413,11 +321,18 @@ pub fn supports_color() -> u8 {
     1
 }
 
-pub const COLOR_LIST: [u8; 76] = [
+pub(crate) const COLOR_LIST_DARK: [u8; 76] = [
     20, 21, 26, 27, 32, 33, 38, 39, 40, 41, 42, 43, 44, 45, 56, 57, 62, 63, 68, 69, 74, 75, 76, 77,
     78, 79, 80, 81, 92, 93, 98, 99, 112, 113, 128, 129, 134, 135, 148, 149, 160, 161, 162, 163,
     164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 178, 179, 184, 185, 196, 197, 198, 199, 200,
     201, 202, 203, 204, 205, 206, 207, 208, 209, 214, 215, 220, 221,
 ];
 
-pub const COLOR_LIST_UNSUPPORTED: [u8; 6] = [6, 2, 3, 4, 5, 1];
+pub(crate) const COLOR_LIST_LIGHT: [u8; 72] = [
+    20, 21, 26, 27, 32, 33, 38, 39, 40, 41, 42, 43, 44, 45, 56, 57, 62, 63, 68, 69, 74, 75, 76, 77,
+    78, 79, 80, 81, 92, 93, 98, 99, 112, 113, 128, 129, 127, 126, 142, 143, 160, 161, 162, 163,
+    164, 165, 166, 167, 168, 169, 172, 173, 178, 179, 196, 197, 198, 199, 200, 201, 202, 203, 204,
+    205, 206, 207, 208, 209, 214, 215, 220, 221,
+];
+
+pub(crate) const COLOR_LIST_UNSUPPORTED: [u8; 6] = [6, 2, 3, 4, 5, 1];

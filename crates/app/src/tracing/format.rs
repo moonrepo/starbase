@@ -1,6 +1,5 @@
 use chrono::{Local, Timelike};
-use starbase_styles::color;
-use starbase_styles::color::apply_style_tags;
+use starbase_styles::{apply_style_tags, color};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use tracing::{Level, Metadata, Subscriber, field::Visit, metadata::LevelFilter};
 use tracing_subscriber::{

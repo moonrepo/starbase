@@ -1,5 +1,4 @@
-use starbase_styles::Style;
-use starbase_styles::color::{apply_style_tags, parse_style_tags, parse_tags};
+use starbase_styles::{Style, apply_style_tags, parse_style_tags, parse_tags};
 use std::env;
 
 #[test]

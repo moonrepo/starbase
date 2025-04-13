@@ -1,12 +1,10 @@
 use crate::fs;
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fmt::Debug;
+use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 use std::time::Instant;
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
 use tracing::{instrument, trace};
 use wax::{Any, LinkBehavior, Pattern};
 
