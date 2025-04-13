@@ -1,9 +1,10 @@
 use iocraft::Color;
-use starbase_styles::{Style, color::Color as NativeColor};
+use starbase_styles::Style;
+use starbase_styles::theme::is_light_theme;
 use std::collections::HashMap;
 
 pub fn style_to_color(style: Style) -> Color {
-    Color::AnsiValue(style.color() as u8)
+    Color::AnsiValue(style.ansi_color())
 }
 
 // https://www.ditig.com/publications/256-colors-cheat-sheet
@@ -71,27 +72,37 @@ pub struct ConsoleTheme {
 
 impl Default for ConsoleTheme {
     fn default() -> Self {
+        if is_light_theme() {
+            Self::light()
+        } else {
+            Self::dark()
+        }
+    }
+}
+
+impl ConsoleTheme {
+    pub fn new(fg: Color, bg: Color) -> Self {
         Self {
-            brand_color: Color::White,
-            bg_alt_color: Color::AnsiValue(234),
+            brand_color: fg,
+            bg_alt_color: bg,
             border_color: style_to_color(Style::Muted),
             border_focus_color: style_to_color(Style::MutedLight),
-            form_label_color: Color::White,
+            form_label_color: fg,
             form_failure_symbol: "✘".into(),
             form_success_symbol: "✔".into(),
-            input_active_color: Color::AnsiValue(NativeColor::Cyan as u8),
-            input_prefix_color: Color::White,
+            input_active_color: style_to_color(Style::Path),
+            input_prefix_color: fg,
             input_prefix_symbol: "❯".into(),
-            input_selected_color: Color::AnsiValue(NativeColor::Teal as u8),
+            input_selected_color: style_to_color(Style::File),
             input_selected_symbol: "✔".into(),
             layout_fallback_symbol: "—".into(),
             layout_list_bullet: "-".into(),
             layout_map_separator: "=".into(),
-            progress_bar_color: Color::White,
+            progress_bar_color: fg,
             progress_bar_filled_char: '█',
             progress_bar_position_char: '▒',
             progress_bar_unfilled_char: '░',
-            progress_loader_color: Color::White,
+            progress_loader_color: fg,
             progress_loader_frames: DEFAULT_FRAMES.iter().map(|f| f.to_string()).collect(),
             style_caution_color: style_to_color(Style::Caution),
             style_failure_color: style_to_color(Style::Failure),
@@ -114,9 +125,7 @@ impl Default for ConsoleTheme {
             custom_tags: HashMap::new(),
         }
     }
-}
 
-impl ConsoleTheme {
     pub fn branded(color: Color) -> Self {
         Self {
             brand_color: color,
@@ -125,6 +134,18 @@ impl ConsoleTheme {
             progress_loader_color: color,
             ..Self::default()
         }
+    }
+
+    pub fn dark() -> Self {
+        let mut theme = Self::new(Color::White, Color::Black);
+        theme.bg_alt_color = Color::AnsiValue(234);
+        theme
+    }
+
+    pub fn light() -> Self {
+        let mut theme = Self::new(Color::Black, Color::White);
+        theme.bg_alt_color = Color::AnsiValue(254);
+        theme
     }
 
     pub fn style_to_color(&self, style: &Style) -> Option<Color> {

@@ -19,7 +19,6 @@ pub fn create_graphical_theme() -> miette::GraphicalTheme {
     if let Some(supports) = supports_color::on(supports_color::Stream::Stderr) {
         if supports.has_256 || supports.has_16m {
             let is_light = is_light_theme();
-
             let code = |light: LightColor, dark: DarkColor| -> u8 {
                 if is_light { light as u8 } else { dark as u8 }
             };
