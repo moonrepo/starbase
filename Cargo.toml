@@ -6,16 +6,16 @@ members = ["crates/*", "examples/*"]
 async-trait = "0.1.88"
 crossterm = "0.28.1"
 dirs = "6.0.0"
-iocraft = "0.7.3"
+iocraft = "0.7.7"
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
-miette = "7.5.0"
+miette = "7.6.0"
 regex = { version = "1.11.1", default-features = false }
 relative-path = "1.9.3"
 reqwest = { version = "0.12.15", default-features = false }
 rustc-hash = "2.1.1"
-scc = "2.3.3"
+scc = "2.3.4"
 serial_test = "3.2.0"
-serde = { version = "1.0.218", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 serde_yml = "0.0.12"
 thiserror = "2.0.12"

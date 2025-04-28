@@ -173,6 +173,49 @@ mod walk_files {
     }
 }
 
+mod walk_fast {
+    use super::*;
+    use starbase_sandbox::create_empty_sandbox;
+
+    #[test]
+    fn handles_dot_folders() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("1.txt", "");
+        sandbox.create_file("dir/2.txt", "");
+        sandbox.create_file(".hidden/3.txt", "");
+
+        let mut paths =
+            walk_fast_with_options(sandbox.path(), ["**/*.txt"], GlobWalkOptions::default())
+                .unwrap();
+        paths.sort();
+
+        assert_eq!(
+            paths,
+            vec![
+                sandbox.path().join("1.txt"),
+                sandbox.path().join("dir/2.txt"),
+            ]
+        );
+
+        let mut paths = walk_fast_with_options(
+            sandbox.path(),
+            ["**/*.txt"],
+            GlobWalkOptions::default().dot_dirs(false).dot_files(false),
+        )
+        .unwrap();
+        paths.sort();
+
+        assert_eq!(
+            paths,
+            vec![
+                sandbox.path().join(".hidden/3.txt"),
+                sandbox.path().join("1.txt"),
+                sandbox.path().join("dir/2.txt"),
+            ]
+        );
+    }
+}
+
 mod partition_patterns {
     use super::*;
     use std::collections::BTreeMap;
@@ -296,6 +339,20 @@ mod partition_patterns {
                         "!**/node_modules/**".into(),
                     ]
                 ),
+            ])
+        );
+    }
+
+    #[test]
+    fn glob_stars() {
+        let map = partition_patterns("/root", ["**/file.txt", "dir/sub/**/*", "other/**/*.txt"]);
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([
+                ("/root".into(), vec!["**/file.txt".into()]),
+                ("/root/dir/sub".into(), vec!["**/*".into()]),
+                ("/root/other".into(), vec!["**/*.txt".into()]),
             ])
         );
     }

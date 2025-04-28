@@ -351,10 +351,12 @@ where
 }
 
 /// Options to customize walking behavior.
-#[derive(Default)]
+#[derive(Debug)]
 pub struct GlobWalkOptions {
     #[cfg(feature = "glob-cache")]
     pub cache: bool,
+    pub ignore_dot_dirs: bool,
+    pub ignore_dot_files: bool,
     pub only_dirs: bool,
     pub only_files: bool,
 }
@@ -377,6 +379,31 @@ impl GlobWalkOptions {
     pub fn files(mut self) -> Self {
         self.only_files = true;
         self
+    }
+
+    /// Control directories that start with a `.`.
+    pub fn dot_dirs(mut self, ignore: bool) -> Self {
+        self.ignore_dot_dirs = ignore;
+        self
+    }
+
+    /// Control files that start with a `.`.
+    pub fn dot_files(mut self, ignore: bool) -> Self {
+        self.ignore_dot_files = ignore;
+        self
+    }
+}
+
+impl Default for GlobWalkOptions {
+    fn default() -> Self {
+        Self {
+            #[cfg(feature = "glob-cache")]
+            cache: false,
+            ignore_dot_dirs: true,
+            ignore_dot_files: false,
+            only_dirs: false,
+            only_files: false,
+        }
     }
 }
 
@@ -440,7 +467,13 @@ fn internal_walk(
     let mut paths = vec![];
 
     let mut add_path = |path: PathBuf, base_dir: &Path, globset: &GlobSet<'_>| {
-        if options.only_files && !path.is_file() || options.only_dirs && !path.is_dir() {
+        if path.is_file() && (options.only_dirs || options.ignore_dot_files && is_hidden_dot(&path))
+        {
+            return;
+        }
+
+        if path.is_dir() && (options.only_files || options.ignore_dot_dirs && is_hidden_dot(&path))
+        {
             return;
         }
 
@@ -452,16 +485,27 @@ fn internal_walk(
     };
 
     if traverse {
+        let ignore_dot_dirs = options.ignore_dot_dirs;
+
         for entry in jwalk::WalkDir::new(dir)
             .follow_links(false)
             .skip_hidden(false)
+            .process_read_dir(move |depth, path, _state, children| {
+                if ignore_dot_dirs
+                    && path.is_dir()
+                    && is_hidden_dot(path)
+                    && (depth.is_none() || depth.is_some_and(|d| d > 0))
+                {
+                    children.retain(|_| false);
+                }
+            })
             .into_iter()
             .flatten()
         {
             add_path(entry.path(), dir, &globset);
         }
     } else {
-        for entry in fs::read_dir(dir).unwrap() {
+        for entry in fs::read_dir(dir)? {
             add_path(entry.path(), dir, &globset);
         }
     }
@@ -555,4 +599,10 @@ fn should_traverse_deep(patterns: &[String]) -> bool {
     patterns
         .iter()
         .any(|pattern| pattern.contains("**") || pattern.contains("/"))
+}
+
+fn is_hidden_dot(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|file| file.to_str())
+        .is_some_and(|name| name.starts_with('.'))
 }
