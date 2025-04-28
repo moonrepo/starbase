@@ -491,10 +491,12 @@ fn internal_walk(
             .follow_links(false)
             .skip_hidden(false)
             .process_read_dir(move |depth, path, _state, children| {
+                // Only ignore nested hidden dirs, but do not ignore
+                // if the root dir is hidden, as globs resolve from it
                 if ignore_dot_dirs
+                    && depth.is_some_and(|d| d > 0)
                     && path.is_dir()
                     && is_hidden_dot(path)
-                    && (depth.is_none() || depth.is_some_and(|d| d > 0))
                 {
                     children.retain(|_| false);
                 }
