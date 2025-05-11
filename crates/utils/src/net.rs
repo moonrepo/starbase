@@ -6,6 +6,7 @@ use std::fmt::Debug;
 use std::io::Write;
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tracing::{instrument, trace};
@@ -39,7 +40,7 @@ impl Downloader for DefaultDownloader {
     }
 }
 
-pub type OnChunkFn = Box<dyn Fn(u64, u64) + Send>;
+pub type OnChunkFn = Arc<dyn Fn(u64, u64) + Send>;
 
 #[derive(Default)]
 pub struct DownloadOptions {
