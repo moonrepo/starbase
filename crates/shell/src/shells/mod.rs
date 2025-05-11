@@ -26,9 +26,10 @@ use crate::Statement;
 use crate::hooks::Hook;
 use crate::shell_error::ShellError;
 use std::ffi::OsString;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::path::{Path, PathBuf};
 
+#[derive(Debug)]
 pub struct ShellCommand {
     pub shell_args: Vec<OsString>,
     pub pass_args_stdin: bool,
@@ -45,7 +46,7 @@ impl Default for ShellCommand {
     }
 }
 
-pub trait Shell: Display + Send + Sync {
+pub trait Shell: Debug + Display + Send + Sync {
     /// Format the provided statement.
     fn format(&self, data: Statement<'_>) -> String;
 
