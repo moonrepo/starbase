@@ -40,7 +40,7 @@ impl Downloader for DefaultDownloader {
     }
 }
 
-pub type OnChunkFn = Arc<dyn Fn(u64, u64) + Send>;
+pub type OnChunkFn = Arc<dyn Fn(u64, u64) + Send + Sync>;
 
 #[derive(Default)]
 pub struct DownloadOptions {
