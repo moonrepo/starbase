@@ -30,7 +30,7 @@ zstd = { version = "0.13.3", optional = true }
 bzip2 = { version = "0.5.2", optional = true }
 
 # zip
-zip = { version = "2.6.1", default-features = false, optional = true }
+zip = { version = "2.6.0", default-features = false, optional = true }
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = [
