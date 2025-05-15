@@ -50,7 +50,7 @@ impl TarPacker {
     /// Create a new `.tar.xz` packer with a custom compression level.
     #[cfg(feature = "tar-xz")]
     pub fn new_xz_with_level(output_file: &Path, level: u32) -> ArchiveResult<Self> {
-        TarPacker::create(Box::new(xz2::write::XzEncoder::new(
+        TarPacker::create(Box::new(liblzma::write::XzEncoder::new(
             fs::create_file(output_file)?,
             level,
         )))
@@ -173,7 +173,7 @@ impl TarUnpacker {
     pub fn new_xz(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
         TarUnpacker::create(
             output_dir,
-            Box::new(xz2::read::XzDecoder::new(fs::open_file(input_file)?)),
+            Box::new(liblzma::read::XzDecoder::new(fs::open_file(input_file)?)),
         )
     }
 

@@ -10,7 +10,7 @@ iocraft = "0.7.9"
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
 miette = "7.6.0"
 regex = { version = "1.11.1", default-features = false }
-relative-path = "1.9.3"
+relative-path = "2.0.1"
 reqwest = { version = "0.12.15", default-features = false }
 rustc-hash = "2.1.1"
 scc = "2.3.4"
