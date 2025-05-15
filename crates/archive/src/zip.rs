@@ -52,7 +52,7 @@ impl ZipPacker {
     /// Create a new compressed `.zip` packer using `xz`.
     #[cfg(feature = "zip-xz")]
     pub fn new_xz(output_file: &Path) -> ArchiveResult<Self> {
-        Self::create(output_file, CompressionMethod::Xz)
+        Self::create(output_file, CompressionMethod::Lzma)
     }
 
     /// Create a new compressed `.zip` packer using `zstd`.

@@ -20,14 +20,15 @@ rustc-hash = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
+# compression
+bzip2 = { version = "0.5.2", optional = true }
 flate2 = { version = "1.1.1", optional = true }
+liblzma = { version = "0.4.1", optional = true }
+zstd = { version = "0.13.3", optional = true }
 
 # tar
 # https://github.com/moonrepo/starbase/issues/56
 binstall-tar = { version = "0.4.42", optional = true }
-xz2 = { version = "0.1.7", optional = true }
-zstd = { version = "0.13.3", optional = true }
-bzip2 = { version = "0.5.2", optional = true }
 
 # zip
 zip = { version = "3.0.0", default-features = false, optional = true }
@@ -57,12 +58,12 @@ tar = ["dep:binstall-tar"]
 tar-all = ["tar", "tar-bz2", "tar-gz", "tar-xz", "tar-zstd"]
 tar-bz2 = ["dep:bzip2", "tar"]
 tar-gz = ["dep:flate2", "tar"]
-tar-xz = ["dep:xz2", "tar"]
+tar-xz = ["dep:liblzma", "tar"]
 tar-zstd = ["dep:zstd", "tar"]
 zip = ["dep:zip"]
 zip-all = ["zip", "zip-bz2", "zip-deflate", "zip-gz", "zip-xz", "zip-zstd"]
 zip-bz2 = ["dep:bzip2", "zip", "zip/bzip2"]
 zip-deflate = ["dep:flate2", "zip", "zip/deflate"]
 zip-gz = ["zip-deflate"]
-zip-xz = ["dep:xz2", "zip", "zip/xz"]
+zip-xz = ["dep:liblzma", "zip", "zip/lzma"]
 zip-zstd = ["dep:zstd", "zip", "zip/zstd"]
