@@ -31,10 +31,34 @@ impl ZipPacker {
         Self::create(output_file, CompressionMethod::Stored)
     }
 
+    /// Create a new compressed `.zip` packer using `bzip2`.
+    #[cfg(feature = "zip-bz2")]
+    pub fn new_bz2(output_file: &Path) -> ArchiveResult<Self> {
+        Self::create(output_file, CompressionMethod::Bzip2)
+    }
+
     /// Create a new compressed `.zip` packer using `deflate`.
     #[cfg(feature = "zip-deflate")]
     pub fn new_deflate(output_file: &Path) -> ArchiveResult<Self> {
         Self::create(output_file, CompressionMethod::Deflated)
+    }
+
+    /// Create a new compressed `.zip` packer using `gz`.
+    #[cfg(feature = "zip-gz")]
+    pub fn new_gz(output_file: &Path) -> ArchiveResult<Self> {
+        Self::create(output_file, CompressionMethod::Deflated)
+    }
+
+    /// Create a new compressed `.zip` packer using `xz`.
+    #[cfg(feature = "zip-xz")]
+    pub fn new_xz(output_file: &Path) -> ArchiveResult<Self> {
+        Self::create(output_file, CompressionMethod::Xz)
+    }
+
+    /// Create a new compressed `.zip` packer using `zstd`.
+    #[cfg(feature = "zip-zstd")]
+    pub fn new_zstd(output_file: &Path) -> ArchiveResult<Self> {
+        Self::create(output_file, CompressionMethod::Zstd)
     }
 }
 
@@ -141,9 +165,33 @@ impl ZipUnpacker {
         })
     }
 
+    /// Create a new `.zip` unpacker for `bzip2`.
+    #[cfg(feature = "zip-bz2")]
+    pub fn new_bz2(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+        Self::new(output_dir, input_file)
+    }
+
     /// Create a new `.zip` unpacker for `deflate`.
     #[cfg(feature = "zip-deflate")]
     pub fn new_deflate(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+        Self::new(output_dir, input_file)
+    }
+
+    /// Create a new `.zip` unpacker for `gz`.
+    #[cfg(feature = "zip-gz")]
+    pub fn new_gz(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+        Self::new(output_dir, input_file)
+    }
+
+    /// Create a new `.zip` unpacker for `xz`.
+    #[cfg(feature = "zip-xz")]
+    pub fn new_xz(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+        Self::new(output_dir, input_file)
+    }
+
+    /// Create a new `.zip` unpacker for `zstd`.
+    #[cfg(feature = "zip-zstd")]
+    pub fn new_zstd(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
         Self::new(output_dir, input_file)
     }
 }

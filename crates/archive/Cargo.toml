@@ -41,7 +41,11 @@ starbase_archive = { path = ".", features = [
 	"tar-xz",
 	"tar-zstd",
 	"zip",
+	"zip-bz2",
 	"zip-deflate",
+	"zip-gz",
+	"zip-xz",
+	"zip-zstd",
 ] }
 starbase_sandbox = { path = "../sandbox" }
 
@@ -50,9 +54,15 @@ default = ["tar-gz"]
 gz = ["dep:flate2"]
 miette = ["dep:miette"]
 tar = ["dep:binstall-tar"]
+tar-all = ["tar", "tar-bz2", "tar-gz", "tar-xz", "tar-zstd"]
 tar-bz2 = ["dep:bzip2", "tar"]
 tar-gz = ["dep:flate2", "tar"]
 tar-xz = ["dep:xz2", "tar"]
 tar-zstd = ["dep:zstd", "tar"]
 zip = ["dep:zip"]
+zip-all = ["zip", "zip-bz2", "zip-deflate", "zip-gz", "zip-xz", "zip-zstd"]
+zip-bz2 = ["dep:bzip2", "zip", "zip/bzip2"]
 zip-deflate = ["dep:flate2", "zip", "zip/deflate"]
+zip-gz = ["zip-deflate"]
+zip-xz = ["dep:xz2", "zip", "zip/xz"]
+zip-zstd = ["dep:zstd", "zip", "zip/zstd"]
