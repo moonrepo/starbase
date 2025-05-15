@@ -1,6 +1,6 @@
 [package]
 name = "starbase_archive"
-version = "0.10.5"
+version = "0.10.6"
 edition = "2024"
 license = "MIT"
 description = "Utilities for packing and unpacking archives. Supports tar and zip."
@@ -11,7 +11,7 @@ rust-version = "1.85.0"
 all-features = true
 
 [dependencies]
-starbase_styles = { version = "0.6.1", path = "../styles" }
+starbase_styles = { version = "0.6.2", path = "../styles" }
 starbase_utils = { version = "0.11.10", path = "../utils", default-features = false, features = [
 	"glob",
 ] }

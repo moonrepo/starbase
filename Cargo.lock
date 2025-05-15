@@ -2318,7 +2318,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.10.5"
+version = "0.10.6"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -2400,7 +2400,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_styles"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "dirs",
  "miette",
