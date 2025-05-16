@@ -28,10 +28,10 @@ fn join_path(value: impl AsRef<str>) -> String {
 impl Shell for Nu {
     // https://www.nushell.sh/book/configuration.html#environment
     fn format(&self, statement: Statement<'_>) -> String {
-        let path_name = if consts::OS == "windows" {
-            "Path"
+        let (path_name, home_name) = if consts::OS == "windows" {
+            ("Path", "USERPROFILE")
         } else {
-            "PATH"
+            ("PATH", "HOME")
         };
 
         match statement {
@@ -74,7 +74,7 @@ impl Shell for Nu {
             Statement::SetEnv { key, value } => {
                 if value.starts_with("$HOME/") {
                     let path = value.trim_start_matches("$HOME/");
-                    format!("$env.{} = ($env.HOME | path join '{}')", key, path)
+                    format!("$env.{} = ($env.{home_name} | path join '{}')", key, path)
                 } else {
                     format!("$env.{} = {}", key, self.quote(value))
                 }
@@ -97,34 +97,36 @@ impl Shell for Nu {
             Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-$env.__ORIG_PATH = $env.{path_name}
-
 def {function} [] {{
-  let data = {command} | from json
+    let data = {command} | from json
 
-  $data | get env | items {{ |k, v|
-    if $v == null {{
-        hide-env $k
-    }} else {{
-        load-env {{ ($k): $v }}
+    $data | get env | items {{ |k, v|
+        if $v == null {{
+            hide-env $k
+        }} else {{
+            load-env {{ ($k): $v }}
+        }}
     }}
-  }}
 
-  let path_list = [
-    ...($data | get paths | default [])
-    ...($env.__ORIG_PATH | split row (char esep))
-  ];
+    let path_list = [
+        ...($data | get paths | default [])
+        ...($env.__ORIG_PATH | split row (char esep))
+    ];
 
-  $env.{path_name} = ($path_list | uniq)
+    $env.{path_name} = ($path_list | uniq)
 }}
 
-$env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
-  let list = ($config | get -i hooks.env_change.PWD) | default []
+export-env {{
+    $env.__ORIG_PATH = $env.{path_name}
 
-  $list | append {{ |before, after|
-    {function}
-  }}
-}})"#
+    $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
+        let list = ($config | get -i hooks.env_change.PWD) | default []
+
+        $list | append {{ |before, after|
+            {function}
+        }}
+    }})
+}}"#
                 )
             }
         }))
@@ -148,10 +150,6 @@ $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
         };
 
         for name in ["config.nu", "env.nu"] {
-            profiles = profiles
-                .insert(get_config_dir(home_dir).join("nushell").join(name), inc())
-                .insert(home_dir.join(".config").join("nushell").join(name), inc());
-
             #[cfg(windows)]
             {
                 profiles = profiles.insert(
@@ -163,6 +161,10 @@ $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
                     inc(),
                 );
             }
+
+            profiles = profiles
+                .insert(get_config_dir(home_dir).join("nushell").join(name), inc())
+                .insert(home_dir.join(".config").join("nushell").join(name), inc());
         }
 
         profiles.into_list()
@@ -209,11 +211,21 @@ impl fmt::Display for Nu {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn formats_env_var() {
         assert_eq!(
             Nu.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$env.PROTO_HOME = ($env.HOME | path join '.proto')"#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_env_var() {
+        assert_eq!(
+            Nu.format_env_set("PROTO_HOME", "$HOME/.proto"),
+            r#"$env.PROTO_HOME = ($env.USERPROFILE | path join '.proto')"#
         );
     }
 
@@ -296,18 +308,18 @@ mod tests {
         assert_eq!(
             Nu::new().get_profile_paths(&home_dir),
             vec![
-                home_dir.join(".config").join("nushell").join("config.nu"),
                 home_dir
                     .join("AppData")
                     .join("Roaming")
                     .join("nushell")
                     .join("config.nu"),
-                home_dir.join(".config").join("nushell").join("env.nu"),
+                home_dir.join(".config").join("nushell").join("config.nu"),
                 home_dir
                     .join("AppData")
                     .join("Roaming")
                     .join("nushell")
                     .join("env.nu"),
+                home_dir.join(".config").join("nushell").join("env.nu"),
             ]
         );
     }
