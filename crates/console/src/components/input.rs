@@ -25,7 +25,7 @@ pub fn Input<'a>(
     let mut should_exit = hooks.use_state(|| false);
     let mut error = hooks.use_state(|| None);
 
-    let validate = props.validate.take();
+    let validate = props.validate.clone();
 
     hooks.use_local_terminal_events({
         move |event| match event {

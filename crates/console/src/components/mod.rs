@@ -31,7 +31,8 @@ pub use iocraft::prelude::{Button, Text, View};
 use std::ops::Deref;
 use std::sync::Arc;
 
-pub struct Validator<'a, T>(Box<dyn Fn(T) -> Option<String> + Send + Sync + 'a>);
+#[derive(Clone)]
+pub struct Validator<'a, T>(Arc<dyn Fn(T) -> Option<String> + Send + Sync + 'a>);
 
 impl<T> Validator<'_, T> {
     /// Takes the handler, leaving a default-initialized handler in its place.
@@ -42,7 +43,7 @@ impl<T> Validator<'_, T> {
 
 impl<T> Default for Validator<'_, T> {
     fn default() -> Self {
-        Self(Box::new(|_| None))
+        Self(Arc::new(|_| None))
     }
 }
 
@@ -51,7 +52,7 @@ where
     F: Fn(T) -> Option<String> + Send + Sync + 'a,
 {
     fn from(f: F) -> Self {
-        Self(Box::new(f))
+        Self(Arc::new(f))
     }
 }
 
@@ -59,7 +60,7 @@ impl<'a, T: 'a> Deref for Validator<'a, T> {
     type Target = dyn Fn(T) -> Option<String> + Send + Sync + 'a;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &*self.0
     }
 }
 
