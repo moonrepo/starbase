@@ -1,7 +1,8 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines};
+use crate::helpers::{
+    ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, normalize_newlines,
+};
 use crate::hooks::*;
-use std::env::consts;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -28,12 +29,6 @@ fn join_path(value: impl AsRef<str>) -> String {
 impl Shell for Nu {
     // https://www.nushell.sh/book/configuration.html#environment
     fn format(&self, statement: Statement<'_>) -> String {
-        let (path_name, home_name) = if consts::OS == "windows" {
-            ("Path", "USERPROFILE")
-        } else {
-            ("PATH", "HOME")
-        };
-
         match statement {
             Statement::PrependPath {
                 paths,
@@ -41,9 +36,13 @@ impl Shell for Nu {
                 orig_key,
             } => {
                 let env_regex = get_env_var_regex();
-                let key = key.unwrap_or(path_name);
+                let key = key.unwrap_or("PATH");
                 let orig_key = orig_key.unwrap_or(key);
-                let mut value = format!("$env.{key} = ($env.{orig_key} | split row (char esep)\n");
+
+                let mut value = format!(
+                    "$env.{} = ($env.{orig_key} | split row (char esep)\n",
+                    get_env_key_native(key)
+                );
 
                 // https://www.nushell.sh/book/configuration.html#path-configuration
                 for path in paths.iter().rev() {
@@ -74,50 +73,57 @@ impl Shell for Nu {
             Statement::SetEnv { key, value } => {
                 if value.starts_with("$HOME/") {
                     let path = value.trim_start_matches("$HOME/");
-                    format!("$env.{} = ($env.{home_name} | path join '{}')", key, path)
+                    format!(
+                        "$env.{} = ($env.{} | path join '{}')",
+                        get_env_key_native(key),
+                        get_env_key_native("HOME"),
+                        path
+                    )
                 } else {
-                    format!("$env.{} = {}", key, self.quote(value))
+                    format!("$env.{} = {}", get_env_key_native(key), self.quote(value))
                 }
             }
             Statement::UnsetEnv { key } => {
-                format!("hide-env {key}")
+                format!("hide-env {}", get_env_key_native(key))
             }
         }
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        let path_name = if consts::OS == "windows" {
-            "Path"
-        } else {
-            "PATH"
-        };
+        let path_key = get_env_key_native("PATH");
 
         // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
             Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-def {function} [] {{
+export def {function} [] {{
     let data = {command} | from json
 
     $data | get env | items {{ |k, v|
         if $v == null {{
-            hide-env $k
+            if $k in $env {{
+                hide-env $k
+            }}
         }} else {{
             load-env {{ ($k): $v }}
         }}
     }}
 
-    let path_list = [
-        ...($data | get paths | default [])
-        ...($env.__ORIG_PATH | split row (char esep))
-    ];
+    let path_list = $data | get paths | default []
+    let path_string = $data | get path | default ''
 
-    $env.{path_name} = ($path_list | uniq)
+    if $path_list | is-not-empty {{
+        $env.{path_key} = $path_list
+    }}
+
+    if $path_string | is-not-empty {{
+        $env.{path_key} = $path_string
+    }}
 }}
 
 export-env {{
-    $env.__ORIG_PATH = $env.{path_name}
+    $env.__ORIG_PATH = $env.{path_key}
 
     $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
         let list = ($config | get -i hooks.env_change.PWD) | default []

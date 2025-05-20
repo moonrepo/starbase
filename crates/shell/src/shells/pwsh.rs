@@ -1,5 +1,5 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{ProfileSet, get_env_var_regex, normalize_newlines};
+use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use std::env;
 use std::fmt;
@@ -61,7 +61,7 @@ impl Shell for Pwsh {
             } => {
                 let key = key.unwrap_or("PATH");
                 let orig_key = orig_key.unwrap_or(key);
-                let mut value = format!("$env:{key} = @(\n");
+                let mut value = format!("$env:{} = @(\n", get_env_key_native(key));
 
                 for path in paths {
                     let path = self.join_path(path);
@@ -80,6 +80,8 @@ impl Shell for Pwsh {
                 normalize_newlines(value)
             }
             Statement::SetEnv { key, value } => {
+                let key = get_env_key_native(key);
+
                 if value.contains('/') || value.contains('\\') {
                     format!("$env:{} = {};", key, self.join_path(value))
                 } else {
@@ -92,9 +94,10 @@ impl Shell for Pwsh {
             }
             Statement::UnsetEnv { key } => {
                 format!(
-                    r#"if (Test-Path "env:{key}") {{
+                    r#"if (Test-Path "env:{}") {{
   Remove-Item -LiteralPath "env:{key}";
-}}"#
+}}"#,
+                    get_env_key_native(key)
                 )
             }
         }
