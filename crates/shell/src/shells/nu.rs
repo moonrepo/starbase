@@ -100,7 +100,7 @@ impl Shell for Nu {
 export def {function} [] {{
     let data = {command} | from json
 
-    $data | get env | items {{ |k, v|
+    $data | get -i env | items {{ |k, v|
         if $v == null {{
             if $k in $env {{
                 hide-env $k
@@ -110,14 +110,14 @@ export def {function} [] {{
         }}
     }}
 
-    let path_list = $data | get paths | default []
-    let path_string = $data | get path | default ''
+    let path_list = $data | get -i paths | default []
+    let path_string = $data | get -i path | default ''
 
-    if $path_list | is-not-empty {{
+    if ($path_list | is-not-empty) {{
         $env.{path_key} = $path_list
     }}
 
-    if $path_string | is-not-empty {{
+    if ($path_string | is-not-empty) {{
         $env.{path_key} = $path_string
     }}
 }}
