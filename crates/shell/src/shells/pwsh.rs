@@ -295,6 +295,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn formats_path() {
         assert_eq!(
@@ -323,6 +324,39 @@ mod tests {
   $env:BINPATH
   "C:\absolute\path"
   $env:PATH
+) -join [IO.PATH]::PathSeparator;"#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  (Join-Path $env:PROTO_HOME "shims")
+  (Join-Path $env:PROTO_HOME "bin")
+  $env:Path
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            Pwsh.format_path_set(&["$HOME".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  $HOME
+  $env:Path
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            Pwsh.format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  $env:BINPATH
+  "C:\absolute\path"
+  $env:Path
 ) -join [IO.PATH]::PathSeparator;"#
         );
     }
