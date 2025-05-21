@@ -29,6 +29,18 @@ pub fn get_env_var_regex() -> regex::Regex {
     regex::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap()
 }
 
+pub fn get_env_key_native(key: &str) -> &str {
+    let is_windows = std::env::consts::OS == "windows";
+
+    if key == "PATH" {
+        if is_windows { "Path" } else { "PATH" }
+    } else if key == "HOME" {
+        if is_windows { "USERPROFILE" } else { "HOME" }
+    } else {
+        key
+    }
+}
+
 pub fn normalize_newlines(content: impl AsRef<str>) -> String {
     let content = content.as_ref().trim();
 

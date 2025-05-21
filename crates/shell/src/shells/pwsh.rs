@@ -1,5 +1,5 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{ProfileSet, get_env_var_regex, normalize_newlines};
+use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use std::env;
 use std::fmt;
@@ -61,7 +61,7 @@ impl Shell for Pwsh {
             } => {
                 let key = key.unwrap_or("PATH");
                 let orig_key = orig_key.unwrap_or(key);
-                let mut value = format!("$env:{key} = @(\n");
+                let mut value = format!("$env:{} = @(\n", get_env_key_native(key));
 
                 for path in paths {
                     let path = self.join_path(path);
@@ -74,12 +74,14 @@ impl Shell for Pwsh {
                 }
 
                 value.push_str("  $env:");
-                value.push_str(orig_key);
+                value.push_str(get_env_key_native(orig_key));
                 value.push_str("\n) -join [IO.PATH]::PathSeparator;");
 
                 normalize_newlines(value)
             }
             Statement::SetEnv { key, value } => {
+                let key = get_env_key_native(key);
+
                 if value.contains('/') || value.contains('\\') {
                     format!("$env:{} = {};", key, self.join_path(value))
                 } else {
@@ -92,9 +94,10 @@ impl Shell for Pwsh {
             }
             Statement::UnsetEnv { key } => {
                 format!(
-                    r#"if (Test-Path "env:{key}") {{
+                    r#"if (Test-Path "env:{}") {{
   Remove-Item -LiteralPath "env:{key}";
-}}"#
+}}"#,
+                    get_env_key_native(key)
                 )
             }
         }
@@ -292,6 +295,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn formats_path() {
         assert_eq!(
@@ -320,6 +324,39 @@ mod tests {
   $env:BINPATH
   "C:\absolute\path"
   $env:PATH
+) -join [IO.PATH]::PathSeparator;"#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_path() {
+        assert_eq!(
+            Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  (Join-Path $env:PROTO_HOME "shims")
+  (Join-Path $env:PROTO_HOME "bin")
+  $env:Path
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            Pwsh.format_path_set(&["$HOME".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  $HOME
+  $env:Path
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            Pwsh.format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  $env:BINPATH
+  "C:\absolute\path"
+  $env:Path
 ) -join [IO.PATH]::PathSeparator;"#
         );
     }
