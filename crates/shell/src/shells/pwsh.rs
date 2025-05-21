@@ -74,7 +74,7 @@ impl Shell for Pwsh {
                 }
 
                 value.push_str("  $env:");
-                value.push_str(orig_key);
+                value.push_str(get_env_key_native(orig_key));
                 value.push_str("\n) -join [IO.PATH]::PathSeparator;");
 
                 normalize_newlines(value)

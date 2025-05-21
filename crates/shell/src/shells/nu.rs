@@ -40,8 +40,9 @@ impl Shell for Nu {
                 let orig_key = orig_key.unwrap_or(key);
 
                 let mut value = format!(
-                    "$env.{} = ($env.{orig_key} | split row (char esep)\n",
-                    get_env_key_native(key)
+                    "$env.{} = ($env.{} | split row (char esep)\n",
+                    get_env_key_native(key),
+                    get_env_key_native(orig_key)
                 );
 
                 // https://www.nushell.sh/book/configuration.html#path-configuration
