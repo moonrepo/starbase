@@ -79,7 +79,7 @@ impl<R: Reporter> Console<R> {
     }
 
     pub fn quiet(&self) {
-        self.quiet.store(true, Ordering::Release);
+        self.set_quiet(true);
     }
 
     pub fn stderr(&self) -> ConsoleStream {
@@ -121,6 +121,10 @@ impl<R: Reporter> Console<R> {
         }
 
         self.theme = theme;
+    }
+
+    pub fn set_quiet(&self, value: bool) {
+        self.quiet.store(value, Ordering::Release);
     }
 }
 
