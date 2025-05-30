@@ -180,6 +180,14 @@ export-env {{
     /// Quotes a string according to Nu shell quoting rules.
     /// @see <https://www.nushell.sh/book/working_with_strings.html>
     fn quote(&self, input: &str) -> String {
+        if self.requires_expansion(input) {
+            if input.starts_with("$\"") {
+                return input.into();
+            } else {
+                return format!("$\"{input}\"");
+            }
+        }
+
         if input.contains('`') {
             // Use backtick quoting for strings containing backticks
             format!("`{}`", input)
@@ -336,13 +344,13 @@ mod tests {
         assert_eq!(Nu.quote("hello"), "'hello'");
         assert_eq!(Nu.quote(""), "''");
         assert_eq!(Nu.quote("echo 'hello'"), "\"echo 'hello'\"");
-        assert_eq!(Nu.quote("echo \"$HOME\""), "\"echo \\\"$HOME\\\"\"");
+        assert_eq!(Nu.quote("echo \"$HOME\""), "$\"echo \"$HOME\"\"");
         assert_eq!(Nu.quote("\"hello\""), "\"\\\"hello\\\"\"");
         assert_eq!(Nu.quote("\"hello\nworld\""), "\"\\\"hello\\nworld\\\"\"");
         assert_eq!(Nu.quote("$'hello world'"), "\"$'hello world'\"");
         assert_eq!(Nu.quote("$''"), "\"$''\"");
         assert_eq!(Nu.quote("$\"hello world\""), "\"$\\\"hello world\\\"\"");
-        assert_eq!(Nu.quote("$\"$HOME\""), "\"$\\\"$HOME\\\"\"");
+        assert_eq!(Nu.quote("$\"$HOME\""), "$\"$HOME\"");
         assert_eq!(Nu.quote("'hello'"), "\"'hello'\"");
     }
 }

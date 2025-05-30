@@ -23,7 +23,7 @@ pub use xonsh::*;
 pub use zsh::*;
 
 use crate::Statement;
-use crate::helpers::{get_env_var_regex, get_var_regex};
+use crate::helpers::get_var_regex;
 use crate::hooks::Hook;
 use crate::shell_error::ShellError;
 use std::ffi::OsString;
@@ -123,7 +123,7 @@ pub trait Shell: Debug + Display + Send + Sync {
             }
         }
 
-        get_env_var_regex().is_match(value) || get_var_regex().is_match(value)
+        get_var_regex().is_match(value)
     }
 }
 

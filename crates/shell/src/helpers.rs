@@ -26,11 +26,11 @@ pub fn get_config_dir(home_dir: &Path) -> PathBuf {
 }
 
 pub fn get_var_regex() -> regex::Regex {
-    regex::Regex::new(r"\$(?<name>[a-z0-9_]+)").unwrap()
+    regex::Regex::new(r"\$(?<name>[A-Za-z0-9_]+)").unwrap()
 }
 
 pub fn get_env_var_regex() -> regex::Regex {
-    regex::Regex::new(r"\$(?<name>[A-Za-z0-9_]+)").unwrap()
+    regex::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap()
 }
 
 pub fn get_env_key_native(key: &str) -> &str {
