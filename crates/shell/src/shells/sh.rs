@@ -1,5 +1,6 @@
 use super::Shell;
 use crate::hooks::*;
+use shell_quote::Sh as ShQuote;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -50,41 +51,10 @@ impl Shell for Sh {
     /// Quotes a string according to shell quoting rules.
     /// @see <https://rg1-teaching.mpi-inf.mpg.de/unixffb-ss98/quoting-guide.html>
     fn quote(&self, value: &str) -> String {
-        if value.is_empty() {
-            return "''".to_string();
-        }
-
-        // Check if we need double quotes
-        if value.contains('\'')
-            || value.contains('\"')
-            || value.contains('`')
-            || value.contains(' ')
-        {
-            // Use double quotes and escape necessary characters
-            let mut quoted = String::from("\"");
-
-            for c in value.chars() {
-                match c {
-                    '"' | '\\' | '$' | '`' => {
-                        quoted.push('\\');
-                        quoted.push(c);
-                    }
-                    _ => {
-                        quoted.push(c);
-                    }
-                }
-            }
-
-            quoted.push('"');
-            quoted
+        if self.requires_expansion(value) {
+            format!("\"{}\"", value.replace("\"", "\\\""))
         } else {
-            // Otherwise, use single quotes for literals and variables
-            // Check if it starts with a variable
-            if value.starts_with('$') {
-                format!("\"{}\"", value)
-            } else {
-                value.to_string()
-            }
+            String::from_utf8_lossy(&ShQuote::quote_vec(value)).into()
         }
     }
 }
@@ -120,11 +90,11 @@ mod tests {
         let sh = Sh::new();
         assert_eq!(sh.quote(""), "''");
         assert_eq!(sh.quote("simple"), "simple");
-        assert_eq!(sh.quote("say \"hello\""), "\"say \\\"hello\\\"\"");
-        assert_eq!(sh.quote("price $5"), "\"price \\$5\"");
+        assert_eq!(sh.quote("say \"hello\""), "say' \"hello\"'");
+        assert_eq!(sh.quote("price $5"), "\"price $5\"");
         assert_eq!(
             sh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
-            "\"complex 'value' with \\\"quotes\\\" and \\\\backslashes\\\\\""
+            "complex' '\\'value\\'' with \"quotes\" and \\backslashes\\'"
         );
     }
 }

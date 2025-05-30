@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Bash, Shell};
 use crate::hooks::*;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -48,29 +48,8 @@ impl Shell for Ash {
         vec![home_dir.join(".ashrc"), home_dir.join(".profile")]
     }
 
-    /// Quotes a string according to Ash shell quoting rules.
-    /// @see <https://www.gnu.org/software/ash/manual/html_node/Qu>
     fn quote(&self, value: &str) -> String {
-        // No quoting needed for alphanumeric and underscore characters
-        if value.is_empty() || value.chars().all(|c| c.is_alphanumeric() || c == '_') {
-            value.to_string()
-        } else if value
-            .chars()
-            .any(|c| c == '\n' || c == '\t' || c == '\\' || c == '\'')
-        {
-            // Use $'...' ANSI-C quoting for values containing special characters
-            format!(
-                "$'{}'",
-                value
-                    .replace('\\', "\\\\")
-                    .replace('\'', "\\'")
-                    .replace('\n', "\\n")
-                    .replace('\t', "\\t")
-            )
-        } else {
-            // Use double quotes for values containing special characters not handled by ANSI-C
-            format!("\"{}\"", value.replace('"', "\\\""))
-        }
+        Bash::new().quote(value)
     }
 }
 
@@ -115,11 +94,8 @@ mod tests {
     fn test_ash_quoting() {
         let shell = Ash;
         assert_eq!(shell.quote("simple"), "simple"); // No quoting needed
-        assert_eq!(shell.quote("value with spaces"), "\"value with spaces\""); // Double quotes needed
-        assert_eq!(
-            shell.quote("value\"with\"quotes"),
-            "\"value\\\"with\\\"quotes\""
-        ); // Double quotes with escaping
+        assert_eq!(shell.quote("value with spaces"), "$'value with spaces'"); // Double quotes needed
+        assert_eq!(shell.quote("value\"with\"quotes"), "$'value\"with\"quotes'"); // Double quotes with escaping
         assert_eq!(
             shell.quote("value\nwith\nnewlines"),
             "$'value\\nwith\\nnewlines'"

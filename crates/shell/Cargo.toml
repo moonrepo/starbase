@@ -13,6 +13,11 @@ all-features = true
 [dependencies]
 miette = { workspace = true, optional = true }
 regex = { workspace = true }
+shell-quote = { version = "0.7.2", default-features = false, features = [
+	"bash",
+	"fish",
+	"sh",
+] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

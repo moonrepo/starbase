@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Bash, Shell};
 use crate::helpers::{is_absolute_dir, normalize_newlines};
 use crate::hooks::*;
 use std::env;
@@ -86,44 +86,8 @@ fi
         ]
     }
 
-    /// Quotes a string according to Zsh shell quoting rules.
-    /// @see <https://info2html.sourceforge.net/cgi-bin/info2html-demo/info2html?(zsh)Quoting>
     fn quote(&self, value: &str) -> String {
-        if value.is_empty() {
-            return "''".to_string();
-        }
-
-        let mut quoted = String::new();
-        let mut is_quoted = false;
-
-        for (i, c) in value.chars().enumerate() {
-            match c {
-                '\\' | '\'' | '"' => {
-                    if i == 0 && c == '$' {
-                        quoted.push('$');
-                    }
-                    quoted.push('\\');
-                    quoted.push(c);
-                }
-                '$' => {
-                    if i == 0 {
-                        quoted.push_str("\"$");
-                        is_quoted = true;
-                    } else {
-                        quoted.push('$');
-                    }
-                }
-                _ => {
-                    quoted.push(c);
-                }
-            }
-        }
-
-        if is_quoted {
-            quoted.push('"');
-        }
-
-        quoted
+        Bash::new().quote(value)
     }
 }
 
@@ -184,11 +148,11 @@ mod tests {
         let zsh = Zsh::new();
         assert_eq!(zsh.quote(""), "''");
         assert_eq!(zsh.quote("simple"), "simple");
-        assert_eq!(zsh.quote("don't"), "don\\'t");
-        assert_eq!(zsh.quote("say \"hello\""), "say \\\"hello\\\"");
+        assert_eq!(zsh.quote("don't"), "$'don\\'t'");
+        assert_eq!(zsh.quote("say \"hello\""), "$'say \"hello\"'");
         assert_eq!(
             zsh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
-            "complex \\'value\\' with \\\"quotes\\\" and \\\\backslashes\\\\"
+            "$'complex \\'value\\' with \"quotes\" and \\\\backslashes\\\\'"
         );
     }
 }
