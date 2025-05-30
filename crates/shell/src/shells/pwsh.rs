@@ -1,5 +1,7 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
+use crate::helpers::{
+    ProfileSet, get_env_key_native, get_env_var_regex, get_var_regex, normalize_newlines,
+};
 use crate::hooks::*;
 use std::env;
 use std::fmt;
@@ -238,6 +240,10 @@ if ($currentAction) {{
     /// Quotes a string according to PowerShell shell quoting rules.
     /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
     fn quote(&self, value: &str) -> String {
+        if self.requires_expansion(value) {
+            return format!("\"{}\"", value.replace("\"", "\"\""));
+        }
+
         // If the string is empty, return an empty single-quoted string
         if value.is_empty() {
             return "''".to_string();
@@ -261,6 +267,17 @@ if ($currentAction) {{
 
         // If the string does not contain any special characters, return a single-quoted string
         format!("'{}'", value)
+    }
+
+    fn requires_expansion(&self, value: &str) -> bool {
+        // https://learn.microsoft.com/en-us/powershell/scripting/learn/deep-dives/everything-about-string-substitutions?view=powershell-7.5
+        for ch in ["$(", "${"] {
+            if value.contains(ch) {
+                return true;
+            }
+        }
+
+        get_var_regex().is_match(value)
     }
 }
 

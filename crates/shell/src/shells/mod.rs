@@ -23,6 +23,7 @@ pub use xonsh::*;
 pub use zsh::*;
 
 use crate::Statement;
+use crate::helpers::get_var_regex;
 use crate::hooks::Hook;
 use crate::shell_error::ShellError;
 use std::ffi::OsString;
@@ -105,6 +106,25 @@ pub trait Shell: Debug + Display + Send + Sync {
 
     /// Quote method for shell-specific quoting
     fn quote(&self, value: &str) -> String;
+
+    /// Return true if the provided string requires expansion.
+    fn requires_expansion(&self, value: &str) -> bool {
+        // https://www.gnu.org/software/bash/manual/bash.html#Shell-Expansions
+        for ch in [
+            "{", "}", // brace
+            "~+", "~-", // tilde
+            "${", // param
+            "$(", // command
+            "<(", ">(", // process
+            "**", "*", "?", "?(", "*(", "+(", "@(", "!(", // file
+        ] {
+            if value.contains(ch) {
+                return true;
+            }
+        }
+
+        get_var_regex().is_match(value)
+    }
 }
 
 pub type BoxedShell = Box<dyn Shell>;
