@@ -1,10 +1,14 @@
 use starbase_styles::{Style, Stylize};
+use starbase_utils::fs::FsError;
 use std::path::PathBuf;
 use thiserror::Error;
 
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
 pub enum GzError {
+    #[error(transparent)]
+    Fs(#[from] Box<FsError>),
+
     #[error("Failed to add source {} to archive.\n{error}", .source.style(Style::Path))]
     AddFailure {
         source: PathBuf,
@@ -41,6 +45,9 @@ pub enum GzError {
 #[cfg(feature = "miette")]
 #[derive(Error, Debug, miette::Diagnostic)]
 pub enum GzError {
+    #[error(transparent)]
+    Fs(#[from] Box<FsError>),
+
     #[diagnostic(code(gz::pack::add))]
     #[error("Failed to add source {} to archive.", .source.style(Style::Path))]
     AddFailure {
@@ -78,4 +85,10 @@ pub enum GzError {
         #[source]
         error: Box<std::io::Error>,
     },
+}
+
+impl From<FsError> for GzError {
+    fn from(e: FsError) -> GzError {
+        GzError::Fs(Box::new(e))
+    }
 }

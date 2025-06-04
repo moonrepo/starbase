@@ -1,4 +1,5 @@
 use starbase_styles::{Style, Stylize};
+use starbase_utils::fs::FsError;
 use std::path::PathBuf;
 use thiserror::Error;
 use zip::result::ZipError as BaseZipError;
@@ -6,6 +7,9 @@ use zip::result::ZipError as BaseZipError;
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
 pub enum ZipError {
+    #[error(transparent)]
+    Fs(#[from] Box<FsError>),
+
     #[error("Failed to add source {} to archive.\n{error}", .source.style(Style::Path))]
     AddFailure {
         source: PathBuf,
@@ -36,6 +40,9 @@ pub enum ZipError {
 #[cfg(feature = "miette")]
 #[derive(Error, Debug, miette::Diagnostic)]
 pub enum ZipError {
+    #[error(transparent)]
+    Fs(#[from] Box<FsError>),
+
     #[diagnostic(code(zip::pack::add))]
     #[error("Failed to add source {} to archive.", .source.style(Style::Path))]
     AddFailure {
@@ -65,4 +72,10 @@ pub enum ZipError {
         #[source]
         error: Box<BaseZipError>,
     },
+}
+
+impl From<FsError> for ZipError {
+    fn from(e: FsError) -> ZipError {
+        ZipError::Fs(Box::new(e))
+    }
 }
