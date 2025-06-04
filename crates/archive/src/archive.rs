@@ -6,29 +6,23 @@ use starbase_utils::glob;
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 
-#[cfg(not(feature = "miette"))]
-pub type ArchiveResult<T> = Result<T, Box<dyn std::error::Error>>;
-
-#[cfg(feature = "miette")]
-pub type ArchiveResult<T> = miette::Result<T>;
-
 /// Abstraction for packing archives.
 pub trait ArchivePacker {
     /// Add the source file to the archive.
-    fn add_file(&mut self, name: &str, file: &Path) -> ArchiveResult<()>;
+    fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError>;
 
     /// Add the source directory to the archive.
-    fn add_dir(&mut self, name: &str, dir: &Path) -> ArchiveResult<()>;
+    fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError>;
 
     /// Create the archive and write all contents to disk.
-    fn pack(&mut self) -> ArchiveResult<()>;
+    fn pack(&mut self) -> Result<(), ArchiveError>;
 }
 
 /// Abstraction for unpacking archives.
 pub trait ArchiveUnpacker {
     /// Unpack the archive to the destination directory. If a prefix is provided,
     /// remove it from the start of all file paths within the archive.
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<PathBuf>;
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<PathBuf, ArchiveError>;
 }
 
 /// An `Archiver` is an abstraction for packing and unpacking archives,
@@ -113,9 +107,9 @@ impl<'owner> Archiver<'owner> {
     /// path to the destination archive file, which is also returned
     /// from this method.
     #[instrument(skip_all)]
-    pub fn pack<F, P>(&self, packer: F) -> ArchiveResult<PathBuf>
+    pub fn pack<F, P>(&self, packer: F) -> Result<PathBuf, ArchiveError>
     where
-        F: FnOnce(&Path) -> ArchiveResult<P>,
+        F: FnOnce(&Path) -> Result<P, ArchiveError>,
         P: ArchivePacker,
     {
         trace!(
@@ -163,7 +157,7 @@ impl<'owner> Archiver<'owner> {
 
     /// Determine the packer to use based on the archive file extension,
     /// then pack the archive using [`Archiver#pack`].
-    pub fn pack_from_ext(&self) -> ArchiveResult<(String, PathBuf)> {
+    pub fn pack_from_ext(&self) -> Result<(String, PathBuf), ArchiveError> {
         let ext = get_full_file_extension(self.archive_file);
         let out = self.archive_file.to_path_buf();
 
@@ -176,8 +170,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "gz".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("tar") => {
                 #[cfg(feature = "tar")]
@@ -187,8 +180,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("tar.bz2" | "tz2" | "tbz" | "tbz2") => {
                 #[cfg(feature = "tar-bz2")]
@@ -198,8 +190,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-bz2".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("tar.gz" | "tgz") => {
                 #[cfg(feature = "tar-gz")]
@@ -209,8 +200,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-gz".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("tar.xz" | "txz") => {
                 #[cfg(feature = "tar-xz")]
@@ -220,8 +210,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-xz".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("zst" | "zstd") => {
                 #[cfg(feature = "tar-zstd")]
@@ -231,8 +220,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-zstd".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("zip") => {
                 #[cfg(feature = "zip")]
@@ -242,21 +230,18 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "zip".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some(ext) => {
                 return Err(ArchiveError::UnsupportedFormat {
                     format: ext.into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             None => {
                 return Err(ArchiveError::UnknownFormat {
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
         };
 
@@ -273,9 +258,9 @@ impl<'owner> Archiver<'owner> {
     /// Furthermore, files at the destination that are not in the
     /// archive are removed entirely.
     #[instrument(skip_all)]
-    pub fn unpack<F, P>(&self, unpacker: F) -> ArchiveResult<PathBuf>
+    pub fn unpack<F, P>(&self, unpacker: F) -> Result<PathBuf, ArchiveError>
     where
-        F: FnOnce(&Path, &Path) -> ArchiveResult<P>,
+        F: FnOnce(&Path, &Path) -> Result<P, ArchiveError>,
         P: ArchiveUnpacker,
     {
         trace!(
@@ -302,7 +287,7 @@ impl<'owner> Archiver<'owner> {
     ///
     /// Returns an absolute path to the directory or file that was created,
     /// and the extension that was extracted from the input archive file.
-    pub fn unpack_from_ext(&self) -> ArchiveResult<(String, PathBuf)> {
+    pub fn unpack_from_ext(&self) -> Result<(String, PathBuf), ArchiveError> {
         let ext = get_full_file_extension(self.archive_file);
         let out;
 
@@ -317,8 +302,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "gz".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("tar") => {
                 #[cfg(feature = "tar")]
@@ -330,8 +314,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("tar.bz2" | "tz2" | "tbz" | "tbz2") => {
                 #[cfg(feature = "tar-bz2")]
@@ -343,8 +326,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-bz2".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("tar.gz" | "tgz") => {
                 #[cfg(feature = "tar-gz")]
@@ -356,8 +338,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-gz".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("tar.xz" | "txz") => {
                 #[cfg(feature = "tar-xz")]
@@ -369,8 +350,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-xz".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("zst" | "zstd") => {
                 #[cfg(feature = "tar-zstd")]
@@ -382,8 +362,7 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-zstd".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some("zip") => {
                 #[cfg(feature = "zip")]
@@ -395,21 +374,18 @@ impl<'owner> Archiver<'owner> {
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "zip".into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             Some(ext) => {
                 return Err(ArchiveError::UnsupportedFormat {
                     format: ext.into(),
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
             None => {
                 return Err(ArchiveError::UnknownFormat {
                     path: self.archive_file.to_path_buf(),
-                }
-                .into());
+                });
             }
         };
 

@@ -1,6 +1,8 @@
-use crate::archive::{ArchivePacker, ArchiveResult, ArchiveUnpacker};
+use crate::archive::{ArchivePacker, ArchiveUnpacker};
+use crate::archive_error::ArchiveError;
 use crate::join_file_name;
 use crate::tree_differ::TreeDiffer;
+pub use crate::zip_error::ZipError;
 use starbase_utils::fs::{self, FsError};
 use std::fs::File;
 use std::io::{self, prelude::*};
@@ -8,8 +10,6 @@ use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
-
-pub use crate::zip_error::ZipError;
 
 /// Creates zip archives.
 pub struct ZipPacker {
@@ -19,7 +19,10 @@ pub struct ZipPacker {
 
 impl ZipPacker {
     /// Create a new packer with a custom compression level.
-    pub fn create(output_file: &Path, compression: CompressionMethod) -> ArchiveResult<Self> {
+    pub fn create(
+        output_file: &Path,
+        compression: CompressionMethod,
+    ) -> Result<Self, ArchiveError> {
         Ok(ZipPacker {
             archive: ZipWriter::new(fs::create_file(output_file)?),
             compression,
@@ -27,43 +30,43 @@ impl ZipPacker {
     }
 
     /// Create a new `.zip` packer.
-    pub fn new(output_file: &Path) -> ArchiveResult<Self> {
+    pub fn new(output_file: &Path) -> Result<Self, ArchiveError> {
         Self::create(output_file, CompressionMethod::Stored)
     }
 
     /// Create a new compressed `.zip` packer using `bzip2`.
     #[cfg(feature = "zip-bz2")]
-    pub fn new_bz2(output_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_bz2(output_file: &Path) -> Result<Self, ArchiveError> {
         Self::create(output_file, CompressionMethod::Bzip2)
     }
 
     /// Create a new compressed `.zip` packer using `deflate`.
     #[cfg(feature = "zip-deflate")]
-    pub fn new_deflate(output_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_deflate(output_file: &Path) -> Result<Self, ArchiveError> {
         Self::create(output_file, CompressionMethod::Deflated)
     }
 
     /// Create a new compressed `.zip` packer using `gz`.
     #[cfg(feature = "zip-gz")]
-    pub fn new_gz(output_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_gz(output_file: &Path) -> Result<Self, ArchiveError> {
         Self::create(output_file, CompressionMethod::Deflated)
     }
 
     /// Create a new compressed `.zip` packer using `xz`.
     #[cfg(feature = "zip-xz")]
-    pub fn new_xz(output_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_xz(output_file: &Path) -> Result<Self, ArchiveError> {
         Self::create(output_file, CompressionMethod::Lzma)
     }
 
     /// Create a new compressed `.zip` packer using `zstd`.
     #[cfg(feature = "zip-zstd")]
-    pub fn new_zstd(output_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_zstd(output_file: &Path) -> Result<Self, ArchiveError> {
         Self::create(output_file, CompressionMethod::Zstd)
     }
 }
 
 impl ArchivePacker for ZipPacker {
-    fn add_file(&mut self, name: &str, file: &Path) -> ArchiveResult<()> {
+    fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
         #[allow(unused_mut)] // windows
         let mut options = SimpleFileOptions::default().compression_method(self.compression);
 
@@ -91,7 +94,7 @@ impl ArchivePacker for ZipPacker {
         Ok(())
     }
 
-    fn add_dir(&mut self, name: &str, dir: &Path) -> ArchiveResult<()> {
+    fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError> {
         trace!(source = name, input = ?dir, "Packing directory");
 
         self.archive
@@ -128,7 +131,7 @@ impl ArchivePacker for ZipPacker {
     }
 
     #[instrument(name = "pack_zip", skip_all)]
-    fn pack(&mut self) -> ArchiveResult<()> {
+    fn pack(&mut self) -> Result<(), ArchiveError> {
         trace!("Creating zip");
 
         // Upstream API changed where finish consumes self.
@@ -152,7 +155,7 @@ pub struct ZipUnpacker {
 
 impl ZipUnpacker {
     /// Create a new `.zip` unpacker.
-    pub fn new(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+    pub fn new(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
         fs::create_dir_all(output_dir)?;
 
         Ok(ZipUnpacker {
@@ -167,38 +170,38 @@ impl ZipUnpacker {
 
     /// Create a new `.zip` unpacker for `bzip2`.
     #[cfg(feature = "zip-bz2")]
-    pub fn new_bz2(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_bz2(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
         Self::new(output_dir, input_file)
     }
 
     /// Create a new `.zip` unpacker for `deflate`.
     #[cfg(feature = "zip-deflate")]
-    pub fn new_deflate(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_deflate(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
         Self::new(output_dir, input_file)
     }
 
     /// Create a new `.zip` unpacker for `gz`.
     #[cfg(feature = "zip-gz")]
-    pub fn new_gz(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_gz(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
         Self::new(output_dir, input_file)
     }
 
     /// Create a new `.zip` unpacker for `xz`.
     #[cfg(feature = "zip-xz")]
-    pub fn new_xz(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_xz(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
         Self::new(output_dir, input_file)
     }
 
     /// Create a new `.zip` unpacker for `zstd`.
     #[cfg(feature = "zip-zstd")]
-    pub fn new_zstd(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+    pub fn new_zstd(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
         Self::new(output_dir, input_file)
     }
 }
 
 impl ArchiveUnpacker for ZipUnpacker {
     #[instrument(name = "unpack_zip", skip_all)]
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
+    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<PathBuf, ArchiveError> {
         trace!(output_dir = ?self.output_dir, "Opening zip");
 
         let mut count = 0;

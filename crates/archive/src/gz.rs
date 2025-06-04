@@ -1,4 +1,6 @@
-use crate::archive::{ArchivePacker, ArchiveResult, ArchiveUnpacker};
+use crate::archive::{ArchivePacker, ArchiveUnpacker};
+use crate::archive_error::ArchiveError;
+pub use crate::gz_error::GzError;
 use crate::tree_differ::TreeDiffer;
 use flate2::Compression;
 use flate2::read::GzDecoder;
@@ -9,8 +11,6 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 
-pub use crate::gz_error::GzError;
-
 /// Applies gzip to a single file.
 pub struct GzPacker {
     archive: Option<GzEncoder<File>>,
@@ -19,7 +19,7 @@ pub struct GzPacker {
 
 impl GzPacker {
     /// Create a new packer with a custom compression level.
-    pub fn create(output_file: &Path, compression: Compression) -> ArchiveResult<Self> {
+    pub fn create(output_file: &Path, compression: Compression) -> Result<Self, ArchiveError> {
         Ok(GzPacker {
             archive: Some(GzEncoder::new(fs::create_file(output_file)?, compression)),
             file_count: 0,
@@ -27,13 +27,13 @@ impl GzPacker {
     }
 
     /// Create a new `.gz` packer.
-    pub fn new(output_file: &Path) -> ArchiveResult<Self> {
+    pub fn new(output_file: &Path) -> Result<Self, ArchiveError> {
         Self::create(output_file, Compression::default())
     }
 }
 
 impl ArchivePacker for GzPacker {
-    fn add_file(&mut self, _name: &str, file: &Path) -> ArchiveResult<()> {
+    fn add_file(&mut self, _name: &str, file: &Path) -> Result<(), ArchiveError> {
         if self.file_count > 0 {
             return Err(GzError::OneFile.into());
         }
@@ -52,12 +52,12 @@ impl ArchivePacker for GzPacker {
         Ok(())
     }
 
-    fn add_dir(&mut self, _name: &str, _dir: &Path) -> ArchiveResult<()> {
-        Err(GzError::NoDirs.into())
+    fn add_dir(&mut self, _name: &str, _dir: &Path) -> Result<(), ArchiveError> {
+        Err(ArchiveError::Gz(Box::new(GzError::NoDirs)))
     }
 
     #[instrument(name = "pack_gz", skip_all)]
-    fn pack(&mut self) -> ArchiveResult<()> {
+    fn pack(&mut self) -> Result<(), ArchiveError> {
         trace!("Gzipping file");
 
         self.archive
@@ -81,7 +81,7 @@ pub struct GzUnpacker {
 
 impl GzUnpacker {
     /// Create a new `.gz` unpacker.
-    pub fn new(output_dir: &Path, input_file: &Path) -> ArchiveResult<Self> {
+    pub fn new(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
         fs::create_dir_all(output_dir)?;
 
         Ok(GzUnpacker {
@@ -94,7 +94,7 @@ impl GzUnpacker {
 
 impl ArchiveUnpacker for GzUnpacker {
     #[instrument(name = "unpack_gz", skip_all)]
-    fn unpack(&mut self, _prefix: &str, _differ: &mut TreeDiffer) -> ArchiveResult<PathBuf> {
+    fn unpack(&mut self, _prefix: &str, _differ: &mut TreeDiffer) -> Result<PathBuf, ArchiveError> {
         trace!(output_dir = ?self.output_dir, "Ungzipping file");
 
         let mut bytes = vec![];
