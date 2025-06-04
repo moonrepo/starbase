@@ -6,12 +6,6 @@ use starbase_utils::glob;
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 
-// #[cfg(not(feature = "miette"))]
-// pub type ArchiveResult<T> = Result<T, Box<dyn std::error::Error>>;
-
-// #[cfg(feature = "miette")]
-// pub type ArchiveResult<T> = miette::Result<T>;
-
 /// Abstraction for packing archives.
 pub trait ArchivePacker {
     /// Add the source file to the archive.
