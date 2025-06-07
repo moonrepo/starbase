@@ -142,7 +142,7 @@ impl TreeDiffer {
         // Reset read pointer to the start of the buffer
         source
             .seek(io::SeekFrom::Start(0))
-            .map_err(|error| ArchiveError::Generic(Box::new(error)))?;
+            .map_err(|error| ArchiveError::Io(Box::new(error)))?;
 
         Ok(true)
     }

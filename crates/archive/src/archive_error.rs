@@ -13,12 +13,12 @@ pub enum ArchiveError {
     #[error(transparent)]
     Glob(#[from] Box<GlobError>),
 
-    #[error(transparent)]
-    Generic(#[from] Box<dyn std::error::Error>),
-
     #[cfg(feature = "gz")]
     #[error(transparent)]
     Gz(#[from] Box<crate::gz::GzError>),
+
+    #[error(transparent)]
+    Io(#[from] Box<std::io::Error>),
 
     #[cfg(feature = "tar")]
     #[error(transparent)]
