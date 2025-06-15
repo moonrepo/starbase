@@ -2283,7 +2283,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.11.1"
+version = "0.11.2"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -2303,7 +2303,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_console"
-version = "0.6.11"
+version = "0.6.12"
 dependencies = [
  "crossterm",
  "iocraft",
@@ -2329,7 +2329,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_macros"
-version = "0.8.3"
+version = "0.8.4"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -2377,7 +2377,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.11.10"
+version = "0.11.11"
 dependencies = [
  "async-trait",
  "criterion2",
