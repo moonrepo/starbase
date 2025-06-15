@@ -19,7 +19,51 @@ impl FileLock {
     pub fn new(path: PathBuf) -> Result<Self, FsError> {
         use std::io::prelude::*;
 
-        let mut file = fs::create_file_if_missing(&path)?;
+        let mut file: File;
+
+        #[cfg(unix)]
+        {
+            file = fs::create_file_if_missing(&path)?;
+        }
+
+        // Attempt to create/access the file in a loop
+        // because this can error with "permission denied"
+        // when another process has exclusive access
+        #[cfg(windows)]
+        {
+            use std::thread::sleep;
+            use std::time::Duration;
+
+            let mut elapsed = 0;
+
+            loop {
+                match fs::create_file_if_missing(&path) {
+                    Ok(inner) => {
+                        file = inner;
+                        break;
+                    }
+                    Err(error) => {
+                        if let FsError::Create {
+                            error: io_error, ..
+                        } = &error
+                        {
+                            // Access denied
+                            if io_error.raw_os_error().is_some_and(|code| code == 5) {
+                                sleep(Duration::from_millis(100));
+                                elapsed += 100;
+
+                                // Abort after 60 seconds
+                                if elapsed <= 60000 {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        return Err(error);
+                    }
+                }
+            }
+        }
 
         trace!(
             lock = ?path,
