@@ -12,7 +12,7 @@ starbase_styles = { version = "0.6.2", path = "../styles" }
 crossterm = { workspace = true, optional = true }
 iocraft = { workspace = true, optional = true }
 miette = { workspace = true, optional = true }
-parking_lot = "0.12.3"
+parking_lot = "0.12.4"
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true, features = ["sync", "time"] }
 tracing = { workspace = true }
