@@ -1,108 +1,28 @@
+use super::powershell::PowerShell;
 use super::{Shell, ShellCommand};
-use crate::helpers::{
-    ProfileSet, get_env_key_native, get_env_var_regex, get_var_regex, normalize_newlines,
-};
+use crate::helpers::{ProfileSet, normalize_newlines};
 use crate::hooks::*;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
-pub struct Pwsh;
+pub struct Pwsh {
+    inner: PowerShell,
+}
 
 impl Pwsh {
-    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self
-    }
-
-    fn format_env(&self, value: impl AsRef<str>) -> String {
-        get_env_var_regex()
-            .replace_all(value.as_ref(), "$$env:$name")
-            // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_automatic_variables?view=powershell-7.4#home
-            .replace("$env:HOME", "$HOME")
-    }
-
-    fn join_path(&self, value: impl AsRef<str>) -> String {
-        let value = value.as_ref();
-
-        // When no variable, return as-is
-        if !value.contains('$') {
-            return format!("\"{}\"", value);
+        Self {
+            inner: PowerShell::new(),
         }
-
-        // Otherwise split into segments and join
-        let parts = self
-            .format_env(value)
-            .split(['/', '\\'])
-            .map(|part| {
-                if part.starts_with('$') {
-                    part.to_owned()
-                } else {
-                    format!("\"{}\"", part)
-                }
-            })
-            .collect::<Vec<_>>();
-
-        if parts.len() == 1 {
-            return parts.join("");
-        }
-
-        format!("Join-Path {}", parts.join(" "))
     }
 }
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.4
 impl Shell for Pwsh {
     fn format(&self, statement: Statement<'_>) -> String {
-        match statement {
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => {
-                let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
-                let mut value = format!("$env:{} = @(\n", get_env_key_native(key));
-
-                for path in paths {
-                    let path = self.join_path(path);
-
-                    if path.starts_with("Join-Path") {
-                        value.push_str(&format!("  ({})\n", path));
-                    } else {
-                        value.push_str(&format!("  {}\n", path));
-                    }
-                }
-
-                value.push_str("  $env:");
-                value.push_str(get_env_key_native(orig_key));
-                value.push_str("\n) -join [IO.PATH]::PathSeparator;");
-
-                normalize_newlines(value)
-            }
-            Statement::SetEnv { key, value } => {
-                let key = get_env_key_native(key);
-
-                if value.contains('/') || value.contains('\\') {
-                    format!("$env:{} = {};", key, self.join_path(value))
-                } else {
-                    format!(
-                        "$env:{} = {};",
-                        key,
-                        self.quote(self.format_env(value).as_str())
-                    )
-                }
-            }
-            Statement::UnsetEnv { key } => {
-                format!(
-                    r#"if (Test-Path "env:{}") {{
-  Remove-Item -LiteralPath "env:{key}";
-}}"#,
-                    get_env_key_native(key)
-                )
-            }
-        }
+        self.inner.format(statement)
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
@@ -166,17 +86,7 @@ if ($currentAction) {{
     }
 
     fn get_exec_command(&self) -> ShellCommand {
-        ShellCommand {
-            shell_args: vec![
-                "-NoLogo".into(),
-                "-Command".into(),
-                // We'll pass the command args via stdin, so that paths with special
-                // characters and spaces resolve correctly.
-                // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_pwsh?view=powershell-7.2#-command---c
-                "-".into(),
-            ],
-            pass_args_stdin: true,
-        }
+        self.inner.get_exec_command()
     }
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
@@ -240,44 +150,12 @@ if ($currentAction) {{
     /// Quotes a string according to PowerShell shell quoting rules.
     /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
     fn quote(&self, value: &str) -> String {
-        if self.requires_expansion(value) {
-            return format!("\"{}\"", value.replace("\"", "\"\""));
-        }
-
-        // If the string is empty, return an empty single-quoted string
-        if value.is_empty() {
-            return "''".to_string();
-        }
-
-        // Check if the string contains any characters that need to be escaped
-        if value.contains('\'') || value.contains('"') || value.contains('`') || value.contains('$')
-        {
-            // If the string contains a single quote, use a single-quoted string and escape single quotes by doubling them
-            if value.contains('\'') {
-                let escaped = value.replace('\'', "''");
-
-                return format!("'{}'", escaped);
-            } else {
-                // Use a double-quoted string and escape necessary characters
-                let escaped = value.replace('`', "``").replace('"', "`\"");
-
-                return format!("\"{}\"", escaped);
-            }
-        }
-
-        // If the string does not contain any special characters, return a single-quoted string
-        format!("'{}'", value)
+        self.inner.quote(value)
     }
 
+    // https://learn.microsoft.com/en-us/powershell/scripting/learn/deep-dives/everything-about-string-substitutions?view=powershell-7.5
     fn requires_expansion(&self, value: &str) -> bool {
-        // https://learn.microsoft.com/en-us/powershell/scripting/learn/deep-dives/everything-about-string-substitutions?view=powershell-7.5
-        for ch in ["$(", "${"] {
-            if value.contains(ch) {
-                return true;
-            }
-        }
-
-        get_var_regex().is_match(value)
+        self.inner.requires_expansion(value)
     }
 }
 
@@ -295,19 +173,19 @@ mod tests {
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Pwsh.format_env_set("PROTO_HOME", "$HOME/.proto"),
+            Pwsh::new().format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$env:PROTO_HOME = Join-Path $HOME ".proto";"#
         );
         assert_eq!(
-            Pwsh.format_env_set("PROTO_HOME", "$HOME"),
+            Pwsh::new().format_env_set("PROTO_HOME", "$HOME"),
             r#"$env:PROTO_HOME = "$HOME";"#
         );
         assert_eq!(
-            Pwsh.format_env_set("BOOL", "true"),
+            Pwsh::new().format_env_set("BOOL", "true"),
             r#"$env:BOOL = 'true';"#
         );
         assert_eq!(
-            Pwsh.format_env_set("STRING", "a b c"),
+            Pwsh::new().format_env_set("STRING", "a b c"),
             r#"$env:STRING = 'a b c';"#
         );
     }
@@ -316,7 +194,8 @@ mod tests {
     #[test]
     fn formats_path() {
         assert_eq!(
-            Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
+            Pwsh::new()
+                .format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   (Join-Path $env:PROTO_HOME "shims")
@@ -326,7 +205,8 @@ mod tests {
         );
 
         assert_eq!(
-            Pwsh.format_path_set(&["$HOME".into()])
+            Pwsh::new()
+                .format_path_set(&["$HOME".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   $HOME
@@ -335,7 +215,8 @@ mod tests {
         );
 
         assert_eq!(
-            Pwsh.format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
+            Pwsh::new()
+                .format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   $env:BINPATH
@@ -349,7 +230,8 @@ mod tests {
     #[test]
     fn formats_path() {
         assert_eq!(
-            Pwsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
+            Pwsh::new()
+                .format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:Path = @(
   (Join-Path $env:PROTO_HOME "shims")
@@ -359,7 +241,8 @@ mod tests {
         );
 
         assert_eq!(
-            Pwsh.format_path_set(&["$HOME".into()])
+            Pwsh::new()
+                .format_path_set(&["$HOME".into()])
                 .replace("\r\n", "\n"),
             r#"$env:Path = @(
   $HOME
@@ -368,7 +251,8 @@ mod tests {
         );
 
         assert_eq!(
-            Pwsh.format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
+            Pwsh::new()
+                .format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
                 .replace("\r\n", "\n"),
             r#"$env:Path = @(
   $env:BINPATH
@@ -385,7 +269,7 @@ mod tests {
             function: "_starbase_hook".into(),
         };
 
-        assert_snapshot!(Pwsh.format_hook(hook).unwrap());
+        assert_snapshot!(Pwsh::new().format_hook(hook).unwrap());
     }
 
     #[test]
@@ -426,11 +310,11 @@ mod tests {
 
     #[test]
     fn test_pwsh_quoting() {
-        assert_eq!(Pwsh.quote(""), "''");
-        assert_eq!(Pwsh.quote("simple"), "'simple'");
-        assert_eq!(Pwsh.quote("don't"), "'don''t'");
-        assert_eq!(Pwsh.quote("say \"hello\""), "\"say `\"hello`\"\"");
-        assert_eq!(Pwsh.quote("back`tick"), "\"back``tick\"");
-        // assert_eq!(Pwsh.quote("price $5"), "\"price `$5\"");
+        assert_eq!(Pwsh::new().quote(""), "''");
+        assert_eq!(Pwsh::new().quote("simple"), "'simple'");
+        assert_eq!(Pwsh::new().quote("don't"), "'don''t'");
+        assert_eq!(Pwsh::new().quote("say \"hello\""), "\"say `\"hello`\"\"");
+        assert_eq!(Pwsh::new().quote("back`tick"), "\"back``tick\"");
+        // assert_eq!(Pwsh::new().quote("price $5"), "\"price `$5\"");
     }
 }
