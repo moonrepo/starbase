@@ -127,7 +127,8 @@ impl ShellType {
 impl Default for ShellType {
     fn default() -> Self {
         #[cfg(windows)]
-        let fallback = ShellType::Pwsh;
+        let fallback = ShellType::PowerShell;
+
         #[cfg(unix)]
         let fallback = ShellType::Sh;
 
