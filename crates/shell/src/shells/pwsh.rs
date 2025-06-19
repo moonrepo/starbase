@@ -12,6 +12,7 @@ pub struct Pwsh {
 }
 
 impl Pwsh {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             inner: PowerShell::new(),
