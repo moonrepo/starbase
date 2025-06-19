@@ -94,7 +94,7 @@ impl ShellType {
 
         debug!("Detecting from operating system");
 
-        if let Some(shell) = detect_from_os() {
+        if let Some(shell) = os::detect() {
             debug!("Detected {} shell", shell);
 
             return Ok(shell);
@@ -225,10 +225,6 @@ pub fn find_shell_on_path(shell: ShellType) -> bool {
     }
 
     false
-}
-
-fn detect_from_os() -> Option<ShellType> {
-    os::detect()
 }
 
 #[cfg(unix)]
