@@ -84,7 +84,7 @@ impl ShellType {
                     "Detecting from SHELL environment variable"
                 );
 
-                if let Some(shell) = parse_shell_from_path(&env_value) {
+                if let Some(shell) = parse_shell_from_file_path(&env_value) {
                     debug!("Detected {} shell", shell);
 
                     return Ok(shell);
@@ -126,11 +126,7 @@ impl ShellType {
 
 impl Default for ShellType {
     fn default() -> Self {
-        #[cfg(windows)]
-        let fallback = ShellType::PowerShell;
-
-        #[cfg(unix)]
-        let fallback = ShellType::Sh;
+        let fallback = os::detect_fallback();
 
         debug!("Defaulting to {} shell", fallback);
 
@@ -201,7 +197,7 @@ impl TryFrom<String> for ShellType {
     }
 }
 
-pub fn parse_shell_from_path<P: AsRef<Path>>(path: P) -> Option<ShellType> {
+pub fn parse_shell_from_file_path<P: AsRef<Path>>(path: P) -> Option<ShellType> {
     // Remove trailing extensions (like `.exe`)
     let name = path.as_ref().file_stem()?.to_str()?;
 
@@ -209,20 +205,34 @@ pub fn parse_shell_from_path<P: AsRef<Path>>(path: P) -> Option<ShellType> {
     ShellType::from_str(name.strip_prefix('-').unwrap_or(name)).ok()
 }
 
-fn detect_from_os() -> Option<ShellType> {
+pub fn find_shell_on_path(shell: ShellType) -> bool {
     #[cfg(windows)]
-    {
-        windows::detect()
-    }
+    let file = format!("{}.exe", shell);
 
     #[cfg(unix)]
-    {
-        unix::detect()
+    let file = shell.to_string();
+
+    let Some(path) = env::var_os("PATH") else {
+        return false;
+    };
+
+    for dir in env::split_paths(&path) {
+        let shell_path = dir.join(&file);
+
+        if shell_path.exists() && shell_path.is_file() {
+            return true;
+        }
     }
+
+    false
+}
+
+fn detect_from_os() -> Option<ShellType> {
+    os::detect()
 }
 
 #[cfg(unix)]
-mod unix {
+mod os {
     use super::*;
     use std::io::BufRead;
     use std::process::{self, Command};
@@ -279,7 +289,7 @@ mod unix {
                 break;
             };
 
-            if let Some(shell) = parse_shell_from_path(status.comm) {
+            if let Some(shell) = parse_shell_from_file_path(status.comm) {
                 return Some(shell);
             }
 
@@ -289,10 +299,18 @@ mod unix {
 
         None
     }
+
+    pub fn detect_fallback() -> ShellType {
+        if find_shell_on_path(ShellType::Bash) {
+            ShellType::Bash
+        } else {
+            ShellType::Sh
+        }
+    }
 }
 
 #[cfg(windows)]
-mod windows {
+mod os {
     use super::*;
     use sysinfo::{ProcessesToUpdate, System, get_current_pid};
     use tracing::trace;
@@ -320,7 +338,7 @@ mod windows {
                         "Inspecting process to find shell"
                     );
 
-                    if let Some(shell) = parse_shell_from_path(exe_path) {
+                    if let Some(shell) = parse_shell_from_file_path(exe_path) {
                         return Some(shell);
                     }
                 }
@@ -332,5 +350,13 @@ mod windows {
         }
 
         None
+    }
+
+    pub fn detect_fallback() -> ShellType {
+        if find_shell_on_path(ShellType::Pwsh) {
+            ShellType::Pwsh
+        } else {
+            ShellType::PowerShell
+        }
     }
 }
