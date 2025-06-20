@@ -13,6 +13,7 @@ pub enum ShellType {
     Ion,
     Murex,
     Nu,
+    PowerShell,
     Pwsh,
     Sh,
     Xonsh,
@@ -30,6 +31,7 @@ impl ShellType {
             Self::Ion,
             Self::Murex,
             Self::Nu,
+            Self::PowerShell,
             Self::Pwsh,
             Self::Sh,
             Self::Xonsh,
@@ -48,6 +50,7 @@ impl ShellType {
                 Self::Murex,
                 Self::Nu,
                 Self::Xonsh,
+                Self::PowerShell,
                 Self::Pwsh,
             ]
         }
@@ -81,7 +84,7 @@ impl ShellType {
                     "Detecting from SHELL environment variable"
                 );
 
-                if let Some(shell) = parse_shell_from_path(&env_value) {
+                if let Some(shell) = parse_shell_from_file_path(&env_value) {
                     debug!("Detected {} shell", shell);
 
                     return Ok(shell);
@@ -91,7 +94,7 @@ impl ShellType {
 
         debug!("Detecting from operating system");
 
-        if let Some(shell) = detect_from_os() {
+        if let Some(shell) = os::detect() {
             debug!("Detected {} shell", shell);
 
             return Ok(shell);
@@ -112,6 +115,7 @@ impl ShellType {
             Self::Ion => Box::new(Ion::new()),
             Self::Murex => Box::new(Murex::new()),
             Self::Nu => Box::new(Nu::new()),
+            Self::PowerShell => Box::new(PowerShell::new()),
             Self::Pwsh => Box::new(Pwsh::new()),
             Self::Sh => Box::new(Sh::new()),
             Self::Xonsh => Box::new(Xonsh::new()),
@@ -122,10 +126,7 @@ impl ShellType {
 
 impl Default for ShellType {
     fn default() -> Self {
-        #[cfg(windows)]
-        let fallback = ShellType::Pwsh;
-        #[cfg(unix)]
-        let fallback = ShellType::Sh;
+        let fallback = os::detect_fallback();
 
         debug!("Defaulting to {} shell", fallback);
 
@@ -146,6 +147,7 @@ impl fmt::Display for ShellType {
                 Self::Ion => "ion",
                 Self::Murex => "murex",
                 Self::Nu => "nu",
+                Self::PowerShell => "powershell",
                 Self::Pwsh => "pwsh",
                 Self::Sh => "sh",
                 Self::Xonsh => "xonsh",
@@ -167,7 +169,8 @@ impl FromStr for ShellType {
             "ion" => Ok(ShellType::Ion),
             "murex" => Ok(ShellType::Murex),
             "nu" | "nushell" => Ok(ShellType::Nu),
-            "pwsh" | "powershell" | "powershell_ise" => Ok(ShellType::Pwsh),
+            "powershell" | "powershell_ise" => Ok(ShellType::PowerShell),
+            "pwsh" => Ok(ShellType::Pwsh),
             "sh" => Ok(ShellType::Sh),
             "xonsh" | "xon.sh" => Ok(ShellType::Xonsh),
             "zsh" => Ok(ShellType::Zsh),
@@ -194,7 +197,7 @@ impl TryFrom<String> for ShellType {
     }
 }
 
-pub fn parse_shell_from_path<P: AsRef<Path>>(path: P) -> Option<ShellType> {
+pub fn parse_shell_from_file_path<P: AsRef<Path>>(path: P) -> Option<ShellType> {
     // Remove trailing extensions (like `.exe`)
     let name = path.as_ref().file_stem()?.to_str()?;
 
@@ -202,20 +205,30 @@ pub fn parse_shell_from_path<P: AsRef<Path>>(path: P) -> Option<ShellType> {
     ShellType::from_str(name.strip_prefix('-').unwrap_or(name)).ok()
 }
 
-fn detect_from_os() -> Option<ShellType> {
+pub fn find_shell_on_path(shell: ShellType) -> bool {
     #[cfg(windows)]
-    {
-        windows::detect()
-    }
+    let file = format!("{}.exe", shell);
 
     #[cfg(unix)]
-    {
-        unix::detect()
+    let file = shell.to_string();
+
+    let Some(path) = env::var_os("PATH") else {
+        return false;
+    };
+
+    for dir in env::split_paths(&path) {
+        let shell_path = dir.join(&file);
+
+        if shell_path.exists() && shell_path.is_file() {
+            return true;
+        }
     }
+
+    false
 }
 
 #[cfg(unix)]
-mod unix {
+mod os {
     use super::*;
     use std::io::BufRead;
     use std::process::{self, Command};
@@ -272,7 +285,7 @@ mod unix {
                 break;
             };
 
-            if let Some(shell) = parse_shell_from_path(status.comm) {
+            if let Some(shell) = parse_shell_from_file_path(status.comm) {
                 return Some(shell);
             }
 
@@ -282,10 +295,18 @@ mod unix {
 
         None
     }
+
+    pub fn detect_fallback() -> ShellType {
+        if find_shell_on_path(ShellType::Bash) {
+            ShellType::Bash
+        } else {
+            ShellType::Sh
+        }
+    }
 }
 
 #[cfg(windows)]
-mod windows {
+mod os {
     use super::*;
     use sysinfo::{ProcessesToUpdate, System, get_current_pid};
     use tracing::trace;
@@ -313,7 +334,7 @@ mod windows {
                         "Inspecting process to find shell"
                     );
 
-                    if let Some(shell) = parse_shell_from_path(exe_path) {
+                    if let Some(shell) = parse_shell_from_file_path(exe_path) {
                         return Some(shell);
                     }
                 }
@@ -325,5 +346,13 @@ mod windows {
         }
 
         None
+    }
+
+    pub fn detect_fallback() -> ShellType {
+        if find_shell_on_path(ShellType::Pwsh) {
+            ShellType::Pwsh
+        } else {
+            ShellType::PowerShell
+        }
     }
 }
