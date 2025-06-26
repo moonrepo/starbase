@@ -22,7 +22,7 @@ static TAGS_MAP: LazyLock<HashMap<String, Style>> = LazyLock::new(|| {
             Style::Url,
         ]
         .into_iter()
-        .map(|style| (format!("{:?}", style).to_lowercase(), style)),
+        .map(|style| (format!("{style:?}").to_lowercase(), style)),
     )
 });
 
@@ -71,15 +71,14 @@ pub fn parse_tags<T: AsRef<str>>(value: T, panic: bool) -> Vec<(String, Option<S
                 tag = tag.strip_prefix('/').unwrap();
 
                 if tag_stack.is_empty() && panic {
-                    panic!("Close tag `{}` found without an open tag", tag);
+                    panic!("Close tag `{tag}` found without an open tag");
                 }
 
                 let in_tag = tag_stack.last();
 
                 if in_tag.is_some_and(|inner| tag != inner) && panic {
                     panic!(
-                        "Close tag `{}` does not much the open tag `{}`",
-                        tag,
+                        "Close tag `{tag}` does not much the open tag `{}`",
                         in_tag.as_ref().unwrap()
                     );
                 }
