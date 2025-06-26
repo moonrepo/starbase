@@ -85,7 +85,7 @@ impl FileLock {
         );
 
         // Let other processes know that we have locked it
-        file.write(format!("{}", pid).as_ref())
+        file.write(format!("{pid}").as_ref())
             .map_err(|error| FsError::Write {
                 path: path.clone(),
                 error: Box::new(error),

@@ -18,7 +18,7 @@ struct FieldVisitor<'writer> {
 impl Visit for FieldVisitor<'_> {
     fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
         if field.name() == "message" {
-            self.record_debug(field, &format_args!("{}", value))
+            self.record_debug(field, &format_args!("{value}"))
         } else {
             self.record_debug(field, &value)
         }
@@ -26,12 +26,7 @@ impl Visit for FieldVisitor<'_> {
 
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
-            write!(
-                self.writer,
-                "  {} ",
-                apply_style_tags(format!("{:?}", value))
-            )
-            .unwrap()
+            write!(self.writer, "  {} ", apply_style_tags(format!("{value:?}"))).unwrap()
         } else {
             write!(
                 self.writer,

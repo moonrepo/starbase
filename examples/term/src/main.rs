@@ -483,7 +483,7 @@ async fn render(session: TestSession, ui: String) {
             })
             .unwrap();
         }
-        _ => panic!("Unknown UI {}.", ui),
+        _ => panic!("Unknown UI {ui}."),
     }
 }
 

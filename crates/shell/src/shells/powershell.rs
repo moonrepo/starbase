@@ -28,7 +28,7 @@ impl PowerShell {
 
         // When no variable, return as-is
         if !value.contains('$') {
-            return format!("\"{}\"", value);
+            return format!("\"{value}\"");
         }
 
         // Otherwise split into segments and join
@@ -39,7 +39,7 @@ impl PowerShell {
                 if part.starts_with('$') {
                     part.to_owned()
                 } else {
-                    format!("\"{}\"", part)
+                    format!("\"{part}\"")
                 }
             })
             .collect::<Vec<_>>();
@@ -69,9 +69,9 @@ impl Shell for PowerShell {
                     let path = self.join_path(path);
 
                     if path.starts_with("Join-Path") {
-                        value.push_str(&format!("  ({})\n", path));
+                        value.push_str(&format!("  ({path})\n"));
                     } else {
-                        value.push_str(&format!("  {}\n", path));
+                        value.push_str(&format!("  {path}\n"));
                     }
                 }
 
@@ -171,17 +171,17 @@ impl Shell for PowerShell {
             if value.contains('\'') {
                 let escaped = value.replace('\'', "''");
 
-                return format!("'{}'", escaped);
+                return format!("'{escaped}'");
             } else {
                 // Use a double-quoted string and escape necessary characters
                 let escaped = value.replace('`', "``").replace('"', "`\"");
 
-                return format!("\"{}\"", escaped);
+                return format!("\"{escaped}\"");
             }
         }
 
         // If the string does not contain any special characters, return a single-quoted string
-        format!("'{}'", value)
+        format!("'{value}'")
     }
 
     fn requires_expansion(&self, value: &str) -> bool {

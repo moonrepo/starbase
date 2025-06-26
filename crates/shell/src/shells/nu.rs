@@ -190,7 +190,7 @@ export-env {{
 
         if input.contains('`') {
             // Use backtick quoting for strings containing backticks
-            format!("`{}`", input)
+            format!("`{input}`")
         } else if input.contains('\'') {
             // Use double quotes with proper escaping for single-quoted strings
             format!(

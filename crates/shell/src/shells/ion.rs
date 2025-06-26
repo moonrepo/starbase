@@ -62,10 +62,10 @@ impl Shell for Ion {
     fn quote(&self, value: &str) -> String {
         if value.starts_with('$') {
             // Variables expanded in double quotes
-            format!("\"{}\"", value)
+            format!("\"{value}\"")
         } else if value.contains('{') || value.contains('}') {
             // Single quotes to prevent brace expansion
-            format!("'{}'", value)
+            format!("'{value}'")
         } else if value.chars().all(|c| {
             c.is_ascii_graphic() && !c.is_whitespace() && c != '"' && c != '\'' && c != '\\'
         }) {

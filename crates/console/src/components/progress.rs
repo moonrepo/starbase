@@ -398,7 +398,7 @@ fn get_message(data: MessageData) -> String {
     }
 
     if message.contains("{per_sec}") {
-        message = message.replace("{per_sec}", &format!("{:.1}/s", sps));
+        message = message.replace("{per_sec}", &format!("{sps:.1}/s"));
     }
 
     if message.contains("{bytes_per_sec}") {

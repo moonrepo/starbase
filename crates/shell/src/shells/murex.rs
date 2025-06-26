@@ -80,7 +80,7 @@ event onPrompt {function}_hook=before {{
     /// @see <https://murex.rocks/tour.html#basic-syntax>
     fn quote(&self, value: &str) -> String {
         if value.starts_with('$') {
-            return format!("\"{}\"", value);
+            return format!("\"{value}\"");
         }
 
         // Check for simple values that don't need quoting
@@ -100,7 +100,7 @@ event onPrompt {function}_hook=before {{
         if value.contains(' ') || value.contains('"') || value.contains('$') {
             // Escape existing backslashes and double quotes
             let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
-            return format!("\"{}\"", escaped_value);
+            return format!("\"{escaped_value}\"");
         }
 
         // Default case for complex values
