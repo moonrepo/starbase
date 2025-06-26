@@ -70,7 +70,7 @@ impl Shell for Xonsh {
             }
         }
 
-        format!("\"{}\"", quoted)
+        format!("\"{quoted}\"")
     }
 }
 
