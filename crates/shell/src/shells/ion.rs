@@ -19,7 +19,7 @@ impl Shell for Ion {
     // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
-            Statement::PrependPath {
+            Statement::ModifyPath {
                 paths,
                 key,
                 orig_key,
@@ -32,6 +32,16 @@ impl Shell for Ion {
                     paths.join(":"),
                 )
             }
+            #[allow(deprecated)]
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => self.format(Statement::ModifyPath {
+                paths,
+                key,
+                orig_key,
+            }),
             Statement::SetEnv { key, value } => {
                 format!("export {}={}", self.quote(key), self.quote(value))
             }

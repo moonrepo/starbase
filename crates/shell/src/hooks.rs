@@ -1,4 +1,10 @@
 pub enum Statement<'data> {
+    ModifyPath {
+        paths: &'data [String],
+        key: Option<&'data str>,
+        orig_key: Option<&'data str>,
+    },
+    #[deprecated = "Use `ModifyPath` instead."]
     PrependPath {
         paths: &'data [String],
         key: Option<&'data str>,

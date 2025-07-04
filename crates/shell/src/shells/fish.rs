@@ -19,7 +19,7 @@ impl Fish {
 impl Shell for Fish {
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
-            Statement::PrependPath {
+            Statement::ModifyPath {
                 paths,
                 key,
                 orig_key,
@@ -36,6 +36,16 @@ impl Shell for Fish {
                         .join(" ")
                 )
             }
+            #[allow(deprecated)]
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => self.format(Statement::ModifyPath {
+                paths,
+                key,
+                orig_key,
+            }),
             Statement::SetEnv { key, value } => {
                 format!("set -gx {} {};", key, self.quote(value))
             }
@@ -166,5 +176,6 @@ mod tests {
         assert_eq!(Fish.quote("$"), "'$'");
         assert_eq!(Fish.quote("$variable"), "\"$variable\"");
         assert_eq!(Fish.quote("value with spaces"), "value' with spaces'");
+        assert_eq!(Fish.quote("/Users/marvin/.proto/activate-start:/Users/marvin/.proto/shims:/Users/marvin/.proto/tools/pnpm/10.12.1/.:/Users/marvin/.pnpm:/Users/marvin/Library/pnpm:/Users/marvin/.proto/tools/node/22.17.0/bin:/Users/marvin/.proto/bin:/Users/marvin/.proto/activate-stop:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/marvin/.mint/bin:/Users/marvin/.cargo/bin:/Users/marvin/.bun/bin:/Users/marvin/.composer/vendor/bin:/Users/marvin/.local/bin:/opt/homebrew/opt/bison/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/Apple/usr/bin:/Library/TeX/texbin:/Applications/Wireshark.app/Contents/MacOS:/Applications/Ghostty.app/Contents/MacOS:/Users/marvin/.lmstudio/bin"), "");
     }
 }

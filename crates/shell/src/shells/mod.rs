@@ -72,12 +72,20 @@ pub trait Shell: Debug + Display + Send + Sync {
         self.format(Statement::UnsetEnv { key })
     }
 
-    /// Format the provided paths to prepend the `PATH` environment variable,
-    /// and be written to a profile file.
-    fn format_path_set(&self, paths: &[String]) -> String {
-        self.format(Statement::PrependPath {
+    /// Format the provided paths to prepend the `PATH` environment variable.
+    fn format_path_prepend(&self, paths: &[String]) -> String {
+        self.format(Statement::ModifyPath {
             paths,
-            key: None,
+            key: Some("PATH"),
+            orig_key: Some("PATH"),
+        })
+    }
+
+    /// Format the provided paths to override the `PATH` environment variable.
+    fn format_path_set(&self, paths: &[String]) -> String {
+        self.format(Statement::ModifyPath {
+            paths,
+            key: Some("PATH"),
             orig_key: None,
         })
     }

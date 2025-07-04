@@ -19,7 +19,7 @@ impl Xonsh {
 impl Shell for Xonsh {
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
-            Statement::PrependPath {
+            Statement::ModifyPath {
                 paths,
                 key,
                 orig_key,
@@ -29,6 +29,16 @@ impl Shell for Xonsh {
 
                 format!(r#"${key} = "{}:${orig_key}""#, paths.join(":"))
             }
+            #[allow(deprecated)]
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => self.format(Statement::ModifyPath {
+                paths,
+                key,
+                orig_key,
+            }),
             Statement::SetEnv { key, value } => {
                 format!("${key} = {}", self.quote(value))
             }

@@ -17,7 +17,7 @@ impl Ash {
 impl Shell for Ash {
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
-            Statement::PrependPath {
+            Statement::ModifyPath {
                 paths,
                 key,
                 orig_key,
@@ -27,6 +27,16 @@ impl Shell for Ash {
 
                 format!(r#"export {key}="{}:${orig_key}";"#, paths.join(":"))
             }
+            #[allow(deprecated)]
+            Statement::PrependPath {
+                paths,
+                key,
+                orig_key,
+            } => self.format(Statement::ModifyPath {
+                paths,
+                key,
+                orig_key,
+            }),
             Statement::SetEnv { key, value } => {
                 format!("export {}={};", self.quote(key), self.quote(value))
             }
