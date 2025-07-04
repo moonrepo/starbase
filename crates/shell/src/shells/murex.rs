@@ -32,16 +32,6 @@ impl Shell for Murex {
                     None => format!(r#"$ENV.{key}="{value}""#),
                 }
             }
-            #[allow(deprecated)]
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => self.format(Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            }),
             Statement::SetEnv { key, value } => {
                 format!("$ENV.{}={}", self.quote(key), self.quote(value))
             }

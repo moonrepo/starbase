@@ -84,16 +84,6 @@ impl Shell for PowerShell {
 
                 normalize_newlines(value)
             }
-            #[allow(deprecated)]
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => self.format(Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            }),
             Statement::SetEnv { key, value } => {
                 let key = get_env_key_native(key);
 

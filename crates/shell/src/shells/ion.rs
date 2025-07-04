@@ -32,16 +32,6 @@ impl Shell for Ion {
                     None => format!(r#"export {key} = "{value}""#,),
                 }
             }
-            #[allow(deprecated)]
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => self.format(Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            }),
             Statement::SetEnv { key, value } => {
                 format!("export {}={}", self.quote(key), self.quote(value))
             }

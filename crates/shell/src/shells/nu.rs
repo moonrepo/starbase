@@ -73,16 +73,6 @@ impl Shell for Nu {
 
                 normalize_newlines(value)
             }
-            #[allow(deprecated)]
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => self.format(Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            }),
             Statement::SetEnv { key, value } => {
                 if value.starts_with("$HOME/") {
                     let path = value.trim_start_matches("$HOME/");

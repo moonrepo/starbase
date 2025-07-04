@@ -60,14 +60,12 @@ pub trait Shell: Debug + Display + Send + Sync {
         }
     }
 
-    /// Format an environment variable that will be set to the entire shell,
-    /// and be written to a profile file.
+    /// Format an environment variable that will be set to the entire shell.
     fn format_env_set(&self, key: &str, value: &str) -> String {
         self.format(Statement::SetEnv { key, value })
     }
 
-    /// Format an environment variable that will be unset from the entire shell,
-    /// and be written to a profile file.
+    /// Format an environment variable that will be unset from the entire shell.
     fn format_env_unset(&self, key: &str) -> String {
         self.format(Statement::UnsetEnv { key })
     }

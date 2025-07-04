@@ -51,16 +51,6 @@ impl Shell for Elvish {
                     ),
                 }
             }
-            #[allow(deprecated)]
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => self.format(Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            }),
             Statement::SetEnv { key, value } => {
                 format!(
                     "set-env {} {};",

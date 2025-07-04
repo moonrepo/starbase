@@ -36,16 +36,6 @@ impl Shell for Fish {
                     None => format!("set -gx {key} {value};"),
                 }
             }
-            #[allow(deprecated)]
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => self.format(Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            }),
             Statement::SetEnv { key, value } => {
                 format!("set -gx {} {};", key, self.quote(value))
             }

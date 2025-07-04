@@ -32,16 +32,6 @@ impl Shell for Xonsh {
                     None => format!(r#"${key} = "{value}""#),
                 }
             }
-            #[allow(deprecated)]
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => self.format(Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            }),
             Statement::SetEnv { key, value } => {
                 format!("${key} = {}", self.quote(value))
             }
