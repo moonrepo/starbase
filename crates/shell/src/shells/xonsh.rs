@@ -25,9 +25,12 @@ impl Shell for Xonsh {
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
+                let value = paths.join(":");
 
-                format!(r#"${key} = "{}:${orig_key}""#, paths.join(":"))
+                match orig_key {
+                    Some(orig_key) => format!(r#"${key} = "{value}:${orig_key}""#),
+                    None => format!(r#"${key} = "{value}""#),
+                }
             }
             #[allow(deprecated)]
             Statement::PrependPath {
@@ -103,10 +106,18 @@ mod tests {
     }
 
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
+        assert_eq!(
+            Xonsh.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"$PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
+        );
+    }
+
+    #[test]
+    fn formats_path_set() {
         assert_eq!(
             Xonsh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"$PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH""#
+            r#"$PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin""#
         );
     }
 

@@ -25,16 +25,16 @@ impl Shell for Fish {
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
+                let value = paths
+                    .iter()
+                    .map(|p| format!(r#""{p}""#))
+                    .collect::<Vec<_>>()
+                    .join(" ");
 
-                format!(
-                    r#"set -gx {key} {} ${orig_key};"#,
-                    paths
-                        .iter()
-                        .map(|p| self.quote(p))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
+                match orig_key {
+                    Some(orig_key) => format!("set -gx {key} {value} ${orig_key};"),
+                    None => format!("set -gx {key} {value};"),
+                }
             }
             #[allow(deprecated)]
             Statement::PrependPath {
@@ -117,10 +117,18 @@ mod tests {
     }
 
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
+        assert_eq!(
+            Fish.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"set -gx PATH "$PROTO_HOME/shims" "$PROTO_HOME/bin" $PATH;"#
+        );
+    }
+
+    #[test]
+    fn formats_path_set() {
         assert_eq!(
             Fish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set -gx PATH "$PROTO_HOME/shims" "$PROTO_HOME/bin" $PATH;"#
+            r#"set -gx PATH "$PROTO_HOME/shims" "$PROTO_HOME/bin";"#
         );
     }
 
@@ -176,6 +184,5 @@ mod tests {
         assert_eq!(Fish.quote("$"), "'$'");
         assert_eq!(Fish.quote("$variable"), "\"$variable\"");
         assert_eq!(Fish.quote("value with spaces"), "value' with spaces'");
-        assert_eq!(Fish.quote("/Users/marvin/.proto/activate-start:/Users/marvin/.proto/shims:/Users/marvin/.proto/tools/pnpm/10.12.1/.:/Users/marvin/.pnpm:/Users/marvin/Library/pnpm:/Users/marvin/.proto/tools/node/22.17.0/bin:/Users/marvin/.proto/bin:/Users/marvin/.proto/activate-stop:/opt/homebrew/bin:/opt/homebrew/sbin:/Users/marvin/.mint/bin:/Users/marvin/.cargo/bin:/Users/marvin/.bun/bin:/Users/marvin/.composer/vendor/bin:/Users/marvin/.local/bin:/opt/homebrew/opt/bison/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Library/Apple/usr/bin:/Library/TeX/texbin:/Applications/Wireshark.app/Contents/MacOS:/Applications/Ghostty.app/Contents/MacOS:/Users/marvin/.lmstudio/bin"), "");
     }
 }

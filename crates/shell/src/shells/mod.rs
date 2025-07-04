@@ -50,7 +50,7 @@ impl Default for ShellCommand {
 
 pub trait Shell: Debug + Display + Send + Sync {
     /// Format the provided statement.
-    fn format(&self, data: Statement<'_>) -> String;
+    fn format(&self, statement: Statement<'_>) -> String;
 
     /// Format an environment variable by either setting or unsetting the value.
     fn format_env(&self, key: &str, value: Option<&str>) -> String {

@@ -23,13 +23,14 @@ impl Shell for Murex {
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
+                let value = paths.join(PATH_DELIMITER);
 
-                format!(
-                    r#"$ENV.{key}="{}{}$ENV.{orig_key}""#,
-                    paths.join(PATH_DELIMITER),
-                    PATH_DELIMITER,
-                )
+                match orig_key {
+                    Some(orig_key) => {
+                        format!(r#"$ENV.{key}="{value}{PATH_DELIMITER}$ENV.{orig_key}""#)
+                    }
+                    None => format!(r#"$ENV.{key}="{value}""#),
+                }
             }
             #[allow(deprecated)]
             Statement::PrependPath {
@@ -139,10 +140,19 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
+        assert_eq!(
+            Murex.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"$ENV.PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$ENV.PATH""#
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn formats_path_set() {
         assert_eq!(
             Murex.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"$ENV.PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$ENV.PATH""#
+            r#"$ENV.PATH="$PROTO_HOME/shims:$PROTO_HOME/bin""#
         );
     }
 

@@ -40,9 +40,14 @@ impl Shell for Bash {
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
+                let mut value = paths.join(":");
 
-                format!(r#"export {key}="{}:${orig_key}";"#, paths.join(":"))
+                if let Some(orig) = orig_key {
+                    value.push_str(":$");
+                    value.push_str(orig);
+                }
+
+                format!(r#"export {key}="{value}";"#)
             }
             #[allow(deprecated)]
             Statement::PrependPath {
@@ -147,10 +152,19 @@ mod tests {
     }
 
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
         assert_eq!(
-            Bash.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Bash::new()
+                .format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             "export PATH=\"$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH\";"
+        );
+    }
+
+    #[test]
+    fn formats_path_set() {
+        assert_eq!(
+            Bash::new().format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            "export PATH=\"$PROTO_HOME/shims:$PROTO_HOME/bin\";"
         );
     }
 
