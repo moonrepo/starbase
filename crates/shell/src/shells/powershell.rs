@@ -314,7 +314,7 @@ mod tests {
 
         assert_eq!(
             PowerShell
-                .format_path_set(&["$HOME".into()])
+                .format_path_prepend(&["$HOME".into()])
                 .replace("\r\n", "\n"),
             r#"$env:Path = @(
   $HOME
@@ -339,7 +339,7 @@ mod tests {
     fn formats_path_set() {
         assert_eq!(
             PowerShell
-                .format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
+                .format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:Path = @(
   (Join-Path $env:PROTO_HOME "shims")

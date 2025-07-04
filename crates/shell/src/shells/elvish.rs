@@ -35,9 +35,8 @@ impl Shell for Elvish {
 
                 match orig_key {
                     Some(orig_key) => format!(
-                        r#"set-env {key} "{}{}"$E:{orig_key};"#,
-                        paths.join(PATH_DELIMITER),
-                        PATH_DELIMITER,
+                        r#"set-env {key} "{}{PATH_DELIMITER}"$E:{orig_key};"#,
+                        paths.join(PATH_DELIMITER)
                     ),
                     None => format!(
                         "set paths = [{} $@paths];",
@@ -179,11 +178,21 @@ mod tests {
         assert_eq!(Elvish.format_env_set("FOO", "bar"), "set-env FOO bar;");
     }
 
+    #[cfg(unix)]
     #[test]
     fn formats_path_prepend() {
         assert_eq!(
             Elvish.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"set-env PATH "$PROTO_HOME/shims:$PROTO_HOME/bin:"$E:PATH;"#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_path_prepend() {
+        assert_eq!(
+            Elvish.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"set-env PATH "$PROTO_HOME/shims;$PROTO_HOME/bin;"$E:PATH;"#
         );
     }
 
