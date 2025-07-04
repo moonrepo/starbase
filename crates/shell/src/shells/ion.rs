@@ -19,18 +19,18 @@ impl Shell for Ion {
     // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
-            Statement::PrependPath {
+            Statement::ModifyPath {
                 paths,
                 key,
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
+                let value = paths.join(":");
 
-                format!(
-                    r#"export {key} = "{}:${{env::{orig_key}}}""#,
-                    paths.join(":"),
-                )
+                match orig_key {
+                    Some(orig_key) => format!(r#"export {key} = "{value}:${{env::{orig_key}}}""#,),
+                    None => format!(r#"export {key} = "{value}""#,),
+                }
             }
             Statement::SetEnv { key, value } => {
                 format!("export {}={}", self.quote(key), self.quote(value))
@@ -97,10 +97,18 @@ mod tests {
     }
 
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
+        assert_eq!(
+            Ion.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:${env::PATH}""#
+        );
+    }
+
+    #[test]
+    fn formats_path_set() {
         assert_eq!(
             Ion.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:${env::PATH}""#
+            r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin""#
         );
     }
 

@@ -5,14 +5,17 @@ use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Zsh {
+    inner: Bash,
     pub dir: Option<PathBuf>,
 }
 
 impl Zsh {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
+            inner: Bash::new(),
             dir: env::var_os("ZDOTDIR").and_then(is_absolute_dir),
         }
     }
@@ -22,24 +25,7 @@ impl Zsh {
 // https://zsh.sourceforge.io/Doc/Release/Files.html#Files
 impl Shell for Zsh {
     fn format(&self, statement: Statement<'_>) -> String {
-        match statement {
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => {
-                let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
-
-                format!(r#"export {key}="{}:${orig_key}";"#, paths.join(":"))
-            }
-            Statement::SetEnv { key, value } => {
-                format!("export {}={};", self.quote(key), self.quote(value))
-            }
-            Statement::UnsetEnv { key } => {
-                format!("unset {};", self.quote(key))
-            }
-        }
+        self.inner.format(statement)
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
@@ -87,7 +73,7 @@ fi
     }
 
     fn quote(&self, value: &str) -> String {
-        Bash::new().quote(value)
+        self.inner.quote(value)
     }
 }
 
@@ -105,16 +91,24 @@ mod tests {
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Zsh::default().format_env_set("PROTO_HOME", "$HOME/.proto"),
+            Zsh::new().format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"export PROTO_HOME="$HOME/.proto";"#
         );
     }
 
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
         assert_eq!(
-            Zsh::default().format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Zsh::new().format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH";"#
+        );
+    }
+
+    #[test]
+    fn formats_path_set() {
+        assert_eq!(
+            Zsh::new().format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin";"#
         );
     }
 
@@ -125,7 +119,7 @@ mod tests {
             function: "_starbase_hook".into(),
         };
 
-        assert_snapshot!(Zsh::default().format_hook(hook).unwrap());
+        assert_snapshot!(Zsh::new().format_hook(hook).unwrap());
     }
 
     #[test]

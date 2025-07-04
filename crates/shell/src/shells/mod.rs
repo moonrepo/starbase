@@ -50,7 +50,7 @@ impl Default for ShellCommand {
 
 pub trait Shell: Debug + Display + Send + Sync {
     /// Format the provided statement.
-    fn format(&self, data: Statement<'_>) -> String;
+    fn format(&self, statement: Statement<'_>) -> String;
 
     /// Format an environment variable by either setting or unsetting the value.
     fn format_env(&self, key: &str, value: Option<&str>) -> String {
@@ -60,24 +60,30 @@ pub trait Shell: Debug + Display + Send + Sync {
         }
     }
 
-    /// Format an environment variable that will be set to the entire shell,
-    /// and be written to a profile file.
+    /// Format an environment variable that will be set to the entire shell.
     fn format_env_set(&self, key: &str, value: &str) -> String {
         self.format(Statement::SetEnv { key, value })
     }
 
-    /// Format an environment variable that will be unset from the entire shell,
-    /// and be written to a profile file.
+    /// Format an environment variable that will be unset from the entire shell.
     fn format_env_unset(&self, key: &str) -> String {
         self.format(Statement::UnsetEnv { key })
     }
 
-    /// Format the provided paths to prepend the `PATH` environment variable,
-    /// and be written to a profile file.
-    fn format_path_set(&self, paths: &[String]) -> String {
-        self.format(Statement::PrependPath {
+    /// Format the provided paths to prepend the `PATH` environment variable.
+    fn format_path_prepend(&self, paths: &[String]) -> String {
+        self.format(Statement::ModifyPath {
             paths,
-            key: None,
+            key: Some("PATH"),
+            orig_key: Some("PATH"),
+        })
+    }
+
+    /// Format the provided paths to override the `PATH` environment variable.
+    fn format_path_set(&self, paths: &[String]) -> String {
+        self.format(Statement::ModifyPath {
+            paths,
+            key: Some("PATH"),
             orig_key: None,
         })
     }

@@ -16,7 +16,7 @@ impl PowerShell {
         Self
     }
 
-    fn format_env(&self, value: impl AsRef<str>) -> String {
+    fn replace_env(&self, value: impl AsRef<str>) -> String {
         get_env_var_regex()
             .replace_all(value.as_ref(), "$$env:$name")
             // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_automatic_variables?view=powershell-5.1#home
@@ -33,7 +33,7 @@ impl PowerShell {
 
         // Otherwise split into segments and join
         let parts = self
-            .format_env(value)
+            .replace_env(value)
             .split(['/', '\\'])
             .map(|part| {
                 if part.starts_with('$') {
@@ -56,13 +56,12 @@ impl PowerShell {
 impl Shell for PowerShell {
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
-            Statement::PrependPath {
+            Statement::ModifyPath {
                 paths,
                 key,
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
                 let mut value = format!("$env:{} = @(\n", get_env_key_native(key));
 
                 for path in paths {
@@ -75,9 +74,13 @@ impl Shell for PowerShell {
                     }
                 }
 
-                value.push_str("  $env:");
-                value.push_str(get_env_key_native(orig_key));
-                value.push_str("\n) -join [IO.PATH]::PathSeparator;");
+                if let Some(orig_key) = orig_key {
+                    value.push_str("  $env:");
+                    value.push_str(get_env_key_native(orig_key));
+                    value.push('\n');
+                }
+
+                value.push_str(") -join [IO.PATH]::PathSeparator;");
 
                 normalize_newlines(value)
             }
@@ -90,7 +93,7 @@ impl Shell for PowerShell {
                     format!(
                         "$env:{} = {};",
                         key,
-                        self.quote(self.format_env(value).as_str())
+                        self.quote(self.replace_env(value).as_str())
                     )
                 }
             }
@@ -228,10 +231,10 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
         assert_eq!(
             PowerShell
-                .format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
+                .format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   (Join-Path $env:PROTO_HOME "shims")
@@ -242,7 +245,7 @@ mod tests {
 
         assert_eq!(
             PowerShell
-                .format_path_set(&["$HOME".into()])
+                .format_path_prepend(&["$HOME".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   $HOME
@@ -252,7 +255,7 @@ mod tests {
 
         assert_eq!(
             PowerShell
-                .format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
+                .format_path_prepend(&["$BINPATH".into(), "C:\\absolute\\path".into()])
                 .replace("\r\n", "\n"),
             r#"$env:PATH = @(
   $env:BINPATH
@@ -262,12 +265,45 @@ mod tests {
         );
     }
 
-    #[cfg(windows)]
+    #[cfg(unix)]
     #[test]
-    fn formats_path() {
+    fn formats_path_set() {
         assert_eq!(
             PowerShell
                 .format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:PATH = @(
+  (Join-Path $env:PROTO_HOME "shims")
+  (Join-Path $env:PROTO_HOME "bin")
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            PowerShell
+                .format_path_set(&["$HOME".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:PATH = @(
+  $HOME
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            PowerShell
+                .format_path_set(&["$BINPATH".into(), "C:\\absolute\\path".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:PATH = @(
+  $env:BINPATH
+  "C:\absolute\path"
+) -join [IO.PATH]::PathSeparator;"#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_path_prepend() {
+        assert_eq!(
+            PowerShell
+                .format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env:Path = @(
   (Join-Path $env:PROTO_HOME "shims")
@@ -278,11 +314,45 @@ mod tests {
 
         assert_eq!(
             PowerShell
-                .format_path_set(&["$HOME".into()])
+                .format_path_prepend(&["$HOME".into()])
                 .replace("\r\n", "\n"),
             r#"$env:Path = @(
   $HOME
   $env:Path
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            PowerShell
+                .format_path_prepend(&["$BINPATH".into(), "C:\\absolute\\path".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  $env:BINPATH
+  "C:\absolute\path"
+  $env:Path
+) -join [IO.PATH]::PathSeparator;"#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_path_set() {
+        assert_eq!(
+            PowerShell
+                .format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME\\bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  (Join-Path $env:PROTO_HOME "shims")
+  (Join-Path $env:PROTO_HOME "bin")
+) -join [IO.PATH]::PathSeparator;"#
+        );
+
+        assert_eq!(
+            PowerShell
+                .format_path_set(&["$HOME".into()])
+                .replace("\r\n", "\n"),
+            r#"$env:Path = @(
+  $HOME
 ) -join [IO.PATH]::PathSeparator;"#
         );
 
@@ -293,7 +363,6 @@ mod tests {
             r#"$env:Path = @(
   $env:BINPATH
   "C:\absolute\path"
-  $env:Path
 ) -join [IO.PATH]::PathSeparator;"#
         );
     }

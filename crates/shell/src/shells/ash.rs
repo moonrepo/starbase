@@ -4,36 +4,21 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
-pub struct Ash;
+pub struct Ash {
+    inner: Bash,
+}
 
 impl Ash {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self
+        Self { inner: Bash::new() }
     }
 }
 
 // https://github.com/ash-shell/ash
 impl Shell for Ash {
     fn format(&self, statement: Statement<'_>) -> String {
-        match statement {
-            Statement::PrependPath {
-                paths,
-                key,
-                orig_key,
-            } => {
-                let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
-
-                format!(r#"export {key}="{}:${orig_key}";"#, paths.join(":"))
-            }
-            Statement::SetEnv { key, value } => {
-                format!("export {}={};", self.quote(key), self.quote(value))
-            }
-            Statement::UnsetEnv { key } => {
-                format!("unset {};", self.quote(key))
-            }
-        }
+        self.inner.format(statement)
     }
 
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
@@ -49,7 +34,7 @@ impl Shell for Ash {
     }
 
     fn quote(&self, value: &str) -> String {
-        Bash::new().quote(value)
+        self.inner.quote(value)
     }
 }
 
@@ -66,16 +51,24 @@ mod tests {
     #[test]
     fn formats_env_var() {
         assert_eq!(
-            Ash.format_env_set("PROTO_HOME", "$HOME/.proto"),
+            Ash::new().format_env_set("PROTO_HOME", "$HOME/.proto"),
             "export PROTO_HOME=\"$HOME/.proto\";"
         );
     }
 
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
         assert_eq!(
-            Ash.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Ash::new().format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             "export PATH=\"$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH\";"
+        );
+    }
+
+    #[test]
+    fn formats_path_set() {
+        assert_eq!(
+            Ash::new().format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            "export PATH=\"$PROTO_HOME/shims:$PROTO_HOME/bin\";"
         );
     }
 
@@ -92,7 +85,7 @@ mod tests {
 
     #[test]
     fn test_ash_quoting() {
-        let shell = Ash;
+        let shell = Ash::new();
         assert_eq!(shell.quote("simple"), "simple"); // No quoting needed
         assert_eq!(shell.quote("value with spaces"), "$'value with spaces'"); // Double quotes needed
         assert_eq!(shell.quote("value\"with\"quotes"), "$'value\"with\"quotes'"); // Double quotes with escaping

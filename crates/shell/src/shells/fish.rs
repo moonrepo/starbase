@@ -19,22 +19,22 @@ impl Fish {
 impl Shell for Fish {
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
-            Statement::PrependPath {
+            Statement::ModifyPath {
                 paths,
                 key,
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
+                let value = paths
+                    .iter()
+                    .map(|p| format!(r#""{p}""#))
+                    .collect::<Vec<_>>()
+                    .join(" ");
 
-                format!(
-                    r#"set -gx {key} {} ${orig_key};"#,
-                    paths
-                        .iter()
-                        .map(|p| self.quote(p))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
+                match orig_key {
+                    Some(orig_key) => format!("set -gx {key} {value} ${orig_key};"),
+                    None => format!("set -gx {key} {value};"),
+                }
             }
             Statement::SetEnv { key, value } => {
                 format!("set -gx {} {};", key, self.quote(value))
@@ -107,10 +107,18 @@ mod tests {
     }
 
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
+        assert_eq!(
+            Fish.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"set -gx PATH "$PROTO_HOME/shims" "$PROTO_HOME/bin" $PATH;"#
+        );
+    }
+
+    #[test]
+    fn formats_path_set() {
         assert_eq!(
             Fish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set -gx PATH "$PROTO_HOME/shims" "$PROTO_HOME/bin" $PATH;"#
+            r#"set -gx PATH "$PROTO_HOME/shims" "$PROTO_HOME/bin";"#
         );
     }
 

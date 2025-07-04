@@ -1,5 +1,5 @@
 pub enum Statement<'data> {
-    PrependPath {
+    ModifyPath {
         paths: &'data [String],
         key: Option<&'data str>,
         orig_key: Option<&'data str>,

@@ -30,20 +30,22 @@ impl Shell for Nu {
     // https://www.nushell.sh/book/configuration.html#environment
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
-            Statement::PrependPath {
+            Statement::ModifyPath {
                 paths,
                 key,
                 orig_key,
             } => {
                 let env_regex = get_env_var_regex();
                 let key = key.unwrap_or("PATH");
-                let orig_key = orig_key.unwrap_or(key);
 
-                let mut value = format!(
-                    "$env.{} = ($env.{} | split row (char esep)\n",
-                    get_env_key_native(key),
-                    get_env_key_native(orig_key)
-                );
+                let mut value = match orig_key {
+                    Some(orig_key) => format!(
+                        "$env.{} = ($env.{} | split row (char esep)\n",
+                        get_env_key_native(key),
+                        get_env_key_native(orig_key)
+                    ),
+                    None => format!("$env.{} = ([]\n", get_env_key_native(key),),
+                };
 
                 // https://www.nushell.sh/book/configuration.html#path-configuration
                 for path in paths.iter().rev() {
@@ -246,9 +248,9 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
         assert_eq!(
-            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            Nu.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$env.PATH = ($env.PATH | split row (char esep)
   | prepend ($env.PROTO_HOME | path join bin)
   | prepend ($env.PROTO_HOME | path join shims)
@@ -256,8 +258,28 @@ mod tests {
         );
 
         assert_eq!(
-            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
+            Nu.format_path_prepend(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
             r#"$env.PATH = ($env.PATH | split row (char esep)
+  | prepend /some/abs/path/bin
+  | prepend ($env.HOME | path join with sub dir)
+  | uniq)"#
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn formats_path_set() {
+        assert_eq!(
+            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
+            r#"$env.PATH = ([]
+  | prepend ($env.PROTO_HOME | path join bin)
+  | prepend ($env.PROTO_HOME | path join shims)
+  | uniq)"#
+        );
+
+        assert_eq!(
+            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
+            r#"$env.PATH = ([]
   | prepend /some/abs/path/bin
   | prepend ($env.HOME | path join with sub dir)
   | uniq)"#
@@ -266,9 +288,9 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn formats_path() {
+    fn formats_path_prepend() {
         assert_eq!(
-            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
+            Nu.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env.Path = ($env.Path | split row (char esep)
   | prepend ($env.PROTO_HOME | path join bin)
@@ -277,9 +299,31 @@ mod tests {
         );
 
         assert_eq!(
-            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()])
+            Nu.format_path_prepend(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env.Path = ($env.Path | split row (char esep)
+  | prepend /some/abs/path/bin
+  | prepend ($env.HOME | path join with sub dir)
+  | uniq)"#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn formats_path_set() {
+        assert_eq!(
+            Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env.Path = ([]
+  | prepend ($env.PROTO_HOME | path join bin)
+  | prepend ($env.PROTO_HOME | path join shims)
+  | uniq)"#
+        );
+
+        assert_eq!(
+            Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env.Path = ([]
   | prepend /some/abs/path/bin
   | prepend ($env.HOME | path join with sub dir)
   | uniq)"#
