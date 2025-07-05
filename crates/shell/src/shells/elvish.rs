@@ -32,22 +32,26 @@ impl Shell for Elvish {
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
+                let value = format(
+                    paths
+                        .iter()
+                        .map(|p| self.quote(p))
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                );
 
                 match orig_key {
-                    Some(orig_key) => format!(
-                        r#"set-env {key} "{}{PATH_DELIMITER}"$E:{orig_key};"#,
-                        paths.join(PATH_DELIMITER)
-                    ),
-                    None => format!(
-                        "set paths = [{} $@paths];",
-                        format(
-                            paths
-                                .iter()
-                                .map(|p| self.quote(p))
-                                .collect::<Vec<_>>()
-                                .join(" ")
-                        )
-                    ),
+                    Some(orig_key) => {
+                        if orig_key == "PATH" {
+                            format!("set paths = [{value} $@paths];")
+                        } else {
+                            format!(
+                                r#"set-env {key} "{}{PATH_DELIMITER}"$E:{orig_key};"#,
+                                paths.join(PATH_DELIMITER)
+                            )
+                        }
+                    }
+                    None => format!("set paths = [{value}];"),
                 }
             }
             Statement::SetEnv { key, value } => {
@@ -183,7 +187,7 @@ mod tests {
     fn formats_path_prepend() {
         assert_eq!(
             Elvish.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set-env PATH "$PROTO_HOME/shims:$PROTO_HOME/bin:"$E:PATH;"#
+            r#"set paths = ["$E:PROTO_HOME/shims" "$E:PROTO_HOME/bin" $@paths];"#
         );
     }
 
@@ -192,7 +196,7 @@ mod tests {
     fn formats_path_prepend() {
         assert_eq!(
             Elvish.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set-env PATH "$PROTO_HOME/shims;$PROTO_HOME/bin;"$E:PATH;"#
+            r#"set paths = ["$E:PROTO_HOME/shims" "$E:PROTO_HOME/bin" $@paths];"#
         );
     }
 
@@ -200,7 +204,7 @@ mod tests {
     fn formats_path_set() {
         assert_eq!(
             Elvish.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"set paths = ["$E:PROTO_HOME/shims" "$E:PROTO_HOME/bin" $@paths];"#
+            r#"set paths = ["$E:PROTO_HOME/shims" "$E:PROTO_HOME/bin"];"#
         );
     }
 
