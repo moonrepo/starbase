@@ -31,7 +31,7 @@ zstd = { version = "0.13.3", optional = true }
 binstall-tar = { version = "0.4.42", optional = true }
 
 # zip
-zip = { version = "4.2.0", default-features = false, optional = true }
+zip = { version = "4.3.0", default-features = false, optional = true }
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = [
