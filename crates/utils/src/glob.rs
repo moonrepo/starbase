@@ -328,7 +328,7 @@ where
         }
     }
 
-    trace!(dir = ?base_dir, results = paths.len(), "Found in {:?}", instant.elapsed());
+    trace!(dir = ?base_dir, "Found {} in {:?}", paths.len(), instant.elapsed());
 
     Ok(paths)
 }
@@ -357,6 +357,7 @@ pub struct GlobWalkOptions {
     pub cache: bool,
     pub ignore_dot_dirs: bool,
     pub ignore_dot_files: bool,
+    pub log_results: bool,
     pub only_dirs: bool,
     pub only_files: bool,
 }
@@ -392,6 +393,12 @@ impl GlobWalkOptions {
         self.ignore_dot_files = ignore;
         self
     }
+
+    /// Log the results.
+    pub fn log_results(mut self) -> Self {
+        self.log_results = true;
+        self
+    }
 }
 
 impl Default for GlobWalkOptions {
@@ -401,6 +408,7 @@ impl Default for GlobWalkOptions {
             cache: false,
             ignore_dot_dirs: true,
             ignore_dot_files: false,
+            log_results: false,
             only_dirs: false,
             only_files: false,
         }
@@ -512,7 +520,17 @@ fn internal_walk(
         }
     }
 
-    trace!(dir = ?dir, results = paths.len(), "Found in {:?}", instant.elapsed());
+    trace!(
+        dir = ?dir,
+        results = ?if options.log_results {
+            Some(&paths)
+        } else {
+            None
+        },
+        "Found {} in {:?}",
+        paths.len(),
+        instant.elapsed(),
+    );
 
     Ok(paths)
 }

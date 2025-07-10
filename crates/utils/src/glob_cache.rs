@@ -43,7 +43,8 @@ impl GlobCache {
                 dir = ?dir,
                 globs = ?globs,
                 results = value.len(),
-                "Reading files from cache",
+                "Reading {} files from cache",
+                value.len()
             );
 
             return Ok(value);
@@ -57,8 +58,8 @@ impl GlobCache {
                 trace!(
                     dir = ?dir,
                     globs = ?globs,
-                    results = value.len(),
-                    "Reading files from cache",
+                    "Reading {} files from cache",
+                    value.len()
                 );
 
                 Ok(value)
@@ -69,8 +70,8 @@ impl GlobCache {
                 trace!(
                     dir = ?dir,
                     globs = ?globs,
-                    results = value.len(),
-                    "Writing files to cache",
+                    "Writing {} files to cache",
+                    value.len()
                 );
 
                 entry.insert_entry(value.clone());
