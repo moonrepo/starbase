@@ -1,7 +1,7 @@
 use super::Shell;
 use crate::helpers::normalize_newlines;
 use crate::hooks::*;
-use shell_quote::{Bash as BashQuote, QuoteRefExt};
+use shell_quote::{Bash as BashQuote, Quotable, QuoteRefExt};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -113,12 +113,8 @@ fi
 
     /// Quotes a string according to Bash shell quoting rules.
     /// @see <https://www.gnu.org/software/bash/manual/bash.html#Quoting>
-    fn quote(&self, value: &str) -> String {
-        if self.requires_expansion(value) {
-            format!("\"{}\"", value.replace("\"", "\\\""))
-        } else {
-            value.quoted(BashQuote)
-        }
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        value.quoted(BashQuote)
     }
 }
 

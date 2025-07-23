@@ -1,6 +1,6 @@
 use super::Shell;
 use crate::hooks::*;
-use shell_quote::Sh as ShQuote;
+use shell_quote::{Quotable, Sh as ShQuote};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -55,12 +55,8 @@ impl Shell for Sh {
 
     /// Quotes a string according to shell quoting rules.
     /// @see <https://rg1-teaching.mpi-inf.mpg.de/unixffb-ss98/quoting-guide.html>
-    fn quote(&self, value: &str) -> String {
-        if self.requires_expansion(value) {
-            format!("\"{}\"", value.replace("\"", "\\\""))
-        } else {
-            String::from_utf8_lossy(&ShQuote::quote_vec(value)).into()
-        }
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        String::from_utf8_lossy(&ShQuote::quote_vec(value)).into()
     }
 }
 

@@ -1,8 +1,9 @@
-use super::Shell;
+use super::{Shell, quotable_into_string};
 use crate::helpers::{
     PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines,
 };
 use crate::hooks::*;
+use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -120,7 +121,9 @@ set @edit:before-readline = $@edit:before-readline {{
     /// Quotes a string according to Elvish shell quoting rules.
     /// @see <https://elv.sh/ref/language.html#single-quoted-string>
     #[allow(clippy::no_effect_replace)]
-    fn quote(&self, value: &str) -> String {
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        let value = quotable_into_string(value.into());
+
         // Check if the value is a bareword (only specific characters allowed)
         let is_bareword = value
             .chars()

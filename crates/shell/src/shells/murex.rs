@@ -1,6 +1,7 @@
-use super::Shell;
+use super::{Shell, quotable_into_string};
 use crate::helpers::{PATH_DELIMITER, normalize_newlines};
 use crate::hooks::*;
+use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -79,7 +80,9 @@ event onPrompt {function}_hook=before {{
 
     /// Quotes a string according to Murex shell quoting rules.
     /// @see <https://murex.rocks/tour.html#basic-syntax>
-    fn quote(&self, value: &str) -> String {
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        let value = quotable_into_string(value.into());
+
         if value.starts_with('$') {
             return format!("\"{value}\"");
         }

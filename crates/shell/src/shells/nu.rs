@@ -1,8 +1,9 @@
-use super::Shell;
+use super::{Shell, quotable_into_string};
 use crate::helpers::{
     ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, normalize_newlines,
 };
 use crate::hooks::*;
+use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -181,39 +182,43 @@ export-env {{
 
     /// Quotes a string according to Nu shell quoting rules.
     /// @see <https://www.nushell.sh/book/working_with_strings.html>
-    fn quote(&self, input: &str) -> String {
-        if self.requires_expansion(input) {
-            if input.starts_with("$\"") {
-                return input.into();
-            } else {
-                return format!("$\"{input}\"");
-            }
-        }
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        let value = quotable_into_string(value.into());
 
-        if input.contains('`') {
+        if value.contains('`') {
             // Use backtick quoting for strings containing backticks
-            format!("`{input}`")
-        } else if input.contains('\'') {
+            format!("`{value}`")
+        } else if value.contains('\'') {
             // Use double quotes with proper escaping for single-quoted strings
             format!(
                 "\"{}\"",
-                input
+                value
                     .replace('\\', "\\\\")
                     .replace('"', "\\\"")
                     .replace('\n', "\\n")
             )
-        } else if input.contains('"') {
+        } else if value.contains('"') {
             // Escape double quotes if present
             format!(
                 "\"{}\"",
-                input
+                value
                     .replace('\\', "\\\\")
                     .replace('"', "\\\"")
                     .replace('\n', "\\n")
             )
         } else {
             // Use single quotes for other cases
-            format!("'{}'", input.replace('\n', "\\n"))
+            format!("'{}'", value.replace('\n', "\\n"))
+        }
+    }
+
+    fn quote_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        let value = quotable_into_string(value.into());
+
+        if value.starts_with("$\"") {
+            value
+        } else {
+            format!("$\"{value}\"")
         }
     }
 }

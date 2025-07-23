@@ -1,3 +1,5 @@
+use shell_quote::Quotable;
+
 use super::powershell::PowerShell;
 use super::{Shell, ShellCommand};
 use crate::helpers::{ProfileSet, normalize_newlines};
@@ -150,12 +152,16 @@ if ($currentAction) {{
 
     /// Quotes a string according to PowerShell shell quoting rules.
     /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
-    fn quote(&self, value: &str) -> String {
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
         self.inner.quote(value)
     }
 
+    fn quote_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        self.inner.quote_expansion(value)
+    }
+
     // https://learn.microsoft.com/en-us/powershell/scripting/learn/deep-dives/everything-about-string-substitutions?view=powershell-7.5
-    fn requires_expansion(&self, value: &str) -> bool {
+    fn requires_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> bool {
         self.inner.requires_expansion(value)
     }
 }

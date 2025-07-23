@@ -1,6 +1,8 @@
+use shell_quote::Quotable;
+
 use super::Shell;
 use crate::helpers::{ProfileSet, get_config_dir};
-use crate::hooks::*;
+use crate::{hooks::*, quotable_into_string};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -59,12 +61,15 @@ impl Shell for Xonsh {
 
     /// Quotes a string according to Xonsh shell quoting rules.
     /// @see <https://xon.sh/tutorial_subproc_strings.html>
-    fn quote(&self, value: &str) -> String {
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        let value = quotable_into_string(value.into());
+
         if value.is_empty() {
             return "''".to_string();
         }
 
         let mut quoted = String::new();
+
         for c in value.chars() {
             match c {
                 '"' => quoted.push_str("\\\""),

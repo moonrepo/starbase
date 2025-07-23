@@ -1,8 +1,10 @@
-use super::{Shell, ShellCommand};
+use super::{Shell, ShellCommand, quotable_into_string};
 use crate::helpers::{
-    ProfileSet, get_env_key_native, get_env_var_regex, get_var_regex, normalize_newlines,
+    ProfileSet, get_env_key_native, get_env_var_regex, get_var_regex, get_var_regex_bytes,
+    normalize_newlines,
 };
 use crate::hooks::*;
+use shell_quote::Quotable;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -157,10 +159,8 @@ impl Shell for PowerShell {
 
     /// Quotes a string according to PowerShell shell quoting rules.
     /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
-    fn quote(&self, value: &str) -> String {
-        if self.requires_expansion(value) {
-            return format!("\"{}\"", value.replace("\"", "\"\""));
-        }
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        let value = quotable_into_string(value.into());
 
         // If the string is empty, return an empty single-quoted string
         if value.is_empty() {
@@ -187,15 +187,38 @@ impl Shell for PowerShell {
         format!("'{value}'")
     }
 
-    fn requires_expansion(&self, value: &str) -> bool {
+    fn quote_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        format!(
+            "\"{}\"",
+            quotable_into_string(value.into()).replace("\"", "\"\"")
+        )
+    }
+
+    fn requires_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> bool {
+        let value: Quotable<'_> = value.into();
+
         // https://learn.microsoft.com/en-us/powershell/scripting/learn/deep-dives/everything-about-string-substitutions?view=powershell-5.1
         for ch in ["$(", "${"] {
-            if value.contains(ch) {
-                return true;
-            }
+            match value {
+                Quotable::Bytes(bytes) => {
+                    let chb = ch.as_bytes();
+
+                    if bytes.windows(chb.len()).any(|chunk| chunk == chb) {
+                        return true;
+                    }
+                }
+                Quotable::Text(text) => {
+                    if text.contains(ch) {
+                        return true;
+                    }
+                }
+            };
         }
 
-        get_var_regex().is_match(value)
+        match value {
+            Quotable::Bytes(bytes) => get_var_regex_bytes().is_match(bytes),
+            Quotable::Text(text) => get_var_regex().is_match(text),
+        }
     }
 }
 

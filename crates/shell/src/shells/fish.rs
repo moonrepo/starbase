@@ -1,7 +1,7 @@
 use super::Shell;
 use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines};
 use crate::hooks::*;
-use shell_quote::{Fish as FishQuote, QuoteRefExt};
+use shell_quote::{Fish as FishQuote, Quotable, QuoteRefExt};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -78,12 +78,8 @@ end;
 
     /// Quotes a string according to Fish shell quoting rules.
     /// @see <https://fishshell.com/docs/current/language.html#quotes>
-    fn quote(&self, value: &str) -> String {
-        if self.requires_expansion(value) {
-            format!("\"{}\"", value.replace("\"", "\\\""))
-        } else {
-            value.quoted(FishQuote)
-        }
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        value.quoted(FishQuote)
     }
 }
 

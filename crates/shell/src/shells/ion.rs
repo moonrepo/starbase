@@ -1,7 +1,8 @@
-use super::Shell;
+use super::{Shell, quotable_into_string};
 use crate::helpers::ProfileSet;
 use crate::helpers::get_config_dir;
 use crate::hooks::*;
+use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -59,7 +60,9 @@ impl Shell for Ion {
 
     /// Quotes a string according to Ion shell quoting rules.
     /// @see <https://doc.redox-os.org/ion-manual/general.html>
-    fn quote(&self, value: &str) -> String {
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
+        let value = quotable_into_string(value.into());
+
         if value.starts_with('$') {
             // Variables expanded in double quotes
             format!("\"{value}\"")

@@ -1,5 +1,6 @@
 use super::{Bash, Shell};
 use crate::hooks::*;
+use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -33,7 +34,7 @@ impl Shell for Ash {
         vec![home_dir.join(".ashrc"), home_dir.join(".profile")]
     }
 
-    fn quote(&self, value: &str) -> String {
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
         self.inner.quote(value)
     }
 }

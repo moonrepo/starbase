@@ -1,3 +1,5 @@
+use shell_quote::Quotable;
+
 use super::{Bash, Shell};
 use crate::helpers::{is_absolute_dir, normalize_newlines};
 use crate::hooks::*;
@@ -72,7 +74,7 @@ fi
         ]
     }
 
-    fn quote(&self, value: &str) -> String {
+    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
         self.inner.quote(value)
     }
 }
