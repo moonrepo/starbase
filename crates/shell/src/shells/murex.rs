@@ -1,4 +1,4 @@
-use super::{Shell, quotable_into_string};
+use super::Shell;
 use crate::helpers::{PATH_DELIMITER, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -206,7 +206,7 @@ mod tests {
         assert_eq!(Murex.quote("value"), "value");
         assert_eq!(Murex.quote("value with spaces"), r#""value with spaces""#);
         assert_eq!(Murex.quote("$(echo hello)"), "\"$(echo hello)\"");
-        assert_eq!(Murex.quote(""), "");
+        assert_eq!(Murex.quote(""), "''");
         assert_eq!(Murex.quote("abc123"), "abc123");
         assert_eq!(Murex.quote("%(Bob)"), "%(Bob)");
         assert_eq!(Murex.quote("%(hello world)"), "%(hello world)");

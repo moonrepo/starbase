@@ -75,6 +75,7 @@ impl Shell for Elvish {
         Quoter::new(
             data,
             QuoterOptions {
+                unquoted_syntax: vec!["{~}".into()],
                 on_quote: Arc::new(|data| Elvish::do_quote(quotable_into_string(data))),
                 ..Default::default()
             },

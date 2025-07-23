@@ -19,10 +19,6 @@ impl Xonsh {
     /// Quotes a string according to Xonsh shell quoting rules.
     /// @see <https://xon.sh/tutorial_subproc_strings.html>
     fn do_quote(value: String) -> String {
-        if value.is_empty() {
-            return "''".to_string();
-        }
-
         let mut quoted = String::new();
 
         for c in value.chars() {

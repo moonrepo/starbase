@@ -406,12 +406,12 @@ mod tests {
         assert_eq!(Nu.quote(""), "''");
         assert_eq!(Nu.quote("echo 'hello'"), "\"echo 'hello'\"");
         assert_eq!(Nu.quote("echo \"$HOME\""), "$\"echo \"$HOME\"\"");
-        assert_eq!(Nu.quote("\"hello\""), "\"\\\"hello\\\"\"");
-        assert_eq!(Nu.quote("\"hello\nworld\""), "\"\\\"hello\\nworld\\\"\"");
-        assert_eq!(Nu.quote("$'hello world'"), "\"$'hello world'\"");
-        assert_eq!(Nu.quote("$''"), "\"$''\"");
-        assert_eq!(Nu.quote("$\"hello world\""), "\"$\\\"hello world\\\"\"");
+        assert_eq!(Nu.quote("\"hello\""), "\"hello\"");
+        assert_eq!(Nu.quote("\"hello\nworld\""), "\"hello\nworld\"");
+        assert_eq!(Nu.quote("$'hello world'"), "$'hello world'");
+        assert_eq!(Nu.quote("$''"), "$''");
+        assert_eq!(Nu.quote("$\"hello world\""), "$\"hello world\"");
         assert_eq!(Nu.quote("$\"$HOME\""), "$\"$HOME\"");
-        assert_eq!(Nu.quote("'hello'"), "\"'hello'\"");
+        assert_eq!(Nu.quote("'hello'"), "'hello'");
     }
 }

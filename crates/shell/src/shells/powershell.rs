@@ -55,11 +55,6 @@ impl PowerShell {
     /// Quotes a string according to PowerShell shell quoting rules.
     /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
     fn do_quote(value: String) -> String {
-        // If the string is empty, return an empty single-quoted string
-        if value.is_empty() {
-            return "''".to_string();
-        }
-
         // Check if the string contains any characters that need to be escaped
         if value.contains('\'') || value.contains('"') || value.contains('`') || value.contains('$')
         {

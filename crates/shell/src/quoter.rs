@@ -36,6 +36,9 @@ pub struct QuoterOptions {
     /// List of syntax and characters that must be quoted for expansion.
     pub expansion_syntax: Vec<String>,
 
+    /// List of syntax and characters that must not be quoted.
+    pub unquoted_syntax: Vec<String>,
+
     /// Handler to apply quoting.
     pub on_quote: Arc<dyn Fn(Quotable<'_>) -> String>,
 
@@ -46,7 +49,8 @@ pub struct QuoterOptions {
 impl Default for QuoterOptions {
     fn default() -> Self {
         Self {
-            quote_pairs: vec![("\"".into(), "\"".into()), ("'".into(), "'".into())],
+            quote_pairs: vec![("'".into(), "'".into()), ("\"".into(), "\"".into())],
+            // https://www.gnu.org/software/bash/manual/bash.html#Shell-Expansions
             expansion_syntax: string_vec(&[
                 "{", "}", // brace
                 "~+", "~-", // tilde
@@ -55,6 +59,7 @@ impl Default for QuoterOptions {
                 "<(", ">(", // process
                 "**", "*", "?", "?(", "*(", "+(", "@(", "!(", // file
             ]),
+            unquoted_syntax: vec![],
             on_quote: Arc::new(quote),
             on_quote_expansion: Arc::new(quote_expansion),
         }
@@ -73,6 +78,14 @@ impl<'a> Quoter<'a> {
         Self {
             data: data.into(),
             options,
+        }
+    }
+
+    /// Return true if the provided string is empty.
+    pub fn is_empty(&self) -> bool {
+        match &self.data {
+            Quotable::Bytes(bytes) => bytes.is_empty(),
+            Quotable::Text(text) => text.is_empty(),
         }
     }
 
@@ -100,7 +113,17 @@ impl<'a> Quoter<'a> {
     /// If it's already quoted, do nothing. If it requires expansion,
     /// use shell-specific quotes. Otherwise quote as normal.
     pub fn maybe_quote(self) -> String {
-        if !self.is_quoted() && self.requires_expansion() {
+        if self.is_empty() {
+            let pair = &self.options.quote_pairs[0];
+
+            return format!("{}{}", pair.0, pair.1);
+        }
+
+        if self.requires_unquoted() || self.is_quoted() {
+            return quotable_into_string(self.data);
+        }
+
+        if self.requires_expansion() {
             return self.quote_expansion();
         }
 
@@ -121,22 +144,8 @@ impl<'a> Quoter<'a> {
 
     /// Return true if the provided string requires expansion.
     pub fn requires_expansion(&self) -> bool {
-        // https://www.gnu.org/software/bash/manual/bash.html#Shell-Expansions
-        for ch in &self.options.expansion_syntax {
-            match &self.data {
-                Quotable::Bytes(bytes) => {
-                    let chb = ch.as_bytes();
-
-                    if bytes.windows(chb.len()).any(|chunk| chunk == chb) {
-                        return true;
-                    }
-                }
-                Quotable::Text(text) => {
-                    if text.contains(ch) {
-                        return true;
-                    }
-                }
-            };
+        if quotable_contains(&self.data, &self.options.expansion_syntax) {
+            return true;
         }
 
         match &self.data {
@@ -144,4 +153,30 @@ impl<'a> Quoter<'a> {
             Quotable::Text(text) => get_var_regex().is_match(text),
         }
     }
+
+    /// Return true if the provided string must be unquoted.
+    pub fn requires_unquoted(&self) -> bool {
+        quotable_contains(&self.data, &self.options.unquoted_syntax)
+    }
+}
+
+fn quotable_contains(data: &Quotable<'_>, chars: &[String]) -> bool {
+    for ch in chars {
+        match data {
+            Quotable::Bytes(bytes) => {
+                let chb = ch.as_bytes();
+
+                if bytes.windows(chb.len()).any(|chunk| chunk == chb) {
+                    return true;
+                }
+            }
+            Quotable::Text(text) => {
+                if text.contains(ch) {
+                    return true;
+                }
+            }
+        };
+    }
+
+    false
 }

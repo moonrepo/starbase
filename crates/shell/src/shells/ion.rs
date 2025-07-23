@@ -42,6 +42,15 @@ impl Shell for Ion {
         Quoter::new(
             data,
             QuoterOptions {
+                // https://doc.redox-os.org/ion-manual/expansions/00-expansions.html
+                expansion_syntax: vec![
+                    "$".into(),
+                    "${".into(),
+                    "$(".into(),
+                    "@".into(),
+                    "@{".into(),
+                    "@(".into(),
+                ],
                 on_quote: Arc::new(|data| Ion::do_quote(quotable_into_string(data))),
                 ..Default::default()
             },
