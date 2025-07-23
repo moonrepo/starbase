@@ -1,11 +1,13 @@
-use super::{Shell, quotable_into_string};
+use super::Shell;
 use crate::helpers::{
     ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, normalize_newlines,
 };
 use crate::hooks::*;
+use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Nu;
@@ -15,19 +17,71 @@ impl Nu {
     pub fn new() -> Self {
         Self
     }
-}
 
-fn join_path(value: impl AsRef<str>) -> String {
-    let parts = value
-        .as_ref()
-        .split(['/', '\\'])
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>();
+    fn join_path(value: impl AsRef<str>) -> String {
+        let parts = value
+            .as_ref()
+            .split(['/', '\\'])
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>();
 
-    format!("path join {}", parts.join(" "))
+        format!("path join {}", parts.join(" "))
+    }
+
+    /// Quotes a string according to Nu shell quoting rules.
+    /// @see <https://www.nushell.sh/book/working_with_strings.html>
+    fn do_quote(value: String) -> String {
+        if value.contains('`') {
+            // Use backtick quoting for strings containing backticks
+            format!("`{value}`")
+        } else if value.contains('\'') {
+            // Use double quotes with proper escaping for single-quoted strings
+            format!(
+                "\"{}\"",
+                value
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
+            )
+        } else if value.contains('"') {
+            // Escape double quotes if present
+            format!(
+                "\"{}\"",
+                value
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
+            )
+        } else {
+            // Use single quotes for other cases
+            format!("'{}'", value.replace('\n', "\\n"))
+        }
+    }
+
+    fn do_quote_expansion(value: String) -> String {
+        if value.starts_with("$\"") {
+            value
+        } else {
+            format!("$\"{value}\"")
+        }
+    }
 }
 
 impl Shell for Nu {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        let mut options = QuoterOptions {
+            on_quote: Arc::new(|data| Nu::do_quote(quotable_into_string(data))),
+            on_quote_expansion: Arc::new(|data| Nu::do_quote_expansion(quotable_into_string(data))),
+            ..Default::default()
+        };
+        options.quote_pairs.push(("r#".into(), "#".into()));
+        options.quote_pairs.push(("`".into(), "`".into()));
+        options.quote_pairs.push(("$'".into(), "'".into()));
+        options.quote_pairs.push(("$\"".into(), "\"".into()));
+
+        Quoter::new(data, options)
+    }
+
     // https://www.nushell.sh/book/configuration.html#environment
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
@@ -59,7 +113,7 @@ impl Shell for Nu {
                             value.push('(');
                             value.push_str(&format!("$env.{}", cap.name("name").unwrap().as_str()));
                             value.push_str(" | ");
-                            value.push_str(&join_path(path_without_env));
+                            value.push_str(&Self::join_path(path_without_env));
                             value.push(')');
                         }
                         _ => {
@@ -178,48 +232,6 @@ export-env {{
         }
 
         profiles.into_list()
-    }
-
-    /// Quotes a string according to Nu shell quoting rules.
-    /// @see <https://www.nushell.sh/book/working_with_strings.html>
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        let value = quotable_into_string(value.into());
-
-        if value.contains('`') {
-            // Use backtick quoting for strings containing backticks
-            format!("`{value}`")
-        } else if value.contains('\'') {
-            // Use double quotes with proper escaping for single-quoted strings
-            format!(
-                "\"{}\"",
-                value
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-                    .replace('\n', "\\n")
-            )
-        } else if value.contains('"') {
-            // Escape double quotes if present
-            format!(
-                "\"{}\"",
-                value
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-                    .replace('\n', "\\n")
-            )
-        } else {
-            // Use single quotes for other cases
-            format!("'{}'", value.replace('\n', "\\n"))
-        }
-    }
-
-    fn quote_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        let value = quotable_into_string(value.into());
-
-        if value.starts_with("$\"") {
-            value
-        } else {
-            format!("$\"{value}\"")
-        }
     }
 }
 

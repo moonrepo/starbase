@@ -21,13 +21,13 @@ pub use nu::*;
 pub use powershell::*;
 pub use pwsh::*;
 pub use sh::*;
-use shell_quote::Quotable;
 pub use xonsh::*;
 pub use zsh::*;
 
-use crate::helpers::{get_var_regex, get_var_regex_bytes, is_quoted};
 use crate::hooks::*;
+use crate::quoter::*;
 use crate::shell_error::ShellError;
+use shell_quote::Quotable;
 use std::ffi::OsString;
 use std::fmt::{Debug, Display};
 use std::path::{Path, PathBuf};
@@ -50,6 +50,9 @@ impl Default for ShellCommand {
 }
 
 pub trait Shell: Debug + Display + Send + Sync {
+    /// Create a quoter for the provided string.
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a>;
+
     /// Format the provided statement.
     fn format(&self, statement: Statement<'_>) -> String;
 
@@ -112,85 +115,10 @@ pub trait Shell: Debug + Display + Send + Sync {
     /// Ordered from most to least common/applicable.
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf>;
 
-    /// Return true if the provided string is already quoted.
-    fn is_quoted<'a, T: Into<Quotable<'a>>>(&self, value: T) -> bool {
-        is_quoted(value, &["\"", "'"])
-    }
-
-    /// Maybe quote the provided string depending on certain conditions.
-    /// If it's already quoted, do nothing. If it requires expansion,
-    /// use double quotes. Otherwise quote.
-    fn maybe_quote<'a>(&self, value: impl Into<Quotable<'a>>) -> String {
-        let value: Quotable<'_> = value.into();
-
-        if !self.is_quoted(clone_quotable(&value))
-            && self.requires_expansion(clone_quotable(&value))
-        {
-            return self.quote_expansion(value);
-        }
-
-        self.quote(value)
-    }
-
     /// Quote the provided string.
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String;
-
-    /// Quote the provided string for expansion, substition, etc.
-    fn quote_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        format!(
-            "\"{}\"",
-            quotable_into_string(value.into()).replace("\"", "\\\"")
-        )
-    }
-
-    /// Return true if the provided string requires expansion.
-    fn requires_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> bool {
-        let value: Quotable<'_> = value.into();
-
-        // https://www.gnu.org/software/bash/manual/bash.html#Shell-Expansions
-        for ch in [
-            "{", "}", // brace
-            "~+", "~-", // tilde
-            "${", // param
-            "$(", // command
-            "<(", ">(", // process
-            "**", "*", "?", "?(", "*(", "+(", "@(", "!(", // file
-        ] {
-            match value {
-                Quotable::Bytes(bytes) => {
-                    let chb = ch.as_bytes();
-
-                    if bytes.windows(chb.len()).any(|chunk| chunk == chb) {
-                        return true;
-                    }
-                }
-                Quotable::Text(text) => {
-                    if text.contains(ch) {
-                        return true;
-                    }
-                }
-            };
-        }
-
-        match value {
-            Quotable::Bytes(bytes) => get_var_regex_bytes().is_match(bytes),
-            Quotable::Text(text) => get_var_regex().is_match(text),
-        }
+    fn quote(&self, value: &str) -> String {
+        self.create_quoter(Quotable::from(value)).maybe_quote()
     }
 }
 
 pub type BoxedShell = Box<dyn Shell>;
-
-pub(super) fn quotable_into_string(value: Quotable<'_>) -> String {
-    match value {
-        Quotable::Bytes(bytes) => String::from_utf8_lossy(bytes).to_string(),
-        Quotable::Text(text) => text.to_owned(),
-    }
-}
-
-pub(super) fn clone_quotable<'a>(value: &Quotable<'a>) -> Quotable<'a> {
-    match value {
-        Quotable::Bytes(bytes) => Quotable::Bytes(bytes),
-        Quotable::Text(text) => Quotable::Text(text),
-    }
-}

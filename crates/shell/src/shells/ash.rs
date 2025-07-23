@@ -1,6 +1,6 @@
 use super::{Bash, Shell};
 use crate::hooks::*;
-use shell_quote::Quotable;
+use crate::quoter::*;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -18,6 +18,10 @@ impl Ash {
 
 // https://github.com/ash-shell/ash
 impl Shell for Ash {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        self.inner.create_quoter(data)
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         self.inner.format(statement)
     }
@@ -32,10 +36,6 @@ impl Shell for Ash {
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         vec![home_dir.join(".ashrc"), home_dir.join(".profile")]
-    }
-
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        self.inner.quote(value)
     }
 }
 

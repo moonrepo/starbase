@@ -1,8 +1,10 @@
 use super::Shell;
 use crate::hooks::*;
+use crate::quoter::*;
 use shell_quote::{Quotable, Sh as ShQuote};
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Sh;
@@ -15,6 +17,18 @@ impl Sh {
 }
 
 impl Shell for Sh {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        Quoter::new(
+            data,
+            QuoterOptions {
+                on_quote: Arc::new(|data| {
+                    String::from_utf8_lossy(&ShQuote::quote_vec(data)).into()
+                }),
+                ..Default::default()
+            },
+        )
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
             Statement::ModifyPath {
@@ -51,12 +65,6 @@ impl Shell for Sh {
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         vec![home_dir.join(".profile")]
-    }
-
-    /// Quotes a string according to shell quoting rules.
-    /// @see <https://rg1-teaching.mpi-inf.mpg.de/unixffb-ss98/quoting-guide.html>
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        String::from_utf8_lossy(&ShQuote::quote_vec(value)).into()
     }
 }
 

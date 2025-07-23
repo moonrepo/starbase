@@ -1,10 +1,11 @@
-use super::{Shell, quotable_into_string};
-use crate::helpers::ProfileSet;
-use crate::helpers::get_config_dir;
+use super::Shell;
+use crate::helpers::{ProfileSet, get_config_dir};
 use crate::hooks::*;
+use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Ion;
@@ -14,9 +15,39 @@ impl Ion {
     pub fn new() -> Self {
         Self
     }
+
+    /// Quotes a string according to Ion shell quoting rules.
+    /// @see <https://doc.redox-os.org/ion-manual/general.html>
+    fn do_quote(value: String) -> String {
+        if value.starts_with('$') {
+            // Variables expanded in double quotes
+            format!("\"{value}\"")
+        } else if value.contains('{') || value.contains('}') {
+            // Single quotes to prevent brace expansion
+            format!("'{value}'")
+        } else if value.chars().all(|c| {
+            c.is_ascii_graphic() && !c.is_whitespace() && c != '"' && c != '\'' && c != '\\'
+        }) {
+            // No quoting needed for simple values
+            value.to_string()
+        } else {
+            // Double quotes for other cases
+            format!("\"{}\"", value.replace('"', "\\\""))
+        }
+    }
 }
 
 impl Shell for Ion {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        Quoter::new(
+            data,
+            QuoterOptions {
+                on_quote: Arc::new(|data| Ion::do_quote(quotable_into_string(data))),
+                ..Default::default()
+            },
+        )
+    }
+
     // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
@@ -56,28 +87,6 @@ impl Shell for Ion {
             .insert(get_config_dir(home_dir).join("ion").join("initrc"), 1)
             .insert(home_dir.join(".config").join("ion").join("initrc"), 2)
             .into_list()
-    }
-
-    /// Quotes a string according to Ion shell quoting rules.
-    /// @see <https://doc.redox-os.org/ion-manual/general.html>
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        let value = quotable_into_string(value.into());
-
-        if value.starts_with('$') {
-            // Variables expanded in double quotes
-            format!("\"{value}\"")
-        } else if value.contains('{') || value.contains('}') {
-            // Single quotes to prevent brace expansion
-            format!("'{value}'")
-        } else if value.chars().all(|c| {
-            c.is_ascii_graphic() && !c.is_whitespace() && c != '"' && c != '\'' && c != '\\'
-        }) {
-            // No quoting needed for simple values
-            value.to_string()
-        } else {
-            // Double quotes for other cases
-            format!("\"{}\"", value.replace('"', "\\\""))
-        }
     }
 }
 

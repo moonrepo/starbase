@@ -1,11 +1,13 @@
-use super::{Shell, quotable_into_string};
+use super::Shell;
 use crate::helpers::{
     PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines,
 };
 use crate::hooks::*;
+use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Elvish;
@@ -14,6 +16,50 @@ impl Elvish {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
+    }
+
+    /// Quotes a string according to Elvish shell quoting rules.
+    /// @see <https://elv.sh/ref/language.html#single-quoted-string>
+    #[allow(clippy::no_effect_replace)]
+    fn do_quote(value: String) -> String {
+        // Check if the value is a bareword (only specific characters allowed)
+        let is_bareword = value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
+
+        if is_bareword {
+            // Barewords: no quotes needed
+            value.to_string()
+        } else if value.contains("{~}") {
+            // Special case for {~} within the value to escape quoting
+            value.to_string()
+        } else if value.chars().any(|c| {
+            c.is_whitespace()
+                || [
+                    '$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F',
+                ]
+                .contains(&c)
+        }) {
+            // Double-quoted strings with escape sequences
+            format!(
+                r#""{}""#,
+                value
+                    .replace('\\', "\\\\")
+                    .replace('\n', "\\n")
+                    .replace('\t', "\\t")
+                    .replace('\x07', "\\a")
+                    .replace('\x08', "\\b")
+                    .replace('\x0C', "\\f")
+                    .replace('\r', "\\r")
+                    .replace('\x1B', "\\e")
+                    .replace('\"', "\\\"")
+                    .replace('\x7F', "\\^?")
+                    .replace('\0', "\x00")
+            )
+        } else {
+            // Single-quoted strings for non-barewords containing special characters
+            format!("'{}'", value.replace('\'', "''").replace('\0', "\x00"))
+        }
     }
 }
 
@@ -25,6 +71,16 @@ fn format(value: impl AsRef<str>) -> String {
 
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        Quoter::new(
+            data,
+            QuoterOptions {
+                on_quote: Arc::new(|data| Elvish::do_quote(quotable_into_string(data))),
+                ..Default::default()
+            },
+        )
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
             Statement::ModifyPath {
@@ -116,52 +172,6 @@ set @edit:before-readline = $@edit:before-readline {{
 
         profiles = profiles.insert(home_dir.join(".elvish").join("rc.elv"), 4); // Legacy
         profiles.into_list()
-    }
-
-    /// Quotes a string according to Elvish shell quoting rules.
-    /// @see <https://elv.sh/ref/language.html#single-quoted-string>
-    #[allow(clippy::no_effect_replace)]
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        let value = quotable_into_string(value.into());
-
-        // Check if the value is a bareword (only specific characters allowed)
-        let is_bareword = value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
-
-        if is_bareword {
-            // Barewords: no quotes needed
-            value.to_string()
-        } else if value.contains("{~}") {
-            // Special case for {~} within the value to escape quoting
-            value.to_string()
-        } else if value.chars().any(|c| {
-            c.is_whitespace()
-                || [
-                    '$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F',
-                ]
-                .contains(&c)
-        }) {
-            // Double-quoted strings with escape sequences
-            format!(
-                r#""{}""#,
-                value
-                    .replace('\\', "\\\\")
-                    .replace('\n', "\\n")
-                    .replace('\t', "\\t")
-                    .replace('\x07', "\\a")
-                    .replace('\x08', "\\b")
-                    .replace('\x0C', "\\f")
-                    .replace('\r', "\\r")
-                    .replace('\x1B', "\\e")
-                    .replace('\"', "\\\"")
-                    .replace('\x7F', "\\^?")
-                    .replace('\0', "\x00")
-            )
-        } else {
-            // Single-quoted strings for non-barewords containing special characters
-            format!("'{}'", value.replace('\'', "''").replace('\0', "\x00"))
-        }
     }
 }
 

@@ -1,9 +1,9 @@
+#![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-
-use shell_quote::Quotable;
 
 #[cfg(unix)]
 pub static PATH_DELIMITER: &str = ":";
@@ -19,29 +19,6 @@ pub fn is_absolute_dir(value: OsString) -> Option<PathBuf> {
     } else {
         None
     }
-}
-
-pub fn is_quoted<'a, T: Into<Quotable<'a>>>(value: T, quotes: &[&str]) -> bool {
-    let value: Quotable<'_> = value.into();
-
-    for quote in quotes {
-        match value {
-            Quotable::Bytes(bytes) => {
-                let qb = quote.as_bytes();
-
-                if bytes.starts_with(qb) && bytes.ends_with(qb) {
-                    return true;
-                }
-            }
-            Quotable::Text(text) => {
-                if text.starts_with(quote) && text.ends_with(quote) {
-                    return true;
-                }
-            }
-        };
-    }
-
-    false
 }
 
 pub fn get_config_dir(home_dir: &Path) -> PathBuf {
@@ -60,6 +37,10 @@ pub fn get_var_regex_bytes() -> regex::bytes::Regex {
 
 pub fn get_env_var_regex() -> regex::Regex {
     regex::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap()
+}
+
+pub fn get_env_var_regex_bytes() -> regex::bytes::Regex {
+    regex::bytes::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap()
 }
 
 pub fn get_env_key_native(key: &str) -> &str {

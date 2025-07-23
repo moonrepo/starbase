@@ -1,7 +1,7 @@
 use super::Shell;
 use crate::helpers::normalize_newlines;
 use crate::hooks::*;
-use shell_quote::{Bash as BashQuote, Quotable, QuoteRefExt};
+use crate::quoter::*;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -32,6 +32,13 @@ fn profile_for_bash(home_dir: &Path) -> PathBuf {
 
 // https://www.baeldung.com/linux/bashrc-vs-bash-profile-vs-profile
 impl Shell for Bash {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        let mut options = QuoterOptions::default();
+        options.quote_pairs.push(("$'".into(), "'".into()));
+
+        Quoter::new(data, options)
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
             Statement::ModifyPath {
@@ -109,12 +116,6 @@ fi
             // Default .profile calls .bashrc in Ubuntu
             vec![home_dir.join(".bashrc"), home_dir.join(".profile")]
         }
-    }
-
-    /// Quotes a string according to Bash shell quoting rules.
-    /// @see <https://www.gnu.org/software/bash/manual/bash.html#Quoting>
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        value.quoted(BashQuote)
     }
 }
 

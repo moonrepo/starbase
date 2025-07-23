@@ -1,8 +1,7 @@
-use shell_quote::Quotable;
-
 use super::{Bash, Shell};
 use crate::helpers::{is_absolute_dir, normalize_newlines};
 use crate::hooks::*;
+use crate::quoter::*;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -26,6 +25,10 @@ impl Zsh {
 // https://zsh.sourceforge.io/Intro/intro_3.html
 // https://zsh.sourceforge.io/Doc/Release/Files.html#Files
 impl Shell for Zsh {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        self.inner.create_quoter(data)
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         self.inner.format(statement)
     }
@@ -72,10 +75,6 @@ fi
             zdot_dir.join(".zprofile"),
             zdot_dir.join(".zshenv"),
         ]
-    }
-
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        self.inner.quote(value)
     }
 }
 

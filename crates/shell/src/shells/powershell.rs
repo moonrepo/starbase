@@ -1,13 +1,12 @@
-use super::{Shell, ShellCommand, quotable_into_string};
-use crate::helpers::{
-    ProfileSet, get_env_key_native, get_env_var_regex, get_var_regex, get_var_regex_bytes,
-    normalize_newlines,
-};
+use super::{Shell, ShellCommand};
+use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
+use crate::quoter::*;
 use shell_quote::Quotable;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct PowerShell;
@@ -52,10 +51,56 @@ impl PowerShell {
 
         format!("Join-Path {}", parts.join(" "))
     }
+
+    /// Quotes a string according to PowerShell shell quoting rules.
+    /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
+    fn do_quote(value: String) -> String {
+        // If the string is empty, return an empty single-quoted string
+        if value.is_empty() {
+            return "''".to_string();
+        }
+
+        // Check if the string contains any characters that need to be escaped
+        if value.contains('\'') || value.contains('"') || value.contains('`') || value.contains('$')
+        {
+            // If the string contains a single quote, use a single-quoted string and escape single quotes by doubling them
+            if value.contains('\'') {
+                let escaped = value.replace('\'', "''");
+
+                return format!("'{escaped}'");
+            } else {
+                // Use a double-quoted string and escape necessary characters
+                let escaped = value.replace('`', "``").replace('"', "`\"");
+
+                return format!("\"{escaped}\"");
+            }
+        }
+
+        // If the string does not contain any special characters, return a single-quoted string
+        format!("'{value}'")
+    }
+
+    fn do_quote_expansion(value: String) -> String {
+        format!("\"{}\"", value.replace("\"", "\"\""))
+    }
 }
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-5.1
 impl Shell for PowerShell {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        Quoter::new(
+            data,
+            QuoterOptions {
+                expansion_syntax: vec!["$(".into(), "${".into()],
+                on_quote: Arc::new(|data| PowerShell::do_quote(quotable_into_string(data))),
+                on_quote_expansion: Arc::new(|data| {
+                    PowerShell::do_quote_expansion(quotable_into_string(data))
+                }),
+                ..Default::default()
+            },
+        )
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
             Statement::ModifyPath {
@@ -155,70 +200,6 @@ impl Shell for PowerShell {
             );
 
         profiles.into_list()
-    }
-
-    /// Quotes a string according to PowerShell shell quoting rules.
-    /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        let value = quotable_into_string(value.into());
-
-        // If the string is empty, return an empty single-quoted string
-        if value.is_empty() {
-            return "''".to_string();
-        }
-
-        // Check if the string contains any characters that need to be escaped
-        if value.contains('\'') || value.contains('"') || value.contains('`') || value.contains('$')
-        {
-            // If the string contains a single quote, use a single-quoted string and escape single quotes by doubling them
-            if value.contains('\'') {
-                let escaped = value.replace('\'', "''");
-
-                return format!("'{escaped}'");
-            } else {
-                // Use a double-quoted string and escape necessary characters
-                let escaped = value.replace('`', "``").replace('"', "`\"");
-
-                return format!("\"{escaped}\"");
-            }
-        }
-
-        // If the string does not contain any special characters, return a single-quoted string
-        format!("'{value}'")
-    }
-
-    fn quote_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        format!(
-            "\"{}\"",
-            quotable_into_string(value.into()).replace("\"", "\"\"")
-        )
-    }
-
-    fn requires_expansion<'a, T: Into<Quotable<'a>>>(&self, value: T) -> bool {
-        let value: Quotable<'_> = value.into();
-
-        // https://learn.microsoft.com/en-us/powershell/scripting/learn/deep-dives/everything-about-string-substitutions?view=powershell-5.1
-        for ch in ["$(", "${"] {
-            match value {
-                Quotable::Bytes(bytes) => {
-                    let chb = ch.as_bytes();
-
-                    if bytes.windows(chb.len()).any(|chunk| chunk == chb) {
-                        return true;
-                    }
-                }
-                Quotable::Text(text) => {
-                    if text.contains(ch) {
-                        return true;
-                    }
-                }
-            };
-        }
-
-        match value {
-            Quotable::Bytes(bytes) => get_var_regex_bytes().is_match(bytes),
-            Quotable::Text(text) => get_var_regex().is_match(text),
-        }
     }
 }
 

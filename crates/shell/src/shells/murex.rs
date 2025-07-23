@@ -1,9 +1,11 @@
 use super::{Shell, quotable_into_string};
 use crate::helpers::{PATH_DELIMITER, normalize_newlines};
 use crate::hooks::*;
+use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Murex;
@@ -13,9 +15,50 @@ impl Murex {
     pub fn new() -> Self {
         Self
     }
+
+    /// Quotes a string according to Murex shell quoting rules.
+    /// @see <https://murex.rocks/tour.html#basic-syntax>
+    fn do_quote(value: String) -> String {
+        if value.starts_with('$') {
+            return format!("\"{value}\"");
+        }
+
+        // Check for simple values that don't need quoting
+        if value
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return value.to_string();
+        }
+
+        // Handle brace quotes %(...)
+        if value.starts_with("%(") && value.ends_with(')') {
+            return value.to_string(); // Return as-is for brace quotes
+        }
+
+        // Check for values with spaces or special characters requiring double quotes
+        if value.contains(' ') || value.contains('"') || value.contains('$') {
+            // Escape existing backslashes and double quotes
+            let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
+            return format!("\"{escaped_value}\"");
+        }
+
+        // Default case for complex values
+        value.to_string()
+    }
 }
 
 impl Shell for Murex {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        let mut options = QuoterOptions {
+            on_quote: Arc::new(|data| Murex::do_quote(quotable_into_string(data))),
+            ..Default::default()
+        };
+        options.quote_pairs.push(("%(".into(), ")".into()));
+
+        Quoter::new(data, options)
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
             Statement::ModifyPath {
@@ -76,39 +119,6 @@ event onPrompt {function}_hook=before {{
             home_dir.join(".murex_profile"),
             home_dir.join(".murex_preload"),
         ]
-    }
-
-    /// Quotes a string according to Murex shell quoting rules.
-    /// @see <https://murex.rocks/tour.html#basic-syntax>
-    fn quote<'a, T: Into<Quotable<'a>>>(&self, value: T) -> String {
-        let value = quotable_into_string(value.into());
-
-        if value.starts_with('$') {
-            return format!("\"{value}\"");
-        }
-
-        // Check for simple values that don't need quoting
-        if value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        {
-            return value.to_string();
-        }
-
-        // Handle brace quotes %(...)
-        if value.starts_with("%(") && value.ends_with(')') {
-            return value.to_string(); // Return as-is for brace quotes
-        }
-
-        // Check for values with spaces or special characters requiring double quotes
-        if value.contains(' ') || value.contains('"') || value.contains('$') {
-            // Escape existing backslashes and double quotes
-            let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
-            return format!("\"{escaped_value}\"");
-        }
-
-        // Default case for complex values
-        value.to_string()
     }
 }
 
