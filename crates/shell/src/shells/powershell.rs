@@ -1,5 +1,7 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
+use crate::helpers::{
+    ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines, quotable_into_string,
+};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;

@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{PATH_DELIMITER, normalize_newlines};
+use crate::helpers::{PATH_DELIMITER, normalize_newlines, quotable_into_string};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;

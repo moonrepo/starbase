@@ -1,17 +1,8 @@
-use crate::helpers::{get_var_regex, get_var_regex_bytes};
+use crate::helpers::{get_var_regex, get_var_regex_bytes, quotable_contains, quotable_into_string};
 use shell_quote::{Bash, QuoteRefExt};
 use std::sync::Arc;
 
 pub use shell_quote::Quotable;
-
-/// Convert a [`Quotable`] instance into a [`String`].
-/// If the data is in bytes, it will be lossy converted.
-pub fn quotable_into_string(data: Quotable<'_>) -> String {
-    match data {
-        Quotable::Bytes(bytes) => String::from_utf8_lossy(bytes).into(),
-        Quotable::Text(text) => text.to_owned(),
-    }
-}
 
 fn string_vec(items: &[&str]) -> Vec<String> {
     items
@@ -158,25 +149,4 @@ impl<'a> Quoter<'a> {
     pub fn requires_unquoted(&self) -> bool {
         quotable_contains(&self.data, &self.options.unquoted_syntax)
     }
-}
-
-fn quotable_contains(data: &Quotable<'_>, chars: &[String]) -> bool {
-    for ch in chars {
-        match data {
-            Quotable::Bytes(bytes) => {
-                let chb = ch.as_bytes();
-
-                if bytes.windows(chb.len()).any(|chunk| chunk == chb) {
-                    return true;
-                }
-            }
-            Quotable::Text(text) => {
-                if text.contains(ch) {
-                    return true;
-                }
-            }
-        };
-    }
-
-    false
 }

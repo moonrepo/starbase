@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::{
     ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, normalize_newlines,
+    quotable_into_string,
 };
 use crate::hooks::*;
 use crate::quoter::*;

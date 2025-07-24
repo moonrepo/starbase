@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir};
+use crate::helpers::{ProfileSet, get_config_dir, quotable_into_string};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;

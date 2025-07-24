@@ -5,6 +5,8 @@ use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use shell_quote::Quotable;
+
 #[cfg(unix)]
 pub static PATH_DELIMITER: &str = ":";
 
@@ -86,4 +88,63 @@ impl ProfileSet {
         items.sort_by(|a, d| a.1.cmp(&d.1));
         items.into_iter().map(|item| item.0).collect()
     }
+}
+
+pub fn quotable_into_string(data: Quotable<'_>) -> String {
+    match data {
+        Quotable::Bytes(bytes) => String::from_utf8_lossy(bytes).into(),
+        Quotable::Text(text) => text.to_owned(),
+    }
+}
+
+pub fn quotable_contains<I, V>(data: &Quotable<'_>, chars: I) -> bool
+where
+    I: IntoIterator<Item = V>,
+    V: AsRef<str>,
+{
+    for ch in chars {
+        let ch = ch.as_ref();
+
+        match data {
+            Quotable::Bytes(bytes) => {
+                let chb = ch.as_bytes();
+
+                if bytes.windows(chb.len()).any(|chunk| chunk == chb) {
+                    return true;
+                }
+            }
+            Quotable::Text(text) => {
+                if text.contains(ch) {
+                    return true;
+                }
+            }
+        };
+    }
+
+    false
+}
+
+pub fn quotable_equals<I, V>(data: &Quotable<'_>, chars: I) -> bool
+where
+    I: IntoIterator<Item = V>,
+    V: AsRef<str>,
+{
+    for ch in chars {
+        let ch = ch.as_ref();
+
+        match data {
+            Quotable::Bytes(bytes) => {
+                if *bytes == ch.as_bytes() {
+                    return true;
+                }
+            }
+            Quotable::Text(text) => {
+                if *text == ch {
+                    return true;
+                }
+            }
+        };
+    }
+
+    false
 }
