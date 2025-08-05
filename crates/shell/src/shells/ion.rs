@@ -43,7 +43,7 @@ impl Shell for Ion {
             data,
             QuoterOptions {
                 // https://doc.redox-os.org/ion-manual/expansions/00-expansions.html
-                expansion_syntax: vec![
+                quoted_syntax: vec![
                     "$".into(),
                     "${".into(),
                     "$(".into(),
@@ -153,7 +153,7 @@ mod tests {
             r#""value \"with\" quotes""#
         );
         assert_eq!(Ion.quote("$variable"), "\"$variable\"");
-        assert_eq!(Ion.quote("{brace_expansion}"), "'{brace_expansion}'");
+        assert_eq!(Ion.quote("{brace_expansion}"), "{brace_expansion}");
         assert_eq!(
             Ion.quote("value with 'single quotes'"),
             r#""value with 'single quotes'""#

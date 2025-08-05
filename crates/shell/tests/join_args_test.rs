@@ -113,4 +113,98 @@ mod join_args {
             "echo $'some value-with a dash'"
         );
     }
+
+    #[test]
+    fn expansion_brace() {
+        assert_eq!(
+            join_args(&create_bash(), ["echo", "a{d,c,b}e"]),
+            "echo a{d,c,b}e"
+        );
+    }
+
+    #[test]
+    fn expansion_shell_param() {
+        assert_eq!(
+            join_args(&create_bash(), ["echo", "${var-unset}"]),
+            "echo \"${var-unset}\""
+        );
+
+        assert_eq!(
+            join_args(&create_bash(), ["echo", "${array[0]:7}"]),
+            "echo \"${array[0]:7}\""
+        );
+    }
+
+    #[test]
+    fn expansion_command() {
+        assert_eq!(
+            join_args(&create_bash(), ["echo", "$(ls)"]),
+            "echo \"$(ls)\""
+        );
+
+        assert_eq!(
+            join_args(&create_bash(), ["echo", "value=$(c git status;)"]),
+            "echo \"value=$(c git status;)\""
+        );
+    }
+
+    #[test]
+    fn expansion_tilde() {
+        assert_eq!(join_args(&create_bash(), ["echo", "~"]), "echo ~");
+
+        assert_eq!(join_args(&create_bash(), ["echo", "~+/foo"]), "echo ~+/foo");
+
+        assert_eq!(
+            join_args(&create_bash(), ["echo", "~fred/foo"]),
+            "echo ~fred/foo"
+        );
+
+        assert_eq!(
+            join_args(&create_bash(), ["echo", "in ~ middle"]),
+            "echo $'in ~ middle'"
+        );
+    }
+
+    #[test]
+    fn community_use_cases() {
+        assert_eq!(
+            join_args(
+                &create_bash(),
+                [
+                    "dotnet",
+                    "build",
+                    "$projectRoot",
+                    "-c:Release",
+                    "-p:AssemblyVersion=$VERSION",
+                    "--no-dependencies",
+                    "--no-restore",
+                    "--warnaserror",
+                    "--os",
+                    "win"
+                ]
+            ),
+            "dotnet build \"$projectRoot\" -c:Release -p:AssemblyVersion=$VERSION --no-dependencies --no-restore --warnaserror --os win"
+        );
+
+        // https://github.com/moonrepo/moon/issues/1740
+        assert_eq!(
+            join_args(
+                &create_bash(),
+                [
+                    "docker",
+                    "build",
+                    "--target",
+                    "prod",
+                    "-t",
+                    "$project",
+                    "-f",
+                    "Dockerfile",
+                    "$workspaceRoot",
+                    "--build-arg",
+                    "COMMIT_HASH=$(git rev-parse HEAD)"
+                ]
+            ),
+            "docker build --target prod -t \"$project\" -f Dockerfile \"$workspaceRoot\" --build-arg \"COMMIT_HASH=$(git rev-parse HEAD)\""
+        );
+    }
 }

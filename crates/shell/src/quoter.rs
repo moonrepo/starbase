@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 pub use shell_quote::Quotable;
 
-fn string_vec(items: &[&str]) -> Vec<String> {
+fn string_vec<T: AsRef<str>>(items: &[T]) -> Vec<String> {
     items
         .iter()
-        .map(|item| item.to_string())
+        .map(|item| item.as_ref().to_string())
         .collect::<Vec<_>>()
 }
 
@@ -16,7 +16,19 @@ fn quote(data: Quotable<'_>) -> String {
 }
 
 fn quote_expansion(data: Quotable<'_>) -> String {
-    format!("\"{}\"", quotable_into_string(data).replace("\"", "\\\""))
+    let string = quotable_into_string(data);
+    let mut output = String::with_capacity(string.len() + 2);
+    output.push('"');
+
+    for c in string.chars() {
+        if c == '"' || c == '\\' {
+            output.push('\\');
+        }
+        output.push(c);
+    }
+
+    output.push('"');
+    output
 }
 
 /// Options for [`Quoter`].
@@ -25,7 +37,7 @@ pub struct QuoterOptions {
     pub quote_pairs: Vec<(String, String)>,
 
     /// List of syntax and characters that must be quoted for expansion.
-    pub expansion_syntax: Vec<String>,
+    pub quoted_syntax: Vec<String>,
 
     /// List of syntax and characters that must not be quoted.
     pub unquoted_syntax: Vec<String>,
@@ -42,15 +54,15 @@ impl Default for QuoterOptions {
         Self {
             quote_pairs: vec![("'".into(), "'".into()), ("\"".into(), "\"".into())],
             // https://www.gnu.org/software/bash/manual/bash.html#Shell-Expansions
-            expansion_syntax: string_vec(&[
-                "{", "}", // brace
-                "~+", "~-", // tilde
+            quoted_syntax: string_vec(&[
                 "${", // param
                 "$(", // command
-                "<(", ">(", // process
-                "**", "*", "?", "?(", "*(", "+(", "@(", "!(", // file
             ]),
-            unquoted_syntax: vec![],
+            unquoted_syntax: string_vec(&[
+                "{", "}", // brace
+                "<(", ">(", // process
+                "**", "*", "?", "?(", "*(", "+(", "@(", "!(", // file, glob
+            ]),
             on_quote: Arc::new(quote),
             on_quote_expansion: Arc::new(quote_expansion),
         }
@@ -110,12 +122,16 @@ impl<'a> Quoter<'a> {
             return format!("{}{}", pair.0, pair.1);
         }
 
-        if self.requires_unquoted() || self.is_quoted() {
+        if self.is_quoted() {
             return quotable_into_string(self.data);
         }
 
         if self.requires_expansion() {
             return self.quote_expansion();
+        }
+
+        if self.requires_unquoted() {
+            return quotable_into_string(self.data);
         }
 
         self.quote()
@@ -135,7 +151,7 @@ impl<'a> Quoter<'a> {
 
     /// Return true if the provided string requires expansion.
     pub fn requires_expansion(&self) -> bool {
-        if quotable_contains(&self.data, &self.options.expansion_syntax) {
+        if quotable_contains(&self.data, &self.options.quoted_syntax) {
             return true;
         }
 

@@ -17,8 +17,8 @@ where
         let arg = arg.into();
 
         match ArgSyntax::determine(&arg) {
-            ArgSyntax::Text => {
-                let quoted_arg = shell.create_quoter(arg.into()).maybe_quote();
+            ArgSyntax::Text | ArgSyntax::TextGlob => {
+                let quoted_arg = shell.create_quoter(arg).maybe_quote();
 
                 out.push_str(&quoted_arg);
             }
@@ -45,25 +45,12 @@ pub enum ArgSyntax {
     Redirection,
     Text,
     TextGlob,
+    Tilde,
 }
 
 impl ArgSyntax {
     pub fn determine(value: &Quotable<'_>) -> ArgSyntax {
-        // Option
-        match value {
-            Quotable::Bytes(bytes) => {
-                if bytes.starts_with(b"-") {
-                    return ArgSyntax::Option;
-                }
-            }
-            Quotable::Text(text) => {
-                if text.starts_with("-") {
-                    return ArgSyntax::Option;
-                }
-            }
-        };
-
-        if quotable_equals(value, ["&", "&&", "&!", "||", "!", ";"]) {
+        if quotable_equals(value, ["&", "&&", "&!", "||", "!", ";", "-", "--"]) {
             return ArgSyntax::Operator;
         }
 
@@ -71,9 +58,32 @@ impl ArgSyntax {
             return ArgSyntax::Pipe;
         }
 
-        if quotable_equals(value, [">", "^>", "&>", ">>", "<", "<<"]) {
+        if quotable_equals(
+            value,
+            [
+                ">", "^>", "&>", "&>>", ">&", "<&", ">>", "<", "<<", "<<<", "2>", "2>>", "2>&1",
+                "<>",
+            ],
+        ) {
             return ArgSyntax::Redirection;
         }
+
+        match value {
+            Quotable::Bytes(bytes) => {
+                if bytes.starts_with(b"-") {
+                    return ArgSyntax::Option;
+                } else if bytes.starts_with(b"~") {
+                    return ArgSyntax::Tilde;
+                }
+            }
+            Quotable::Text(text) => {
+                if text.starts_with("-") {
+                    return ArgSyntax::Option;
+                } else if text.starts_with("~") {
+                    return ArgSyntax::Tilde;
+                }
+            }
+        };
 
         if quotable_contains(value, ["*", "[", "{", "?"]) {
             return ArgSyntax::TextGlob;
