@@ -1,15 +1,8 @@
-use crate::helpers::{get_var_regex, get_var_regex_bytes, quotable_contains, quotable_into_string};
+use crate::helpers::{get_var_regex, get_var_regex_bytes, quotable_into_string};
 use shell_quote::{Bash, QuoteRefExt};
 use std::sync::Arc;
 
 pub use shell_quote::Quotable;
-
-fn string_vec<T: AsRef<str>>(items: &[T]) -> Vec<String> {
-    items
-        .iter()
-        .map(|item| item.as_ref().to_string())
-        .collect::<Vec<_>>()
-}
 
 fn quote(data: Quotable<'_>) -> String {
     data.quoted(Bash)
@@ -31,16 +24,22 @@ fn quote_expansion(data: Quotable<'_>) -> String {
     output
 }
 
+/// Types of syntax to check for to determine quoting.
+pub enum Syntax {
+    Symbol(String),
+    Pair(String, String),
+}
+
 /// Options for [`Quoter`].
 pub struct QuoterOptions {
     /// List of start and end quotes for strings.
     pub quote_pairs: Vec<(String, String)>,
 
     /// List of syntax and characters that must be quoted for expansion.
-    pub quoted_syntax: Vec<String>,
+    pub quoted_syntax: Vec<Syntax>,
 
     /// List of syntax and characters that must not be quoted.
-    pub unquoted_syntax: Vec<String>,
+    pub unquoted_syntax: Vec<Syntax>,
 
     /// Handler to apply quoting.
     pub on_quote: Arc<dyn Fn(Quotable<'_>) -> String>,
@@ -54,15 +53,31 @@ impl Default for QuoterOptions {
         Self {
             quote_pairs: vec![("'".into(), "'".into()), ("\"".into(), "\"".into())],
             // https://www.gnu.org/software/bash/manual/bash.html#Shell-Expansions
-            quoted_syntax: string_vec(&[
-                "${", // param
-                "$(", // command
-            ]),
-            unquoted_syntax: string_vec(&[
-                "{", "}", // brace
-                "<(", ">(", // process
-                "**", "*", "?", "?(", "*(", "+(", "@(", "!(", // file, glob
-            ]),
+            quoted_syntax: vec![
+                // param
+                Syntax::Pair("${".into(), "}".into()),
+                // command
+                Syntax::Pair("$(".into(), ")".into()),
+                // arithmetic
+                Syntax::Pair("$((".into(), "))".into()),
+            ],
+            unquoted_syntax: vec![
+                // brace
+                Syntax::Pair("{".into(), "}".into()),
+                // process
+                Syntax::Pair("<(".into(), ")".into()),
+                Syntax::Pair(">(".into(), ")".into()),
+                // file, glob
+                Syntax::Symbol("**".into()),
+                Syntax::Symbol("*".into()),
+                Syntax::Symbol("?".into()),
+                Syntax::Pair("[".into(), "]".into()),
+                Syntax::Pair("?(".into(), ")".into()),
+                Syntax::Pair("*(".into(), ")".into()),
+                Syntax::Pair("+(".into(), ")".into()),
+                Syntax::Pair("@(".into(), ")".into()),
+                Syntax::Pair("!(".into(), ")".into()),
+            ],
             on_quote: Arc::new(quote),
             on_quote_expansion: Arc::new(quote_expansion),
         }
@@ -151,7 +166,7 @@ impl<'a> Quoter<'a> {
 
     /// Return true if the provided string requires expansion.
     pub fn requires_expansion(&self) -> bool {
-        if quotable_contains(&self.data, &self.options.quoted_syntax) {
+        if quotable_contains_syntax(&self.data, &self.options.quoted_syntax) {
             return true;
         }
 
@@ -163,6 +178,58 @@ impl<'a> Quoter<'a> {
 
     /// Return true if the provided string must be unquoted.
     pub fn requires_unquoted(&self) -> bool {
-        quotable_contains(&self.data, &self.options.unquoted_syntax)
+        quotable_contains_syntax(&self.data, &self.options.unquoted_syntax)
     }
+}
+
+fn quotable_contains_syntax(data: &Quotable<'_>, syntaxes: &[Syntax]) -> bool {
+    for syntax in syntaxes {
+        match data {
+            Quotable::Bytes(bytes) => {
+                match syntax {
+                    Syntax::Symbol(symbol) => {
+                        let sbytes = symbol.as_bytes();
+
+                        if bytes.windows(sbytes.len()).any(|chunk| chunk == sbytes) {
+                            return true;
+                        }
+                    }
+                    Syntax::Pair(open, close) => {
+                        let obytes = open.as_bytes();
+                        let cbytes = close.as_bytes();
+
+                        if let Some(o) = bytes
+                            .windows(obytes.len())
+                            .position(|chunk| chunk == obytes)
+                        {
+                            if bytes[o..]
+                                .windows(cbytes.len())
+                                .any(|chunk| chunk == cbytes)
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                };
+            }
+            Quotable::Text(text) => {
+                match syntax {
+                    Syntax::Symbol(symbol) => {
+                        if text.contains(symbol) {
+                            return true;
+                        }
+                    }
+                    Syntax::Pair(open, close) => {
+                        if let Some(o) = text.find(open) {
+                            if text[o..].contains(close) {
+                                return true;
+                            }
+                        }
+                    }
+                };
+            }
+        };
+    }
+
+    false
 }

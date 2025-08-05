@@ -38,7 +38,7 @@ where
 }
 
 #[derive(PartialEq)]
-pub enum ArgSyntax {
+enum ArgSyntax {
     Option,
     Operator,
     Pipe,
@@ -61,7 +61,7 @@ impl ArgSyntax {
         if quotable_equals(
             value,
             [
-                ">", "^>", "&>", "&>>", ">&", "<&", ">>", "<", "<<", "<<<", "2>", "2>>", "2>&1",
+                ">", ">>", "^>", "&>", "&>>", ">&", "<&", "<", "<<", "<<<", "2>", "2>>", "2>&1",
                 "<>",
             ],
         ) {

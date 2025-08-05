@@ -88,7 +88,10 @@ impl Shell for PowerShell {
         Quoter::new(
             data,
             QuoterOptions {
-                quoted_syntax: vec!["$(".into(), "${".into()],
+                quoted_syntax: vec![
+                    Syntax::Pair("$(".into(), ")".into()),
+                    Syntax::Pair("${".into(), "}".into()),
+                ],
                 on_quote: Arc::new(|data| PowerShell::do_quote(quotable_into_string(data))),
                 on_quote_expansion: Arc::new(|data| {
                     PowerShell::do_quote_expansion(quotable_into_string(data))
