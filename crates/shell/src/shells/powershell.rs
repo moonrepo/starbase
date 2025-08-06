@@ -78,7 +78,18 @@ impl PowerShell {
     }
 
     fn do_quote_expansion(value: String) -> String {
-        format!("\"{}\"", value.replace("\"", "\"\""))
+        let mut output = String::with_capacity(value.len() + 2);
+        output.push('"');
+
+        for c in value.chars() {
+            if c == '"' {
+                output.push('"');
+            }
+            output.push(c);
+        }
+
+        output.push('"');
+        output
     }
 }
 

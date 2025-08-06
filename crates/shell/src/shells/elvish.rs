@@ -76,8 +76,18 @@ impl Shell for Elvish {
         Quoter::new(
             data,
             QuoterOptions {
-                unquoted_syntax: vec![Syntax::Symbol("{~}".into())],
+                quoted_syntax: vec![],
+                // https://elv.sh/learn/tour.html#brace-expansion
+                unquoted_syntax: vec![
+                    // brace
+                    Syntax::Pair("{".into(), "}".into()),
+                    // file, glob
+                    Syntax::Symbol("**".into()),
+                    Syntax::Symbol("*".into()),
+                    Syntax::Symbol("?".into()),
+                ],
                 on_quote: Arc::new(|data| Elvish::do_quote(quotable_into_string(data))),
+                on_quote_expansion: Arc::new(|data| Elvish::do_quote(quotable_into_string(data))),
                 ..Default::default()
             },
         )
