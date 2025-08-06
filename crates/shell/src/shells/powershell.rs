@@ -19,6 +19,7 @@ impl PowerShell {
         Self
     }
 
+    // $FOO -> $env:FOO
     fn replace_env(&self, value: impl AsRef<str>) -> String {
         get_env_var_regex()
             .replace_all(value.as_ref(), "$$env:$name")
@@ -175,6 +176,10 @@ impl Shell for PowerShell {
 
     fn get_env_path(&self, home_dir: &Path) -> PathBuf {
         self.get_config_path(home_dir)
+    }
+
+    fn get_env_regex(&self) -> regex::Regex {
+        regex::Regex::new(r"\$(Env|env):(?<name>[A-Za-z0-9_]+)").unwrap()
     }
 
     fn get_exec_command(&self) -> ShellCommand {

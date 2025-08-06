@@ -1,11 +1,8 @@
-#![allow(dead_code)]
-
+use shell_quote::Quotable;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-
-use shell_quote::Quotable;
 
 #[cfg(unix)]
 pub static PATH_DELIMITER: &str = ":";
@@ -39,10 +36,6 @@ pub fn get_var_regex_bytes() -> regex::bytes::Regex {
 
 pub fn get_env_var_regex() -> regex::Regex {
     regex::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap()
-}
-
-pub fn get_env_var_regex_bytes() -> regex::bytes::Regex {
-    regex::bytes::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap()
 }
 
 pub fn get_env_key_native(key: &str) -> &str {

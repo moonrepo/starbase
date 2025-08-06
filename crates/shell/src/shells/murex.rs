@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{PATH_DELIMITER, normalize_newlines, quotable_into_string};
+use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines, quotable_into_string};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -46,6 +46,13 @@ impl Murex {
         // Default case for complex values
         value.to_string()
     }
+
+    // $FOO -> $ENV.FOO
+    fn replace_env(&self, value: impl AsRef<str>) -> String {
+        get_env_var_regex()
+            .replace_all(value.as_ref(), "$$ENV.$name")
+            .to_string()
+    }
 }
 
 impl Shell for Murex {
@@ -67,7 +74,7 @@ impl Shell for Murex {
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let value = paths.join(PATH_DELIMITER);
+                let value = self.replace_env(paths.join(PATH_DELIMITER));
 
                 match orig_key {
                     Some(orig_key) => {
@@ -77,7 +84,11 @@ impl Shell for Murex {
                 }
             }
             Statement::SetEnv { key, value } => {
-                format!("$ENV.{}={}", self.quote(key), self.quote(value))
+                format!(
+                    "$ENV.{}={}",
+                    self.quote(key),
+                    self.quote(self.replace_env(value).as_str())
+                )
             }
             Statement::UnsetEnv { key } => {
                 format!("unset {};", self.quote(key))
@@ -114,6 +125,10 @@ event onPrompt {function}_hook=before {{
         home_dir.join(".murex_preload")
     }
 
+    fn get_env_regex(&self) -> regex::Regex {
+        regex::Regex::new(r"\$ENV.(?<name>[A-Za-z0-9_]+)").unwrap()
+    }
+
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
         vec![
             home_dir.join(".murex_profile"),
@@ -137,7 +152,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Murex.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"$ENV.PROTO_HOME="$HOME/.proto""#
+            r#"$ENV.PROTO_HOME="$ENV.HOME/.proto""#
         );
     }
 
@@ -146,7 +161,7 @@ mod tests {
     fn formats_path_prepend() {
         assert_eq!(
             Murex.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"$ENV.PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$ENV.PATH""#
+            r#"$ENV.PATH="$ENV.PROTO_HOME/shims:$ENV.PROTO_HOME/bin:$ENV.PATH""#
         );
     }
 
@@ -155,7 +170,7 @@ mod tests {
     fn formats_path_set() {
         assert_eq!(
             Murex.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"$ENV.PATH="$PROTO_HOME/shims:$PROTO_HOME/bin""#
+            r#"$ENV.PATH="$ENV.PROTO_HOME/shims:$ENV.PROTO_HOME/bin""#
         );
     }
 
@@ -164,7 +179,7 @@ mod tests {
     fn formats_path_prepend() {
         assert_eq!(
             Murex.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"$ENV.PATH="$PROTO_HOME/shims;$PROTO_HOME/bin;$ENV.PATH""#
+            r#"$ENV.PATH="$ENV.PROTO_HOME/shims;$ENV.PROTO_HOME/bin;$ENV.PATH""#
         );
     }
 
@@ -173,7 +188,7 @@ mod tests {
     fn formats_path_set() {
         assert_eq!(
             Murex.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"$ENV.PATH="$PROTO_HOME/shims;$PROTO_HOME/bin""#
+            r#"$ENV.PATH="$ENV.PROTO_HOME/shims;$ENV.PROTO_HOME/bin""#
         );
     }
 

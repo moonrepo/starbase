@@ -92,6 +92,10 @@ if ($currentAction) {{
         self.get_config_path(home_dir)
     }
 
+    fn get_env_regex(&self) -> regex::Regex {
+        self.inner.get_env_regex()
+    }
+
     fn get_exec_command(&self) -> ShellCommand {
         self.inner.get_exec_command()
     }

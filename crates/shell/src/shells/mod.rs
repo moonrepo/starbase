@@ -24,6 +24,7 @@ pub use sh::*;
 pub use xonsh::*;
 pub use zsh::*;
 
+use crate::helpers::get_env_var_regex;
 use crate::hooks::*;
 use crate::quoter::*;
 use crate::shell_error::ShellError;
@@ -105,6 +106,11 @@ pub trait Shell: Debug + Display + Send + Sync {
 
     /// Return the path in which environment settings will be defined.
     fn get_env_path(&self, home_dir: &Path) -> PathBuf;
+
+    /// Return a regex pattern for matching against environment variables.
+    fn get_env_regex(&self) -> regex::Regex {
+        get_env_var_regex()
+    }
 
     /// Return parameters for executing a one-off command and then exiting.
     fn get_exec_command(&self) -> ShellCommand {

@@ -62,12 +62,13 @@ impl Elvish {
             format!("'{}'", value.replace('\'', "''").replace('\0', "\x00"))
         }
     }
-}
 
-fn format(value: impl AsRef<str>) -> String {
-    get_env_var_regex()
-        .replace_all(value.as_ref(), "$$E:$name")
-        .replace("$E:HOME", "{~}")
+    // $FOO -> ${env::FOO}
+    fn replace_env(&self, value: impl AsRef<str>) -> String {
+        get_env_var_regex()
+            .replace_all(value.as_ref(), "$$E:$name")
+            .replace("$E:HOME", "{~}")
+    }
 }
 
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
@@ -101,7 +102,7 @@ impl Shell for Elvish {
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let value = format(
+                let value = self.replace_env(
                     paths
                         .iter()
                         .map(|p| self.quote(p))
@@ -127,7 +128,7 @@ impl Shell for Elvish {
                 format!(
                     "set-env {} {};",
                     self.quote(key),
-                    self.quote(&format(value)).as_str()
+                    self.quote(self.replace_env(value).as_str())
                 )
             }
             Statement::UnsetEnv { key } => {
@@ -162,6 +163,10 @@ set @edit:before-readline = $@edit:before-readline {{
 
     fn get_env_path(&self, home_dir: &Path) -> PathBuf {
         self.get_config_path(home_dir)
+    }
+
+    fn get_env_regex(&self) -> regex::Regex {
+        regex::Regex::new(r"\$E:(?<name>[A-Za-z0-9_]+)").unwrap()
     }
 
     // https://elv.sh/ref/command.html#rc-file

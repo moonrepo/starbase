@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, quotable_into_string};
+use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, quotable_into_string};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -35,6 +35,13 @@ impl Ion {
             format!("\"{}\"", value.replace('"', "\\\""))
         }
     }
+
+    // $FOO -> ${env::FOO}
+    fn replace_env(&self, value: impl AsRef<str>) -> String {
+        get_env_var_regex()
+            .replace_all(value.as_ref(), "$${env::$name}")
+            .to_string()
+    }
 }
 
 impl Shell for Ion {
@@ -66,7 +73,7 @@ impl Shell for Ion {
                 orig_key,
             } => {
                 let key = key.unwrap_or("PATH");
-                let value = paths.join(":");
+                let value = self.replace_env(paths.join(":"));
 
                 match orig_key {
                     Some(orig_key) => format!(r#"export {key} = "{value}:${{env::{orig_key}}}""#,),
@@ -74,7 +81,11 @@ impl Shell for Ion {
                 }
             }
             Statement::SetEnv { key, value } => {
-                format!("export {}={}", self.quote(key), self.quote(value))
+                format!(
+                    "export {}={}",
+                    self.quote(key),
+                    self.quote(self.replace_env(value).as_str())
+                )
             }
             Statement::UnsetEnv { key } => {
                 format!("drop {}", self.quote(key))
@@ -88,6 +99,10 @@ impl Shell for Ion {
 
     fn get_env_path(&self, home_dir: &Path) -> PathBuf {
         self.get_config_path(home_dir)
+    }
+
+    fn get_env_regex(&self) -> regex::Regex {
+        regex::Regex::new(r"\$\{env::(?<name>[A-Za-z0-9_]+)\}").unwrap()
     }
 
     // https://doc.redox-os.org/ion-manual/general.html#xdg-app-dirs-support
@@ -113,7 +128,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Ion.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"export PROTO_HOME="$HOME/.proto""#
+            r#"export PROTO_HOME="${env::HOME}/.proto""#
         );
     }
 
@@ -121,7 +136,7 @@ mod tests {
     fn formats_path_prepend() {
         assert_eq!(
             Ion.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:${env::PATH}""#
+            r#"export PATH = "${env::PROTO_HOME}/shims:${env::PROTO_HOME}/bin:${env::PATH}""#
         );
     }
 
@@ -129,7 +144,7 @@ mod tests {
     fn formats_path_set() {
         assert_eq!(
             Ion.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin""#
+            r#"export PATH = "${env::PROTO_HOME}/shims:${env::PROTO_HOME}/bin""#
         );
     }
 

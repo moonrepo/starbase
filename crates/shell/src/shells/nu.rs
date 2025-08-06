@@ -91,6 +91,7 @@ impl Shell for Nu {
                 key,
                 orig_key,
             } => {
+                // $FOO -> $env.FOO
                 let env_regex = get_env_var_regex();
                 let key = key.unwrap_or("PATH");
 
@@ -203,6 +204,10 @@ export-env {{
 
     fn get_env_path(&self, home_dir: &Path) -> PathBuf {
         get_config_dir(home_dir).join("nushell").join("env.nu")
+    }
+
+    fn get_env_regex(&self) -> regex::Regex {
+        regex::Regex::new(r"\$env.(?<name>[A-Za-z0-9_]+)").unwrap()
     }
 
     // https://www.nushell.sh/book/configuration.html
