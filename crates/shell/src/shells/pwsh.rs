@@ -2,6 +2,8 @@ use super::powershell::PowerShell;
 use super::{Shell, ShellCommand};
 use crate::helpers::{ProfileSet, normalize_newlines};
 use crate::hooks::*;
+use crate::quoter::*;
+use shell_quote::Quotable;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -22,6 +24,10 @@ impl Pwsh {
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-7.4
 impl Shell for Pwsh {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        self.inner.create_quoter(data)
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         self.inner.format(statement)
     }
@@ -86,6 +92,10 @@ if ($currentAction) {{
         self.get_config_path(home_dir)
     }
 
+    fn get_env_regex(&self) -> regex::Regex {
+        self.inner.get_env_regex()
+    }
+
     fn get_exec_command(&self) -> ShellCommand {
         self.inner.get_exec_command()
     }
@@ -146,17 +156,6 @@ if ($currentAction) {{
         }
 
         profiles.into_list()
-    }
-
-    /// Quotes a string according to PowerShell shell quoting rules.
-    /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
-    fn quote(&self, value: &str) -> String {
-        self.inner.quote(value)
-    }
-
-    // https://learn.microsoft.com/en-us/powershell/scripting/learn/deep-dives/everything-about-string-substitutions?view=powershell-7.5
-    fn requires_expansion(&self, value: &str) -> bool {
-        self.inner.requires_expansion(value)
     }
 }
 

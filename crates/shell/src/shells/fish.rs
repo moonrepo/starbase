@@ -1,9 +1,11 @@
 use super::Shell;
 use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines};
 use crate::hooks::*;
-use shell_quote::{Fish as FishQuote, QuoteRefExt};
+use crate::quoter::*;
+use shell_quote::{Fish as FishQuote, Quotable, QuoteRefExt};
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Fish;
@@ -17,6 +19,16 @@ impl Fish {
 
 // https://fishshell.com/docs/current/language.html#configuration
 impl Shell for Fish {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        Quoter::new(
+            data,
+            QuoterOptions {
+                on_quote: Arc::new(|data| data.quoted(FishQuote)),
+                ..Default::default()
+            },
+        )
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
             Statement::ModifyPath {
@@ -74,16 +86,6 @@ end;
             .insert(get_config_dir(home_dir).join("fish").join("config.fish"), 1)
             .insert(home_dir.join(".config").join("fish").join("config.fish"), 2)
             .into_list()
-    }
-
-    /// Quotes a string according to Fish shell quoting rules.
-    /// @see <https://fishshell.com/docs/current/language.html#quotes>
-    fn quote(&self, value: &str) -> String {
-        if self.requires_expansion(value) {
-            format!("\"{}\"", value.replace("\"", "\\\""))
-        } else {
-            value.quoted(FishQuote)
-        }
     }
 }
 

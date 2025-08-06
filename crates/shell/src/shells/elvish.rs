@@ -1,10 +1,14 @@
 use super::Shell;
 use crate::helpers::{
     PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines,
+    quotable_into_string,
 };
 use crate::hooks::*;
+use crate::quoter::*;
+use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Elvish;
@@ -14,113 +18,11 @@ impl Elvish {
     pub fn new() -> Self {
         Self
     }
-}
-
-fn format(value: impl AsRef<str>) -> String {
-    get_env_var_regex()
-        .replace_all(value.as_ref(), "$$E:$name")
-        .replace("$E:HOME", "{~}")
-}
-
-// https://elv.sh/ref/command.html#using-elvish-interactivelyn
-impl Shell for Elvish {
-    fn format(&self, statement: Statement<'_>) -> String {
-        match statement {
-            Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            } => {
-                let key = key.unwrap_or("PATH");
-                let value = format(
-                    paths
-                        .iter()
-                        .map(|p| self.quote(p))
-                        .collect::<Vec<_>>()
-                        .join(" "),
-                );
-
-                match orig_key {
-                    Some(orig_key) => {
-                        if orig_key == "PATH" {
-                            format!("set paths = [{value} $@paths];")
-                        } else {
-                            format!(
-                                r#"set-env {key} "{}{PATH_DELIMITER}"$E:{orig_key};"#,
-                                paths.join(PATH_DELIMITER)
-                            )
-                        }
-                    }
-                    None => format!("set paths = [{value}];"),
-                }
-            }
-            Statement::SetEnv { key, value } => {
-                format!(
-                    "set-env {} {};",
-                    self.quote(key),
-                    self.quote(&format(value)).as_str()
-                )
-            }
-            Statement::UnsetEnv { key } => {
-                format!("unset-env {};", self.quote(key))
-            }
-        }
-    }
-
-    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
-                format!(
-                    r#"
-set-env __ORIG_PATH $E:PATH
-
-fn {function} {{
-  eval ({command});
-}}
-
-set @edit:before-readline = $@edit:before-readline {{
-  {function}
-}}
-"#
-                )
-            }
-        }))
-    }
-
-    fn get_config_path(&self, home_dir: &Path) -> PathBuf {
-        get_config_dir(home_dir).join("elvish").join("rc.elv")
-    }
-
-    fn get_env_path(&self, home_dir: &Path) -> PathBuf {
-        self.get_config_path(home_dir)
-    }
-
-    // https://elv.sh/ref/command.html#rc-file
-    fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        let mut profiles = ProfileSet::default()
-            .insert(get_config_dir(home_dir).join("elvish").join("rc.elv"), 1)
-            .insert(home_dir.join(".config").join("elvish").join("rc.elv"), 2);
-
-        #[cfg(windows)]
-        {
-            profiles = profiles.insert(
-                home_dir
-                    .join("AppData")
-                    .join("Roaming")
-                    .join("elvish")
-                    .join("rc.elv"),
-                3,
-            );
-        }
-
-        profiles = profiles.insert(home_dir.join(".elvish").join("rc.elv"), 4); // Legacy
-        profiles.into_list()
-    }
 
     /// Quotes a string according to Elvish shell quoting rules.
     /// @see <https://elv.sh/ref/language.html#single-quoted-string>
     #[allow(clippy::no_effect_replace)]
-    fn quote(&self, value: &str) -> String {
+    fn do_quote(value: String) -> String {
         // Check if the value is a bareword (only specific characters allowed)
         let is_bareword = value
             .chars()
@@ -159,6 +61,134 @@ set @edit:before-readline = $@edit:before-readline {{
             // Single-quoted strings for non-barewords containing special characters
             format!("'{}'", value.replace('\'', "''").replace('\0', "\x00"))
         }
+    }
+
+    // $FOO -> ${env::FOO}
+    fn replace_env(&self, value: impl AsRef<str>) -> String {
+        get_env_var_regex()
+            .replace_all(value.as_ref(), "$$E:$name")
+            .replace("$E:HOME", "{~}")
+    }
+}
+
+// https://elv.sh/ref/command.html#using-elvish-interactivelyn
+impl Shell for Elvish {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        Quoter::new(
+            data,
+            QuoterOptions {
+                quoted_syntax: vec![],
+                // https://elv.sh/learn/tour.html#brace-expansion
+                unquoted_syntax: vec![
+                    // brace
+                    Syntax::Pair("{".into(), "}".into()),
+                    // file, glob
+                    Syntax::Symbol("**".into()),
+                    Syntax::Symbol("*".into()),
+                    Syntax::Symbol("?".into()),
+                ],
+                on_quote: Arc::new(|data| Elvish::do_quote(quotable_into_string(data))),
+                on_quote_expansion: Arc::new(|data| Elvish::do_quote(quotable_into_string(data))),
+                ..Default::default()
+            },
+        )
+    }
+
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::ModifyPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let value = self.replace_env(
+                    paths
+                        .iter()
+                        .map(|p| self.quote(p))
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                );
+
+                match orig_key {
+                    Some(orig_key) => {
+                        if orig_key == "PATH" {
+                            format!("set paths = [{value} $@paths];")
+                        } else {
+                            format!(
+                                r#"set-env {key} "{}{PATH_DELIMITER}"$E:{orig_key};"#,
+                                paths.join(PATH_DELIMITER)
+                            )
+                        }
+                    }
+                    None => format!("set paths = [{value}];"),
+                }
+            }
+            Statement::SetEnv { key, value } => {
+                format!(
+                    "set-env {} {};",
+                    self.quote(key),
+                    self.quote(self.replace_env(value).as_str())
+                )
+            }
+            Statement::UnsetEnv { key } => {
+                format!("unset-env {};", self.quote(key))
+            }
+        }
+    }
+
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir { command, function } => {
+                format!(
+                    r#"
+set-env __ORIG_PATH $E:PATH
+
+fn {function} {{
+  eval ({command});
+}}
+
+set @edit:before-readline = $@edit:before-readline {{
+  {function}
+}}
+"#
+                )
+            }
+        }))
+    }
+
+    fn get_config_path(&self, home_dir: &Path) -> PathBuf {
+        get_config_dir(home_dir).join("elvish").join("rc.elv")
+    }
+
+    fn get_env_path(&self, home_dir: &Path) -> PathBuf {
+        self.get_config_path(home_dir)
+    }
+
+    fn get_env_regex(&self) -> regex::Regex {
+        regex::Regex::new(r"\$E:(?<name>[A-Za-z0-9_]+)").unwrap()
+    }
+
+    // https://elv.sh/ref/command.html#rc-file
+    fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
+        let mut profiles = ProfileSet::default()
+            .insert(get_config_dir(home_dir).join("elvish").join("rc.elv"), 1)
+            .insert(home_dir.join(".config").join("elvish").join("rc.elv"), 2);
+
+        #[cfg(windows)]
+        {
+            profiles = profiles.insert(
+                home_dir
+                    .join("AppData")
+                    .join("Roaming")
+                    .join("elvish")
+                    .join("rc.elv"),
+                3,
+            );
+        }
+
+        profiles = profiles.insert(home_dir.join(".elvish").join("rc.elv"), 4); // Legacy
+        profiles.into_list()
     }
 }
 

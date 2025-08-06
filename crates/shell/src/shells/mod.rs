@@ -24,9 +24,11 @@ pub use sh::*;
 pub use xonsh::*;
 pub use zsh::*;
 
-use crate::helpers::get_var_regex;
+use crate::helpers::get_env_var_regex;
 use crate::hooks::*;
+use crate::quoter::*;
 use crate::shell_error::ShellError;
+use shell_quote::Quotable;
 use std::ffi::OsString;
 use std::fmt::{Debug, Display};
 use std::path::{Path, PathBuf};
@@ -49,6 +51,9 @@ impl Default for ShellCommand {
 }
 
 pub trait Shell: Debug + Display + Send + Sync {
+    /// Create a quoter for the provided string.
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a>;
+
     /// Format the provided statement.
     fn format(&self, statement: Statement<'_>) -> String;
 
@@ -102,6 +107,11 @@ pub trait Shell: Debug + Display + Send + Sync {
     /// Return the path in which environment settings will be defined.
     fn get_env_path(&self, home_dir: &Path) -> PathBuf;
 
+    /// Return a regex pattern for matching against environment variables.
+    fn get_env_regex(&self) -> regex::Regex {
+        get_env_var_regex()
+    }
+
     /// Return parameters for executing a one-off command and then exiting.
     fn get_exec_command(&self) -> ShellCommand {
         ShellCommand::default()
@@ -111,26 +121,9 @@ pub trait Shell: Debug + Display + Send + Sync {
     /// Ordered from most to least common/applicable.
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf>;
 
-    /// Quote method for shell-specific quoting
-    fn quote(&self, value: &str) -> String;
-
-    /// Return true if the provided string requires expansion.
-    fn requires_expansion(&self, value: &str) -> bool {
-        // https://www.gnu.org/software/bash/manual/bash.html#Shell-Expansions
-        for ch in [
-            "{", "}", // brace
-            "~+", "~-", // tilde
-            "${", // param
-            "$(", // command
-            "<(", ">(", // process
-            "**", "*", "?", "?(", "*(", "+(", "@(", "!(", // file
-        ] {
-            if value.contains(ch) {
-                return true;
-            }
-        }
-
-        get_var_regex().is_match(value)
+    /// Quote the provided string.
+    fn quote(&self, value: &str) -> String {
+        self.create_quoter(Quotable::from(value)).maybe_quote()
     }
 }
 

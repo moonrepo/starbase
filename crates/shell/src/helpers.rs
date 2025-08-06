@@ -1,3 +1,4 @@
+use shell_quote::Quotable;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
@@ -27,6 +28,10 @@ pub fn get_config_dir(home_dir: &Path) -> PathBuf {
 
 pub fn get_var_regex() -> regex::Regex {
     regex::Regex::new(r"\$(?<name>[A-Za-z0-9_]+)").unwrap()
+}
+
+pub fn get_var_regex_bytes() -> regex::bytes::Regex {
+    regex::bytes::Regex::new(r"\$(?<name>[A-Za-z0-9_]+)").unwrap()
 }
 
 pub fn get_env_var_regex() -> regex::Regex {
@@ -76,4 +81,63 @@ impl ProfileSet {
         items.sort_by(|a, d| a.1.cmp(&d.1));
         items.into_iter().map(|item| item.0).collect()
     }
+}
+
+pub fn quotable_into_string(data: Quotable<'_>) -> String {
+    match data {
+        Quotable::Bytes(bytes) => String::from_utf8_lossy(bytes).into(),
+        Quotable::Text(text) => text.to_owned(),
+    }
+}
+
+pub fn quotable_contains<I, V>(data: &Quotable<'_>, chars: I) -> bool
+where
+    I: IntoIterator<Item = V>,
+    V: AsRef<str>,
+{
+    for ch in chars {
+        let ch = ch.as_ref();
+
+        match data {
+            Quotable::Bytes(bytes) => {
+                let chb = ch.as_bytes();
+
+                if bytes.windows(chb.len()).any(|chunk| chunk == chb) {
+                    return true;
+                }
+            }
+            Quotable::Text(text) => {
+                if text.contains(ch) {
+                    return true;
+                }
+            }
+        };
+    }
+
+    false
+}
+
+pub fn quotable_equals<I, V>(data: &Quotable<'_>, chars: I) -> bool
+where
+    I: IntoIterator<Item = V>,
+    V: AsRef<str>,
+{
+    for ch in chars {
+        let ch = ch.as_ref();
+
+        match data {
+            Quotable::Bytes(bytes) => {
+                if *bytes == ch.as_bytes() {
+                    return true;
+                }
+            }
+            Quotable::Text(text) => {
+                if *text == ch {
+                    return true;
+                }
+            }
+        };
+    }
+
+    false
 }

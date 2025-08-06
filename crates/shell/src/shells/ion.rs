@@ -1,9 +1,11 @@
 use super::Shell;
-use crate::helpers::ProfileSet;
-use crate::helpers::get_config_dir;
+use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, quotable_into_string};
 use crate::hooks::*;
+use crate::quoter::*;
+use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Ion;
@@ -13,53 +15,10 @@ impl Ion {
     pub fn new() -> Self {
         Self
     }
-}
-
-impl Shell for Ion {
-    // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
-    fn format(&self, statement: Statement<'_>) -> String {
-        match statement {
-            Statement::ModifyPath {
-                paths,
-                key,
-                orig_key,
-            } => {
-                let key = key.unwrap_or("PATH");
-                let value = paths.join(":");
-
-                match orig_key {
-                    Some(orig_key) => format!(r#"export {key} = "{value}:${{env::{orig_key}}}""#,),
-                    None => format!(r#"export {key} = "{value}""#,),
-                }
-            }
-            Statement::SetEnv { key, value } => {
-                format!("export {}={}", self.quote(key), self.quote(value))
-            }
-            Statement::UnsetEnv { key } => {
-                format!("drop {}", self.quote(key))
-            }
-        }
-    }
-
-    fn get_config_path(&self, home_dir: &Path) -> PathBuf {
-        get_config_dir(home_dir).join("ion").join("initrc")
-    }
-
-    fn get_env_path(&self, home_dir: &Path) -> PathBuf {
-        self.get_config_path(home_dir)
-    }
-
-    // https://doc.redox-os.org/ion-manual/general.html#xdg-app-dirs-support
-    fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
-        ProfileSet::default()
-            .insert(get_config_dir(home_dir).join("ion").join("initrc"), 1)
-            .insert(home_dir.join(".config").join("ion").join("initrc"), 2)
-            .into_list()
-    }
 
     /// Quotes a string according to Ion shell quoting rules.
     /// @see <https://doc.redox-os.org/ion-manual/general.html>
-    fn quote(&self, value: &str) -> String {
+    fn do_quote(value: String) -> String {
         if value.starts_with('$') {
             // Variables expanded in double quotes
             format!("\"{value}\"")
@@ -75,6 +34,83 @@ impl Shell for Ion {
             // Double quotes for other cases
             format!("\"{}\"", value.replace('"', "\\\""))
         }
+    }
+
+    // $FOO -> ${env::FOO}
+    fn replace_env(&self, value: impl AsRef<str>) -> String {
+        get_env_var_regex()
+            .replace_all(value.as_ref(), "$${env::$name}")
+            .to_string()
+    }
+}
+
+impl Shell for Ion {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        Quoter::new(
+            data,
+            QuoterOptions {
+                // https://doc.redox-os.org/ion-manual/expansions/00-expansions.html
+                quoted_syntax: vec![
+                    Syntax::Symbol("$".into()),
+                    Syntax::Pair("${".into(), "}".into()),
+                    Syntax::Pair("$(".into(), ")".into()),
+                    Syntax::Symbol("@".into()),
+                    Syntax::Pair("@{".into(), "}".into()),
+                    Syntax::Pair("@(".into(), ")".into()),
+                ],
+                on_quote: Arc::new(|data| Ion::do_quote(quotable_into_string(data))),
+                ..Default::default()
+            },
+        )
+    }
+
+    // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
+    fn format(&self, statement: Statement<'_>) -> String {
+        match statement {
+            Statement::ModifyPath {
+                paths,
+                key,
+                orig_key,
+            } => {
+                let key = key.unwrap_or("PATH");
+                let value = self.replace_env(paths.join(":"));
+
+                match orig_key {
+                    Some(orig_key) => format!(r#"export {key} = "{value}:${{env::{orig_key}}}""#,),
+                    None => format!(r#"export {key} = "{value}""#,),
+                }
+            }
+            Statement::SetEnv { key, value } => {
+                format!(
+                    "export {}={}",
+                    self.quote(key),
+                    self.quote(self.replace_env(value).as_str())
+                )
+            }
+            Statement::UnsetEnv { key } => {
+                format!("drop {}", self.quote(key))
+            }
+        }
+    }
+
+    fn get_config_path(&self, home_dir: &Path) -> PathBuf {
+        get_config_dir(home_dir).join("ion").join("initrc")
+    }
+
+    fn get_env_path(&self, home_dir: &Path) -> PathBuf {
+        self.get_config_path(home_dir)
+    }
+
+    fn get_env_regex(&self) -> regex::Regex {
+        regex::Regex::new(r"\$\{env::(?<name>[A-Za-z0-9_]+)\}").unwrap()
+    }
+
+    // https://doc.redox-os.org/ion-manual/general.html#xdg-app-dirs-support
+    fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
+        ProfileSet::default()
+            .insert(get_config_dir(home_dir).join("ion").join("initrc"), 1)
+            .insert(home_dir.join(".config").join("ion").join("initrc"), 2)
+            .into_list()
     }
 }
 
@@ -92,7 +128,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Ion.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"export PROTO_HOME="$HOME/.proto""#
+            r#"export PROTO_HOME="${env::HOME}/.proto""#
         );
     }
 
@@ -100,7 +136,7 @@ mod tests {
     fn formats_path_prepend() {
         assert_eq!(
             Ion.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin:${env::PATH}""#
+            r#"export PATH = "${env::PROTO_HOME}/shims:${env::PROTO_HOME}/bin:${env::PATH}""#
         );
     }
 
@@ -108,7 +144,7 @@ mod tests {
     fn formats_path_set() {
         assert_eq!(
             Ion.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
-            r#"export PATH = "$PROTO_HOME/shims:$PROTO_HOME/bin""#
+            r#"export PATH = "${env::PROTO_HOME}/shims:${env::PROTO_HOME}/bin""#
         );
     }
 
@@ -132,7 +168,7 @@ mod tests {
             r#""value \"with\" quotes""#
         );
         assert_eq!(Ion.quote("$variable"), "\"$variable\"");
-        assert_eq!(Ion.quote("{brace_expansion}"), "'{brace_expansion}'");
+        assert_eq!(Ion.quote("{brace_expansion}"), "{brace_expansion}");
         assert_eq!(
             Ion.quote("value with 'single quotes'"),
             r#""value with 'single quotes'""#

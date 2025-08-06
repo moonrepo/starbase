@@ -1,8 +1,11 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir};
+use crate::helpers::{ProfileSet, get_config_dir, quotable_into_string};
 use crate::hooks::*;
+use crate::quoter::*;
+use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Xonsh;
@@ -12,11 +15,37 @@ impl Xonsh {
     pub fn new() -> Self {
         Self
     }
+
+    /// Quotes a string according to Xonsh shell quoting rules.
+    /// @see <https://xon.sh/tutorial_subproc_strings.html>
+    fn do_quote(value: String) -> String {
+        let mut quoted = String::new();
+
+        for c in value.chars() {
+            match c {
+                '"' => quoted.push_str("\\\""),
+                '\\' => quoted.push_str("\\\\"),
+                _ => quoted.push(c),
+            }
+        }
+
+        format!("\"{quoted}\"")
+    }
 }
 
 // https://xon.sh/bash_to_xsh.html
 // https://xon.sh/xonshrc.html
 impl Shell for Xonsh {
+    fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
+        Quoter::new(
+            data,
+            QuoterOptions {
+                on_quote: Arc::new(|data| Xonsh::do_quote(quotable_into_string(data))),
+                ..Default::default()
+            },
+        )
+    }
+
     fn format(&self, statement: Statement<'_>) -> String {
         match statement {
             Statement::ModifyPath {
@@ -55,25 +84,6 @@ impl Shell for Xonsh {
             .insert(home_dir.join(".config").join("xonsh").join("rc.xsh"), 2)
             .insert(home_dir.join(".xonshrc"), 3)
             .into_list()
-    }
-
-    /// Quotes a string according to Xonsh shell quoting rules.
-    /// @see <https://xon.sh/tutorial_subproc_strings.html>
-    fn quote(&self, value: &str) -> String {
-        if value.is_empty() {
-            return "''".to_string();
-        }
-
-        let mut quoted = String::new();
-        for c in value.chars() {
-            match c {
-                '"' => quoted.push_str("\\\""),
-                '\\' => quoted.push_str("\\\\"),
-                _ => quoted.push(c),
-            }
-        }
-
-        format!("\"{quoted}\"")
     }
 }
 
