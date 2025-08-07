@@ -8,6 +8,11 @@ mod join_args {
     use super::*;
 
     #[test]
+    fn empty_args() {
+        assert_eq!(join_args(&create_bash(), Vec::<&str>::new()), "");
+    }
+
+    #[test]
     fn normal_args() {
         assert_eq!(
             join_args(

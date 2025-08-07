@@ -11,6 +11,11 @@ where
 {
     let mut out = String::new();
     let args = args.into_iter().collect::<Vec<_>>();
+
+    if args.is_empty() {
+        return out;
+    }
+
     let last_index = args.len() - 1;
 
     for (index, arg) in args.into_iter().enumerate() {
