@@ -394,16 +394,14 @@ pub fn is_stale<T: AsRef<Path> + Debug>(
     if let Ok(meta) = metadata(path) {
         let mut time = meta.modified().or_else(|_| meta.created());
 
-        if accessed {
-            if let Ok(accessed_time) = meta.accessed() {
-                time = Ok(accessed_time);
-            }
+        if accessed && let Ok(accessed_time) = meta.accessed() {
+            time = Ok(accessed_time);
         }
 
-        if let Ok(check_time) = time {
-            if check_time < (current_time - duration) {
-                return Ok(Some((meta.len(), check_time)));
-            }
+        if let Ok(check_time) = time
+            && check_time < (current_time - duration)
+        {
+            return Ok(Some((meta.len(), check_time)));
         }
     }
 
@@ -553,15 +551,15 @@ pub fn remove_link<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     // no longer exists, but the symlink does exist (broken link). To actually
     // remove the symlink when in a broken state, we need to read the metadata
     // and infer the state ourself.
-    if let Ok(metadata) = path.symlink_metadata() {
-        if metadata.is_symlink() {
-            trace!(file = ?path, "Removing symlink");
+    if let Ok(metadata) = path.symlink_metadata()
+        && metadata.is_symlink()
+    {
+        trace!(file = ?path, "Removing symlink");
 
-            fs::remove_file(path).map_err(|error| FsError::Remove {
-                path: path.to_path_buf(),
-                error: Box::new(error),
-            })?;
-        }
+        fs::remove_file(path).map_err(|error| FsError::Remove {
+            path: path.to_path_buf(),
+            error: Box::new(error),
+        })?;
     }
 
     Ok(())
@@ -596,17 +594,17 @@ pub fn remove_file_if_stale<T: AsRef<Path> + Debug>(
 ) -> Result<u64, FsError> {
     let path = path.as_ref();
 
-    if path.exists() {
-        if let Some((size, _)) = is_stale(path, true, duration, current_time)? {
-            trace!(file = ?path, "Removing stale file");
+    if path.exists()
+        && let Some((size, _)) = is_stale(path, true, duration, current_time)?
+    {
+        trace!(file = ?path, "Removing stale file");
 
-            fs::remove_file(path).map_err(|error| FsError::Remove {
-                path: path.to_path_buf(),
-                error: Box::new(error),
-            })?;
+        fs::remove_file(path).map_err(|error| FsError::Remove {
+            path: path.to_path_buf(),
+            error: Box::new(error),
+        })?;
 
-            return Ok(size);
-        }
+        return Ok(size);
     }
 
     Ok(0)
@@ -700,13 +698,12 @@ pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
     );
 
     for entry in read_dir_all(dir)? {
-        if entry.file_type().is_ok_and(|file_type| file_type.is_file()) {
-            if let Ok(bytes) = remove_file_if_stale(entry.path(), duration, now) {
-                if bytes > 0 {
-                    files_deleted += 1;
-                    bytes_saved += bytes;
-                }
-            }
+        if entry.file_type().is_ok_and(|file_type| file_type.is_file())
+            && let Ok(bytes) = remove_file_if_stale(entry.path(), duration, now)
+            && bytes > 0
+        {
+            files_deleted += 1;
+            bytes_saved += bytes;
         }
     }
 

@@ -220,10 +220,10 @@ impl ArchiveUnpacker for ZipUnpacker {
             };
 
             // Remove the prefix
-            if !prefix.is_empty() {
-                if let Ok(suffix) = path.strip_prefix(prefix) {
-                    path = suffix.to_owned();
-                }
+            if !prefix.is_empty()
+                && let Ok(suffix) = path.strip_prefix(prefix)
+            {
+                path = suffix.to_owned();
             }
 
             let output_path = self.output_dir.join(&path);
