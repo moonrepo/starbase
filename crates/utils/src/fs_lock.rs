@@ -1,7 +1,6 @@
 #![allow(unstable_name_collisions)]
 
 use crate::fs::{self, FsError};
-use fs4::fs_std::FileExt;
 use std::fmt::Debug;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -71,7 +70,7 @@ impl FileLock {
         );
 
         // This blocks if another process has access!
-        file.lock_exclusive().map_err(|error| FsError::Lock {
+        file.lock().map_err(|error| FsError::Lock {
             path: path.clone(),
             error: Box::new(error),
         })?;
@@ -159,7 +158,7 @@ pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
         return false;
     };
 
-    match file.try_lock_exclusive() {
+    match file.try_lock() {
         Ok(_) => {
             file.unlock().unwrap();
             false
@@ -236,7 +235,7 @@ where
 
     trace!(file = ?path, "Locking file exclusively");
 
-    file.lock_exclusive().map_err(|error| FsError::Lock {
+    file.lock().map_err(|error| FsError::Lock {
         path: path.to_path_buf(),
         error: Box::new(error),
     })?;

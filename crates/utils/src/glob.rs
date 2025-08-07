@@ -218,10 +218,10 @@ pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
             continue;
         }
 
-        if let Some(index) = value.find(single) {
-            if !is_escaped(index) {
-                return true;
-            }
+        if let Some(index) = value.find(single)
+            && !is_escaped(index)
+        {
+            return true;
         }
     }
 
@@ -230,10 +230,10 @@ pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
             continue;
         }
 
-        if let Some(index) = value.find(open) {
-            if !is_escaped(index) {
-                return true;
-            }
+        if let Some(index) = value.find(open)
+            && !is_escaped(index)
+        {
+            return true;
         }
     }
 
@@ -485,10 +485,10 @@ fn internal_walk(
             return;
         }
 
-        if let Ok(suffix) = path.strip_prefix(base_dir) {
-            if globset.matches(suffix) {
-                paths.push(path);
-            }
+        if let Ok(suffix) = path.strip_prefix(base_dir)
+            && globset.matches(suffix)
+        {
+            paths.push(path);
         }
     };
 

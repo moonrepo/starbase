@@ -214,10 +214,10 @@ impl ArchiveUnpacker for TarUnpacker {
             let mut path: PathBuf = entry.path().unwrap().into_owned();
 
             // Remove the prefix
-            if !prefix.is_empty() {
-                if let Ok(suffix) = path.strip_prefix(prefix) {
-                    path = suffix.to_owned();
-                }
+            if !prefix.is_empty()
+                && let Ok(suffix) = path.strip_prefix(prefix)
+            {
+                path = suffix.to_owned();
             }
 
             // Unpack the file if different than destination

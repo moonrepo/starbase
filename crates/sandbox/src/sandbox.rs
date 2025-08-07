@@ -108,7 +108,7 @@ impl Sandbox {
     }
 
     /// Run a binary with the provided name in the sandbox.
-    pub fn run_bin_with_name<N, C>(&self, name: N, handler: C) -> SandboxAssert
+    pub fn run_bin_with_name<N, C>(&self, name: N, handler: C) -> SandboxAssert<'_>
     where
         N: AsRef<str>,
         C: FnOnce(&mut Command),
@@ -125,7 +125,7 @@ impl Sandbox {
 
     /// Run a binary in the sandbox. Will default to the `BIN_NAME` setting,
     /// or the `CARGO_BIN_NAME` environment variable.
-    pub fn run_bin<C>(&self, handler: C) -> SandboxAssert
+    pub fn run_bin<C>(&self, handler: C) -> SandboxAssert<'_>
     where
         C: FnOnce(&mut Command),
     {
