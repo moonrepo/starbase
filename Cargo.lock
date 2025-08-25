@@ -2346,7 +2346,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "assert_cmd",
  "assert_fs",
