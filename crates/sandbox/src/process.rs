@@ -76,22 +76,22 @@ impl SandboxAssert<'_> {
         self.inner.success()
     }
 
+    /// Return stderr as a string.
+    pub fn stderr(&self) -> String {
+        get_assert_stderr_output(&self.inner)
+    }
+
+    /// Return stdout as a string.
+    pub fn stdout(&self) -> String {
+        get_assert_stdout_output(&self.inner)
+    }
+
     /// Return a combined output of stdout and stderr.
     /// Will replace the sandbox root and home directories.
     pub fn output(&self) -> String {
         let mut output = String::new();
-        output.push_str(
-            &self
-                .sandbox
-                .settings
-                .apply_log_filters(get_assert_stderr_output(&self.inner)),
-        );
-        output.push_str(
-            &self
-                .sandbox
-                .settings
-                .apply_log_filters(get_assert_stdout_output(&self.inner)),
-        );
+        output.push_str(&self.sandbox.settings.apply_log_filters(self.stderr()));
+        output.push_str(&self.sandbox.settings.apply_log_filters(self.stdout()));
 
         // Replace fixture path
         let root = self.sandbox.path().to_str().unwrap();
