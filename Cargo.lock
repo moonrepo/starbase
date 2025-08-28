@@ -2288,7 +2288,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.11.5"
+version = "0.11.6"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -2344,7 +2344,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.9.6"
+version = "0.9.7"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -2357,7 +2357,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.10.1"
+version = "0.10.2"
 dependencies = [
  "miette",
  "regex",
@@ -2382,7 +2382,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.11.15"
+version = "0.11.16"
 dependencies = [
  "async-trait",
  "criterion2",
