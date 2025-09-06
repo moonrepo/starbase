@@ -2357,7 +2357,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "starbase"
-version = "0.10.5"
+version = "0.10.6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2372,7 +2372,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.11.6"
+version = "0.11.7"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -2428,7 +2428,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.9.7"
+version = "0.9.8"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -2466,7 +2466,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.11.16"
+version = "0.11.17"
 dependencies = [
  "async-trait",
  "criterion2",
