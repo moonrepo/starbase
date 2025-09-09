@@ -310,12 +310,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clean-path"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaa6b4b263a5d737e9bf6b7c09b72c41a5480aec4d7219af827f6564e950b6a5"
-
-[[package]]
 name = "compact_str"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2464,7 +2458,6 @@ version = "0.9.8"
 dependencies = [
  "assert_cmd",
  "assert_fs",
- "clean-path",
  "insta",
  "predicates",
  "pretty_assertions",

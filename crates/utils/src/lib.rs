@@ -42,6 +42,9 @@ mod yaml_error;
 /// Utilities for accessing common OS directories.
 pub use dirs;
 
+/// Utilities for handling OS paths.
+pub mod path;
+
 #[macro_export]
 macro_rules! string_vec {
     () => {{
