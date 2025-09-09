@@ -1,5 +1,4 @@
-use clean_path::Clean;
-use starbase_utils::env;
+use starbase_utils::{env, path};
 use std::path::{Path, PathBuf};
 
 /// Locate a fixture on the file system by searching up the directory tree
@@ -14,7 +13,7 @@ pub fn locate_fixture<T: AsRef<str>>(fixture: T) -> PathBuf {
         let fixture_path = dir.join("tests").join("__fixtures__").join(fixture);
 
         if fixture_path.exists() {
-            return fixture_path.clean();
+            return path::clean(fixture_path);
         }
 
         // Don't traverse past the root!
