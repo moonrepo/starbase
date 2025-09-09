@@ -1,0 +1,12 @@
+[package]
+name = "starbase_id"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+description = "A generic identifier."
+repository = "https://github.com/moonrepo/starbase"
+rust-version = "1.85.0"
+
+[dependencies]
+compact_str = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
