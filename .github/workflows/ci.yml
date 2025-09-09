@@ -75,4 +75,5 @@ jobs:
       - name: Build WASI
         run:
           cargo +nightly-2025-08-07 build --target wasm32-wasip1 -p starbase_archive -p
-          starbase_events -p starbase -p starbase_macros -p starbase_styles -p starbase_utils
+          starbase_events -p starbase -p starbase_macros -p starbase_styles -p starbase_utils -p
+          starbase_id

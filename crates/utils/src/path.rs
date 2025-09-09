@@ -4,10 +4,11 @@ use std::hash::{DefaultHasher, Hasher};
 use std::path::{Component, Path, PathBuf};
 
 /// Normalize separators in a path string to their OS specific separators.
-/// On Unix this will be `/`, and on Windows `\`.
+/// On Unix and WASM this will be `/`, and on Windows `\`.
 #[inline]
 pub fn normalize_separators<T: AsRef<str>>(path: T) -> String {
-    #[cfg(unix)]
+    // Handle WASM and Unix
+    #[cfg(not(windows))]
     {
         path.as_ref().replace('\\', "/")
     }
@@ -30,7 +31,8 @@ pub fn standardize_separators<T: AsRef<str>>(path: T) -> String {
 pub fn exe_name<T: AsRef<str>>(name: T) -> String {
     let name = name.as_ref();
 
-    #[cfg(unix)]
+    // Handle WASM and Unix
+    #[cfg(not(windows))]
     {
         name.into()
     }
