@@ -9,4 +9,12 @@ rust-version = "1.85.0"
 
 [dependencies]
 compact_str = { workspace = true, features = ["serde"] }
+schematic = { workspace = true, optional = true }
 serde = { workspace = true }
+
+[dev-dependencies]
+starbase_id = { path = ".", features = ["schematic"] }
+
+[features]
+default = []
+schematic = ["dep:schematic"]

@@ -96,3 +96,14 @@ gen_from!(Cow<'_, str>);
 gen_from!(&Cow<'_, str>);
 gen_from!(Box<str>);
 gen_from!(&Box<str>);
+
+#[cfg(feature = "schematic")]
+impl schematic::Schematic for Id {
+    fn schema_name() -> Option<String> {
+        Some("Id".into())
+    }
+
+    fn build_schema(mut schema: schematic::SchemaBuilder) -> schematic::Schema {
+        schema.string_default()
+    }
+}
