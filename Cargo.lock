@@ -2481,7 +2481,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_id"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "compact_str",
  "schematic",
