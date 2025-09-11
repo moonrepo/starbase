@@ -6,23 +6,25 @@ use std::path::{Component, Path, PathBuf};
 /// Normalize separators in a path string to their OS specific separators.
 /// On Unix and WASM this will be `/`, and on Windows `\`.
 #[inline]
-pub fn normalize_separators<T: AsRef<str>>(path: T) -> String {
+pub fn normalize_separators<T: AsRef<OsStr>>(path: T) -> String {
+    let path = path.as_ref().to_string_lossy();
+
     // Handle WASM and Unix
     #[cfg(not(windows))]
     {
-        path.as_ref().replace('\\', "/")
+        path.replace('\\', "/")
     }
 
     #[cfg(windows)]
     {
-        path.as_ref().replace('/', "\\")
+        path.replace('/', "\\")
     }
 }
 
 /// Standardize separators in a path string to `/` for portability,
 #[inline]
-pub fn standardize_separators<T: AsRef<str>>(path: T) -> String {
-    path.as_ref().replace('\\', "/")
+pub fn standardize_separators<T: AsRef<OsStr>>(path: T) -> String {
+    path.as_ref().to_string_lossy().replace('\\', "/")
 }
 
 /// Format the provided name for use as an executable file.
