@@ -3,7 +3,7 @@ name = "starbase_id"
 version = "0.1.2"
 edition = "2024"
 license = "MIT"
-description = "A generic identifier."
+description = "A compact string identifier."
 repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.85.0"
 

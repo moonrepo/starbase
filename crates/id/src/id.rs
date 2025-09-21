@@ -7,7 +7,9 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::ops::Deref;
 
-/// A generic identifier.
+/// A compact string identifier for use within records, key lookups, and more.
+/// Supports unicode alphanumeric characters, forward slash `/`, period `.`,
+/// underscore `_`, and dash `-`. A leading `@` is supported to support npm package names.
 #[derive(Clone, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(into = "String", try_from = "String")]
 pub struct Id(CompactString);
@@ -91,7 +93,7 @@ impl Id {
 
     /// Return the identifier as a [`str`] reference.
     pub fn as_str(&self) -> &str {
-        &self.0
+        self.0.as_str()
     }
 }
 
