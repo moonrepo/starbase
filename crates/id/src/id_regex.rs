@@ -6,8 +6,11 @@ use std::sync::LazyLock;
 // with our Unicode character classes.
 // https://docs.rs/regex/latest/regex/#perl-character-classes-unicode-friendly
 
-static ALNUM: &str = r"\p{Alphabetic}\p{M}\p{Join_Control}\d";
-static SYMBOLS: &str = r"/\._-";
+#[doc(hidden)]
+pub static ALNUM: &str = r"\p{Alphabetic}\p{M}\p{Join_Control}\d";
+
+#[doc(hidden)]
+pub static SYMBOLS: &str = r"/\._-";
 
 /// Pattern that all identifiers are matched against. Supports unicode alphanumeric
 /// characters, forward slash `/`, period `.`, underscore `_`, and dash `-`.
