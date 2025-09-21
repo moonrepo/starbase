@@ -6,6 +6,7 @@ use std::borrow::{Borrow, Cow};
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::ops::Deref;
+use std::str::FromStr;
 
 /// A compact string identifier for use within records, key lookups, and more.
 /// Supports unicode alphanumeric characters, forward slash `/`, period `.`,
@@ -216,6 +217,14 @@ gen_try_from!(os, &OsString);
 impl From<Id> for String {
     fn from(value: Id) -> Self {
         value.to_string()
+    }
+}
+
+impl FromStr for Id {
+    type Err = IdError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
     }
 }
 
