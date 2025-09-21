@@ -2484,9 +2484,12 @@ name = "starbase_id"
 version = "0.1.2"
 dependencies = [
  "compact_str",
+ "miette",
+ "regex",
  "schematic",
  "serde",
  "starbase_id",
+ "thiserror 2.0.16",
 ]
 
 [[package]]

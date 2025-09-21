@@ -9,12 +9,16 @@ rust-version = "1.85.0"
 
 [dependencies]
 compact_str = { workspace = true, features = ["serde"] }
+miette = { workspace = true, optional = true }
+regex = { workspace = true, features = ["unicode"] }
 schematic = { workspace = true, optional = true }
 serde = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 starbase_id = { path = ".", features = ["schematic"] }
 
 [features]
 default = []
+miette = ["dep:miette"]
 schematic = ["dep:schematic"]
