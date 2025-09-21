@@ -10,7 +10,7 @@ static ALNUM: &str = r"\p{Alphabetic}\p{M}\p{Join_Control}\d";
 static SYMBOLS: &str = r"/\._-";
 
 /// Pattern that all identifiers are matched against. Supports unicode alphanumeric
-/// characters, forward `/` and backward `\` slash, period `.`, underscore `_`, and dash `-`.
+/// characters, forward slash `/`, period `.`, underscore `_`, and dash `-`.
 /// A leading `@` is supported to support npm package names.
 pub static ID_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(format!("^(@?[{ALNUM}][{ALNUM}{SYMBOLS}]*)$").as_str()).unwrap());

@@ -4,7 +4,7 @@ mod id {
     use super::*;
 
     fn symbols() -> Vec<&'static str> {
-        vec![".", "-", "_", "/", "@"]
+        vec![".", "-", "_", "/"]
     }
 
     #[test]
@@ -32,5 +32,34 @@ mod id {
         for p in ["'", "\"", "?", "?", "[", "}", "~", "`", "!", "@", "$"] {
             assert!(Id::new(format!("sbc{p}123")).is_err());
         }
+    }
+
+    #[test]
+    fn doesnt_error_if_starts_with_a() {
+        assert!(Id::new("@abc").is_ok());
+    }
+
+    #[test]
+    fn errors_if_starts_with_symbol() {
+        for s in symbols() {
+            assert!(Id::new(format!("{s}abc")).is_err());
+        }
+    }
+
+    #[test]
+    fn can_end_with_symbol() {
+        for s in symbols() {
+            assert!(Id::new(format!("abc{s}")).is_ok());
+        }
+    }
+
+    #[test]
+    fn supports_file_paths() {
+        assert!(Id::new("packages/core/cli").is_ok());
+    }
+
+    #[test]
+    fn supports_npm_package() {
+        assert!(Id::new("@moonrepo/cli").is_ok());
     }
 }

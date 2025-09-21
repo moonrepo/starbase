@@ -32,7 +32,7 @@ impl Id {
             ID_CLEAN_PATTERN
                 .replace_all(id.as_ref(), "-")
                 // Remove leading/trailing symbols
-                .trim_matches(['@', '-', '_', '/', '\\', '.']),
+                .trim_matches(['@', '-', '_', '/', '.']),
         )
     }
 
