@@ -40,6 +40,16 @@ mod id {
     }
 
     #[test]
+    fn errors_if_empty() {
+        assert!(Id::new("").is_err());
+    }
+
+    #[test]
+    fn can_be_1_char() {
+        assert!(Id::new("a").is_ok());
+    }
+
+    #[test]
     fn can_end_with_symbol() {
         for s in symbols() {
             assert!(Id::new(format!("abc{s}")).is_ok());
