@@ -16,7 +16,7 @@ pub static SYMBOLS: &str = r"/\._-";
 /// characters, forward slash `/`, period `.`, underscore `_`, and dash `-`.
 /// A leading `@` is supported to support npm package names.
 pub static ID_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(format!("^(@?[{ALNUM}][{ALNUM}{SYMBOLS}]*)$").as_str()).unwrap());
+    LazyLock::new(|| Regex::new(format!("^(@?[{ALNUM}{SYMBOLS}]*)$").as_str()).unwrap());
 
 /// Pattern that removes unsupported characters from an identifier.
 pub static ID_CLEAN_PATTERN: LazyLock<Regex> =

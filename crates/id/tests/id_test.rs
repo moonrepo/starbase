@@ -40,13 +40,6 @@ mod id {
     }
 
     #[test]
-    fn errors_if_starts_with_symbol() {
-        for s in symbols() {
-            assert!(Id::new(format!("{s}abc")).is_err());
-        }
-    }
-
-    #[test]
     fn can_end_with_symbol() {
         for s in symbols() {
             assert!(Id::new(format!("abc{s}")).is_ok());
