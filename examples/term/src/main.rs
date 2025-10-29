@@ -373,6 +373,26 @@ async fn render(session: TestSession, ui: String) {
             .await
             .unwrap();
         }
+        "select-tall" => {
+            let mut index = 0usize;
+            let mut options = vec![];
+
+            for i in 1..=100 {
+                options.push(SelectOption::new(i.to_string()));
+            }
+
+            con.render_interactive(element! {
+                Select(
+                    default_index: 2,
+                    label: "What is your favorite number?",
+                    description: "This is a very tall list...".to_owned(),
+                    on_index: &mut index,
+                    options,
+                )
+            })
+            .await
+            .unwrap();
+        }
         "selectmulti" => {
             let mut indexes = vec![];
 

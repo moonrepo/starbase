@@ -57,6 +57,7 @@ pub struct SelectProps<'a> {
     pub options: Vec<SelectOption>,
     pub prefix_symbol: Option<String>,
     pub selected_symbol: Option<String>,
+    pub separator: String,
     pub on_index: Option<&'a mut usize>,
     pub on_indexes: Option<&'a mut Vec<usize>>,
 }
@@ -73,6 +74,7 @@ impl Default for SelectProps<'_> {
             options: vec![],
             prefix_symbol: None,
             selected_symbol: None,
+            separator: "- ".into(),
             on_index: None,
             on_indexes: None,
         }
@@ -84,6 +86,7 @@ pub fn Select<'a>(
     props: &mut SelectProps<'a>,
     mut hooks: Hooks,
 ) -> impl Into<AnyElement<'a>> + use<'a> {
+    let (_, height) = hooks.use_terminal_size();
     let theme = hooks.use_context::<ConsoleTheme>();
     let mut system = hooks.use_context_mut::<SystemContext>();
     let options = hooks.use_state(|| props.options.clone());
@@ -102,14 +105,27 @@ pub fn Select<'a>(
     let mut error = hooks.use_state(|| None);
 
     let multiple = props.multiple;
-    let option_last_index = options.read().len() - 1;
+    let last_index = options.read().len() - 1;
+    let (start_index, end_index) = calculate_indexes(
+        active_index.get(),
+        last_index,
+        ((height / 2).max(17) - 2) as usize,
+    );
+
+    // let (out, _) = hooks.use_output();
+    // out.println(format!(
+    //     "active = {}, max = {}, start = {start_index}, end = {end_index}, limit = {}",
+    //     active_index.get(),
+    //     last_index,
+    //     ((height / 2).max(17) - 2)
+    // ));
 
     let get_next_index = move |current: usize, step: isize| -> usize {
         let next = current as isize - step;
 
         if next < 0 {
-            option_last_index
-        } else if next > option_last_index as isize {
+            last_index
+        } else if next > last_index as isize {
             0
         } else {
             next as usize
@@ -160,7 +176,7 @@ pub fn Select<'a>(
                     }
                     KeyCode::Right | KeyCode::Down => {
                         let mut next_index = match code {
-                            KeyCode::Right => option_last_index,
+                            KeyCode::Right => last_index,
                             KeyCode::Down => get_next_index(active_index.get(), -1),
                             _ => unimplemented!(),
                         };
@@ -228,7 +244,19 @@ pub fn Select<'a>(
             })
         ) {
             View(flex_direction: FlexDirection::Column, margin_top: 1, margin_bottom: 1) {
-                #(options.read().iter().enumerate().map(|(index, opt)| {
+                #((start_index > 0).then(|| {
+                    element! {
+                        View(padding_left: 2) {
+                            Text(
+                                content: format!("...{start_index} more"),
+                                color: theme.style_muted_light_color
+                            )
+                        }
+                    }
+                }))
+
+                #(options.read()[start_index..=end_index].iter().enumerate().map(|(iter_index, opt)| {
+                    let index = start_index + iter_index;
                     let active = active_index.get() == index;
                     let selected = selected_index.read().contains(&index);
 
@@ -274,7 +302,7 @@ pub fn Select<'a>(
                             #(opt.description.as_ref().map(|desc| {
                                 element! {
                                     Text(
-                                        content: desc,
+                                        content: format!("{}{desc}", props.separator),
                                         color: theme.style_muted_light_color
                                     )
                                 }
@@ -282,8 +310,43 @@ pub fn Select<'a>(
                         }
                     }
                 }))
+
+                #((end_index < last_index).then(|| {
+                    element! {
+                        View(padding_left: 2) {
+                            Text(
+                                content: format!("...{} more", last_index - end_index),
+                                color: theme.style_muted_light_color
+                            )
+                        }
+                    }
+                }))
             }
         }
     }
     .into_any()
+}
+
+fn calculate_indexes(active_index: usize, max_index: usize, limit: usize) -> (usize, usize) {
+    if max_index <= limit {
+        return (0, max_index);
+    }
+
+    let before_limit = limit / 2;
+    let after_limit = limit / 2 - (if limit % 2 == 0 { 1 } else { 0 });
+    let start_index;
+    let end_index;
+
+    if active_index <= before_limit {
+        start_index = 0;
+        end_index = limit - 1;
+    } else if active_index > max_index - after_limit {
+        start_index = max_index - limit + 1;
+        end_index = max_index;
+    } else {
+        start_index = active_index - before_limit;
+        end_index = active_index + after_limit;
+    }
+
+    (start_index, end_index)
 }
