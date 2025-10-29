@@ -8,7 +8,7 @@ use std::collections::HashSet;
 pub struct SelectOption {
     pub description: Option<String>,
     pub disabled: bool,
-    pub label: String,
+    pub label: Option<String>,
     pub value: String,
 }
 
@@ -19,7 +19,7 @@ impl SelectOption {
         Self {
             description: None,
             disabled: false,
-            label: value.to_owned(),
+            label: None,
             value: value.to_owned(),
         }
     }
@@ -27,6 +27,13 @@ impl SelectOption {
     pub fn description(self, description: impl AsRef<str>) -> Self {
         Self {
             description: Some(description.as_ref().to_owned()),
+            ..self
+        }
+    }
+
+    pub fn description_opt(self, description: Option<String>) -> Self {
+        Self {
+            description,
             ..self
         }
     }
@@ -40,9 +47,13 @@ impl SelectOption {
 
     pub fn label(self, label: impl AsRef<str>) -> Self {
         Self {
-            label: label.as_ref().to_owned(),
+            label: Some(label.as_ref().to_owned()),
             ..self
         }
+    }
+
+    pub fn label_opt(self, label: Option<String>) -> Self {
+        Self { label, ..self }
     }
 }
 
@@ -285,7 +296,7 @@ pub fn Select<'a>(
                             })
 
                             Text(
-                                content: &opt.label,
+                                content: opt.label.as_ref().unwrap_or(&opt.value),
                                 color: if !theme.supports_color {
                                     None
                                 } else if opt.disabled {
