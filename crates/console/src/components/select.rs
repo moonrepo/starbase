@@ -6,6 +6,7 @@ use std::collections::HashSet;
 
 #[derive(Clone, Default)]
 pub struct SelectOption {
+    pub description: Option<String>,
     pub disabled: bool,
     pub label: String,
     pub value: String,
@@ -16,9 +17,17 @@ impl SelectOption {
         let value = value.as_ref();
 
         Self {
+            description: None,
             disabled: false,
             label: value.to_owned(),
             value: value.to_owned(),
+        }
+    }
+
+    pub fn description(self, description: impl AsRef<str>) -> Self {
+        Self {
+            description: Some(description.as_ref().to_owned()),
+            ..self
         }
     }
 
@@ -252,7 +261,7 @@ pub fn Select<'a>(
                                 color: if !theme.supports_color {
                                     None
                                 } else if opt.disabled {
-                                    Some(theme.style_muted_light_color)
+                                    Some(theme.style_muted_color)
                                 } else if selected {
                                     Some(theme.input_selected_color)
                                 } else if active {
@@ -261,6 +270,15 @@ pub fn Select<'a>(
                                     None
                                 }
                             )
+
+                            #(opt.description.as_ref().map(|desc| {
+                                element! {
+                                    Text(
+                                        content: desc,
+                                        color: theme.style_muted_light_color
+                                    )
+                                }
+                            }))
                         }
                     }
                 }))

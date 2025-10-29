@@ -362,10 +362,10 @@ async fn render(session: TestSession, ui: String) {
                     description: "Only choose 1 value.".to_owned(),
                     on_index: &mut index,
                     options: vec![
-                        SelectOption::new("red"),
+                        SelectOption::new("red").description("Red color"),
                         SelectOption::new("blue").label("Blue").disabled(),
                         SelectOption::new("green"),
-                        SelectOption::new("yellow").disabled(),
+                        SelectOption::new("yellow").disabled().description("Yellow color"),
                         SelectOption::new("pink").label("Pink"),
                     ]
                 )

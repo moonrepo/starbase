@@ -1246,9 +1246,9 @@ dependencies = [
 
 [[package]]
 name = "iocraft"
-version = "0.7.11"
+version = "0.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d2276ed525f48c3ebc83563eec6bdf726aa26d6a5f8ede6089e823f5649e6a7"
+checksum = "174f7cba88e28ab99df9878b28bf3ac8b471c2edf6a830f02208737ac8af6701"
 dependencies = [
  "any_key",
  "bitflags",
