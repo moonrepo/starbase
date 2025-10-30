@@ -10,6 +10,7 @@ pub fn create_command_with_name<P: AsRef<Path>, N: AsRef<str>>(
     name: N,
     settings: &SandboxSettings,
 ) -> assert_cmd::Command {
+    #[allow(deprecated)]
     let mut cmd = assert_cmd::Command::cargo_bin(name.as_ref()).unwrap();
     cmd.current_dir(path);
     cmd.timeout(std::time::Duration::from_secs(settings.timeout));
