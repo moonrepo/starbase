@@ -36,9 +36,7 @@ impl GlobCache {
         let key = self.create_key(dir, globs);
 
         // If the cache already exists, allow for parallel reads
-        if self.cache.contains(&key) {
-            let value = self.cache.read(&key, |_, list| list.to_vec()).unwrap();
-
+        if let Some(value) = self.cache.read_sync(&key, |_, list| list.to_vec()) {
             trace!(
                 dir = ?dir,
                 globs = ?globs,
@@ -51,7 +49,7 @@ impl GlobCache {
         }
 
         // Otherwise use an entry so that it creates a lock that avoids parallel writes
-        match self.cache.entry(key) {
+        match self.cache.entry_sync(key) {
             Entry::Occupied(entry) => {
                 let value = entry.get().to_vec();
 
@@ -82,6 +80,6 @@ impl GlobCache {
     }
 
     pub fn reset(&self) {
-        self.cache.clear();
+        self.cache.clear_sync();
     }
 }
