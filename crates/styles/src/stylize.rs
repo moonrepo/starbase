@@ -18,6 +18,12 @@ impl Stylize for String {
     }
 }
 
+impl Stylize for &String {
+    fn style(&self, style: Style) -> String {
+        paint_style(style, self)
+    }
+}
+
 impl Stylize for PathBuf {
     fn style(&self, style: Style) -> String {
         paint_style(style, self.to_str().unwrap_or("<unknown>"))

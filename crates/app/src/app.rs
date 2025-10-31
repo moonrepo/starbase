@@ -6,8 +6,10 @@ use tokio::spawn;
 use tokio::task::JoinHandle;
 use tracing::{instrument, trace};
 
+/// A result for `main` that handles errors and exit codes.
 pub type MainResult = miette::Result<ExitCode>;
 
+/// Phases of an application's lifecycle.
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum AppPhase {
     #[default]
@@ -17,6 +19,7 @@ pub enum AppPhase {
     Shutdown,
 }
 
+/// An application that runs through lifecycles using a session instance.
 #[derive(Debug, Default)]
 pub struct App {
     pub phase: AppPhase,

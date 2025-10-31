@@ -47,6 +47,7 @@ pub fn get_assert_stderr_output(assert: &Assert) -> String {
     output_to_string(&assert.get_output().stderr)
 }
 
+/// Standardized assertion for sandbox processes.
 pub struct SandboxAssert<'s> {
     pub inner: Assert,
     pub sandbox: &'s Sandbox,

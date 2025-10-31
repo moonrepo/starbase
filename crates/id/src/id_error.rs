@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+/// ID errors.
 #[derive(Error, Debug)]
 #[error(
     "Invalid identifier format for `{0}`. May only contain alpha-numeric characters, dashes (-), slashes (/), underscores (_), and periods (.)."
