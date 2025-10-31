@@ -14,10 +14,7 @@ pub use crate::fs_lock::*;
 /// or the file to append does not exist, they will be created.
 #[inline]
 #[instrument(skip(data))]
-pub fn append_file<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(
-    path: T,
-    data: D,
-) -> Result<(), FsError> {
+pub fn append_file<D: AsRef<[u8]>>(path: impl AsRef<Path> + Debug, data: D) -> Result<(), FsError> {
     use std::io::Write;
 
     let path = path.as_ref();
@@ -76,36 +73,35 @@ pub fn copy_file<S: AsRef<Path> + Debug, D: AsRef<Path> + Debug>(
 /// directory does not exist, it will be created.
 #[inline]
 #[instrument]
-pub fn copy_dir_all<R: AsRef<Path> + Debug, F: AsRef<Path> + Debug, T: AsRef<Path> + Debug>(
-    from_root: R,
-    from: F,
+pub fn copy_dir_all<F: AsRef<Path> + Debug, T: AsRef<Path> + Debug>(
+    from_root: F,
     to_root: T,
 ) -> Result<(), FsError> {
     let from_root = from_root.as_ref();
-    let from = from.as_ref();
     let to_root = to_root.as_ref();
     let mut dirs = vec![];
 
     trace!(
-        from = ?from,
+        from = ?from_root,
         to = ?to_root,
         "Copying directory"
     );
 
-    for entry in read_dir(from)? {
+    for entry in read_dir(from_root)? {
         if let Ok(file_type) = entry.file_type() {
-            if file_type.is_file() {
-                let path = entry.path();
+            let path = entry.path();
+            let rel_path = path.strip_prefix(from_root).unwrap();
 
-                copy_file(&path, to_root.join(path.strip_prefix(from_root).unwrap()))?;
+            if file_type.is_file() {
+                copy_file(&path, to_root.join(rel_path))?;
             } else if file_type.is_dir() {
-                dirs.push(entry.path());
+                dirs.push(rel_path.to_path_buf());
             }
         }
     }
 
     for dir in dirs {
-        copy_dir_all(from_root, &dir, to_root)?;
+        copy_dir_all(from_root.join(&dir), to_root.join(dir))?;
     }
 
     Ok(())
@@ -237,10 +233,9 @@ pub fn detect_indentation<T: AsRef<str>>(content: T) -> String {
 pub fn file_name<T: AsRef<Path>>(path: T) -> String {
     path.as_ref()
         .file_name()
-        .unwrap_or_default()
-        .to_str()
+        .and_then(|name| name.to_str())
         .unwrap_or("<unknown>")
-        .to_string()
+        .to_owned()
 }
 
 /// Find a file with the provided name in the starting directory,
@@ -316,6 +311,7 @@ where
     find_upwards_until(name, start_dir, end_dir).map(|p| p.parent().unwrap().to_path_buf())
 }
 
+/// Options for `.editorconfig` integration.
 #[cfg(feature = "editor-config")]
 pub struct EditorConfigProps {
     pub eof: String,
@@ -382,7 +378,7 @@ pub fn get_editor_config_props<T: AsRef<Path> + Debug>(
 /// and timestamp, otherwise return `None`.
 #[inline]
 #[instrument]
-pub fn is_stale<T: AsRef<Path> + Debug>(
+pub fn stale<T: AsRef<Path> + Debug>(
     path: T,
     accessed: bool,
     duration: Duration,
@@ -406,6 +402,18 @@ pub fn is_stale<T: AsRef<Path> + Debug>(
     }
 
     Ok(None)
+}
+
+/// Check if the provided path is a stale file, by comparing modified, created, or accessed
+/// timestamps against the current timestamp and duration. If stale, returns a boolean.
+#[inline]
+#[instrument]
+pub fn is_stale<T: AsRef<Path> + Debug>(
+    path: T,
+    accessed: bool,
+    duration: Duration,
+) -> Result<bool, FsError> {
+    stale(path, accessed, duration, SystemTime::now()).map(|res| res.is_some())
 }
 
 /// Return metadata for the provided path. The path must already exist.
@@ -590,14 +598,13 @@ pub fn remove_file<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
 pub fn remove_file_if_stale<T: AsRef<Path> + Debug>(
     path: T,
     duration: Duration,
-    current_time: SystemTime,
 ) -> Result<u64, FsError> {
     let path = path.as_ref();
 
     if path.exists()
-        && let Some((size, _)) = is_stale(path, true, duration, current_time)?
+        && let Some((size, _)) = stale(path, true, duration, SystemTime::now())?
     {
-        trace!(file = ?path, "Removing stale file");
+        trace!(file = ?path, size, "Removing stale file");
 
         fs::remove_file(path).map_err(|error| FsError::Remove {
             path: path.to_path_buf(),
@@ -690,7 +697,6 @@ pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
     let mut files_deleted: usize = 0;
     let mut bytes_saved: u64 = 0;
     let dir = dir.as_ref();
-    let now = SystemTime::now();
 
     trace!(
         dir = ?dir,
@@ -699,7 +705,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
 
     for entry in read_dir_all(dir)? {
         if entry.file_type().is_ok_and(|file_type| file_type.is_file())
-            && let Ok(bytes) = remove_file_if_stale(entry.path(), duration, now)
+            && let Ok(bytes) = remove_file_if_stale(entry.path(), duration)
             && bytes > 0
         {
             files_deleted += 1;
@@ -771,7 +777,7 @@ pub fn update_perms<T: AsRef<Path>>(_path: T, _mode: Option<u32>) -> Result<(), 
 /// does not exist, it will be created.
 #[inline]
 #[instrument(skip(data))]
-pub fn write_file<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(path: T, data: D) -> Result<(), FsError> {
+pub fn write_file<D: AsRef<[u8]>>(path: impl AsRef<Path> + Debug, data: D) -> Result<(), FsError> {
     let path = path.as_ref();
 
     if let Some(parent) = path.parent() {
@@ -791,8 +797,8 @@ pub fn write_file<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(path: T, data: D) -> R
 #[cfg(feature = "editor-config")]
 #[inline]
 #[instrument(skip(data))]
-pub fn write_file_with_config<T: AsRef<Path> + Debug, D: AsRef<[u8]>>(
-    path: T,
+pub fn write_file_with_config<D: AsRef<[u8]>>(
+    path: impl AsRef<Path> + Debug,
     data: D,
 ) -> Result<(), FsError> {
     let path = path.as_ref();

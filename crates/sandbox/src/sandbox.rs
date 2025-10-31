@@ -14,6 +14,7 @@ use std::process::{Command as StdCommand, Output};
 pub struct Sandbox {
     /// The fixture instance.
     pub fixture: TempDir,
+
     /// Settings to customize commands and assertions.
     pub settings: SandboxSettings,
 }

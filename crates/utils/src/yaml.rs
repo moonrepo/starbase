@@ -8,8 +8,8 @@ use std::sync::LazyLock;
 use tracing::{instrument, trace};
 
 pub use crate::yaml_error::YamlError;
-pub use serde_yml;
-pub use serde_yml::{
+pub use serde_norway as serde_yaml;
+pub use serde_norway::{
     Mapping as YamlMapping, Number as YamlNumber, Sequence as YamlSequence, Value as YamlValue,
 };
 
@@ -40,14 +40,13 @@ pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
 /// Parse a string and deserialize into the required type.
 #[inline]
 #[instrument(name = "parse_yaml", skip(data))]
-pub fn parse<T, D>(data: T) -> Result<D, YamlError>
+pub fn parse<D>(data: impl AsRef<str>) -> Result<D, YamlError>
 where
-    T: AsRef<str>,
     D: DeserializeOwned,
 {
     trace!("Parsing YAML");
 
-    serde_yml::from_str(data.as_ref()).map_err(|error| YamlError::Parse {
+    serde_norway::from_str(data.as_ref()).map_err(|error| YamlError::Parse {
         error: Box::new(error),
     })
 }
@@ -61,7 +60,7 @@ where
 {
     trace!("Formatting YAML");
 
-    serde_yml::to_string(&data).map_err(|error| YamlError::Format {
+    serde_norway::to_string(&data).map_err(|error| YamlError::Format {
         error: Box::new(error),
     })
 }
@@ -76,14 +75,14 @@ where
 {
     trace!("Formatting YAML with preserved indentation");
 
-    let mut data = serde_yml::to_string(data)
+    let mut data = serde_norway::to_string(data)
         .map_err(|error| YamlError::Format {
             error: Box::new(error),
         })?
         .trim()
         .to_string();
 
-    // serde_yml does not support customizing the indentation character. So to work around
+    // serde does not support customizing the indentation character. So to work around
     // this, we do it manually on the YAML string, but only if the indent is different than
     // a double space (the default), which can be customized with `.editorconfig`.
     if indent != "  " {
@@ -111,9 +110,8 @@ where
 /// The path must already exist.
 #[inline]
 #[instrument(name = "read_yaml")]
-pub fn read_file<P, D>(path: P) -> Result<D, YamlError>
+pub fn read_file<D>(path: impl AsRef<Path> + Debug) -> Result<D, YamlError>
 where
-    P: AsRef<Path> + Debug,
     D: DeserializeOwned,
 {
     let path = path.as_ref();
@@ -121,7 +119,7 @@ where
 
     trace!(file = ?path, "Reading YAML file");
 
-    serde_yml::from_str(&contents).map_err(|error| YamlError::ReadFile {
+    serde_norway::from_str(&contents).map_err(|error| YamlError::ReadFile {
         path: path.to_path_buf(),
         error: Box::new(error),
     })
@@ -132,17 +130,16 @@ where
 ///
 /// This function is primarily used internally for non-consumer facing files.
 #[inline]
-#[instrument(name = "write_yaml", skip(yaml))]
-pub fn write_file<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
+#[instrument(name = "write_yaml", skip(data))]
+pub fn write_file<D>(path: impl AsRef<Path> + Debug, data: &D) -> Result<(), YamlError>
 where
-    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();
 
     trace!(file = ?path, "Writing YAML file");
 
-    let data = serde_yml::to_string(&yaml).map_err(|error| YamlError::WriteFile {
+    let data = serde_norway::to_string(&data).map_err(|error| YamlError::WriteFile {
         path: path.to_path_buf(),
         error: Box::new(error),
     })?;
@@ -159,10 +156,9 @@ where
 /// This function is used for consumer facing files, like configs.
 #[cfg(feature = "editor-config")]
 #[inline]
-#[instrument(name = "write_yaml_with_config", skip(yaml))]
-pub fn write_file_with_config<P, D>(path: P, yaml: &D) -> Result<(), YamlError>
+#[instrument(name = "write_yaml_with_config", skip(data))]
+pub fn write_file_with_config<D>(path: impl AsRef<Path> + Debug, data: &D) -> Result<(), YamlError>
 where
-    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     trace!(file = ?path, "Writing YAML file with .editorconfig");
@@ -170,7 +166,7 @@ where
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path)?;
 
-    let mut data = format_with_identation(yaml, &editor_config.indent)?;
+    let mut data = format_with_identation(data, &editor_config.indent)?;
     editor_config.apply_eof(&mut data);
 
     fs::write_file(path, data)?;

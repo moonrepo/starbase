@@ -12,9 +12,8 @@ pub use toml::value::{Datetime as TomlDatetime, Table as TomlTable, Value as Tom
 /// Parse a string and deserialize into the required type.
 #[inline]
 #[instrument(name = "parse_toml", skip(data))]
-pub fn parse<T, D>(data: T) -> Result<D, TomlError>
+pub fn parse<D>(data: impl AsRef<str>) -> Result<D, TomlError>
 where
-    T: AsRef<str>,
     D: DeserializeOwned,
 {
     trace!("Parsing TOML");
@@ -48,9 +47,8 @@ where
 /// The path must already exist.
 #[inline]
 #[instrument(name = "read_toml")]
-pub fn read_file<P, D>(path: P) -> Result<D, TomlError>
+pub fn read_file<D>(path: impl AsRef<Path> + Debug) -> Result<D, TomlError>
 where
-    P: AsRef<Path> + Debug,
     D: DeserializeOwned,
 {
     let path = path.as_ref();
@@ -67,10 +65,13 @@ where
 /// Write a file and serialize the provided data to the provided path. If the parent directory
 /// does not exist, it will be created.
 #[inline]
-#[instrument(name = "write_toml", skip(toml))]
-pub fn write_file<P, D>(path: P, toml: &D, pretty: bool) -> Result<(), TomlError>
+#[instrument(name = "write_toml", skip(data))]
+pub fn write_file<D>(
+    path: impl AsRef<Path> + Debug,
+    data: &D,
+    pretty: bool,
+) -> Result<(), TomlError>
 where
-    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();
@@ -78,12 +79,12 @@ where
     trace!(file = ?path, "Writing TOML file");
 
     let data = if pretty {
-        toml::to_string_pretty(&toml).map_err(|error| TomlError::WriteFile {
+        toml::to_string_pretty(&data).map_err(|error| TomlError::WriteFile {
             path: path.to_path_buf(),
             error: Box::new(error),
         })?
     } else {
-        toml::to_string(&toml).map_err(|error| TomlError::WriteFile {
+        toml::to_string(&data).map_err(|error| TomlError::WriteFile {
             path: path.to_path_buf(),
             error: Box::new(error),
         })?

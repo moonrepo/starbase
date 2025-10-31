@@ -66,6 +66,7 @@ pub fn paths() -> Vec<PathBuf> {
 
 /// Return an environment variable as a boolean value. If the value is a `1`, `true`,
 /// `yes`, `on`, or `enable`, return true, otherwise return false for all other cases.
+#[inline]
 pub fn bool_var(key: &str) -> bool {
     match env::var(key) {
         Ok(value) => {

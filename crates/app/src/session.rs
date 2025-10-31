@@ -1,5 +1,7 @@
+/// Generic result for session operations.
 pub type AppResult = miette::Result<Option<u8>>;
 
+/// A session that is passed to each application run.
 #[async_trait::async_trait]
 pub trait AppSession: Clone + Send + Sync {
     /// Run operations at the start of the application process to setup

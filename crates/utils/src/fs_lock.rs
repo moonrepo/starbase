@@ -8,6 +8,7 @@ use tracing::{instrument, trace};
 
 pub const LOCK_FILE: &str = ".lock";
 
+/// Instance representing a file lock.
 pub struct FileLock {
     lock: PathBuf,
     file: File,
@@ -143,6 +144,7 @@ impl Drop for FileLock {
     }
 }
 
+/// Instance representing a directory lock.
 pub type DirLock = FileLock;
 
 /// Return true if the directory is currently locked (via [`lock_directory`]).

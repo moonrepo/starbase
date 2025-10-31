@@ -2,6 +2,7 @@ use crate::fs::FsError;
 use starbase_styles::{Style, Stylize};
 use thiserror::Error;
 
+/// Network, HTTP, and URL errors.
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
 pub enum NetError {
@@ -35,6 +36,7 @@ pub enum NetError {
     },
 }
 
+/// Network, HTTP, and URL errors.
 #[cfg(feature = "miette")]
 #[derive(Error, Debug, miette::Diagnostic)]
 pub enum NetError {

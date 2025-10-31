@@ -3,6 +3,7 @@ use starbase_styles::{Style, Stylize};
 use std::path::PathBuf;
 use thiserror::Error;
 
+/// JSON errors.
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
 pub enum JsonError {
@@ -49,6 +50,7 @@ pub enum JsonError {
     },
 }
 
+/// JSON errors.
 #[cfg(feature = "miette")]
 #[derive(Error, Debug, miette::Diagnostic)]
 pub enum JsonError {

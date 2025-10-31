@@ -47,9 +47,8 @@ pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
 /// Parse a string and deserialize into the required type.
 #[inline]
 #[instrument(name = "parse_json", skip(data))]
-pub fn parse<T, D>(data: T) -> Result<D, JsonError>
+pub fn parse<D>(data: impl AsRef<str>) -> Result<D, JsonError>
 where
-    T: AsRef<str>,
     D: DeserializeOwned,
 {
     trace!("Parsing JSON");
@@ -113,9 +112,8 @@ where
 /// The path must already exist.
 #[inline]
 #[instrument(name = "read_json")]
-pub fn read_file<P, D>(path: P) -> Result<D, JsonError>
+pub fn read_file<D>(path: impl AsRef<Path> + Debug) -> Result<D, JsonError>
 where
-    P: AsRef<Path> + Debug,
     D: DeserializeOwned,
 {
     let path = path.as_ref();
@@ -137,10 +135,13 @@ where
 ///
 /// This function is primarily used internally for non-consumer facing files.
 #[inline]
-#[instrument(name = "write_json", skip(json))]
-pub fn write_file<P, D>(path: P, json: &D, pretty: bool) -> Result<(), JsonError>
+#[instrument(name = "write_json", skip(data))]
+pub fn write_file<D>(
+    path: impl AsRef<Path> + Debug,
+    data: &D,
+    pretty: bool,
+) -> Result<(), JsonError>
 where
-    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     let path = path.as_ref();
@@ -148,12 +149,12 @@ where
     trace!(file = ?path, "Writing JSON file");
 
     let data = if pretty {
-        serde_json::to_string_pretty(&json).map_err(|error| JsonError::WriteFile {
+        serde_json::to_string_pretty(&data).map_err(|error| JsonError::WriteFile {
             path: path.to_path_buf(),
             error: Box::new(error),
         })?
     } else {
-        serde_json::to_string(&json).map_err(|error| JsonError::WriteFile {
+        serde_json::to_string(&data).map_err(|error| JsonError::WriteFile {
             path: path.to_path_buf(),
             error: Box::new(error),
         })?
@@ -171,14 +172,17 @@ where
 /// This function is used for consumer facing files, like configs.
 #[cfg(feature = "editor-config")]
 #[inline]
-#[instrument(name = "write_json_with_config", skip(json))]
-pub fn write_file_with_config<P, D>(path: P, json: &D, pretty: bool) -> Result<(), JsonError>
+#[instrument(name = "write_json_with_config", skip(data))]
+pub fn write_file_with_config<D>(
+    path: impl AsRef<Path> + Debug,
+    data: &D,
+    pretty: bool,
+) -> Result<(), JsonError>
 where
-    P: AsRef<Path> + Debug,
     D: ?Sized + Serialize,
 {
     if !pretty {
-        return write_file(path, &json, false);
+        return write_file(path, &data, false);
     }
 
     trace!(file = ?path, "Writing JSON file with .editorconfig");
@@ -186,7 +190,7 @@ where
     let path = path.as_ref();
     let editor_config = fs::get_editor_config_props(path)?;
 
-    let mut data = format_with_identation(&json, &editor_config.indent)?;
+    let mut data = format_with_identation(&data, &editor_config.indent)?;
     editor_config.apply_eof(&mut data);
 
     fs::write_file(path, data)?;

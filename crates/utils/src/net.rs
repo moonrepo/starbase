@@ -14,6 +14,7 @@ use url::Url;
 
 pub use crate::net_error::NetError;
 
+/// A contract for downloading files from a URL.
 #[async_trait]
 pub trait Downloader: Send {
     async fn download(&self, url: Url) -> Result<Response, NetError>;
@@ -21,6 +22,7 @@ pub trait Downloader: Send {
 
 pub type BoxedDownloader = Box<dyn Downloader>;
 
+/// A default [`Downloader`] backed by `reqwest`.
 #[derive(Default)]
 pub struct DefaultDownloader {
     client: reqwest::Client,
@@ -40,8 +42,10 @@ impl Downloader for DefaultDownloader {
     }
 }
 
+/// A function that is called for each chunk in a download stream.
 pub type OnChunkFn = Arc<dyn Fn(u64, u64) + Send + Sync>;
 
+/// Options for customizing network downloads.
 #[derive(Default)]
 pub struct DownloadOptions {
     pub downloader: Option<BoxedDownloader>,
@@ -50,7 +54,7 @@ pub struct DownloadOptions {
 
 /// Download a file from the provided source URL, to the destination file path,
 /// using custom options.
-#[instrument(name = "download_from_url", skip(options))]
+#[instrument(skip(options))]
 pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
     source_url: S,
     dest_file: D,
@@ -208,6 +212,7 @@ mod offline {
     }
 }
 
+/// Options for detecting an online/offline connection.
 #[derive(Debug)]
 pub struct OfflineOptions {
     pub check_default_hosts: bool,
@@ -233,12 +238,20 @@ impl Default for OfflineOptions {
     }
 }
 
+/// Detect if there is an internet connection, or the user is offline.
+#[instrument]
+pub fn is_offline(timeout: u64) -> bool {
+    is_offline_with_options(OfflineOptions {
+        timeout,
+        ..Default::default()
+    })
+}
+
 /// Detect if there is an internet connection, or the user is offline,
 /// using a custom list of hosts.
 #[instrument]
-pub fn is_offline(timeout: u64, custom_hosts: Vec<String>) -> bool {
+pub fn is_offline_with_hosts(timeout: u64, custom_hosts: Vec<String>) -> bool {
     is_offline_with_options(OfflineOptions {
-        custom_hosts,
         timeout,
         ..Default::default()
     })

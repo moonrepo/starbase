@@ -3,6 +3,7 @@ use starbase_styles::{Style, Stylize};
 use std::path::PathBuf;
 use thiserror::Error;
 
+/// YAML errors.
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
 pub enum YamlError {
@@ -12,30 +13,31 @@ pub enum YamlError {
     #[error("Failed to format YAML.\n{error}")]
     Format {
         #[source]
-        error: Box<serde_yml::Error>,
+        error: Box<serde_norway::Error>,
     },
 
     #[error("Failed to parse YAML.\n{error}")]
     Parse {
         #[source]
-        error: Box<serde_yml::Error>,
+        error: Box<serde_norway::Error>,
     },
 
     #[error("Failed to parse YAML file {}.\n{error}", .path.style(Style::Path))]
     ReadFile {
         path: PathBuf,
         #[source]
-        error: Box<serde_yml::Error>,
+        error: Box<serde_norway::Error>,
     },
 
     #[error("Failed to format YAML for file {}.\n{error}", .path.style(Style::Path))]
     WriteFile {
         path: PathBuf,
         #[source]
-        error: Box<serde_yml::Error>,
+        error: Box<serde_norway::Error>,
     },
 }
 
+/// YAML errors.
 #[cfg(feature = "miette")]
 #[derive(Error, Debug, miette::Diagnostic)]
 pub enum YamlError {
@@ -47,14 +49,14 @@ pub enum YamlError {
     #[error("Failed to format YAML.")]
     Format {
         #[source]
-        error: Box<serde_yml::Error>,
+        error: Box<serde_norway::Error>,
     },
 
     #[diagnostic(code(yaml::parse))]
     #[error("Failed to parse YAML.")]
     Parse {
         #[source]
-        error: Box<serde_yml::Error>,
+        error: Box<serde_norway::Error>,
     },
 
     #[diagnostic(code(yaml::parse_file))]
@@ -62,7 +64,7 @@ pub enum YamlError {
     ReadFile {
         path: PathBuf,
         #[source]
-        error: Box<serde_yml::Error>,
+        error: Box<serde_norway::Error>,
     },
 
     #[diagnostic(code(yaml::format_file))]
@@ -70,7 +72,7 @@ pub enum YamlError {
     WriteFile {
         path: PathBuf,
         #[source]
-        error: Box<serde_yml::Error>,
+        error: Box<serde_norway::Error>,
     },
 }
 

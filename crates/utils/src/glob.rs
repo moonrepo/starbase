@@ -154,12 +154,12 @@ impl GlobSet<'_> {
     }
 
     /// Return true if the path matches the negated patterns.
-    pub fn is_negated<P: AsRef<OsStr>>(&self, path: P) -> bool {
+    pub fn is_excluded<P: AsRef<OsStr>>(&self, path: P) -> bool {
         self.negations.is_match(path.as_ref())
     }
 
     /// Return true if the path matches the non-negated patterns.
-    pub fn is_match<P: AsRef<OsStr>>(&self, path: P) -> bool {
+    pub fn is_included<P: AsRef<OsStr>>(&self, path: P) -> bool {
         self.expressions.is_match(path.as_ref())
     }
 
@@ -172,18 +172,17 @@ impl GlobSet<'_> {
 
         let path = path.as_ref();
 
-        if self.is_negated(path) {
+        if self.is_excluded(path) {
             return false;
         }
 
-        self.is_match(path)
+        self.is_included(path)
     }
 }
 
 /// Parse and create a [`Glob`] instance from the borrowed string pattern.
 /// If parsing fails, a [`GlobError`] is returned.
 #[inline]
-#[instrument]
 pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
     Glob::new(pattern).map_err(|error| GlobError::Create {
         glob: pattern.to_owned(),
@@ -194,15 +193,14 @@ pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
 /// Return true if the provided string looks like a glob pattern.
 /// This is not exhaustive and may be inaccurate.
 #[inline]
-#[instrument]
 pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
     let value = value.as_ref();
 
-    if value.contains("**") {
+    if value.contains("**") || value.starts_with('!') {
         return true;
     }
 
-    let single_values = vec!['*', '?', '!'];
+    let single_values = vec!['*', '?'];
     let paired_values = vec![('{', '}'), ('[', ']')];
     let mut bytes = value.bytes();
     let mut is_escaped = |index: usize| {
@@ -257,7 +255,6 @@ pub fn normalize<T: AsRef<Path>>(path: T) -> Result<String, GlobError> {
 /// Split a list of glob patterns into separate non-negated and negated patterns.
 /// Negated patterns must start with `!`.
 #[inline]
-#[instrument]
 pub fn split_patterns<'glob, I, V>(patterns: I) -> (Vec<&'glob str>, Vec<&'glob str>)
 where
     I: IntoIterator<Item = &'glob V> + Debug,
@@ -430,7 +427,7 @@ where
 /// Walk the file system starting from the provided directory, and return all files and directories
 /// that match the provided glob patterns, and customize further with the provided options.
 #[inline]
-#[instrument(skip(options))]
+#[instrument]
 pub fn walk_fast_with_options<'glob, P, I, V>(
     base_dir: P,
     patterns: I,
