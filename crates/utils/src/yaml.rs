@@ -8,8 +8,8 @@ use std::sync::LazyLock;
 use tracing::{instrument, trace};
 
 pub use crate::yaml_error::YamlError;
-pub use serde_yml;
-pub use serde_yml::{
+pub use serde_norway as serde_yaml;
+pub use serde_norway::{
     Mapping as YamlMapping, Number as YamlNumber, Sequence as YamlSequence, Value as YamlValue,
 };
 
@@ -46,7 +46,7 @@ where
 {
     trace!("Parsing YAML");
 
-    serde_yml::from_str(data.as_ref()).map_err(|error| YamlError::Parse {
+    serde_norway::from_str(data.as_ref()).map_err(|error| YamlError::Parse {
         error: Box::new(error),
     })
 }
@@ -60,7 +60,7 @@ where
 {
     trace!("Formatting YAML");
 
-    serde_yml::to_string(&data).map_err(|error| YamlError::Format {
+    serde_norway::to_string(&data).map_err(|error| YamlError::Format {
         error: Box::new(error),
     })
 }
@@ -75,7 +75,7 @@ where
 {
     trace!("Formatting YAML with preserved indentation");
 
-    let mut data = serde_yml::to_string(data)
+    let mut data = serde_norway::to_string(data)
         .map_err(|error| YamlError::Format {
             error: Box::new(error),
         })?
@@ -119,7 +119,7 @@ where
 
     trace!(file = ?path, "Reading YAML file");
 
-    serde_yml::from_str(&contents).map_err(|error| YamlError::ReadFile {
+    serde_norway::from_str(&contents).map_err(|error| YamlError::ReadFile {
         path: path.to_path_buf(),
         error: Box::new(error),
     })
@@ -139,7 +139,7 @@ where
 
     trace!(file = ?path, "Writing YAML file");
 
-    let data = serde_yml::to_string(&data).map_err(|error| YamlError::WriteFile {
+    let data = serde_norway::to_string(&data).map_err(|error| YamlError::WriteFile {
         path: path.to_path_buf(),
         error: Box::new(error),
     })?;
