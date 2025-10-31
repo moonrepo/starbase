@@ -7,6 +7,7 @@ use tracing::trace;
 
 static INSTANCE: OnceLock<Arc<GlobCache>> = OnceLock::new();
 
+/// A singleton for glob caches.
 #[derive(Default)]
 pub struct GlobCache {
     cache: scc::HashMap<u64, Vec<PathBuf>>,

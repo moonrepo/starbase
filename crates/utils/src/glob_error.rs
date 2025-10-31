@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 use wax::BuildError;
 
+/// Glob errors.
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
 pub enum GlobError {
@@ -21,6 +22,7 @@ pub enum GlobError {
     InvalidPath { path: PathBuf },
 }
 
+/// Glob errors.
 #[cfg(feature = "miette")]
 #[derive(Error, Debug, miette::Diagnostic)]
 pub enum GlobError {

@@ -1,5 +1,5 @@
 /// Utilities for reading and writing environment variables.
-pub mod env;
+pub mod envx;
 
 /// Utilities for reading and writing files and directories.
 pub mod fs;
@@ -16,7 +16,7 @@ mod glob_cache;
 mod glob_error;
 
 #[cfg(feature = "json")]
-/// Utilities for parsing and formatting JSON, backed by `serde_json`.
+/// Utilities for parsing and formatting JSON.
 pub mod json;
 #[cfg(feature = "json")]
 mod json_error;
@@ -28,13 +28,13 @@ pub mod net;
 mod net_error;
 
 #[cfg(feature = "toml")]
-/// Utilities for parsing and formatting TOML, backed by `toml`.
+/// Utilities for parsing and formatting TOML.
 pub mod toml;
 #[cfg(feature = "toml")]
 mod toml_error;
 
 #[cfg(feature = "yaml")]
-/// Utilities for parsing and formatting YAML, backed by `serde_yml`.
+/// Utilities for parsing and formatting YAML.
 pub mod yaml;
 #[cfg(feature = "yaml")]
 mod yaml_error;
@@ -45,6 +45,7 @@ pub use dirs;
 /// Utilities for handling OS paths.
 pub mod path;
 
+/// Create a [`Vec`] of owned [`String`]s.
 #[macro_export]
 macro_rules! string_vec {
     () => {{
