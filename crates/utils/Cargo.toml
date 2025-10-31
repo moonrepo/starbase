@@ -15,7 +15,7 @@ name = "glob"
 harness = false
 
 [dependencies]
-starbase_styles = { version = "0.6.3", path = "../styles" }
+starbase_styles = { version = "0.6.4", path = "../styles" }
 dirs = { workspace = true }
 miette = { workspace = true, optional = true }
 regex = { workspace = true, optional = true }
