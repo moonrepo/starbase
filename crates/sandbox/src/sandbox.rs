@@ -78,11 +78,7 @@ impl Sandbox {
 
         // And commit them... this seems like a lot of overhead?
         self.run_git(|cmd| {
-            cmd.args(["commit", "-m", "Fixtures"])
-                .env("GIT_AUTHOR_NAME", "Sandbox")
-                .env("GIT_AUTHOR_EMAIL", "fakeemail@somedomain.dev")
-                .env("GIT_COMMITTER_NAME", "Sandbox")
-                .env("GIT_COMMITTER_EMAIL", "fakeemail@somedomain.dev");
+            cmd.args(["commit", "-m", "Fixtures"]);
         });
 
         self
@@ -93,8 +89,14 @@ impl Sandbox {
     where
         C: FnOnce(&mut StdCommand),
     {
-        let mut cmd = StdCommand::new(if cfg!(windows) { "git.exe" } else { "git" });
-        cmd.current_dir(self.path());
+        let mut cmd = StdCommand::new("git");
+        cmd.current_dir(self.path())
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .env("GIT_PAGER", "")
+            .env("GIT_AUTHOR_NAME", "Sandbox")
+            .env("GIT_AUTHOR_EMAIL", "fakeemail@somedomain.dev")
+            .env("GIT_COMMITTER_NAME", "Sandbox")
+            .env("GIT_COMMITTER_EMAIL", "fakeemail@somedomain.dev");
 
         handler(&mut cmd);
 
