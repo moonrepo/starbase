@@ -1,6 +1,6 @@
 [package]
 name = "starbase_sandbox"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2024"
 license = "MIT"
 description = "A temporary sandbox for testing file system and process operations, with fixtures support."
