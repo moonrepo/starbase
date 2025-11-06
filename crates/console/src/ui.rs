@@ -102,6 +102,10 @@ impl<R: Reporter> Console<R> {
         self.out.render(element, self.theme())
     }
 
+    pub fn render_err<T: Component>(&self, element: Element<'_, T>) -> Result<(), ConsoleError> {
+        self.err.render(element, self.theme())
+    }
+
     pub async fn render_interactive<T: Component>(
         &self,
         element: Element<'_, T>,
@@ -109,10 +113,24 @@ impl<R: Reporter> Console<R> {
         self.out.render_interactive(element, self.theme()).await
     }
 
+    pub async fn render_interactive_err<T: Component>(
+        &self,
+        element: Element<'_, T>,
+    ) -> Result<(), ConsoleError> {
+        self.err.render_interactive(element, self.theme()).await
+    }
+
     pub async fn render_loop<T: Component>(
         &self,
         element: Element<'_, T>,
     ) -> Result<(), ConsoleError> {
         self.out.render_loop(element, self.theme()).await
+    }
+
+    pub async fn render_loop_err<T: Component>(
+        &self,
+        element: Element<'_, T>,
+    ) -> Result<(), ConsoleError> {
+        self.err.render_loop(element, self.theme()).await
     }
 }
