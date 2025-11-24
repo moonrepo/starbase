@@ -14,8 +14,8 @@ regex = { version = "1.12.2", default-features = false }
 relative-path = "2.0.1"
 reqwest = { version = "0.12.24", default-features = false }
 rustc-hash = "2.1.1"
-scc = "3.3.3"
-schematic = { version = "0.18.14", default-features = false }
+scc = "3.4.2"
+schematic = { version = "0.19.0", default-features = false }
 serial_test = "3.2.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
