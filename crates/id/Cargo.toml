@@ -1,6 +1,6 @@
 [package]
 name = "starbase_id"
-version = "0.2.6"
+version = "0.3.0"
 edition = "2024"
 license = "MIT"
 description = "A compact string identifier."
