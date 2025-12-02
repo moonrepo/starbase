@@ -350,7 +350,6 @@ where
 /// Options to customize walking behavior.
 #[derive(Debug)]
 pub struct GlobWalkOptions {
-    #[cfg(feature = "glob-cache")]
     pub cache: bool,
     pub ignore_dot_dirs: bool,
     pub ignore_dot_files: bool,
@@ -360,7 +359,6 @@ pub struct GlobWalkOptions {
 }
 
 impl GlobWalkOptions {
-    #[cfg(feature = "glob-cache")]
     /// Cache the results globally.
     pub fn cache(mut self) -> Self {
         self.cache = true;
@@ -401,7 +399,6 @@ impl GlobWalkOptions {
 impl Default for GlobWalkOptions {
     fn default() -> Self {
         Self {
-            #[cfg(feature = "glob-cache")]
             cache: false,
             ignore_dot_dirs: true,
             ignore_dot_files: false,
@@ -443,8 +440,9 @@ where
     for (dir, mut patterns) in partition_patterns(base_dir, patterns) {
         patterns.sort();
 
+        // Only run if the feature is enabled
         #[cfg(feature = "glob-cache")]
-        if options.cache {
+        if options.cache && !crate::envx::is_test() {
             paths.extend(
                 GlobCache::instance()
                     .cache(&dir, &patterns, |d, p| internal_walk(d, p, &options))?,

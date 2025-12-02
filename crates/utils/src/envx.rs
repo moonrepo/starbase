@@ -54,6 +54,13 @@ pub fn is_wsl() -> bool {
     })
 }
 
+/// Return true if we're in a test environment, based on `STARBASE_TEST`.
+pub fn is_test() -> bool {
+    static TEST_CACHE: OnceLock<bool> = OnceLock::new();
+
+    *TEST_CACHE.get_or_init(|| has_env_var("STARBASE_TEST"))
+}
+
 /// Return the `PATH` environment variable as a list of [`PathBuf`]s.
 #[inline]
 pub fn paths() -> Vec<PathBuf> {
