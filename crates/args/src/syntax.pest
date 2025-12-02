@@ -1,0 +1,26 @@
+COMMENT = _{ "#" ~ (!"#" ~ ANY)* }
+WHITESPACE = _{ " " }
+
+id = @{ (ASCII_ALPHANUMERIC | "-" | "_" | ".")+ }
+
+// Special value types
+value_bash_quote = { "$'" ~ (!"'" ~ ANY)* ~ "'" }
+
+// Value types
+value_double_quote_inner = _{ ( !( "\"" | "\\" ) ~ ANY | "\\" ~ ( "\"" | "\\" ) )* }
+value_double_quote = { "\"" ~ value_double_quote_inner ~ "\"" }
+value_single_quote = { "'" ~ (!"'" ~ ANY)* ~ "'" }
+value_unquoted = { (!WHITESPACE ~ ANY)+ }
+
+value = { value_bash_quote | value_double_quote | value_single_quote | value_unquoted }
+
+// Argument types
+flag_group = { "-" ~ ASCII_ALPHA+ }
+flag = { "-" ~ ASCII_ALPHA }
+option = { "--" ~ (ASCII_ALPHANUMERIC | "-" | "_" | ".")+ }
+option_with_value = { option ~ "=" ~ value }
+argument = _{ flag_group | flag | option_with_value | option | value }
+
+args = _{
+    SOI ~ (argument ~ " "*)+ ~ EOI
+}
