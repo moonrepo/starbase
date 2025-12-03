@@ -7,7 +7,7 @@ async-trait = "0.1.89"
 compact_str = "0.9.0"
 crossterm = "0.28.1"
 dirs = "6.0.0"
-iocraft = "0.7.14"
+iocraft = "0.7.16"
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
 miette = "7.6.0"
 regex = { version = "1.12.2", default-features = false }
@@ -15,7 +15,7 @@ relative-path = "2.0.1"
 reqwest = { version = "0.12.24", default-features = false }
 rustc-hash = "2.1.1"
 scc = "3.4.2"
-schematic = { version = "0.19.0", default-features = false }
+schematic = { version = "0.19.1", default-features = false }
 serial_test = "3.2.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
@@ -26,4 +26,4 @@ tokio = { version = "1.48.0", default-features = false, features = [
     "rt",
     "sync",
 ] }
-tracing = { version = "0.1.41" }
+tracing = { version = "0.1.43" }

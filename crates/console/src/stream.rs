@@ -8,9 +8,10 @@ use std::sync::{Arc, mpsc};
 use std::thread::{JoinHandle, spawn};
 use tracing::trace;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum ConsoleStreamType {
     Stderr,
+    #[default]
     Stdout,
 }
 
