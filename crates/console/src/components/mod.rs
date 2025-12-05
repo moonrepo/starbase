@@ -9,6 +9,7 @@ mod notice;
 mod progress;
 mod section;
 mod select;
+mod signal_container;
 mod styled_text;
 mod table;
 
@@ -22,6 +23,7 @@ pub use notice::*;
 pub use progress::*;
 pub use section::*;
 pub use select::*;
+pub use signal_container::*;
 pub use styled_text::*;
 pub use table::*;
 

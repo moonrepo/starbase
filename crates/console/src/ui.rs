@@ -17,6 +17,7 @@ fn is_ignoring_ctrl_c() -> bool {
 }
 
 pub struct RenderOptions {
+    pub handle_interrupt: bool,
     pub fullscreen: bool,
     pub ignore_ctrl_c: bool,
     pub stream: ConsoleStreamType,
@@ -25,6 +26,7 @@ pub struct RenderOptions {
 impl Default for RenderOptions {
     fn default() -> Self {
         Self {
+            handle_interrupt: false,
             fullscreen: false,
             ignore_ctrl_c: is_ignoring_ctrl_c(),
             stream: ConsoleStreamType::Stdout,
@@ -119,7 +121,17 @@ impl ConsoleStream {
             ContextProvider(value: Context::owned(theme)) {
                 #(element)
             }
-        };
+        }
+        .into_any();
+
+        if options.handle_interrupt {
+            element = element! {
+                SignalContainer {
+                    #(element)
+                }
+            }
+            .into_any();
+        }
 
         let mut renderer = element.render_loop();
 
@@ -127,7 +139,7 @@ impl ConsoleStream {
             renderer = renderer.fullscreen();
         }
 
-        if options.ignore_ctrl_c {
+        if options.handle_interrupt || options.ignore_ctrl_c {
             renderer = renderer.ignore_ctrl_c();
         }
 
@@ -136,6 +148,10 @@ impl ConsoleStream {
         })?;
 
         self.flush()?;
+
+        if options.handle_interrupt && received_interrupt_signal() {
+            std::process::exit(130);
+        }
 
         Ok(())
     }
