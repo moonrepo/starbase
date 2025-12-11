@@ -60,7 +60,7 @@ toml = ["dep:toml", "dep:serde"]
 yaml = ["dep:regex", "dep:serde", "dep:serde_norway"]
 
 [dev-dependencies]
-criterion2 = { version = "3.0.0", default-features = false }
+criterion2 = { version = "3.0.2", default-features = false }
 reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
 starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [
