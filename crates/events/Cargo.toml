@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT"
 description = "Async and mutable event system."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 
 [dependencies]
 starbase_macros = { version = "0.8.8", path = "../macros", features = [
