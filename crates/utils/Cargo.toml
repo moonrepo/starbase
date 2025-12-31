@@ -61,7 +61,7 @@ yaml = ["dep:regex", "dep:serde", "dep:serde_norway"]
 
 [dev-dependencies]
 criterion2 = { version = "3.0.2", default-features = false }
-reqwest = { workspace = true, features = ["rustls-tls-native-roots"] }
+reqwest = { workspace = true, features = ["rustls"] }
 starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [
     "editor-config",
