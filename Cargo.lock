@@ -2550,7 +2550,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -2656,7 +2656,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "async-trait",
  "criterion2",
