@@ -1,16 +1,17 @@
-COMMENT = _{ "#" ~ (!"#" ~ ANY)* }
-// WHITESPACE = _{ (" " | "\t") }
+COMMENT    = _{ "#" ~ (!"#" ~ ANY)* }
+WHITESPACE = _{ (" " | "\t") }
 
 id     = _{ ASCII_ALPHANUMERIC | "-" | "_" | "." }
 id_env = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
 
 // SYNTAX:
 // https://www.gnu.org/software/bash/manual/html_node/Definitions.html
-blank             = _{ " " | "\t" }
-whitespace        = _{ blank | "\n" | "\r" }
-meta_char         = _{ whitespace | "|" | "&" | ";" | "(" | ")" | "<" | ">" }
-escape_char       = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
-control_operator  =  {
+
+blank                     = _{ " " | "\t" }
+whitespace                = _{ blank | "\n" | "\r" }
+meta_char                 = _{ whitespace | "|" | "&" | ";" | "(" | ")" | "<" | ">" }
+escape_char               = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
+control_operator          =  {
     // Posix
     ";"
   | ";;"
@@ -25,7 +26,7 @@ control_operator  =  {
   | ")"
   | "\n"
 }
-redirect_operator =  {
+redirect_operator         =  {
     // Posix
     ">"
   | ">>"
@@ -39,37 +40,45 @@ redirect_operator =  {
   | ">&"
   | "<&"
   | ">|"
-  | "1>"
-  | "2>"
 }
-operator          = _{ control_operator | redirect_operator }
+redirect_operator_with_fd =  {
+    (ASCII_DIGIT | "-")? ~ redirect_operator ~ (ASCII_DIGIT | "-")?
+}
 
-// Value types
+operator = _{ control_operator | redirect_operator_with_fd | redirect_operator }
+
+// VALUES:
+
 value_double_quote_inner = _{
     !("\"" | "\\") ~ ANY
   | "\\" ~ ("\"" | escape_char)
   | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
 }
 value_double_quote       = @{ "\"" ~ value_double_quote_inner* ~ "\"" }
+
 value_single_quote_inner = _{
     !("'" | "\\") ~ ANY
   | "\\" ~ ("'" | escape_char)
   | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
 }
 value_single_quote       = @{ "'" ~ value_single_quote_inner* ~ "'" }
-value_ansi_quote         = @{ "$'" ~ value_single_quote_inner* ~ "'" }
-value_unquoted_inner     = _{ !meta_char ~ ANY }
-value_unquoted           = @{ value_unquoted_inner+ }
+
+value_ansi_quote = @{ "$'" ~ value_single_quote_inner* ~ "'" }
+
+value_unquoted_inner = _{ !meta_char ~ ANY }
+value_unquoted       = @{ value_unquoted_inner+ }
 
 value = _{ value_ansi_quote | value_double_quote | value_single_quote | value_unquoted }
 
-// Special argument types
-env_var_prefix = { ^"$e:" | ^"$env::" | ^"$env:" | ^"$env." }
-env_var        = { env_var_prefix? ~ id_env+ ~ "=" ~ value }
+// ARGUMENTS:
 
-// Argument types
-flag_group        = { "-" ~ ASCII_ALPHA{2, } }
-flag              = { "-" ~ ASCII_ALPHA }
+env_var_namespace = { ^"$e:" | ^"$env::" | ^"$env:" | ^"$env." }
+env_var_name      = { id_env+ }
+env_var           = { env_var_namespace? ~ env_var_name ~ "=" ~ value }
+
+flag_group = { "-" ~ ASCII_ALPHA{2, } }
+flag       = { "-" ~ ASCII_ALPHA }
+
 option            = { "--" ~ id+ }
 option_with_value = { option ~ "=" ~ value }
 
@@ -78,14 +87,13 @@ argument = _{ env_var | flag_group | flag | option_with_value | option | value }
 // COMMAND LINE:
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Commands.html
 
-// Simple command, with at least 1 argument
-command            = { argument ~ (blank+ ~ argument)* }
-command_separator  = { ";" | "&&" | "||" }
-command_terminator = { ";" | "&" | "2>&1" | "\n" }
-command_list       = { command ~ (blank* ~ command_separator ~ blank* ~ command)* ~ blank* ~ command_terminator? }
+command            = ${ argument ~ (blank+ ~ argument)* }
+command_separator  =  { ";" | "&&" | "||" }
+command_terminator =  { ";" | "&" | "2>&1" | "\n" }
+command_list       =  { command ~ (command_separator ~ command)* ~ command_terminator? }
 
 pipeline_separator = { "|" | "|&" }
-pipeline           = { command_list ~ (blank* ~ pipeline_separator ~ blank* ~ command_list)* }
+pipeline           = { command_list ~ (pipeline_separator ~ command_list)* }
 
 args = _{
     SOI ~ pipeline ~ EOI

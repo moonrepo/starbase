@@ -16,17 +16,11 @@ pub enum Value {
     Unquoted(String),
 }
 
-impl Default for Value {
-    fn default() -> Self {
-        Value::DoubleQuoted(String::new())
-    }
-}
-
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::AnsiQuoted(inner) => write!(f, "$'{inner}'"),
-            Self::DoubleQuoted(inner) => write!(f, "\'{inner}\'"),
+            Self::DoubleQuoted(inner) => write!(f, "\"{inner}\""),
             Self::SingleQuoted(inner) => write!(f, "'{inner}'"),
             Self::Unquoted(inner) => write!(f, "{inner}"),
         }
@@ -52,7 +46,7 @@ impl fmt::Display for Argument {
         match self {
             Self::EnvVar(key, value, namespace) => write!(
                 f,
-                "{}{key}={value};",
+                "{}{key}={value}",
                 namespace.as_deref().unwrap_or_default()
             ),
             Self::FlagGroup(flag) | Self::Flag(flag) => write!(f, "{flag}"),
@@ -152,6 +146,23 @@ impl fmt::Display for Pipeline {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct CommandLine(pub Vec<Pipeline>);
+
+impl fmt::Display for CommandLine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(|arg| arg.to_string())
+                .collect::<Vec<_>>()
+                .join("")
+        )
+    }
+}
+
 fn parse_value(pair: Pair<'_, Rule>) -> Value {
     match pair.as_rule() {
         Rule::value_ansi_quote => Value::AnsiQuoted(
@@ -210,7 +221,7 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
             Argument::Option(key.as_str().into(), Some(parse_value(value)))
         }
 
-        _ => unimplemented!(),
+        _ => unreachable!(),
     }
 }
 
@@ -225,7 +236,7 @@ fn parse_command(pair: Pair<'_, Rule>) -> Command {
 
             Command(args)
         }
-        _ => unimplemented!(),
+        _ => unreachable!(),
     }
 }
 
@@ -233,13 +244,16 @@ fn parse_command_list(pair: Pair<'_, Rule>) -> CommandList {
     match pair.as_rule() {
         Rule::command_list => {
             let mut list = vec![];
-            let mut last_command = None;
             let mut last_separator = None;
 
             for inner in pair.into_inner() {
                 match inner.as_rule() {
                     Rule::command => {
-                        if let Some(command) = last_command.take() {
+                        let command = parse_command(inner);
+
+                        if list.is_empty() {
+                            list.push(Sequence::Start(command));
+                        } else {
                             match last_separator.take() {
                                 Some("&&") => {
                                     list.push(Sequence::AndThen(command));
@@ -248,38 +262,24 @@ fn parse_command_list(pair: Pair<'_, Rule>) -> CommandList {
                                     list.push(Sequence::OrElse(command));
                                 }
                                 _ => {
-                                    if list.is_empty() {
-                                        list.push(Sequence::Start(command));
-                                    } else {
-                                        list.push(Sequence::Then(command));
-                                    }
+                                    list.push(Sequence::Then(command));
                                 }
                             };
                         }
-
-                        last_command = Some(parse_command(inner));
                     }
                     Rule::command_separator => {
                         last_separator = Some(inner.as_str());
                     }
                     Rule::command_terminator => {
-                        if let Some(command) = last_command.take() {
-                            list.push(Sequence::Then(command));
-                        }
-
                         list.push(Sequence::Stop(inner.as_str().into()));
                     }
-                    _ => unimplemented!(),
+                    _ => unreachable!(),
                 };
-            }
-
-            if let Some(command) = last_command.take() {
-                list.push(Sequence::Then(command));
             }
 
             CommandList(list)
         }
-        _ => unimplemented!(),
+        _ => unreachable!(),
     }
 }
 
@@ -293,21 +293,20 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
             for inner in pair.into_inner() {
                 match inner.as_rule() {
                     Rule::command_list => {
-                        if let Some(command_list) = last_command_list.take() {
+                        let command_list = parse_command_list(inner);
+
+                        if list.is_empty() {
+                            list.push(Pipeline::Start(command_list));
+                        } else {
                             match last_separator.take() {
-                                Some("|") => {
-                                    list.push(Pipeline::Pipe(command_list));
-                                }
                                 Some("|&") => {
                                     list.push(Pipeline::PipeAll(command_list));
                                 }
                                 _ => {
-                                    list.push(Pipeline::Start(command_list));
+                                    list.push(Pipeline::Pipe(command_list));
                                 }
                             };
                         }
-
-                        last_command_list = Some(parse_command_list(inner));
                     }
                     Rule::pipeline_separator => {
                         last_separator = Some(inner.as_str());
@@ -326,22 +325,7 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
     }
 }
 
-pub fn parse_args<T: AsRef<str>>(input: T) -> Vec<Argument> {
-    let a = ArgsParser::parse(Rule::args, input.as_ref().trim());
-    dbg!(&a);
-    let pairs = a.unwrap();
-    let mut args = vec![];
-
-    for pair in pairs {
-        if pair.as_rule() == Rule::pipeline {
-            // args.push(arg);
-        }
-    }
-
-    args
-}
-
-pub fn parse<T: AsRef<str>>(input: T) -> Vec<Pipeline> {
+pub fn parse<T: AsRef<str>>(input: T) -> Result<CommandLine, ()> {
     let pairs = ArgsParser::parse(Rule::args, input.as_ref().trim()).unwrap();
     let mut pipeline = vec![];
 
@@ -351,5 +335,5 @@ pub fn parse<T: AsRef<str>>(input: T) -> Vec<Pipeline> {
         }
     }
 
-    pipeline
+    Ok(CommandLine(pipeline))
 }
