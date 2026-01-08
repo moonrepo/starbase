@@ -34,15 +34,28 @@ macro_rules! test_args {
     };
 }
 
-#[test]
-fn syntax() {
-    dbg!(parse("command1  ||    command2  |command3").unwrap());
-
-    assert!(false);
-}
-
 mod examples {
     use super::*;
+
+    #[test]
+    fn git() {
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![
+                Argument::Value(Value::Unquoted("git".into())),
+                Argument::Value(Value::Unquoted("rebase".into())),
+                Argument::Flag("-i".into()),
+                Argument::Option("--empty".into(), Some(Value::Unquoted("drop".into()))),
+                Argument::Option("--exec".into(), None),
+                Argument::Value(Value::DoubleQuoted("echo".into())),
+                Argument::Value(Value::Unquoted("HEAD~3".into())),
+            ]),
+        )]))]);
+
+        assert_eq!(
+            parse("git rebase -i --empty=drop --exec \"echo\" HEAD~3").unwrap(),
+            actual
+        );
+    }
 
     #[test]
     fn docker() {
