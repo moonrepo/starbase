@@ -85,6 +85,8 @@ pub enum Sequence {
     AndThen(Command),
     // ||
     OrElse(Command),
+    // >, <, etc
+    Redirect(Command, String),
     // ;, &, etc
     Stop(String),
 }
@@ -96,6 +98,7 @@ impl fmt::Display for Sequence {
             Self::Then(command) => write!(f, "; {command}"),
             Self::AndThen(command) => write!(f, " && {command}"),
             Self::OrElse(command) => write!(f, " || {command}"),
+            Self::Redirect(command, op) => write!(f, " {op} {command}"),
             Self::Stop(term) => {
                 if term == ";" {
                     write!(f, ";")
@@ -127,21 +130,21 @@ impl fmt::Display for CommandList {
 #[derive(Debug, PartialEq)]
 pub enum Pipeline {
     Start(CommandList),
+    // !
+    StartNegated(CommandList),
     // |
     Pipe(CommandList),
     // |&
     PipeAll(CommandList),
-    // ...
-    // Redirect(Sequence, String),
 }
 
 impl fmt::Display for Pipeline {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Start(command) => write!(f, "{command}"),
+            Self::StartNegated(command) => write!(f, "! {command}"),
             Self::Pipe(command) => write!(f, " | {command}"),
             Self::PipeAll(command) => write!(f, " |& {command}"),
-            // Self::Redirect(command, op) => write!(f, " {op} {command}"),
         }
     }
 }
@@ -244,7 +247,8 @@ fn parse_command_list(pair: Pair<'_, Rule>) -> CommandList {
     match pair.as_rule() {
         Rule::command_list => {
             let mut list = vec![];
-            let mut last_separator = None;
+            let mut control_operator: Option<&str> = None;
+            let mut redirect_operator: Option<&str> = None;
 
             for inner in pair.into_inner() {
                 match inner.as_rule() {
@@ -253,22 +257,29 @@ fn parse_command_list(pair: Pair<'_, Rule>) -> CommandList {
 
                         if list.is_empty() {
                             list.push(Sequence::Start(command));
-                        } else {
-                            match last_separator.take() {
-                                Some("&&") => {
+                        } else if let Some(control) = control_operator.take() {
+                            match control {
+                                "&&" => {
                                     list.push(Sequence::AndThen(command));
                                 }
-                                Some("||") => {
+                                "||" => {
                                     list.push(Sequence::OrElse(command));
                                 }
                                 _ => {
                                     list.push(Sequence::Then(command));
                                 }
                             };
+                        } else if let Some(redirect) = redirect_operator.take() {
+                            list.push(Sequence::Redirect(command, redirect.into()));
+                        } else {
+                            list.push(Sequence::Then(command));
                         }
                     }
-                    Rule::command_separator => {
-                        last_separator = Some(inner.as_str());
+                    Rule::control_operator => {
+                        control_operator = Some(inner.as_str().trim());
+                    }
+                    Rule::redirect_operator | Rule::redirect_operator_with_fd => {
+                        redirect_operator = Some(inner.as_str().trim());
                     }
                     Rule::command_terminator => {
                         list.push(Sequence::Stop(inner.as_str().into()));
@@ -288,7 +299,8 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
         Rule::pipeline => {
             let mut list = vec![];
             let mut last_command_list = None;
-            let mut last_separator = None;
+            let mut last_operator = None;
+            let mut negated = false;
 
             for inner in pair.into_inner() {
                 match inner.as_rule() {
@@ -296,9 +308,13 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
                         let command_list = parse_command_list(inner);
 
                         if list.is_empty() {
-                            list.push(Pipeline::Start(command_list));
+                            if negated {
+                                list.push(Pipeline::StartNegated(command_list));
+                            } else {
+                                list.push(Pipeline::Start(command_list));
+                            }
                         } else {
-                            match last_separator.take() {
+                            match last_operator.take() {
                                 Some("|&") => {
                                     list.push(Pipeline::PipeAll(command_list));
                                 }
@@ -308,8 +324,11 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
                             };
                         }
                     }
-                    Rule::pipeline_separator => {
-                        last_separator = Some(inner.as_str());
+                    Rule::pipeline_negated => {
+                        negated = true;
+                    }
+                    Rule::pipeline_operator => {
+                        last_operator = Some(inner.as_str());
                     }
                     _ => unreachable!(),
                 };
@@ -330,6 +349,8 @@ pub fn parse<T: AsRef<str>>(input: T) -> Result<CommandLine, ()> {
     let mut pipeline = vec![];
 
     for pair in pairs {
+        dbg!(&pair);
+
         if pair.as_rule() == Rule::pipeline {
             pipeline.extend(parse_pipeline(pair));
         }

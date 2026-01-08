@@ -1,5 +1,13 @@
 use starbase_args::*;
 
+fn extract_commands(line: &CommandLine) -> &Vec<Sequence> {
+    if let Some(Pipeline::Start(commands)) = line.0.first() {
+        return &commands.0;
+    }
+
+    unimplemented!()
+}
+
 fn extract_args(line: &CommandLine) -> &Vec<Argument> {
     if let Some(Pipeline::Start(commands)) = line.0.first() {
         if let Some(Sequence::Start(command)) = commands.0.first() {
@@ -8,6 +16,22 @@ fn extract_args(line: &CommandLine) -> &Vec<Argument> {
     }
 
     unimplemented!()
+}
+
+macro_rules! test_commands {
+    ($input:expr, $output:expr) => {
+        let commands = parse($input).unwrap();
+        assert_eq!(extract_commands(&commands), &$output);
+        assert_eq!(commands.to_string(), $input);
+    };
+}
+
+macro_rules! test_args {
+    ($input:expr, $output:expr) => {
+        let args = parse($input).unwrap();
+        assert_eq!(extract_args(&args), &$output);
+        assert_eq!(args.to_string(), $input);
+    };
 }
 
 #[test]
@@ -61,16 +85,194 @@ mod pipeline {
     // }
 }
 
-mod args {
+mod command_list {
     use super::*;
 
-    macro_rules! test_args {
-        ($input:expr, $output:expr) => {
-            let args = parse($input).unwrap();
-            assert_eq!(extract_args(&args), &$output);
-            assert_eq!(args.to_string(), $input);
-        };
+    #[test]
+    fn redirects() {
+        for op in [
+            ">", ">>", ">>>", "<", "<<", "<<<", "<>", "&>", "&>>", ">&", "<&", ">|",
+        ] {
+            // test_commands!(
+            //     format!("foo {op} bar"),
+            //     [
+            //         Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+            //             "foo".into()
+            //         ))])),
+            //         Sequence::Redirect(
+            //             Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
+            //             op.into()
+            //         ),
+            //     ]
+            // );
+
+            test_commands!(
+                format!("foo 1{op} bar"),
+                [
+                    Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                        "foo".into()
+                    ))])),
+                    Sequence::Redirect(
+                        Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
+                        format!("1{op}")
+                    ),
+                ]
+            );
+        }
     }
+
+    #[test]
+    fn terminators() {
+        test_commands!(
+            "foo;",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::Stop(";".into())
+            ]
+        );
+        test_commands!(
+            "foo &",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::Stop("&".into())
+            ]
+        );
+        test_commands!(
+            "foo 2>&1",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::Stop("2>&1".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn terminators_spacing() {
+        assert_eq!(parse(" foo;  ").unwrap().to_string(), "foo;");
+        assert_eq!(parse(" foo ;").unwrap().to_string(), "foo;");
+        assert_eq!(parse("foo  ; ").unwrap().to_string(), "foo;");
+
+        assert_eq!(parse(" foo&").unwrap().to_string(), "foo &");
+        assert_eq!(parse("foo &").unwrap().to_string(), "foo &");
+        assert_eq!(parse(" foo  &  ").unwrap().to_string(), "foo &");
+    }
+
+    #[test]
+    fn then() {
+        test_commands!(
+            "foo; bar -a; baz --qux",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::Then(Command(vec![
+                    Argument::Value(Value::Unquoted("bar".into())),
+                    Argument::Flag("-a".into())
+                ])),
+                Sequence::Then(Command(vec![
+                    Argument::Value(Value::Unquoted("baz".into())),
+                    Argument::Option("--qux".into(), None)
+                ])),
+            ]
+        );
+        test_commands!(
+            "foo; bar;",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::Then(Command(vec![Argument::Value(Value::Unquoted(
+                    "bar".into()
+                )),])),
+                Sequence::Stop(";".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn then_spacing() {
+        assert_eq!(parse("foo;bar").unwrap().to_string(), "foo; bar");
+        assert_eq!(parse("foo ; bar").unwrap().to_string(), "foo; bar");
+        assert_eq!(
+            parse("foo;   bar   ;baz").unwrap().to_string(),
+            "foo; bar; baz"
+        );
+    }
+}
+
+mod command {
+    use super::*;
+
+    #[test]
+    fn simple() {
+        let mut command = String::from("bin");
+        let mut actual = vec![Argument::Value(Value::Unquoted("bin".into()))];
+
+        test_args!(command.as_str(), actual);
+
+        command.push_str(" -a");
+        actual.push(Argument::Flag("-a".into()));
+
+        test_args!(command.as_str(), actual);
+
+        command.push_str(" -xYZ");
+        actual.push(Argument::FlagGroup("-xYZ".into()));
+
+        test_args!(command.as_str(), actual);
+
+        command.push_str(" --opt1=value");
+        actual.push(Argument::Option(
+            "--opt1".into(),
+            Some(Value::Unquoted("value".into())),
+        ));
+
+        test_args!(command.as_str(), actual);
+
+        command.push_str(" --opt-2='some value'");
+        actual.push(Argument::Option(
+            "--opt-2".into(),
+            Some(Value::SingleQuoted("some value".into())),
+        ));
+
+        test_args!(command.as_str(), actual);
+
+        command.push_str(" --opt_3=$'another value'");
+        actual.push(Argument::Option(
+            "--opt_3".into(),
+            Some(Value::AnsiQuoted("another value".into())),
+        ));
+
+        test_args!(command.as_str(), actual);
+
+        command.push_str(" --opt.4 \"last value\"");
+        actual.push(Argument::Option("--opt.4".into(), None));
+        actual.push(Argument::Value(Value::DoubleQuoted("last value".into())));
+
+        test_args!(command.as_str(), actual);
+    }
+
+    #[test]
+    fn spacing() {
+        assert_eq!(
+            extract_args(&parse(" a    b  c       -d ").unwrap()),
+            &[
+                Argument::Value(Value::Unquoted("a".into())),
+                Argument::Value(Value::Unquoted("b".into())),
+                Argument::Value(Value::Unquoted("c".into())),
+                Argument::Flag("-d".into()),
+            ]
+        );
+    }
+}
+
+mod args {
+    use super::*;
 
     #[test]
     fn env_var() {

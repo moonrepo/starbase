@@ -1,5 +1,5 @@
-COMMENT    = _{ "#" ~ (!"#" ~ ANY)* }
-WHITESPACE = _{ (" " | "\t") }
+COMMENT = _{ "#" ~ (!"#" ~ ANY)* }
+// WHITESPACE = _{ (" " | "\t") }
 
 id     = _{ ASCII_ALPHANUMERIC | "-" | "_" | "." }
 id_env = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
@@ -11,41 +11,33 @@ blank                     = _{ " " | "\t" }
 whitespace                = _{ blank | "\n" | "\r" }
 meta_char                 = _{ whitespace | "|" | "&" | ";" | "(" | ")" | "<" | ">" }
 escape_char               = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
+fd_char                   = _{ ASCII_DIGIT | "-" }
 control_operator          =  {
     // Posix
     ";"
-  | ";;"
-  | ";;&"
-  | ";&"
-  | "&"
   | "&&"
-  | "|&"
-  | "|"
   | "||"
-  | "("
-  | ")"
-  | "\n"
 }
 redirect_operator         =  {
     // Posix
-    ">"
-  | ">>"
+    "<>"
   | ">>>"
-  | "<"
-  | "<<"
+  | ">>"
   | "<<<"
-  | "<>"
-  | "&>"
+  | "<<"
   | "&>>"
+  | "&>"
   | ">&"
   | "<&"
   | ">|"
+  | ">"
+  | "<"
 }
 redirect_operator_with_fd =  {
-    (ASCII_DIGIT | "-")? ~ redirect_operator ~ (ASCII_DIGIT | "-")?
+    (fd_char ~ redirect_operator ~ fd_char)
+  | (fd_char ~ redirect_operator)
+  | (redirect_operator ~ fd_char)
 }
-
-operator = _{ control_operator | redirect_operator_with_fd | redirect_operator }
 
 // VALUES:
 
@@ -88,12 +80,13 @@ argument = _{ env_var | flag_group | flag | option_with_value | option | value }
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Commands.html
 
 command            = ${ argument ~ (blank+ ~ argument)* }
-command_separator  =  { ";" | "&&" | "||" }
+command_operator   =  { control_operator | redirect_operator_with_fd | redirect_operator }
 command_terminator =  { ";" | "&" | "2>&1" | "\n" }
-command_list       =  { command ~ (command_separator ~ command)* ~ command_terminator? }
+command_list       = ${ command ~ (blank* ~ command_operator ~ blank* ~ command)* ~ (blank* ~ command_terminator)? }
 
-pipeline_separator = { "|" | "|&" }
-pipeline           = { command_list ~ (pipeline_separator ~ command_list)* }
+pipeline_negated  =  { "!" }
+pipeline_operator =  { "|" | "|&" }
+pipeline          = ${ (pipeline_negated ~ blank*)? ~ command_list ~ (blank* ~ pipeline_operator ~ blank* ~ command_list)* }
 
 args = _{
     SOI ~ pipeline ~ EOI
