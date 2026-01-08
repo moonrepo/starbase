@@ -1,5 +1,5 @@
-COMMENT = _{ "#" ~ (!"#" ~ ANY)* }
-// WHITESPACE = _{ (" " | "\t") }
+COMMENT    = _{ "#" ~ (!"#" ~ ANY)* }
+WHITESPACE = _{ " " | "\t" }
 
 id     = _{ ASCII_ALPHANUMERIC | "-" | "_" | "." }
 id_env = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
@@ -7,11 +7,14 @@ id_env = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
 // SYNTAX:
 // https://www.gnu.org/software/bash/manual/html_node/Definitions.html
 
-blank                     = _{ " " | "\t" }
-whitespace                = _{ blank | "\n" | "\r" }
-meta_char                 = _{ whitespace | "|" | "&" | ";" | "(" | ")" | "<" | ">" }
-escape_char               = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
-fd_char                   = _{ ASCII_DIGIT | "-" }
+blank       = _{ " " | "\t" }
+whitespace  = _{ blank | "\n" | "\r" }
+meta_char   = _{ whitespace | "|" | "&" | ";" | "(" | ")" | "<" | ">" }
+escape_char = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
+fd_char     = _{ ASCII_DIGIT | "-" }
+
+// OPERATORS:
+
 control_operator          =  {
     // Posix
     ";"
@@ -33,10 +36,16 @@ redirect_operator         =  {
   | ">"
   | "<"
 }
-redirect_operator_with_fd =  {
+redirect_operator_with_fd = @{
     (fd_char ~ redirect_operator ~ fd_char)
   | (fd_char ~ redirect_operator)
   | (redirect_operator ~ fd_char)
+}
+
+operator = _{
+    control_operator
+  | redirect_operator_with_fd
+  | redirect_operator
 }
 
 // VALUES:
@@ -57,36 +66,35 @@ value_single_quote       = @{ "'" ~ value_single_quote_inner* ~ "'" }
 
 value_ansi_quote = @{ "$'" ~ value_single_quote_inner* ~ "'" }
 
-value_unquoted_inner = _{ !meta_char ~ ANY }
+value_unquoted_inner = _{ !(meta_char | operator) ~ ANY }
 value_unquoted       = @{ value_unquoted_inner+ }
 
 value = _{ value_ansi_quote | value_double_quote | value_single_quote | value_unquoted }
 
 // ARGUMENTS:
 
-env_var_namespace = { ^"$e:" | ^"$env::" | ^"$env:" | ^"$env." }
-env_var_name      = { id_env+ }
-env_var           = { env_var_namespace? ~ env_var_name ~ "=" ~ value }
+env_var_namespace =  { ^"$e:" | ^"$env::" | ^"$env:" | ^"$env." }
+env_var_name      = @{ id_env+ }
+env_var           = ${ env_var_namespace? ~ env_var_name ~ "=" ~ value }
 
-flag_group = { "-" ~ ASCII_ALPHA{2, } }
-flag       = { "-" ~ ASCII_ALPHA }
+flag_group = @{ "-" ~ ASCII_ALPHA{2, } }
+flag       = @{ "-" ~ ASCII_ALPHA }
 
-option            = { "--" ~ id+ }
-option_with_value = { option ~ "=" ~ value }
+option            = @{ "--" ~ id+ }
+option_with_value = ${ option ~ "=" ~ value }
 
 argument = _{ env_var | flag_group | flag | option_with_value | option | value }
 
 // COMMAND LINE:
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Commands.html
 
-command            = ${ argument ~ (blank+ ~ argument)* }
-command_operator   =  { control_operator | redirect_operator_with_fd | redirect_operator }
-command_terminator =  { ";" | "&" | "2>&1" | "\n" }
-command_list       = ${ command ~ (blank* ~ command_operator ~ blank* ~ command)* ~ (blank* ~ command_terminator)? }
+command            = { argument+ }
+command_terminator = { ";" | "&" | "2>&1" | "\n" }
+command_list       = { command ~ (operator ~ command)* ~ command_terminator? }
 
-pipeline_negated  =  { "!" }
-pipeline_operator =  { "|" | "|&" }
-pipeline          = ${ (pipeline_negated ~ blank*)? ~ command_list ~ (blank* ~ pipeline_operator ~ blank* ~ command_list)* }
+pipeline_negated  = { "!" }
+pipeline_operator = { "|" | "|&" }
+pipeline          = { pipeline_negated? ~ command_list ~ (pipeline_operator ~ command_list)* }
 
 args = _{
     SOI ~ pipeline ~ EOI

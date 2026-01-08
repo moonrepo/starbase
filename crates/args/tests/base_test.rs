@@ -93,18 +93,18 @@ mod command_list {
         for op in [
             ">", ">>", ">>>", "<", "<<", "<<<", "<>", "&>", "&>>", ">&", "<&", ">|",
         ] {
-            // test_commands!(
-            //     format!("foo {op} bar"),
-            //     [
-            //         Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
-            //             "foo".into()
-            //         ))])),
-            //         Sequence::Redirect(
-            //             Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
-            //             op.into()
-            //         ),
-            //     ]
-            // );
+            test_commands!(
+                format!("foo {op} bar"),
+                [
+                    Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                        "foo".into()
+                    ))])),
+                    Sequence::Redirect(
+                        Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
+                        op.into()
+                    ),
+                ]
+            );
 
             test_commands!(
                 format!("foo 1{op} bar"),
@@ -115,6 +115,32 @@ mod command_list {
                     Sequence::Redirect(
                         Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
                         format!("1{op}")
+                    ),
+                ]
+            );
+
+            test_commands!(
+                format!("foo {op}2 bar"),
+                [
+                    Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                        "foo".into()
+                    ))])),
+                    Sequence::Redirect(
+                        Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
+                        format!("{op}2")
+                    ),
+                ]
+            );
+
+            test_commands!(
+                format!("foo 1{op}2 bar"),
+                [
+                    Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                        "foo".into()
+                    ))])),
+                    Sequence::Redirect(
+                        Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
+                        format!("1{op}2")
                     ),
                 ]
             );
@@ -202,6 +228,90 @@ mod command_list {
         assert_eq!(
             parse("foo;   bar   ;baz").unwrap().to_string(),
             "foo; bar; baz"
+        );
+    }
+
+    #[test]
+    fn and_then() {
+        test_commands!(
+            "foo && bar -a && baz --qux",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::AndThen(Command(vec![
+                    Argument::Value(Value::Unquoted("bar".into())),
+                    Argument::Flag("-a".into())
+                ])),
+                Sequence::AndThen(Command(vec![
+                    Argument::Value(Value::Unquoted("baz".into())),
+                    Argument::Option("--qux".into(), None)
+                ])),
+            ]
+        );
+        test_commands!(
+            "foo && bar &",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::AndThen(Command(vec![Argument::Value(Value::Unquoted(
+                    "bar".into()
+                )),])),
+                Sequence::Stop("&".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn and_then_spacing() {
+        assert_eq!(parse("foo&&bar").unwrap().to_string(), "foo && bar");
+        assert_eq!(parse("foo && bar").unwrap().to_string(), "foo && bar");
+        assert_eq!(
+            parse("foo&&   bar   &&baz").unwrap().to_string(),
+            "foo && bar && baz"
+        );
+    }
+
+    #[test]
+    fn or_else() {
+        test_commands!(
+            "foo || bar -a || baz --qux",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::OrElse(Command(vec![
+                    Argument::Value(Value::Unquoted("bar".into())),
+                    Argument::Flag("-a".into())
+                ])),
+                Sequence::OrElse(Command(vec![
+                    Argument::Value(Value::Unquoted("baz".into())),
+                    Argument::Option("--qux".into(), None)
+                ])),
+            ]
+        );
+        test_commands!(
+            "foo || bar 2>&1",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::OrElse(Command(vec![Argument::Value(Value::Unquoted(
+                    "bar".into()
+                )),])),
+                Sequence::Stop("2>&1".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn or_else_spacing() {
+        assert_eq!(parse("foo||bar").unwrap().to_string(), "foo || bar");
+        assert_eq!(parse("foo || bar").unwrap().to_string(), "foo || bar");
+        assert_eq!(
+            parse("foo||   bar   ||baz").unwrap().to_string(),
+            "foo || bar || baz"
         );
     }
 }

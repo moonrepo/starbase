@@ -349,7 +349,7 @@ pub fn parse<T: AsRef<str>>(input: T) -> Result<CommandLine, ()> {
     let mut pipeline = vec![];
 
     for pair in pairs {
-        dbg!(&pair);
+        // dbg!(&pair);
 
         if pair.as_rule() == Rule::pipeline {
             pipeline.extend(parse_pipeline(pair));
