@@ -1,15 +1,16 @@
 COMMENT    = _{ "#" ~ (!"#" ~ ANY)* }
 WHITESPACE = _{ " " | "\t" }
 
-id     = _{ ASCII_ALPHANUMERIC | "-" | "_" | "." }
-id_env = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
+id       = _{ ASCII_ALPHANUMERIC | "-" | "_" | "." }
+id_param = _{ ASCII_ALPHANUMERIC | "_" }
+id_env   = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
 
 // SYNTAX:
 // https://www.gnu.org/software/bash/manual/html_node/Definitions.html
 
 blank       = _{ " " | "\t" }
 whitespace  = _{ blank | "\n" | "\r" }
-meta_char   = _{ whitespace | "|" | "&" | ";" | "(" | ")" | "<" | ">" }
+meta_char   = _{ whitespace | ";" | "&" }
 escape_char = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
 fd_char     = _{ ASCII_DIGIT | "-" }
 
@@ -20,6 +21,7 @@ control_operator          =  {
     ";"
   | "&&"
   | "||"
+  | "--"
 }
 redirect_operator         =  {
     // Posix
@@ -71,6 +73,14 @@ value_unquoted       = @{ value_unquoted_inner+ }
 
 value = _{ value_ansi_quote | value_double_quote | value_single_quote | value_unquoted }
 
+// EXPANSIONS:
+// https://www.gnu.org/software/bash/manual/html_node/Arithmetic-Expansion.html
+
+arithmetic_expansion = { "$((" ~ (!"))" ~ ANY)* ~ "))" }
+parameter_expansion  = { "${" ~ (!"}" ~ ANY)* ~ "}" }
+
+expansion = _{ arithmetic_expansion | parameter_expansion }
+
 // ARGUMENTS:
 
 env_var_namespace =  { ^"$e:" | ^"$env::" | ^"$env:" | ^"$env." }
@@ -83,14 +93,23 @@ flag       = @{ "-" ~ ASCII_ALPHA }
 option            = @{ "--" ~ id+ }
 option_with_value = ${ option ~ "=" ~ value }
 
-argument = _{ env_var | flag_group | flag | option_with_value | option | value }
+param = @{ "$" ~ (ASCII_ALPHA | "_") ~ id_param* }
+
+argument = _{ expansion | env_var | param | flag_group | flag | option_with_value | option | value }
+
+// SUBSTITUTION:
+
+command_substitution = { "${" ~ (whitespace | "|") ~ pipeline ~ "; }" | "$(" ~ pipeline ~ ")" | "`" ~ pipeline ~ "`" }
+process_substitution = { "<(" ~ pipeline ~ ")" | ">(" ~ pipeline ~ ")" }
+
+substitution = _{ command_substitution | process_substitution }
 
 // COMMAND LINE:
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Commands.html
 
 command            = { argument+ }
 command_terminator = { ";" | "&" | "2>&1" | "\n" }
-command_list       = { command ~ (operator ~ command)* ~ command_terminator? }
+command_list       = { command ~ ((process_substitution) | (operator ~ command))* ~ command_terminator? }
 
 pipeline_negated  = { "!" }
 pipeline_operator = { "|" | "|&" }

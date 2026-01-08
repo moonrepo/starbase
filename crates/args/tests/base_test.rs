@@ -41,6 +41,36 @@ fn syntax() {
     assert!(false);
 }
 
+mod examples {
+    use super::*;
+
+    #[test]
+    fn docker() {
+        assert_eq!(
+            parse(
+                "docker run -it --name=\"foo\" -v /foo/bar:/fizz/buzz:to lol.domain/blah blah:pass@sha256__abe8euenr93nd -- bash -c 'do something'",
+            ).unwrap(),
+            CommandLine(vec![Pipeline::Start(CommandList(vec![
+                Sequence::Start(Command(vec![
+                    Argument::Value(Value::Unquoted("docker".into())),
+                    Argument::Value(Value::Unquoted("run".into())),
+                    Argument::FlagGroup("-it".into()),
+                    Argument::Option("--name".into(), Some(Value::DoubleQuoted("foo".into()))),
+                    Argument::Flag("-v".into()),
+                    Argument::Value(Value::Unquoted("/foo/bar:/fizz/buzz:to".into())),
+                    Argument::Value(Value::Unquoted("lol.domain/blah".into())),
+                    Argument::Value(Value::Unquoted("blah:pass@sha256__abe8euenr93nd".into())),
+                ])),
+                Sequence::Passthrough(Command(vec![
+                    Argument::Value(Value::Unquoted("bash".into())),
+                    Argument::Flag("-c".into()),
+                    Argument::Value(Value::SingleQuoted("do something".into())),
+                ])),
+            ]))])
+        );
+    }
+}
+
 mod pipeline {
     use super::*;
 
@@ -449,6 +479,78 @@ mod args {
     }
 
     #[test]
+    fn exe() {
+        test_args!("bin", [Argument::Value(Value::Unquoted("bin".into()))]);
+        test_args!(
+            "file.sh",
+            [Argument::Value(Value::Unquoted("file.sh".into()))]
+        );
+        test_args!(
+            "./file.sh",
+            [Argument::Value(Value::Unquoted("./file.sh".into()))]
+        );
+        test_args!(
+            "../file.sh",
+            [Argument::Value(Value::Unquoted("../file.sh".into()))]
+        );
+        test_args!(
+            "\"file with space.sh\"",
+            [Argument::Value(Value::DoubleQuoted(
+                "file with space.sh".into()
+            ))]
+        );
+    }
+
+    #[test]
+    fn flags() {
+        test_args!(
+            "-aB -ABC -abcd",
+            [
+                Argument::FlagGroup("-aB".into()),
+                Argument::FlagGroup("-ABC".into()),
+                Argument::FlagGroup("-abcd".into())
+            ]
+        );
+        test_args!(
+            "-a -B -c -D",
+            [
+                Argument::Flag("-a".into()),
+                Argument::Flag("-B".into()),
+                Argument::Flag("-c".into()),
+                Argument::Flag("-D".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn options() {
+        test_args!(
+            "--a --B --c.d --e-f --g_h --iJ",
+            [
+                Argument::Option("--a".into(), None),
+                Argument::Option("--B".into(), None),
+                Argument::Option("--c.d".into(), None),
+                Argument::Option("--e-f".into(), None),
+                Argument::Option("--g_h".into(), None),
+                Argument::Option("--iJ".into(), None)
+            ]
+        );
+        test_args!(
+            "--a=a --b='b b' --c=\"c c c\" --d=$'d'",
+            [
+                Argument::Option("--a".into(), Some(Value::Unquoted("a".into()))),
+                Argument::Option("--b".into(), Some(Value::SingleQuoted("b b".into()))),
+                Argument::Option("--c".into(), Some(Value::DoubleQuoted("c c c".into()))),
+                Argument::Option("--d".into(), Some(Value::AnsiQuoted("d".into())))
+            ]
+        );
+    }
+}
+
+mod value {
+    use super::*;
+
+    #[test]
     fn special_quote() {
         test_args!(
             "bin $''",
@@ -538,69 +640,171 @@ mod args {
     }
 
     #[test]
-    fn exe() {
-        test_args!("bin", [Argument::Value(Value::Unquoted("bin".into()))]);
+    fn brace_expansion() {
         test_args!(
-            "file.sh",
-            [Argument::Value(Value::Unquoted("file.sh".into()))]
+            "echo a{d,c,b}e",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Expansion(Expansion::Brace("a{d,c,b}e".into()))
+            ]
         );
         test_args!(
-            "./file.sh",
-            [Argument::Value(Value::Unquoted("./file.sh".into()))]
+            "mkdir /usr/local/src/bash/{old,new,dist,bugs}",
+            [
+                Argument::Value(Value::Unquoted("mkdir".into())),
+                Argument::Expansion(Expansion::Brace(
+                    "/usr/local/src/bash/{old,new,dist,bugs}".into()
+                ))
+            ]
         );
         test_args!(
-            "../file.sh",
-            [Argument::Value(Value::Unquoted("../file.sh".into()))]
+            "chown root /usr/{ucb/{ex,edit},lib/{ex?.?*,how_ex}}",
+            [
+                Argument::Value(Value::Unquoted("chown".into())),
+                Argument::Value(Value::Unquoted("root".into())),
+                Argument::Expansion(Expansion::Mixed(
+                    "/usr/{ucb/{ex,edit},lib/{ex?.?*,how_ex}}".into()
+                ))
+            ]
         );
         test_args!(
-            "\"file with space.sh\"",
-            [Argument::Value(Value::DoubleQuoted(
-                "file with space.sh".into()
-            ))]
+            "echo {1..3}",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Expansion(Expansion::Brace("{1..3}".into()))
+            ]
+        );
+
+        // Not expanded
+        test_args!(
+            "echo ${test}",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Expansion(Expansion::Param("${test}".into()))
+            ]
+        );
+        test_args!(
+            "echo foo\\{bar",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::Unquoted("foo\\{bar".into()))
+            ]
         );
     }
 
     #[test]
-    fn flags() {
+    fn tilde_expansion() {
+        for cmd in [
+            "~",
+            "~/foo",
+            "~fred/foo",
+            "~+/foo",
+            "~-/foo",
+            "~1",
+            "~+2",
+            "~-3",
+        ] {
+            test_args!(cmd, [Argument::Expansion(Expansion::Tilde(cmd.into()))]);
+        }
+    }
+
+    #[test]
+    fn param() {
+        for param in ["$foo", "$BAR", "$a", "$_", "$fooBAR", "$foo_bar", "$foo123"] {
+            test_args!(
+                format!("echo {param}"),
+                [
+                    Argument::Value(Value::Unquoted("echo".into())),
+                    Argument::Expansion(Expansion::Param(param.into()))
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn param_expansion() {
+        for param in [
+            "${parameter}",
+            "${parameter:−word}",
+            "${parameter:=word}",
+            "${parameter:?word}",
+            "${parameter:+word}",
+            "${parameter:offset}",
+            "${parameter:offset:length}",
+            "${!prefix*}",
+            "${!prefix@}",
+            "${!name[@]}",
+            "${!name[*]}",
+            "${#parameter}",
+            "${parameter#word}",
+            "${parameter##word}",
+            "${parameter%word}",
+            "${parameter%%word}",
+            "${parameter//pattern/string}",
+            "${parameter/#pattern/string}",
+            "${parameter/%pattern/string}",
+            "${parameter^pattern}",
+            "${parameter^^pattern}",
+            "${parameter,pattern}",
+            "${parameter,,pattern}",
+            "${parameter@operator}",
+        ] {
+            test_args!(
+                format!("echo {param}"),
+                [
+                    Argument::Value(Value::Unquoted("echo".into())),
+                    Argument::Expansion(Expansion::Param(param.into()))
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn filename_expansion() {
         test_args!(
-            "-aB -ABC -abcd",
+            "echo *",
             [
-                Argument::FlagGroup("-aB".into()),
-                Argument::FlagGroup("-ABC".into()),
-                Argument::FlagGroup("-abcd".into())
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Expansion(Expansion::Filename("*".into()))
             ]
         );
         test_args!(
-            "-a -B -c -D",
+            "ls *.txt",
             [
-                Argument::Flag("-a".into()),
-                Argument::Flag("-B".into()),
-                Argument::Flag("-c".into()),
-                Argument::Flag("-D".into()),
+                Argument::Value(Value::Unquoted("ls".into())),
+                Argument::Expansion(Expansion::Filename("*.txt".into()))
+            ]
+        );
+        test_args!(
+            "ls file?",
+            [
+                Argument::Value(Value::Unquoted("ls".into())),
+                Argument::Expansion(Expansion::Filename("file?".into()))
+            ]
+        );
+        test_args!(
+            "ls file[1-3].txt",
+            [
+                Argument::Value(Value::Unquoted("ls".into())),
+                Argument::Expansion(Expansion::Filename("file[1-3].txt".into()))
             ]
         );
     }
 
     #[test]
-    fn options() {
+    fn arithmetic_expansion() {
         test_args!(
-            "--a --B --c.d --e-f --g_h --iJ",
+            "echo $((2+2))",
             [
-                Argument::Option("--a".into(), None),
-                Argument::Option("--B".into(), None),
-                Argument::Option("--c.d".into(), None),
-                Argument::Option("--e-f".into(), None),
-                Argument::Option("--g_h".into(), None),
-                Argument::Option("--iJ".into(), None)
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Expansion(Expansion::Arithmetic("$((2+2))".into()))
             ]
         );
         test_args!(
-            "--a=a --b='b b' --c=\"c c c\" --d=$'d'",
+            "echo $(( (5*4) / 2 ))",
             [
-                Argument::Option("--a".into(), Some(Value::Unquoted("a".into()))),
-                Argument::Option("--b".into(), Some(Value::SingleQuoted("b b".into()))),
-                Argument::Option("--c".into(), Some(Value::DoubleQuoted("c c c".into()))),
-                Argument::Option("--d".into(), Some(Value::AnsiQuoted("d".into())))
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Expansion(Expansion::Arithmetic("$(( (5*4) / 2 ))".into()))
             ]
         );
     }
