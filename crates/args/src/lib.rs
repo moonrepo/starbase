@@ -14,6 +14,8 @@ pub enum Value {
     DoubleQuoted(String),
     SingleQuoted(String),
     Unquoted(String),
+    Expansion(Expansion),
+    Substitution(Substitution),
 }
 
 impl fmt::Display for Value {
@@ -23,6 +25,8 @@ impl fmt::Display for Value {
             Self::DoubleQuoted(inner) => write!(f, "\"{inner}\""),
             Self::SingleQuoted(inner) => write!(f, "'{inner}'"),
             Self::Unquoted(inner) => write!(f, "{inner}"),
+            Self::Expansion(inner) => write!(f, "{inner}"),
+            Self::Substitution(inner) => write!(f, "{inner}"),
         }
     }
 }
@@ -106,6 +110,20 @@ impl fmt::Display for Expansion {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum Substitution {
+    Command(String),
+    Process(String),
+}
+
+impl fmt::Display for Substitution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Command(inner) | Self::Process(inner) => write!(f, "{inner}"),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Argument {
     // KEY=value, $env:KEY=value
     EnvVar(String, Value, Option<String>),
@@ -117,6 +135,8 @@ pub enum Argument {
     Flag(String),
     // --opt, --opt=value
     Option(String, Option<Value>),
+    // $(), <(), ...
+    Substitution(Substitution),
     // value
     Value(Value),
 }
@@ -135,6 +155,7 @@ impl fmt::Display for Argument {
                 Some(value) => write!(f, "{option}={value}"),
                 None => write!(f, "{option}"),
             },
+            Self::Substitution(inner) => write!(f, "{inner}"),
             Self::Value(value) => write!(f, "{value}"),
         }
     }
@@ -261,6 +282,21 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
         Rule::value_double_quote => Value::DoubleQuoted(pair.as_str().trim_matches('"').into()),
         Rule::value_single_quote => Value::SingleQuoted(pair.as_str().trim_matches('\'').into()),
         Rule::value_unquoted => Value::Unquoted(pair.as_str().into()),
+
+        // Expansions
+        Rule::arithmetic_expansion => Value::Expansion(Expansion::Arithmetic(pair.as_str().into())),
+        Rule::parameter_expansion | Rule::param => {
+            Value::Expansion(Expansion::Param(pair.as_str().into()))
+        }
+
+        // Substitution
+        Rule::command_substitution => {
+            Value::Substitution(Substitution::Command(pair.as_str().into()))
+        }
+        Rule::process_substitution => {
+            Value::Substitution(Substitution::Process(pair.as_str().into()))
+        }
+
         _ => unreachable!(),
     }
 }
@@ -316,6 +352,14 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
         }
         Rule::parameter_expansion | Rule::param => {
             Argument::Expansion(Expansion::Param(pair.as_str().into()))
+        }
+
+        // Substitution
+        Rule::command_substitution => {
+            Argument::Substitution(Substitution::Command(pair.as_str().into()))
+        }
+        Rule::process_substitution => {
+            Argument::Substitution(Substitution::Process(pair.as_str().into()))
         }
 
         // Flags

@@ -14,16 +14,15 @@ escape_char = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
 fd_char     = _{ ASCII_DIGIT | "-" }
 
 // OPERATORS:
+// https://www.gnu.org/software/bash/manual/html_node/Redirections.html
 
 control_operator          =  {
-    // Posix
     ";"
   | "&&"
   | "||"
   | "--"
 }
 redirect_operator         =  {
-    // Posix
     "<>"
   | ">>>"
   | ">>"
@@ -70,45 +69,49 @@ value_ansi_quote = @{ "$'" ~ value_single_quote_inner* ~ "'" }
 value_unquoted_inner = _{ !(meta_char | operator) ~ ANY }
 value_unquoted       = @{ value_unquoted_inner+ }
 
-value = _{ value_ansi_quote | value_double_quote | value_single_quote | value_unquoted }
+value         = _{ value_ansi_quote | value_double_quote | value_single_quote | value_unquoted }
+value_dynamic = _{ expansion | substitution | value }
 
 // EXPANSIONS:
 // https://www.gnu.org/software/bash/manual/html_node/Arithmetic-Expansion.html
+// https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html
 
-arithmetic_expansion = { "$((" ~ (!"))" ~ ANY)* ~ "))" }
-parameter_expansion  = { "${" ~ (!"}" ~ ANY)* ~ "}" }
+arithmetic_expansion = { "$((" ~ (!"))" ~ ANY)+ ~ "))" }
+parameter_expansion  = { "${" ~ (!"}" ~ ANY)+ ~ "}" }
 
 expansion = _{ arithmetic_expansion | parameter_expansion }
+
+// SUBSTITUTION:
+// https://www.gnu.org/software/bash/manual/html_node/Command-Substitution.html
+// https://www.gnu.org/software/bash/manual/html_node/Process-Substitution.html
+
+command_substitution = { "$(" ~ (!")" ~ ANY)+ ~ ")" | "`" ~ (!"`" ~ ANY)+ ~ "`" }
+process_substitution = { "<(" ~ (!")" ~ ANY)+ ~ ")" | ">(" ~ (!")" ~ ANY)+ ~ ")" }
+
+substitution = _{ command_substitution | process_substitution }
 
 // ARGUMENTS:
 
 env_var_namespace =  { ^"$e:" | ^"$env::" | ^"$env:" | ^"$env." }
 env_var_name      = @{ id_env+ }
-env_var           = ${ env_var_namespace? ~ env_var_name ~ "=" ~ value }
+env_var           = ${ env_var_namespace? ~ env_var_name ~ "=" ~ value_dynamic }
 
 flag_group = @{ "-" ~ ASCII_ALPHA{2, } }
 flag       = @{ "-" ~ ASCII_ALPHA }
 
 option            = @{ "--" ~ (id | "-" | ".")+ }
-option_with_value = ${ option ~ "=" ~ value }
+option_with_value = ${ option ~ "=" ~ value_dynamic }
 
 param = @{ "$" ~ (ASCII_ALPHA | "_") ~ id* }
 
-argument = _{ expansion | env_var | param | flag_group | flag | option_with_value | option | value }
-
-// SUBSTITUTION:
-
-command_substitution = { "${" ~ (whitespace | "|") ~ pipeline ~ "; }" | "$(" ~ pipeline ~ ")" | "`" ~ pipeline ~ "`" }
-process_substitution = { "<(" ~ pipeline ~ ")" | ">(" ~ pipeline ~ ")" }
-
-substitution = _{ command_substitution | process_substitution }
+argument = _{ expansion | substitution | env_var | param | flag_group | flag | option_with_value | option | value }
 
 // COMMAND LINE:
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Commands.html
 
 command            = { argument+ }
 command_terminator = { ";" | "&" | "2>&1" | "\n" }
-command_list       = { command ~ ((process_substitution) | (operator ~ command))* ~ command_terminator? }
+command_list       = { command ~ (operator ~ command)* ~ command_terminator? }
 
 pipeline_negated  = { "!" }
 pipeline_operator = { "|" | "|&" }

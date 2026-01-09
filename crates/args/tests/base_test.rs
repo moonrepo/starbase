@@ -38,6 +38,22 @@ mod examples {
     use super::*;
 
     #[test]
+    fn awk() {
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![
+                Argument::Value(Value::Unquoted("awk".into())),
+                Argument::Value(Value::SingleQuoted("NR == 1 {min = max = $2} $2 < min {min = $2} $2 > max {max = $2} {sum += $2} END {printf(\"Min: %.2f, Max: %.2f, Avg: %.2f\\n\", min, max, sum/NR)}".into())),
+                Argument::Value(Value::Unquoted("filename.txt".into())),
+            ]),
+        )]))]);
+
+        assert_eq!(
+            parse("awk 'NR == 1 {min = max = $2} $2 < min {min = $2} $2 > max {max = $2} {sum += $2} END {printf(\"Min: %.2f, Max: %.2f, Avg: %.2f\\n\", min, max, sum/NR)}' filename.txt").unwrap(),
+            actual
+        );
+    }
+
+    #[test]
     fn git() {
         let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
             Command(vec![
@@ -59,27 +75,54 @@ mod examples {
 
     #[test]
     fn docker() {
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![
+            Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("docker".into())),
+                Argument::Value(Value::Unquoted("run".into())),
+                Argument::FlagGroup("-it".into()),
+                Argument::Option("--name".into(), Some(Value::DoubleQuoted("foo".into()))),
+                Argument::Flag("-v".into()),
+                Argument::Value(Value::Unquoted("/foo/bar:/fizz/buzz:to".into())),
+                Argument::Value(Value::Unquoted("lol.domain/blah".into())),
+                Argument::Value(Value::Unquoted("blah:pass@sha256__abe8euenr93nd".into())),
+            ])),
+            Sequence::Passthrough(Command(vec![
+                Argument::Value(Value::Unquoted("bash".into())),
+                Argument::Flag("-c".into()),
+                Argument::Value(Value::SingleQuoted("do something".into())),
+            ])),
+        ]))]);
+
         assert_eq!(
             parse(
                 "docker run -it --name=\"foo\" -v /foo/bar:/fizz/buzz:to lol.domain/blah blah:pass@sha256__abe8euenr93nd -- bash -c 'do something'",
             ).unwrap(),
-            CommandLine(vec![Pipeline::Start(CommandList(vec![
-                Sequence::Start(Command(vec![
-                    Argument::Value(Value::Unquoted("docker".into())),
-                    Argument::Value(Value::Unquoted("run".into())),
-                    Argument::FlagGroup("-it".into()),
-                    Argument::Option("--name".into(), Some(Value::DoubleQuoted("foo".into()))),
-                    Argument::Flag("-v".into()),
-                    Argument::Value(Value::Unquoted("/foo/bar:/fizz/buzz:to".into())),
-                    Argument::Value(Value::Unquoted("lol.domain/blah".into())),
-                    Argument::Value(Value::Unquoted("blah:pass@sha256__abe8euenr93nd".into())),
-                ])),
-                Sequence::Passthrough(Command(vec![
-                    Argument::Value(Value::Unquoted("bash".into())),
-                    Argument::Flag("-c".into()),
-                    Argument::Value(Value::SingleQuoted("do something".into())),
-                ])),
-            ]))])
+            actual
+        );
+
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![
+                Argument::Value(Value::Unquoted("docker".into())),
+                Argument::Value(Value::Unquoted("build".into())),
+                Argument::Option("--target".into(), None),
+                Argument::Value(Value::Unquoted("prod".into())),
+                Argument::Flag("-t".into()),
+                Argument::Expansion(Expansion::Param("$project".into())),
+                Argument::Flag("-f".into()),
+                Argument::Value(Value::Unquoted("Dockerfile".into())),
+                Argument::Expansion(Expansion::Param("$workspaceRoot".into())),
+                Argument::Option("--build-arg".into(), None),
+                Argument::EnvVar(
+                    "COMMIT_HASH".into(),
+                    Value::Substitution(Substitution::Command("$(git rev-parse HEAD)".into())),
+                    None,
+                ),
+            ]),
+        )]))]);
+
+        assert_eq!(
+            parse("docker build --target prod -t $project -f Dockerfile $workspaceRoot --build-arg COMMIT_HASH=$(git rev-parse HEAD)").unwrap(),
+            actual
         );
     }
 }
@@ -357,6 +400,32 @@ mod command_list {
             "foo || bar || baz"
         );
     }
+
+    #[test]
+    fn process_substitution() {
+        test_commands!(
+            "echo <(foo)",
+            [Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Substitution(Substitution::Process("<(foo)".into()))
+            ]))]
+        );
+        test_commands!(
+            "echo >(bar)",
+            [Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Substitution(Substitution::Process(">(bar)".into()))
+            ]))]
+        );
+        test_commands!(
+            "diff <(ls /dir1) <( ls /dir2 )",
+            [Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("diff".into())),
+                Argument::Substitution(Substitution::Process("<(ls /dir1)".into())),
+                Argument::Substitution(Substitution::Process("<( ls /dir2 )".into()))
+            ]))]
+        );
+    }
 }
 
 mod command {
@@ -467,6 +536,22 @@ mod args {
                 Argument::Value(Value::Unquoted("bin".into())),
             ]
         );
+        test_args!(
+            "KEY=$(echo foo)",
+            [Argument::EnvVar(
+                "KEY".into(),
+                Value::Substitution(Substitution::Command("$(echo foo)".into())),
+                None
+            )]
+        );
+        test_args!(
+            "KEY=${param}",
+            [Argument::EnvVar(
+                "KEY".into(),
+                Value::Expansion(Expansion::Param("${param}".into())),
+                None
+            )]
+        );
     }
 
     #[test]
@@ -556,6 +641,22 @@ mod args {
                 Argument::Option("--c".into(), Some(Value::DoubleQuoted("c c c".into()))),
                 Argument::Option("--d".into(), Some(Value::AnsiQuoted("d".into())))
             ]
+        );
+        test_args!(
+            "--opt=$(echo foo)",
+            [Argument::Option(
+                "--opt".into(),
+                Some(Value::Substitution(Substitution::Command(
+                    "$(echo foo)".into()
+                ))),
+            )]
+        );
+        test_args!(
+            "--opt=${param}",
+            [Argument::Option(
+                "--opt".into(),
+                Some(Value::Expansion(Expansion::Param("${param}".into()))),
+            )]
         );
     }
 }
