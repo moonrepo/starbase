@@ -54,6 +54,17 @@ mod examples {
     }
 
     #[test]
+    fn bash() {
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![Argument::Value(Value::Substitution(
+                Substitution::Command("$( echo ${FOO} && echo hi )".into()),
+            ))]),
+        )]))]);
+
+        assert_eq!(parse("$( echo ${FOO} && echo hi )").unwrap(), actual);
+    }
+
+    #[test]
     fn git() {
         let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
             Command(vec![
@@ -71,6 +82,17 @@ mod examples {
             parse("git rebase -i --empty=drop --exec \"echo\" HEAD~3").unwrap(),
             actual
         );
+
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![
+                Argument::Value(Value::Unquoted("git".into())),
+                Argument::Value(Value::Unquoted("checkout".into())),
+                Argument::Flag("-b".into()),
+                Argument::Value(Value::DoubleQuoted("🚀-emoji".into())),
+            ]),
+        )]))]);
+
+        assert_eq!(parse("git checkout -b \"🚀-emoji\"").unwrap(), actual);
     }
 
     #[test]
@@ -107,10 +129,10 @@ mod examples {
                 Argument::Option("--target".into(), None),
                 Argument::Value(Value::Unquoted("prod".into())),
                 Argument::Flag("-t".into()),
-                Argument::Expansion(Expansion::Param("$project".into())),
+                Argument::Value(Value::Expansion(Expansion::Param("$project".into()))),
                 Argument::Flag("-f".into()),
                 Argument::Value(Value::Unquoted("Dockerfile".into())),
-                Argument::Expansion(Expansion::Param("$workspaceRoot".into())),
+                Argument::Value(Value::Expansion(Expansion::Param("$workspaceRoot".into()))),
                 Argument::Option("--build-arg".into(), None),
                 Argument::EnvVar(
                     "COMMIT_HASH".into(),
@@ -125,6 +147,88 @@ mod examples {
             actual
         );
     }
+
+    #[test]
+    fn qemu() {
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![
+                Argument::Value(Value::Unquoted("qemu-system-x86_64".into())),
+                Argument::FlagGroup("-machine".into()),
+                Argument::Value(Value::Unquoted("q35,smm=on".into())),
+                Argument::FlagGroup("-drive".into()),
+                Argument::Value(Value::Unquoted(
+                    "if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.secboot.fd"
+                        .into(),
+                )),
+                Argument::FlagGroup("-global".into()),
+                Argument::Value(Value::Unquoted(
+                    "driver=cfi.pflash01,property=secure,value=on".into(),
+                )),
+                Argument::FlagGroup("-drive".into()),
+                Argument::Value(Value::Unquoted(
+                    "file=rbd:pool/volume:id=admin:key=AQAAABCDEF==:conf=/etc/ceph/ceph.conf,format=raw,if=virtio,id=drive1,cache=none"
+                        .into(),
+                )),
+                Argument::FlagGroup("-device".into()),
+                Argument::Value(Value::Unquoted("usb-tablet".into())),
+                Argument::FlagGroup("-vnc".into()),
+                Argument::Value(Value::Unquoted("127.0.0.1:0".into())),
+                Argument::FlagGroup("-device".into()),
+                Argument::Value(Value::Unquoted("vfio-pci,host=0000:01:00.0,multifunction=on".into())),
+                Argument::FlagGroup("-netdev".into()),
+                Argument::Value(Value::Unquoted("user,id=net0,hostfwd=tcp::2222-:22".into())),
+                Argument::FlagGroup("-device".into()),
+                Argument::Value(Value::Unquoted("e1000e,netdev=net0".into())),
+                Argument::FlagGroup("-qmp".into()),
+                Argument::Value(Value::Unquoted("unix:/tmp/qmp.sock,server=on,wait=off".into())),
+            ]),
+        )]))]);
+
+        assert_eq!(parse("qemu-system-x86_64 -machine q35,smm=on -drive if=pflash,format=raw,readonly=on,file=/usr/share/OVMF/OVMF_CODE.secboot.fd -global driver=cfi.pflash01,property=secure,value=on -drive file=rbd:pool/volume:id=admin:key=AQAAABCDEF==:conf=/etc/ceph/ceph.conf,format=raw,if=virtio,id=drive1,cache=none -device usb-tablet -vnc 127.0.0.1:0 -device vfio-pci,host=0000:01:00.0,multifunction=on -netdev user,id=net0,hostfwd=tcp::2222-:22 -device e1000e,netdev=net0 -qmp unix:/tmp/qmp.sock,server=on,wait=off").unwrap(), actual);
+    }
+
+    #[test]
+    fn system() {
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![
+                Argument::Value(Value::Unquoted("ls".into())),
+                Argument::Flag("-l".into()),
+                Argument::Value(Value::SingleQuoted("afile; rm -rf ~".into())),
+            ]),
+        )]))]);
+
+        assert_eq!(parse("ls -l 'afile; rm -rf ~'").unwrap(), actual);
+
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![
+            Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("apt-get".into())),
+                Argument::Value(Value::Unquoted("update".into())),
+                Argument::FlagGroup("-qq".into()),
+            ])),
+            Sequence::Redirect(
+                Command(vec![Argument::Value(Value::Unquoted("/dev/null".into()))]),
+                ">".into(),
+            ),
+            Sequence::AndThen(Command(vec![
+                Argument::Value(Value::Unquoted("apt-get".into())),
+                Argument::Value(Value::Unquoted("install".into())),
+                Argument::FlagGroup("-yq".into()),
+                Argument::Value(Value::Unquoted("jq".into())),
+                Argument::Value(Value::Unquoted("make".into())),
+            ])),
+            Sequence::Redirect(
+                Command(vec![Argument::Value(Value::Unquoted("/dev/null".into()))]),
+                ">>".into(),
+            ),
+            Sequence::Stop("2>&1".into()),
+        ]))]);
+
+        assert_eq!(
+            parse("apt-get update -qq >/dev/null && apt-get install -yq jq make >>/dev/null 2>&1")
+                .unwrap(),
+            actual
+        );
+    }
 }
 
 mod pipeline {
@@ -132,43 +236,65 @@ mod pipeline {
 
     #[test]
     fn single_command() {
-        assert_eq!(
-            parse("foo --bar").unwrap(),
-            CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
-                Command(vec![
-                    Argument::Value(Value::Unquoted("foo".into())),
-                    Argument::Option("--bar".into(), None),
-                ])
-            )]))])
-        );
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![
+                Argument::Value(Value::Unquoted("foo".into())),
+                Argument::Option("--bar".into(), None),
+            ]),
+        )]))]);
+
+        assert_eq!(parse("foo --bar").unwrap(), actual);
     }
 
-    // #[test]
-    // fn multi_command_then() {
-    //     assert_eq!(parse("foo --bar; baz -x;"), []);
-    // }
+    #[test]
+    fn pipe() {
+        let actual = CommandLine(vec![
+            Pipeline::Start(CommandList(vec![Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("foo".into())),
+                Argument::Flag("-a".into()),
+            ]))])),
+            Pipeline::Pipe(CommandList(vec![Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("bar".into())),
+                Argument::Option("--b".into(), None),
+            ]))])),
+            Pipeline::PipeAll(CommandList(vec![Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("baz".into())),
+                Argument::Value(Value::SingleQuoted("c".into())),
+            ]))])),
+        ]);
 
-    // #[test]
-    // fn pipe() {
-    //     assert_eq!(
-    //         parse_args("foo -a | bar --b | baz 'c'"),
-    //         [
-    //             Argument::EnvVar("KEY".into(), Value::Unquoted("value".into()), None),
-    //             Argument::Value(Value::Unquoted("bin".into())),
-    //         ]
-    //     );
-    // }
+        assert_eq!(parse("foo -a | bar --b |& baz 'c'").unwrap(), actual);
+        assert_eq!(
+            parse("foo -a  |    bar --b     |&      baz 'c'").unwrap(),
+            actual
+        );
+        assert_eq!(parse("foo -a|bar --b|&baz 'c'").unwrap(), actual);
+    }
 
-    // #[test]
-    // fn pipe_error() {
-    //     assert_eq!(
-    //         parse_args("foo -a |& bar --b |& baz 'c'"),
-    //         [
-    //             Argument::EnvVar("KEY".into(), Value::Unquoted("value".into()), None),
-    //             Argument::Value(Value::Unquoted("bin".into())),
-    //         ]
-    //     );
-    // }
+    #[test]
+    fn pipe_negated() {
+        let actual = CommandLine(vec![
+            Pipeline::StartNegated(CommandList(vec![Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("foo".into())),
+                Argument::Flag("-a".into()),
+            ]))])),
+            Pipeline::Pipe(CommandList(vec![Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("bar".into())),
+                Argument::Option("--b".into(), None),
+            ]))])),
+            Pipeline::PipeAll(CommandList(vec![Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("baz".into())),
+                Argument::Value(Value::SingleQuoted("c".into())),
+            ]))])),
+        ]);
+
+        assert_eq!(parse("! foo -a | bar --b |& baz 'c'").unwrap(), actual);
+        assert_eq!(
+            parse("!foo -a  |    bar --b     |&      baz 'c'").unwrap(),
+            actual
+        );
+        assert_eq!(parse("! foo -a|bar --b|&baz 'c'").unwrap(), actual);
+    }
 }
 
 mod command_list {
@@ -402,27 +528,47 @@ mod command_list {
     }
 
     #[test]
+    fn passthrough() {
+        test_commands!(
+            "foo -- bar --qux",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "foo".into()
+                ))])),
+                Sequence::Passthrough(Command(vec![
+                    Argument::Value(Value::Unquoted("bar".into())),
+                    Argument::Option("--qux".into(), None)
+                ])),
+            ]
+        );
+    }
+
+    #[test]
     fn process_substitution() {
         test_commands!(
             "echo <(foo)",
             [Sequence::Start(Command(vec![
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Substitution(Substitution::Process("<(foo)".into()))
+                Argument::Value(Value::Substitution(Substitution::Process("<(foo)".into())))
             ]))]
         );
         test_commands!(
             "echo >(bar)",
             [Sequence::Start(Command(vec![
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Substitution(Substitution::Process(">(bar)".into()))
+                Argument::Value(Value::Substitution(Substitution::Process(">(bar)".into())))
             ]))]
         );
         test_commands!(
             "diff <(ls /dir1) <( ls /dir2 )",
             [Sequence::Start(Command(vec![
                 Argument::Value(Value::Unquoted("diff".into())),
-                Argument::Substitution(Substitution::Process("<(ls /dir1)".into())),
-                Argument::Substitution(Substitution::Process("<( ls /dir2 )".into()))
+                Argument::Value(Value::Substitution(Substitution::Process(
+                    "<(ls /dir1)".into()
+                ))),
+                Argument::Value(Value::Substitution(Substitution::Process(
+                    "<( ls /dir2 )".into()
+                )))
             ]))]
         );
     }
@@ -759,16 +905,16 @@ mod value {
             "echo a{d,c,b}e",
             [
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Expansion(Expansion::Brace("a{d,c,b}e".into()))
+                Argument::Value(Value::Expansion(Expansion::Brace("a{d,c,b}e".into())))
             ]
         );
         test_args!(
             "mkdir /usr/local/src/bash/{old,new,dist,bugs}",
             [
                 Argument::Value(Value::Unquoted("mkdir".into())),
-                Argument::Expansion(Expansion::Brace(
+                Argument::Value(Value::Expansion(Expansion::Brace(
                     "/usr/local/src/bash/{old,new,dist,bugs}".into()
-                ))
+                )))
             ]
         );
         test_args!(
@@ -776,16 +922,16 @@ mod value {
             [
                 Argument::Value(Value::Unquoted("chown".into())),
                 Argument::Value(Value::Unquoted("root".into())),
-                Argument::Expansion(Expansion::Mixed(
+                Argument::Value(Value::Expansion(Expansion::Mixed(
                     "/usr/{ucb/{ex,edit},lib/{ex?.?*,how_ex}}".into()
-                ))
+                )))
             ]
         );
         test_args!(
             "echo {1..3}",
             [
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Expansion(Expansion::Brace("{1..3}".into()))
+                Argument::Value(Value::Expansion(Expansion::Brace("{1..3}".into())))
             ]
         );
 
@@ -794,7 +940,7 @@ mod value {
             "echo ${test}",
             [
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Expansion(Expansion::Param("${test}".into()))
+                Argument::Value(Value::Expansion(Expansion::Param("${test}".into())))
             ]
         );
         test_args!(
@@ -818,7 +964,12 @@ mod value {
             "~+2",
             "~-3",
         ] {
-            test_args!(cmd, [Argument::Expansion(Expansion::Tilde(cmd.into()))]);
+            test_args!(
+                cmd,
+                [Argument::Value(Value::Expansion(Expansion::Tilde(
+                    cmd.into()
+                )))]
+            );
         }
     }
 
@@ -829,7 +980,7 @@ mod value {
                 format!("echo {param}"),
                 [
                     Argument::Value(Value::Unquoted("echo".into())),
-                    Argument::Expansion(Expansion::Param(param.into()))
+                    Argument::Value(Value::Expansion(Expansion::Param(param.into())))
                 ]
             );
         }
@@ -867,7 +1018,7 @@ mod value {
                 format!("echo {param}"),
                 [
                     Argument::Value(Value::Unquoted("echo".into())),
-                    Argument::Expansion(Expansion::Param(param.into()))
+                    Argument::Value(Value::Expansion(Expansion::Param(param.into())))
                 ]
             );
         }
@@ -879,28 +1030,30 @@ mod value {
             "echo *",
             [
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Expansion(Expansion::Filename("*".into()))
+                Argument::Value(Value::Expansion(Expansion::Filename("*".into())))
             ]
         );
         test_args!(
             "ls *.txt",
             [
                 Argument::Value(Value::Unquoted("ls".into())),
-                Argument::Expansion(Expansion::Filename("*.txt".into()))
+                Argument::Value(Value::Expansion(Expansion::Filename("*.txt".into())))
             ]
         );
         test_args!(
             "ls file?",
             [
                 Argument::Value(Value::Unquoted("ls".into())),
-                Argument::Expansion(Expansion::Filename("file?".into()))
+                Argument::Value(Value::Expansion(Expansion::Filename("file?".into())))
             ]
         );
         test_args!(
             "ls file[1-3].txt",
             [
                 Argument::Value(Value::Unquoted("ls".into())),
-                Argument::Expansion(Expansion::Filename("file[1-3].txt".into()))
+                Argument::Value(Value::Expansion(Expansion::Filename(
+                    "file[1-3].txt".into()
+                )))
             ]
         );
     }
@@ -911,14 +1064,16 @@ mod value {
             "echo $((2+2))",
             [
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Expansion(Expansion::Arithmetic("$((2+2))".into()))
+                Argument::Value(Value::Expansion(Expansion::Arithmetic("$((2+2))".into())))
             ]
         );
         test_args!(
             "echo $(( (5*4) / 2 ))",
             [
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Expansion(Expansion::Arithmetic("$(( (5*4) / 2 ))".into()))
+                Argument::Value(Value::Expansion(Expansion::Arithmetic(
+                    "$(( (5*4) / 2 ))".into()
+                )))
             ]
         );
     }

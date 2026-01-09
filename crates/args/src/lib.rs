@@ -31,61 +31,6 @@ impl fmt::Display for Value {
     }
 }
 
-pub enum ExpansionType {
-    Arithmetic,
-    Brace,
-    Filename,
-    Mixed,
-    Param,
-    Tilde,
-}
-
-impl ExpansionType {
-    fn detect(value: &str) -> Option<Self> {
-        if value.starts_with('~') {
-            return Some(Self::Tilde);
-        } else if value.starts_with("$((") {
-            return Some(Self::Arithmetic);
-        } else if value.starts_with("${") {
-            return Some(Self::Param);
-        }
-
-        let mut found = vec![];
-        let mut last_ch = ' ';
-
-        for ch in value.chars() {
-            // https://www.gnu.org/software/bash/manual/html_node/Brace-Expansion.html
-            if ch == '{' && last_ch != '$' && last_ch != '\\' {
-                found.push(ExpansionType::Brace);
-            }
-
-            // https://www.gnu.org/software/bash/manual/html_node/Filename-Expansion.html
-            if ch == '*'
-                || ch == '?'
-                || ch == '['
-                || (ch == '('
-                    && (last_ch == '?'
-                        || last_ch == '*'
-                        || last_ch == '+'
-                        || last_ch == '@'
-                        || last_ch == '!'))
-            {
-                found.push(ExpansionType::Filename);
-            }
-
-            last_ch = ch;
-        }
-
-        if found.is_empty() {
-            None
-        } else if found.len() > 1 {
-            Some(Self::Mixed)
-        } else {
-            Some(found.remove(0))
-        }
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub enum Expansion {
     Arithmetic(String),
@@ -109,6 +54,52 @@ impl fmt::Display for Expansion {
     }
 }
 
+impl Expansion {
+    fn detect(value: &str) -> Option<Self> {
+        if value.starts_with('~') {
+            return Some(Self::Tilde(value.into()));
+        } else if value.starts_with("$((") {
+            return Some(Self::Arithmetic(value.into()));
+        } else if value.starts_with("${") {
+            return Some(Self::Param(value.into()));
+        }
+
+        let mut found = vec![];
+        let mut last_ch = ' ';
+
+        for ch in value.chars() {
+            // https://www.gnu.org/software/bash/manual/html_node/Brace-Expansion.html
+            if ch == '{' && last_ch != '$' && last_ch != '\\' {
+                found.push(Self::Brace(value.into()));
+            }
+
+            // https://www.gnu.org/software/bash/manual/html_node/Filename-Expansion.html
+            if ch == '*'
+                || ch == '?'
+                || ch == '['
+                || (ch == '('
+                    && (last_ch == '?'
+                        || last_ch == '*'
+                        || last_ch == '+'
+                        || last_ch == '@'
+                        || last_ch == '!'))
+            {
+                found.push(Self::Filename(value.into()));
+            }
+
+            last_ch = ch;
+        }
+
+        if found.is_empty() {
+            None
+        } else if found.len() > 1 {
+            Some(Self::Mixed(value.into()))
+        } else {
+            Some(found.remove(0))
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Substitution {
     Command(String),
@@ -127,16 +118,12 @@ impl fmt::Display for Substitution {
 pub enum Argument {
     // KEY=value, $env:KEY=value
     EnvVar(String, Value, Option<String>),
-    // $(), ${}, ...
-    Expansion(Expansion),
     // -abc
     FlagGroup(String),
     // -a
     Flag(String),
     // --opt, --opt=value
     Option(String, Option<Value>),
-    // $(), <(), ...
-    Substitution(Substitution),
     // value
     Value(Value),
 }
@@ -149,13 +136,11 @@ impl fmt::Display for Argument {
                 "{}{key}={value}",
                 namespace.as_deref().unwrap_or_default()
             ),
-            Self::Expansion(inner) => write!(f, "{inner}"),
             Self::FlagGroup(flag) | Self::Flag(flag) => write!(f, "{flag}"),
             Self::Option(option, value) => match value {
                 Some(value) => write!(f, "{option}={value}"),
                 None => write!(f, "{option}"),
             },
-            Self::Substitution(inner) => write!(f, "{inner}"),
             Self::Value(value) => write!(f, "{value}"),
         }
     }
@@ -281,7 +266,11 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
         ),
         Rule::value_double_quote => Value::DoubleQuoted(pair.as_str().trim_matches('"').into()),
         Rule::value_single_quote => Value::SingleQuoted(pair.as_str().trim_matches('\'').into()),
-        Rule::value_unquoted => Value::Unquoted(pair.as_str().into()),
+
+        Rule::value_unquoted => match Expansion::detect(pair.as_str()) {
+            Some(exp) => Value::Expansion(exp),
+            None => Value::Unquoted(pair.as_str().into()),
+        },
 
         // Expansions
         Rule::arithmetic_expansion => Value::Expansion(Expansion::Arithmetic(pair.as_str().into())),
@@ -304,26 +293,10 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
 fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
     match pair.as_rule() {
         // Values
-        Rule::value_ansi_quote | Rule::value_double_quote | Rule::value_single_quote => {
-            Argument::Value(parse_value(pair))
-        }
-
-        Rule::value_unquoted => {
-            let inner = pair.as_str();
-
-            if let Some(exp) = ExpansionType::detect(inner) {
-                Argument::Expansion(match exp {
-                    ExpansionType::Arithmetic => Expansion::Arithmetic(inner.into()),
-                    ExpansionType::Brace => Expansion::Brace(inner.into()),
-                    ExpansionType::Filename => Expansion::Filename(inner.into()),
-                    ExpansionType::Mixed => Expansion::Mixed(inner.into()),
-                    ExpansionType::Param => Expansion::Param(inner.into()),
-                    ExpansionType::Tilde => Expansion::Tilde(inner.into()),
-                })
-            } else {
-                Argument::Value(parse_value(pair))
-            }
-        }
+        Rule::value_ansi_quote
+        | Rule::value_double_quote
+        | Rule::value_single_quote
+        | Rule::value_unquoted => Argument::Value(parse_value(pair)),
 
         // Env vars
         Rule::env_var => {
@@ -347,20 +320,20 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
         }
 
         // Expansions
-        Rule::arithmetic_expansion => {
-            Argument::Expansion(Expansion::Arithmetic(pair.as_str().into()))
-        }
+        Rule::arithmetic_expansion => Argument::Value(Value::Expansion(Expansion::Arithmetic(
+            pair.as_str().into(),
+        ))),
         Rule::parameter_expansion | Rule::param => {
-            Argument::Expansion(Expansion::Param(pair.as_str().into()))
+            Argument::Value(Value::Expansion(Expansion::Param(pair.as_str().into())))
         }
 
         // Substitution
-        Rule::command_substitution => {
-            Argument::Substitution(Substitution::Command(pair.as_str().into()))
-        }
-        Rule::process_substitution => {
-            Argument::Substitution(Substitution::Process(pair.as_str().into()))
-        }
+        Rule::command_substitution => Argument::Value(Value::Substitution(Substitution::Command(
+            pair.as_str().into(),
+        ))),
+        Rule::process_substitution => Argument::Value(Value::Substitution(Substitution::Process(
+            pair.as_str().into(),
+        ))),
 
         // Flags
         Rule::flag_group => Argument::FlagGroup(pair.as_str().into()),

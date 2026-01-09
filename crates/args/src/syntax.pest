@@ -114,7 +114,7 @@ command_terminator = { ";" | "&" | "2>&1" | "\n" }
 command_list       = { command ~ (operator ~ command)* ~ command_terminator? }
 
 pipeline_negated  = { "!" }
-pipeline_operator = { "|" | "|&" }
+pipeline_operator = { "|&" | "|" }
 pipeline          = { pipeline_negated? ~ command_list ~ (pipeline_operator ~ command_list)* }
 
 args = _{
