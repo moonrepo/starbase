@@ -1,0 +1,12 @@
+[package]
+name = "starbase_args"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+description = "A generic command line argument parser with support for POSIX-based shells and more."
+repository = "https://github.com/moonrepo/starbase"
+rust-version = "1.85.0"
+
+[dependencies]
+pest = "2.8.3"
+pest_derive = "2.8.3"
