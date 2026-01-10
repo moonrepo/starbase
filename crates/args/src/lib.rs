@@ -3,49 +3,11 @@
 use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
 use std::fmt;
+use std::ops::Deref;
 
 #[derive(Parser)]
 #[grammar = "syntax.pest"]
 pub struct ArgsParser;
-
-#[derive(Debug, PartialEq)]
-pub enum Value {
-    /// ""
-    DoubleQuoted(String),
-    /// $""
-    SpecialDoubleQuoted(String),
-    /// ''
-    SingleQuoted(String),
-    /// $''
-    SpecialSingleQuoted(String),
-    /// ...
-    Unquoted(String),
-    /// $(()), ${}, {}, ...
-    Expansion(Expansion),
-    /// $(), ...
-    Substitution(Substitution),
-
-    /// %()
-    MurexBraceQuoted(String),
-    /// r#''#
-    NuRawQuoted(String),
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::DoubleQuoted(inner) => write!(f, "\"{inner}\""),
-            Self::SpecialDoubleQuoted(inner) => write!(f, "$\"{inner}\""),
-            Self::SingleQuoted(inner) => write!(f, "'{inner}'"),
-            Self::SpecialSingleQuoted(inner) => write!(f, "$'{inner}'"),
-            Self::Unquoted(inner) => write!(f, "{inner}"),
-            Self::Expansion(inner) => write!(f, "{inner}"),
-            Self::Substitution(inner) => write!(f, "{inner}"),
-            Self::MurexBraceQuoted(inner) => write!(f, "%({inner})"),
-            Self::NuRawQuoted(inner) => write!(f, "r#'{inner}'#"),
-        }
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub enum Expansion {
@@ -77,6 +39,17 @@ impl fmt::Display for Expansion {
 }
 
 impl Expansion {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Arithmetic(inner)
+            | Self::Brace(inner)
+            | Self::Mixed(inner)
+            | Self::Param(inner)
+            | Self::Tilde(inner)
+            | Self::Wildcard(inner) => inner,
+        }
+    }
+
     fn detect(value: &str) -> Option<Self> {
         if value.starts_with('~') {
             return Some(Self::Tilde(value.into()));
@@ -138,6 +111,76 @@ impl fmt::Display for Substitution {
     }
 }
 
+impl Substitution {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Command(inner) | Self::Process(inner) => inner,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Value {
+    /// ""
+    DoubleQuoted(String),
+    /// $""
+    SpecialDoubleQuoted(String),
+    /// ''
+    SingleQuoted(String),
+    /// $''
+    SpecialSingleQuoted(String),
+    /// ...
+    Unquoted(String),
+    /// $(()), ${}, {}, ...
+    Expansion(Expansion),
+    /// $(), ...
+    Substitution(Substitution),
+
+    /// %()
+    MurexBraceQuoted(String),
+    /// r#''#
+    NuRawQuoted(String),
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DoubleQuoted(inner) => write!(f, "\"{inner}\""),
+            Self::SpecialDoubleQuoted(inner) => write!(f, "$\"{inner}\""),
+            Self::SingleQuoted(inner) => write!(f, "'{inner}'"),
+            Self::SpecialSingleQuoted(inner) => write!(f, "$'{inner}'"),
+            Self::Unquoted(inner) => write!(f, "{inner}"),
+            Self::Expansion(inner) => write!(f, "{inner}"),
+            Self::Substitution(inner) => write!(f, "{inner}"),
+            Self::MurexBraceQuoted(inner) => write!(f, "%({inner})"),
+            Self::NuRawQuoted(inner) => write!(f, "r#'{inner}'#"),
+        }
+    }
+}
+
+impl Value {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Expansion(expansion) => expansion.as_str(),
+            Self::Substitution(substitution) => substitution.as_str(),
+            _ => self.get_quoted(),
+        }
+    }
+
+    pub fn get_quoted(&self) -> &str {
+        match self {
+            Self::DoubleQuoted(inner)
+            | Self::SpecialDoubleQuoted(inner)
+            | Self::SingleQuoted(inner)
+            | Self::SpecialSingleQuoted(inner)
+            | Self::Unquoted(inner)
+            | Self::MurexBraceQuoted(inner)
+            | Self::NuRawQuoted(inner) => inner,
+            _ => "",
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Argument {
     /// KEY=value, $env:KEY=value
@@ -184,6 +227,14 @@ impl fmt::Display for Command {
                 .collect::<Vec<_>>()
                 .join(" ")
         )
+    }
+}
+
+impl Deref for Command {
+    type Target = Vec<Argument>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
@@ -241,6 +292,14 @@ impl fmt::Display for CommandList {
     }
 }
 
+impl Deref for CommandList {
+    type Target = Vec<Sequence>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Pipeline {
     Start(CommandList),
@@ -280,6 +339,14 @@ impl fmt::Display for CommandLine {
                 .collect::<Vec<_>>()
                 .join("")
         )
+    }
+}
+
+impl Deref for CommandLine {
+    type Target = Vec<Pipeline>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
