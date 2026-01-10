@@ -2613,7 +2613,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_args"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "pest",
  "pest_derive",
