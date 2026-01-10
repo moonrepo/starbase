@@ -115,9 +115,10 @@ flag       = @{ "-" ~ ASCII_ALPHA }
 option            = @{ ("&" | "--") ~ ASCII_ALPHA ~ (id | "-" | ".")* }
 option_with_value = ${ option ~ "=" ~ value_dynamic }
 
-param = @{ ("$" | "@") ~ (ASCII_ALPHA | "_") ~ id* }
+param_special = @{ "$" ~ ("#" | "*" | "@" | "?" | "-" | "$" | "!") }
+param = @{ ("$" | "@") ~ (((ASCII_ALPHA | "_") ~ id*) | ASCII_DIGIT+) }
 
-argument = _{ expansion | substitution | env_var | param | flag_group | flag | option_with_value | option | value }
+argument = _{ expansion | substitution | env_var | param_special | param | flag_group | flag | option_with_value | option | value }
 
 // COMMAND LINE:
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Commands.html

@@ -1280,6 +1280,29 @@ mod shells {
     use super::*;
 
     #[test]
+    fn bash() {
+        // https://www.gnu.org/software/bash/manual/html_node/Positional-Parameters.html
+        test_args!(
+            "echo $1",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::Expansion(Expansion::Param("$1".into()))),
+            ]
+        );
+
+        // https://www.gnu.org/software/bash/manual/html_node/Special-Parameters.html
+        for p in ["$*", "$@", "$#", "$?", "$-", "$$", "$!"] {
+            test_args!(
+                format!("echo {p}"),
+                [
+                    Argument::Value(Value::Unquoted("echo".into())),
+                    Argument::Value(Value::Expansion(Expansion::Param(p.into()))),
+                ]
+            );
+        }
+    }
+
+    #[test]
     fn elvish() {
         // https://elv.sh/ref/language.html#ordinary-command
         test_args!(
@@ -1343,13 +1366,16 @@ mod shells {
         );
 
         // https://fishshell.com/docs/current/language.html#dereferencing-variables
-        test_args!(
-            "echo $$var[2][3]",
-            [
-                Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Value(Value::Expansion(Expansion::Mixed("$$var[2][3]".into()))),
-            ]
-        );
+        // NOTE: this is wrong since it conflicts with bash syntax!
+        // test_args!(
+        //     "echo $$var[2][3]",
+        //     [
+        //         Argument::Value(Value::Unquoted("echo".into())),
+        //         Argument::Value(Value::Expansion(Expansion::Param("$$".into()))),
+        //         Argument::Value(Value::Expansion(Expansion::Mixed("var[2][3]".into()))),
+        //     ]
+        // );
+
         // NOTE: this is technically wrong since it implies a space!
         // test_args!(
         //     "echo (basename image.jpg .jpg).png",

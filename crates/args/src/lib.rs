@@ -290,6 +290,7 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
         Rule::value_murex_brace_quote => {
             Value::MurexBraceQuoted(inner.trim_start_matches("%(").trim_end_matches(")").into())
         }
+
         Rule::value_nu_raw_quote => Value::NuRawQuoted(
             inner
                 .trim_start_matches("r#'")
@@ -353,6 +354,10 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
         | Rule::param
         | Rule::command_substitution
         | Rule::process_substitution => Argument::Value(parse_value(pair)),
+
+        Rule::param_special => {
+            Argument::Value(Value::Expansion(Expansion::Param(pair.as_str().into())))
+        }
 
         // Env vars
         Rule::env_var => {
