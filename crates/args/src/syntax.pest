@@ -6,12 +6,13 @@ id_env = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
 
 // SYNTAX:
 // https://www.gnu.org/software/bash/manual/html_node/Definitions.html
+// https://fishshell.com/docs/current/language.html#table-of-operators
 
 blank       = _{ " " | "\t" }
 whitespace  = _{ blank | "\n" | "\r" }
 meta_char   = _{ whitespace | "|" | "&" | ";" }
 escape_char = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
-fd_char     = _{ ASCII_DIGIT | "-" }
+fd_char     = _{ ASCII_DIGIT | "-" | "out+err" | "o+e" | "out" | "o" | "err" | "e"  }
 
 // OPERATORS:
 // https://www.gnu.org/software/bash/manual/html_node/Redirections.html
@@ -31,8 +32,15 @@ redirect_operator         =  {
   | "&>>"
   | "&>"
   | ">&"
-  | "<&"
+  | ">?"
+  | ">^"
   | ">|"
+  | "<&"
+  | "<?"
+  | "<^"
+  | "<|"
+  | "|>"
+  | "|<"
   | ">"
   | "<"
 }
@@ -50,26 +58,31 @@ operator = _{
 
 // VALUES:
 
+value_quote_inner = _{
+    "\\" ~ ((^"x" | ^"u") ~ ASCII_HEX_DIGIT+)
+}
+
 value_double_quote_inner = _{
     !("\"" | "\\") ~ ANY
   | "\\" ~ ("\"" | escape_char)
-  | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+  | value_quote_inner
 }
-value_double_quote       = @{ "\"" ~ value_double_quote_inner* ~ "\"" }
+value_double_quote       = @{ "$"? ~ "\"" ~ value_double_quote_inner* ~ "\"" }
 
 value_single_quote_inner = _{
     !("'" | "\\") ~ ANY
   | "\\" ~ ("'" | escape_char)
-  | "\\" ~ ("u" ~ ASCII_HEX_DIGIT{4})
+  | value_quote_inner
 }
-value_single_quote       = @{ "'" ~ value_single_quote_inner* ~ "'" }
+value_single_quote       = @{ "$"? ~ "'" ~ value_single_quote_inner* ~ "'" }
 
-value_ansi_quote = @{ "$'" ~ value_single_quote_inner* ~ "'" }
+value_murex_brace_quote = @{ "%(" ~ (!")" ~ ANY)+ ~ ")" }
+value_nu_raw_quote = @{ "r#'" ~ value_single_quote_inner* ~ "'#" }
 
 value_unquoted_inner = _{ !(meta_char | operator) ~ ANY }
 value_unquoted       = @{ value_unquoted_inner+ }
 
-value         = _{ value_ansi_quote | value_double_quote | value_single_quote | value_unquoted }
+value         = _{ value_murex_brace_quote | value_nu_raw_quote | value_double_quote | value_single_quote | value_unquoted }
 value_dynamic = _{ expansion | substitution | value }
 
 // EXPANSIONS:
@@ -77,7 +90,7 @@ value_dynamic = _{ expansion | substitution | value }
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html
 
 arithmetic_expansion = { "$((" ~ (!"))" ~ ANY)+ ~ "))" }
-parameter_expansion  = { "${" ~ (!"}" ~ ANY)+ ~ "}" }
+parameter_expansion  = { "${" ~ (!"}" ~ ANY)+ ~ "}" | "{" ~ (!"}" ~ ANY)+ ~ "}" }
 
 expansion = _{ arithmetic_expansion | parameter_expansion }
 
@@ -85,10 +98,10 @@ expansion = _{ arithmetic_expansion | parameter_expansion }
 // https://www.gnu.org/software/bash/manual/html_node/Command-Substitution.html
 // https://www.gnu.org/software/bash/manual/html_node/Process-Substitution.html
 
-command_substitution = { "$(" ~ (!")" ~ ANY)+ ~ ")" | "`" ~ (!"`" ~ ANY)+ ~ "`" }
+command_substitution = { "$(" ~ (!")" ~ ANY)+ ~ ")" | "!(" ~ (!")" ~ ANY)+ ~ ")" | "(" ~ (!")" ~ ANY)+ ~ ")" | "`" ~ (!"`" ~ ANY)+ ~ "`" }
 process_substitution = { "<(" ~ (!")" ~ ANY)+ ~ ")" | ">(" ~ (!")" ~ ANY)+ ~ ")" }
 
-substitution = _{ command_substitution | process_substitution }
+substitution = _{ process_substitution | command_substitution }
 
 // ARGUMENTS:
 
@@ -99,10 +112,10 @@ env_var           = ${ env_var_namespace? ~ env_var_name ~ "=" ~ value_dynamic }
 flag_group = @{ "-" ~ ASCII_ALPHA{2, } }
 flag       = @{ "-" ~ ASCII_ALPHA }
 
-option            = @{ "--" ~ (id | "-" | ".")+ }
+option            = @{ ("&" | "--") ~ ASCII_ALPHA ~ (id | "-" | ".")* }
 option_with_value = ${ option ~ "=" ~ value_dynamic }
 
-param = @{ "$" ~ (ASCII_ALPHA | "_") ~ id* }
+param = @{ ("$" | "@") ~ (ASCII_ALPHA | "_") ~ id* }
 
 argument = _{ expansion | substitution | env_var | param | flag_group | flag | option_with_value | option | value }
 
@@ -110,11 +123,11 @@ argument = _{ expansion | substitution | env_var | param | flag_group | flag | o
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Commands.html
 
 command            = { argument+ }
-command_terminator = { ";" | "&" | "2>&1" | "\n" }
+command_terminator = { ";" | "&-" | "&!" | "&" | "2>&1" | "\n" }
 command_list       = { command ~ (operator ~ command)* ~ command_terminator? }
 
 pipeline_negated  = { "!" }
-pipeline_operator = { "|&" | "|" }
+pipeline_operator = { "|&" | "&|" | "^|" | "|" | "->" | "=>" | "?" }
 pipeline          = { pipeline_negated? ~ command_list ~ (pipeline_operator ~ command_list)* }
 
 args = _{

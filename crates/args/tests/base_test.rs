@@ -18,6 +18,14 @@ fn extract_args(line: &CommandLine) -> &Vec<Argument> {
     unimplemented!()
 }
 
+macro_rules! test_pipeline {
+    ($input:expr, $output:expr) => {
+        let pipeline = parse($input).unwrap();
+        assert_eq!(&pipeline, &$output);
+        assert_eq!(pipeline.to_string(), $input);
+    };
+}
+
 macro_rules! test_commands {
     ($input:expr, $output:expr) => {
         let commands = parse($input).unwrap();
@@ -65,6 +73,27 @@ mod examples {
     }
 
     #[test]
+    fn curl() {
+        let actual = CommandLine(vec![
+            Pipeline::Start(CommandList(vec![Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("curl".into())),
+                Argument::Flag("-s".into()),
+                Argument::Flag("-L".into()),
+                Argument::Value(Value::Expansion(Expansion::Param("$uri".into()))),
+            ]))])),
+            Pipeline::Pipe(CommandList(vec![Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("tar".into())),
+                Argument::FlagGroup("-xzvf".into()),
+                Argument::Value(Value::Unquoted("-".into())),
+                Argument::Flag("-C".into()),
+                Argument::Value(Value::Unquoted(".".into())),
+            ]))])),
+        ]);
+
+        assert_eq!(parse("curl -s -L $uri | tar -xzvf - -C .").unwrap(), actual);
+    }
+
+    #[test]
     fn git() {
         let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
             Command(vec![
@@ -93,6 +122,17 @@ mod examples {
         )]))]);
 
         assert_eq!(parse("git checkout -b \"🚀-emoji\"").unwrap(), actual);
+
+        let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
+            Command(vec![
+                Argument::Value(Value::Unquoted("git".into())),
+                Argument::Value(Value::Unquoted("reset".into())),
+                Argument::Option("--hard".into(), None),
+                Argument::Value(Value::Expansion(Expansion::Brace("HEAD@{2}".into()))),
+            ]),
+        )]))]);
+
+        assert_eq!(parse("git reset --hard HEAD@{2}").unwrap(), actual);
     }
 
     #[test]
@@ -235,7 +275,7 @@ mod pipeline {
     use super::*;
 
     #[test]
-    fn single_command() {
+    fn simple_command() {
         let actual = CommandLine(vec![Pipeline::Start(CommandList(vec![Sequence::Start(
             Command(vec![
                 Argument::Value(Value::Unquoted("foo".into())),
@@ -244,6 +284,60 @@ mod pipeline {
         )]))]);
 
         assert_eq!(parse("foo --bar").unwrap(), actual);
+    }
+
+    #[test]
+    fn complex_commands() {
+        let actual = CommandLine(vec![
+            Pipeline::Start(CommandList(vec![
+                Sequence::Start(Command(vec![
+                    Argument::Value(Value::Unquoted("foo".into())),
+                    Argument::Option("--a".into(), None),
+                ])),
+                Sequence::Redirect(
+                    Command(vec![Argument::Value(Value::Unquoted("out.txt".into()))]),
+                    ">>".into(),
+                ),
+                Sequence::AndThen(Command(vec![
+                    Argument::Value(Value::Unquoted("bar".into())),
+                    Argument::FlagGroup("-bC".into()),
+                    Argument::Value(Value::SingleQuoted("value".into())),
+                ])),
+                Sequence::OrElse(Command(vec![
+                    Argument::Value(Value::Unquoted("exit".into())),
+                    Argument::Value(Value::Expansion(Expansion::Param("$ret".into()))),
+                ])),
+            ])),
+            Pipeline::Pipe(CommandList(vec![
+                Sequence::Start(Command(vec![
+                    Argument::Value(Value::Unquoted("baz".into())),
+                    Argument::Value(Value::Substitution(Substitution::Process("<(in)".into()))),
+                ])),
+                Sequence::OrElse(Command(vec![
+                    Argument::Value(Value::Unquoted("baz".into())),
+                    Argument::Value(Value::Substitution(Substitution::Command(
+                        "$(./out.sh)".into(),
+                    ))),
+                ])),
+                Sequence::AndThen(Command(vec![
+                    Argument::Value(Value::Unquoted("qux".into())),
+                    Argument::Value(Value::Unquoted("1".into())),
+                    Argument::Value(Value::Unquoted("2".into())),
+                    Argument::Value(Value::Unquoted("3".into())),
+                ])),
+                Sequence::Passthrough(Command(vec![Argument::Value(Value::Unquoted(
+                    "wat".into(),
+                ))])),
+            ])),
+            Pipeline::PipeAll(CommandList(vec![
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "last".into(),
+                ))])),
+                Sequence::Stop("&".into()),
+            ])),
+        ]);
+
+        assert_eq!(parse("foo --a >> out.txt && bar -bC 'value' || exit $ret | baz <(in) || baz $(./out.sh) && qux 1 2 3 -- wat |& last &").unwrap(), actual);
     }
 
     #[test]
@@ -303,7 +397,8 @@ mod command_list {
     #[test]
     fn redirects() {
         for op in [
-            ">", ">>", ">>>", "<", "<<", "<<<", "<>", "&>", "&>>", ">&", "<&", ">|",
+            ">", ">>", ">>>", "<", "<<", "<<<", "<>", "&>", "&>>", ">&", "<&", ">|", "<?", ">?",
+            "<^", ">^",
         ] {
             test_commands!(
                 format!("foo {op} bar"),
@@ -353,6 +448,32 @@ mod command_list {
                     Sequence::Redirect(
                         Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
                         format!("1{op}2")
+                    ),
+                ]
+            );
+
+            test_commands!(
+                format!("foo o{op}err bar"),
+                [
+                    Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                        "foo".into()
+                    ))])),
+                    Sequence::Redirect(
+                        Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
+                        format!("o{op}err")
+                    ),
+                ]
+            );
+
+            test_commands!(
+                format!("foo o+e{op} bar"),
+                [
+                    Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                        "foo".into()
+                    ))])),
+                    Sequence::Redirect(
+                        Command(vec![Argument::Value(Value::Unquoted("bar".into()))]),
+                        format!("o+e{op}")
                     ),
                 ]
             );
@@ -544,6 +665,47 @@ mod command_list {
     }
 
     #[test]
+    fn command_substitution() {
+        test_commands!(
+            "echo $(foo)",
+            [Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::Substitution(Substitution::Command("$(foo)".into())))
+            ]))]
+        );
+        test_commands!(
+            "echo $(bar)",
+            [Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::Substitution(Substitution::Command("$(bar)".into())))
+            ]))]
+        );
+        test_commands!(
+            "diff $(ls /dir1) ` ls /dir2 `",
+            [Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("diff".into())),
+                Argument::Value(Value::Substitution(Substitution::Command(
+                    "$(ls /dir1)".into()
+                ))),
+                Argument::Value(Value::Substitution(Substitution::Command(
+                    "` ls /dir2 `".into()
+                )))
+            ]))]
+        );
+
+        // elvish
+        test_commands!(
+            "put (echo 'a\nb')",
+            [Sequence::Start(Command(vec![
+                Argument::Value(Value::Unquoted("put".into())),
+                Argument::Value(Value::Substitution(Substitution::Command(
+                    "(echo 'a\nb')".into()
+                )))
+            ]))]
+        );
+    }
+
+    #[test]
     fn process_substitution() {
         test_commands!(
             "echo <(foo)",
@@ -613,7 +775,7 @@ mod command {
         command.push_str(" --opt_3=$'another value'");
         actual.push(Argument::Option(
             "--opt_3".into(),
-            Some(Value::AnsiQuoted("another value".into())),
+            Some(Value::SpecialSingleQuoted("another value".into())),
         ));
 
         test_args!(command.as_str(), actual);
@@ -785,7 +947,7 @@ mod args {
                 Argument::Option("--a".into(), Some(Value::Unquoted("a".into()))),
                 Argument::Option("--b".into(), Some(Value::SingleQuoted("b b".into()))),
                 Argument::Option("--c".into(), Some(Value::DoubleQuoted("c c c".into()))),
-                Argument::Option("--d".into(), Some(Value::AnsiQuoted("d".into())))
+                Argument::Option("--d".into(), Some(Value::SpecialSingleQuoted("d".into())))
             ]
         );
         test_args!(
@@ -809,31 +971,6 @@ mod args {
 
 mod value {
     use super::*;
-
-    #[test]
-    fn special_quote() {
-        test_args!(
-            "bin $''",
-            [
-                Argument::Value(Value::Unquoted("bin".into())),
-                Argument::Value(Value::AnsiQuoted("".into()))
-            ]
-        );
-        test_args!(
-            "bin $'abc'",
-            [
-                Argument::Value(Value::Unquoted("bin".into())),
-                Argument::Value(Value::AnsiQuoted("abc".into()))
-            ]
-        );
-        test_args!(
-            "bin $'a b c'",
-            [
-                Argument::Value(Value::Unquoted("bin".into())),
-                Argument::Value(Value::AnsiQuoted("a b c".into()))
-            ]
-        );
-    }
 
     #[test]
     fn single_quote() {
@@ -868,6 +1005,31 @@ mod value {
     }
 
     #[test]
+    fn single_special_quote() {
+        test_args!(
+            "bin $''",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SpecialSingleQuoted("".into()))
+            ]
+        );
+        test_args!(
+            "bin $'abc'",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SpecialSingleQuoted("abc".into()))
+            ]
+        );
+        test_args!(
+            "bin $'a b c'",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SpecialSingleQuoted("a b c".into()))
+            ]
+        );
+    }
+
+    #[test]
     fn double_quote() {
         test_args!(
             "bin \"\"",
@@ -895,6 +1057,31 @@ mod value {
             [
                 Argument::Value(Value::Unquoted("bin".into())),
                 Argument::Value(Value::DoubleQuoted("a\\\"b".into()))
+            ]
+        );
+    }
+
+    #[test]
+    fn single_double_quote() {
+        test_args!(
+            "bin $\"\"",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SpecialDoubleQuoted("".into()))
+            ]
+        );
+        test_args!(
+            "bin $\"abc\"",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SpecialDoubleQuoted("abc".into()))
+            ]
+        );
+        test_args!(
+            "bin $\"a b c\"",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SpecialDoubleQuoted("a b c".into()))
             ]
         );
     }
@@ -948,6 +1135,16 @@ mod value {
             [
                 Argument::Value(Value::Unquoted("echo".into())),
                 Argument::Value(Value::Unquoted("foo\\{bar".into()))
+            ]
+        );
+
+        // elvish
+        test_args!(
+            "put {a b} {1 2}",
+            [
+                Argument::Value(Value::Unquoted("put".into())),
+                Argument::Value(Value::Expansion(Expansion::Brace("{a b}".into()))),
+                Argument::Value(Value::Expansion(Expansion::Brace("{1 2}".into()))),
             ]
         );
     }
@@ -1030,28 +1227,28 @@ mod value {
             "echo *",
             [
                 Argument::Value(Value::Unquoted("echo".into())),
-                Argument::Value(Value::Expansion(Expansion::Filename("*".into())))
+                Argument::Value(Value::Expansion(Expansion::Wildcard("*".into())))
             ]
         );
         test_args!(
             "ls *.txt",
             [
                 Argument::Value(Value::Unquoted("ls".into())),
-                Argument::Value(Value::Expansion(Expansion::Filename("*.txt".into())))
+                Argument::Value(Value::Expansion(Expansion::Wildcard("*.txt".into())))
             ]
         );
         test_args!(
             "ls file?",
             [
                 Argument::Value(Value::Unquoted("ls".into())),
-                Argument::Value(Value::Expansion(Expansion::Filename("file?".into())))
+                Argument::Value(Value::Expansion(Expansion::Wildcard("file?".into())))
             ]
         );
         test_args!(
             "ls file[1-3].txt",
             [
                 Argument::Value(Value::Unquoted("ls".into())),
-                Argument::Value(Value::Expansion(Expansion::Filename(
+                Argument::Value(Value::Expansion(Expansion::Wildcard(
                     "file[1-3].txt".into()
                 )))
             ]
@@ -1074,6 +1271,196 @@ mod value {
                 Argument::Value(Value::Expansion(Expansion::Arithmetic(
                     "$(( (5*4) / 2 ))".into()
                 )))
+            ]
+        );
+    }
+}
+
+mod shells {
+    use super::*;
+
+    #[test]
+    fn elvish() {
+        // https://elv.sh/ref/language.html#ordinary-command
+        test_args!(
+            "echo &sep=, a b c",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Option("&sep".into(), Some(Value::Unquoted(",".into()))),
+                Argument::Value(Value::Unquoted("a".into())),
+                Argument::Value(Value::Unquoted("b".into())),
+                Argument::Value(Value::Unquoted("c".into())),
+            ]
+        );
+
+        // https://elv.sh/ref/language.html#pipeline-exception
+        test_commands!(
+            "while $true { put foo } > run &-",
+            [
+                Sequence::Start(Command(vec![
+                    Argument::Value(Value::Unquoted("while".into())),
+                    Argument::Value(Value::Expansion(Expansion::Param("$true".into()))),
+                    Argument::Value(Value::Expansion(Expansion::Brace("{ put foo }".into()))),
+                ])),
+                Sequence::Redirect(
+                    Command(vec![Argument::Value(Value::Unquoted("run".into())),]),
+                    ">".into()
+                ),
+                Sequence::Stop("&-".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn fish() {
+        // https://fishshell.com/docs/current/language.html#combining-pipes-and-redirections
+        test_pipeline!(
+            "print 2>&1 | less",
+            CommandLine(vec![
+                Pipeline::Start(CommandList(vec![
+                    Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                        "print".into()
+                    ))])),
+                    Sequence::Stop("2>&1".into()),
+                ])),
+                Pipeline::Pipe(CommandList(vec![Sequence::Start(Command(vec![
+                    Argument::Value(Value::Unquoted("less".into()))
+                ])),]))
+            ])
+        );
+        test_commands!(
+            "print > /dev/null 2>&1",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "print".into()
+                ))])),
+                Sequence::Redirect(
+                    Command(vec![Argument::Value(Value::Unquoted("/dev/null".into()))]),
+                    ">".into()
+                ),
+                Sequence::Stop("2>&1".into()),
+            ]
+        );
+
+        // https://fishshell.com/docs/current/language.html#dereferencing-variables
+        test_args!(
+            "echo $$var[2][3]",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::Expansion(Expansion::Mixed("$$var[2][3]".into()))),
+            ]
+        );
+        // NOTE: this is technically wrong since it implies a space!
+        // test_args!(
+        //     "echo (basename image.jpg .jpg).png",
+        //     [
+        //         Argument::Value(Value::Unquoted("echo".into())),
+        //         Argument::Value(Value::Substitution(Substitution::Command(
+        //             "(basename image.jpg .jpg)".into()
+        //         ))),
+        //         Argument::Value(Value::Unquoted(".png".into())),
+        //     ]
+        // );
+    }
+
+    #[test]
+    fn ion() {
+        // https://doc.redox-os.org/ion-manual/variables/00-variables.html
+        test_args!(
+            "echo @array_variable",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::Expansion(Expansion::Param("@array_variable".into()))),
+            ]
+        );
+
+        // https://doc.redox-os.org/ion-manual/pipelines.html#detaching-processes
+        test_commands!(
+            "command &!",
+            [
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "command".into()
+                ))])),
+                Sequence::Stop("&!".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn murex() {
+        // https://murex.rocks/parser/brace-quote.html#as-a-function
+        test_args!(
+            "echo %(hello world)",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::MurexBraceQuoted("hello world".into())),
+            ]
+        );
+    }
+
+    #[test]
+    fn nu() {
+        // Note: not exactly accurate!
+        test_pipeline!(
+            "command out+err>| less",
+            CommandLine(vec![Pipeline::Start(CommandList(vec![
+                Sequence::Start(Command(vec![Argument::Value(Value::Unquoted(
+                    "command".into()
+                ))])),
+                Sequence::Redirect(
+                    Command(vec![Argument::Value(Value::Unquoted("less".into()))]),
+                    "out+err>|".into()
+                ),
+            ]))])
+        );
+
+        test_args!(
+            "each { $in.name }",
+            [
+                Argument::Value(Value::Unquoted("each".into())),
+                Argument::Value(Value::Expansion(Expansion::Brace("{ $in.name }".into()))),
+            ]
+        );
+
+        // https://www.nushell.sh/book/working_with_strings.html#raw-strings
+        test_args!(
+            "echo r#'hello world'#",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::NuRawQuoted("hello world".into())),
+            ]
+        );
+    }
+
+    #[test]
+    fn xonsh() {
+        // https://xon.sh/tutorial.html#captured-subprocess-with-and
+        test_args!(
+            "echo !(ls nonexistent_directory)",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::Substitution(Substitution::Command(
+                    "!(ls nonexistent_directory)".into()
+                ))),
+            ]
+        );
+    }
+
+    #[test]
+    fn pwsh() {
+        // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_redirection?view=powershell-7.5#examples
+        test_commands!(
+            "dir C:\\, fakepath 2>&1 .\\dir.log",
+            [
+                Sequence::Start(Command(vec![
+                    Argument::Value(Value::Unquoted("dir".into())),
+                    Argument::Value(Value::Unquoted("C:\\,".into())),
+                    Argument::Value(Value::Unquoted("fakepath".into())),
+                ])),
+                Sequence::Redirect(
+                    Command(vec![Argument::Value(Value::Unquoted(".\\dir.log".into())),]),
+                    "2>&1".into()
+                ),
             ]
         );
     }

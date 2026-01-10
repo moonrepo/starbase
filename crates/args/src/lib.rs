@@ -10,35 +10,57 @@ pub struct ArgsParser;
 
 #[derive(Debug, PartialEq)]
 pub enum Value {
-    AnsiQuoted(String),
+    /// ""
     DoubleQuoted(String),
+    /// $""
+    SpecialDoubleQuoted(String),
+    /// ''
     SingleQuoted(String),
+    /// $''
+    SpecialSingleQuoted(String),
+    /// ...
     Unquoted(String),
+    /// $(()), ${}, {}, ...
     Expansion(Expansion),
+    /// $(), ...
     Substitution(Substitution),
+
+    /// %()
+    MurexBraceQuoted(String),
+    /// r#''#
+    NuRawQuoted(String),
 }
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AnsiQuoted(inner) => write!(f, "$'{inner}'"),
             Self::DoubleQuoted(inner) => write!(f, "\"{inner}\""),
+            Self::SpecialDoubleQuoted(inner) => write!(f, "$\"{inner}\""),
             Self::SingleQuoted(inner) => write!(f, "'{inner}'"),
+            Self::SpecialSingleQuoted(inner) => write!(f, "$'{inner}'"),
             Self::Unquoted(inner) => write!(f, "{inner}"),
             Self::Expansion(inner) => write!(f, "{inner}"),
             Self::Substitution(inner) => write!(f, "{inner}"),
+            Self::MurexBraceQuoted(inner) => write!(f, "%({inner})"),
+            Self::NuRawQuoted(inner) => write!(f, "r#'{inner}'#"),
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Expansion {
+    /// $(())
     Arithmetic(String),
+    /// {}
     Brace(String),
-    Filename(String),
+    /// ...
     Mixed(String),
+    /// ${}, $param
     Param(String),
+    /// ~
     Tilde(String),
+    /// *, ?, []
+    Wildcard(String),
 }
 
 impl fmt::Display for Expansion {
@@ -46,7 +68,7 @@ impl fmt::Display for Expansion {
         match self {
             Self::Arithmetic(inner)
             | Self::Brace(inner)
-            | Self::Filename(inner)
+            | Self::Wildcard(inner)
             | Self::Param(inner)
             | Self::Mixed(inner)
             | Self::Tilde(inner) => write!(f, "{inner}"),
@@ -84,7 +106,7 @@ impl Expansion {
                         || last_ch == '@'
                         || last_ch == '!'))
             {
-                found.push(Self::Filename(value.into()));
+                found.push(Self::Wildcard(value.into()));
             }
 
             last_ch = ch;
@@ -102,7 +124,9 @@ impl Expansion {
 
 #[derive(Debug, PartialEq)]
 pub enum Substitution {
+    /// $(), ()
     Command(String),
+    /// <(), >()
     Process(String),
 }
 
@@ -116,15 +140,15 @@ impl fmt::Display for Substitution {
 
 #[derive(Debug, PartialEq)]
 pub enum Argument {
-    // KEY=value, $env:KEY=value
+    /// KEY=value, $env:KEY=value
     EnvVar(String, Value, Option<String>),
-    // -abc
+    /// -abc
     FlagGroup(String),
-    // -a
+    /// -a
     Flag(String),
-    // --opt, --opt=value
+    /// --opt, --opt=value
     Option(String, Option<Value>),
-    // value
+    /// value
     Value(Value),
 }
 
@@ -166,17 +190,17 @@ impl fmt::Display for Command {
 #[derive(Debug, PartialEq)]
 pub enum Sequence {
     Start(Command),
-    // ;
+    /// ;
     Then(Command),
-    // &&
+    /// &&
     AndThen(Command),
-    // ||
+    /// ||
     OrElse(Command),
-    // --
+    /// --
     Passthrough(Command),
-    // >, <, etc
+    /// >, <, etc
     Redirect(Command, String),
-    // ;, &, etc
+    /// ;, &, etc
     Stop(String),
 }
 
@@ -220,12 +244,14 @@ impl fmt::Display for CommandList {
 #[derive(Debug, PartialEq)]
 pub enum Pipeline {
     Start(CommandList),
-    // !
+    /// !
     StartNegated(CommandList),
-    // |
+    /// |
     Pipe(CommandList),
-    // |&
+    /// |&
     PipeAll(CommandList),
+    /// ...
+    PipeWith(CommandList, String),
 }
 
 impl fmt::Display for Pipeline {
@@ -235,6 +261,7 @@ impl fmt::Display for Pipeline {
             Self::StartNegated(command) => write!(f, "! {command}"),
             Self::Pipe(command) => write!(f, " | {command}"),
             Self::PipeAll(command) => write!(f, " |& {command}"),
+            Self::PipeWith(command, op) => write!(f, " {op} {command}"),
         }
     }
 }
@@ -257,34 +284,57 @@ impl fmt::Display for CommandLine {
 }
 
 fn parse_value(pair: Pair<'_, Rule>) -> Value {
+    let inner = pair.as_str();
+
     match pair.as_rule() {
-        Rule::value_ansi_quote => Value::AnsiQuoted(
-            pair.as_str()
-                .trim_start_matches("$'")
-                .trim_end_matches("'")
+        Rule::value_murex_brace_quote => {
+            Value::MurexBraceQuoted(inner.trim_start_matches("%(").trim_end_matches(")").into())
+        }
+        Rule::value_nu_raw_quote => Value::NuRawQuoted(
+            inner
+                .trim_start_matches("r#'")
+                .trim_end_matches("'#")
                 .into(),
         ),
-        Rule::value_double_quote => Value::DoubleQuoted(pair.as_str().trim_matches('"').into()),
-        Rule::value_single_quote => Value::SingleQuoted(pair.as_str().trim_matches('\'').into()),
 
-        Rule::value_unquoted => match Expansion::detect(pair.as_str()) {
+        Rule::value_double_quote => {
+            if inner.starts_with('$') {
+                Value::SpecialDoubleQuoted(
+                    inner.trim_start_matches("$\"").trim_end_matches('"').into(),
+                )
+            } else {
+                Value::DoubleQuoted(inner.trim_matches('"').into())
+            }
+        }
+
+        Rule::value_single_quote => {
+            if inner.starts_with('$') {
+                Value::SpecialSingleQuoted(
+                    inner.trim_start_matches("$'").trim_end_matches('\'').into(),
+                )
+            } else {
+                Value::SingleQuoted(inner.trim_matches('\'').into())
+            }
+        }
+
+        Rule::value_unquoted => match Expansion::detect(inner) {
             Some(exp) => Value::Expansion(exp),
-            None => Value::Unquoted(pair.as_str().into()),
+            None => Value::Unquoted(inner.into()),
         },
 
         // Expansions
-        Rule::arithmetic_expansion => Value::Expansion(Expansion::Arithmetic(pair.as_str().into())),
+        Rule::arithmetic_expansion => Value::Expansion(Expansion::Arithmetic(inner.into())),
         Rule::parameter_expansion | Rule::param => {
-            Value::Expansion(Expansion::Param(pair.as_str().into()))
+            if inner.starts_with(['$', '@']) {
+                Value::Expansion(Expansion::Param(inner.into()))
+            } else {
+                Value::Expansion(Expansion::Brace(inner.into()))
+            }
         }
 
         // Substitution
-        Rule::command_substitution => {
-            Value::Substitution(Substitution::Command(pair.as_str().into()))
-        }
-        Rule::process_substitution => {
-            Value::Substitution(Substitution::Process(pair.as_str().into()))
-        }
+        Rule::command_substitution => Value::Substitution(Substitution::Command(inner.into())),
+        Rule::process_substitution => Value::Substitution(Substitution::Process(inner.into())),
 
         _ => unreachable!(),
     }
@@ -293,10 +343,16 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
 fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
     match pair.as_rule() {
         // Values
-        Rule::value_ansi_quote
+        Rule::value_murex_brace_quote
+        | Rule::value_nu_raw_quote
         | Rule::value_double_quote
         | Rule::value_single_quote
-        | Rule::value_unquoted => Argument::Value(parse_value(pair)),
+        | Rule::value_unquoted
+        | Rule::arithmetic_expansion
+        | Rule::parameter_expansion
+        | Rule::param
+        | Rule::command_substitution
+        | Rule::process_substitution => Argument::Value(parse_value(pair)),
 
         // Env vars
         Rule::env_var => {
@@ -318,22 +374,6 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
 
             Argument::EnvVar(key.as_str().into(), parse_value(value), namespace)
         }
-
-        // Expansions
-        Rule::arithmetic_expansion => Argument::Value(Value::Expansion(Expansion::Arithmetic(
-            pair.as_str().into(),
-        ))),
-        Rule::parameter_expansion | Rule::param => {
-            Argument::Value(Value::Expansion(Expansion::Param(pair.as_str().into())))
-        }
-
-        // Substitution
-        Rule::command_substitution => Argument::Value(Value::Substitution(Substitution::Command(
-            pair.as_str().into(),
-        ))),
-        Rule::process_substitution => Argument::Value(Value::Substitution(Substitution::Process(
-            pair.as_str().into(),
-        ))),
 
         // Flags
         Rule::flag_group => Argument::FlagGroup(pair.as_str().into()),
@@ -443,11 +483,14 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
                             }
                         } else {
                             match last_operator.take() {
+                                Some("|") | None => {
+                                    list.push(Pipeline::Pipe(command_list));
+                                }
                                 Some("|&") => {
                                     list.push(Pipeline::PipeAll(command_list));
                                 }
-                                _ => {
-                                    list.push(Pipeline::Pipe(command_list));
+                                Some(op) => {
+                                    list.push(Pipeline::PipeWith(command_list, op.into()));
                                 }
                             };
                         }
@@ -472,13 +515,12 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
     }
 }
 
-pub fn parse<T: AsRef<str>>(input: T) -> Result<CommandLine, ()> {
-    let pairs = ArgsParser::parse(Rule::args, input.as_ref().trim()).unwrap();
+#[allow(clippy::result_large_err)]
+pub fn parse<T: AsRef<str>>(input: T) -> Result<CommandLine, pest::error::Error<Rule>> {
+    let pairs = ArgsParser::parse(Rule::args, input.as_ref().trim())?;
     let mut pipeline = vec![];
 
     for pair in pairs {
-        // dbg!(&pair);
-
         if pair.as_rule() == Rule::pipeline {
             pipeline.extend(parse_pipeline(pair));
         }
