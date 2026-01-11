@@ -161,19 +161,33 @@ impl fmt::Display for Value {
 impl Value {
     pub fn as_str(&self) -> &str {
         match self {
+            Self::Unquoted(inner) => inner,
             Self::Expansion(expansion) => expansion.as_str(),
             Self::Substitution(substitution) => substitution.as_str(),
-            _ => self.get_quoted(),
+            _ => self.get_quoted_value(),
         }
     }
 
-    pub fn get_quoted(&self) -> &str {
+    pub fn is_quoted(&self) -> bool {
+        match self {
+            Self::DoubleQuoted(_)
+            | Self::SpecialDoubleQuoted(_)
+            | Self::SingleQuoted(_)
+            | Self::SpecialSingleQuoted(_)
+            | Self::MurexBraceQuoted(_)
+            | Self::NuRawQuoted(_) => true,
+            _ => false,
+        }
+    }
+
+    /// If the value is quoted, returns the value within the quotes.
+    /// Otherwise returns an empty string.
+    pub fn get_quoted_value(&self) -> &str {
         match self {
             Self::DoubleQuoted(inner)
             | Self::SpecialDoubleQuoted(inner)
             | Self::SingleQuoted(inner)
             | Self::SpecialSingleQuoted(inner)
-            | Self::Unquoted(inner)
             | Self::MurexBraceQuoted(inner)
             | Self::NuRawQuoted(inner) => inner,
             _ => "",
