@@ -184,15 +184,8 @@ impl Shell for PowerShell {
 
     fn get_exec_command(&self) -> ShellCommand {
         ShellCommand {
-            shell_args: vec![
-                "-NoLogo".into(),
-                "-Command".into(),
-                // We'll pass the command args via stdin, so that paths with special
-                // characters and spaces resolve correctly.
-                // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_pwsh?view=powershell-7.2#-command---c
-                "-".into(),
-            ],
-            pass_args_stdin: true,
+            shell_args: vec!["-NoLogo".into(), "-c".into()],
+            pass_args_stdin: false,
         }
     }
 
