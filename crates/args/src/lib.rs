@@ -5,6 +5,8 @@ use pest_derive::Parser;
 use std::fmt;
 use std::ops::Deref;
 
+pub use pest::error::*;
+
 #[derive(Parser)]
 #[grammar = "syntax.pest"]
 pub struct ArgsParser;
