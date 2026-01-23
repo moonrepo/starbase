@@ -288,11 +288,11 @@ pub fn is_offline_with_options(options: OfflineOptions) -> bool {
         if options.ip_v6 {
             ips.extend([
                 // Cloudflare DNS: https://1.1.1.1/dns/
-                SocketAddr::from(([2606, 4700, 4700, 0, 0, 0, 0, 1111], 53)),
-                SocketAddr::from(([2606, 4700, 4700, 0, 0, 0, 0, 1001], 53)),
+                SocketAddr::from(([0x2606, 0x4700, 0x4700, 0, 0, 0, 0, 0x1111], 53)),
+                SocketAddr::from(([0x2606, 0x4700, 0x4700, 0, 0, 0, 0, 0x1001], 53)),
                 // Google DNS: https://developers.google.com/speed/public-dns
-                SocketAddr::from(([2001, 4860, 4860, 0, 0, 0, 0, 8888], 53)),
-                SocketAddr::from(([2001, 4860, 4860, 0, 0, 0, 0, 8844], 53)),
+                SocketAddr::from(([0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8888], 53)),
+                SocketAddr::from(([0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8844], 53)),
             ]);
         }
     }
