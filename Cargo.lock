@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "example_app"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "async-trait",
  "example_lib",
@@ -715,7 +715,7 @@ dependencies = [
 
 [[package]]
 name = "example_lib"
-version = "0.6.6"
+version = "0.6.7"
 dependencies = [
  "miette",
  "starbase_utils",
@@ -724,7 +724,7 @@ dependencies = [
 
 [[package]]
 name = "example_term"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-trait",
  "iocraft",
@@ -2518,7 +2518,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "starbase"
-version = "0.10.8"
+version = "0.10.9"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2533,7 +2533,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -2553,7 +2553,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_args"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "pest",
  "pest_derive",
@@ -2561,7 +2561,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_console"
-version = "0.6.21"
+version = "0.6.22"
 dependencies = [
  "crossterm",
  "iocraft",
@@ -2576,7 +2576,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_events"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "async-trait",
  "miette",
@@ -2587,7 +2587,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_id"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "compact_str",
  "miette",
@@ -2600,7 +2600,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_macros"
-version = "0.8.9"
+version = "0.8.10"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -2610,7 +2610,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_sandbox"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "assert_cmd",
  "assert_fs",
@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.10.5"
+version = "0.10.6"
 dependencies = [
  "miette",
  "regex",
@@ -2636,7 +2636,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_styles"
-version = "0.6.5"
+version = "0.6.6"
 dependencies = [
  "dirs",
  "miette",
@@ -2647,7 +2647,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.12.4"
+version = "0.12.5"
 dependencies = [
  "async-trait",
  "criterion2",
