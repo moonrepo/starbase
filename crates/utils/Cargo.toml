@@ -44,7 +44,7 @@ serde_norway = { workspace = true, optional = true }
 # net
 async-trait = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
-url = { version = "2.5.7", optional = true }
+url = { version = "2.5.8", optional = true }
 
 [features]
 default = []

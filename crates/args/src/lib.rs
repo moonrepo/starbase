@@ -171,15 +171,15 @@ impl Value {
     }
 
     pub fn is_quoted(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Self::DoubleQuoted(_)
-            | Self::SpecialDoubleQuoted(_)
-            | Self::SingleQuoted(_)
-            | Self::SpecialSingleQuoted(_)
-            | Self::MurexBraceQuoted(_)
-            | Self::NuRawQuoted(_) => true,
-            _ => false,
-        }
+                | Self::SpecialDoubleQuoted(_)
+                | Self::SingleQuoted(_)
+                | Self::SpecialSingleQuoted(_)
+                | Self::MurexBraceQuoted(_)
+                | Self::NuRawQuoted(_)
+        )
     }
 
     /// If the value is quoted, returns the value within the quotes.

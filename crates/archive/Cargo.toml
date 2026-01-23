@@ -22,7 +22,7 @@ thiserror = { workspace = true }
 
 # compression
 bzip2 = { version = "0.6.1", optional = true }
-flate2 = { version = "1.1.5", optional = true }
+flate2 = { version = "1.1.8", optional = true }
 liblzma = { version = "0.4.5", optional = true, features = ["static"] }
 zstd = { version = "0.13.3", optional = true }
 
@@ -31,7 +31,7 @@ zstd = { version = "0.13.3", optional = true }
 binstall-tar = { version = "0.4.42", optional = true }
 
 # zip
-zip = { version = "7.0.0", default-features = false, optional = true }
+zip = { version = "7.2.0", default-features = false, optional = true }
 
 [dev-dependencies]
 starbase_archive = { path = ".", features = [
