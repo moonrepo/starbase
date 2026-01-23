@@ -8,5 +8,5 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.85.0"
 
 [dependencies]
-pest = "2.8.3"
-pest_derive = "2.8.3"
+pest = "2.8.5"
+pest_derive = "2.8.5"
