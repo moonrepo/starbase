@@ -23,6 +23,8 @@ pub enum Expansion {
     Param(String),
     /// ~
     Tilde(String),
+    /// @token(id)
+    TokenFunc(String),
     /// *, ?, []
     Wildcard(String),
 }
@@ -35,6 +37,7 @@ impl fmt::Display for Expansion {
             | Self::Wildcard(inner)
             | Self::Param(inner)
             | Self::Mixed(inner)
+            | Self::TokenFunc(inner)
             | Self::Tilde(inner) => write!(f, "{inner}"),
         }
     }
@@ -48,6 +51,7 @@ impl Expansion {
             | Self::Mixed(inner)
             | Self::Param(inner)
             | Self::Tilde(inner)
+            | Self::TokenFunc(inner)
             | Self::Wildcard(inner) => inner,
         }
     }
@@ -59,6 +63,8 @@ impl Expansion {
             return Some(Self::Arithmetic(value.into()));
         } else if value.starts_with("${") {
             return Some(Self::Param(value.into()));
+        } else if value.starts_with("@") {
+            return Some(Self::TokenFunc(value.into()));
         }
 
         let mut found = vec![];
@@ -415,6 +421,7 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
                 Value::Expansion(Expansion::Brace(inner.into()))
             }
         }
+        Rule::moon_token_expansion => Value::Expansion(Expansion::TokenFunc(inner.into())),
 
         // Substitution
         Rule::command_substitution => Value::Substitution(Substitution::Command(inner.into())),
@@ -434,6 +441,7 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
         | Rule::value_unquoted
         | Rule::arithmetic_expansion
         | Rule::parameter_expansion
+        | Rule::moon_token_expansion
         | Rule::param
         | Rule::command_substitution
         | Rule::process_substitution => Argument::Value(parse_value(pair)),
