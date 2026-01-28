@@ -2553,7 +2553,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_args"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "pest",
  "pest_derive",
@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.10.6"
+version = "0.10.7"
 dependencies = [
  "miette",
  "regex",
