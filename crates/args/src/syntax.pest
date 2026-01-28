@@ -3,6 +3,7 @@ WHITESPACE = _{ " " | "\t" }
 
 id     = _{ ASCII_ALPHANUMERIC | "_" }
 id_env = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
+id_starbase = _{ ALPHABETIC | ASCII_DIGIT | JOIN_CONTROL | "_" | "-" | "." | "/" | "\\" }
 
 // SYNTAX:
 // https://www.gnu.org/software/bash/manual/html_node/Definitions.html
@@ -92,7 +93,9 @@ value_dynamic = _{ expansion | substitution | value }
 arithmetic_expansion = { "$((" ~ (!"))" ~ ANY)+ ~ "))" }
 parameter_expansion  = { "${" ~ (!"}" ~ ANY)+ ~ "}" | "{" ~ (!"}" ~ ANY)+ ~ "}" }
 
-expansion = _{ arithmetic_expansion | parameter_expansion }
+moon_token_expansion = @{ "@" ~ id_starbase+ ~ "(" ~ id_starbase+ ~ ")" }
+
+expansion = _{ arithmetic_expansion | parameter_expansion | moon_token_expansion}
 
 // SUBSTITUTION:
 // https://www.gnu.org/software/bash/manual/html_node/Command-Substitution.html

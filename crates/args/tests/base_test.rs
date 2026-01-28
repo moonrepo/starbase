@@ -1274,6 +1274,50 @@ mod value {
             ]
         );
     }
+
+    #[test]
+    fn moon_token_funcs() {
+        for param in [
+            "@group(file_group)",
+            "@dirs(lint.able)",
+            "@files(config)",
+            "@globs(tests)",
+            "@root(sources)",
+            "@envs(sources)",
+            "@in(1)",
+            "@out(0)",
+            "@meta(name)",
+        ] {
+            test_args!(
+                format!("echo {param}"),
+                [
+                    Argument::Value(Value::Unquoted("echo".into())),
+                    Argument::Value(Value::Expansion(Expansion::TokenFunc(param.into())))
+                ]
+            );
+        }
+    }
+
+    #[test]
+    fn moon_token_vars() {
+        for param in [
+            "$osFamily",
+            "$workspaceRoot",
+            "$projectChannel",
+            "$projectStack",
+            "$taskToolchain",
+            "$datetime",
+            "$vcsRepository",
+        ] {
+            test_args!(
+                format!("echo {param}"),
+                [
+                    Argument::Value(Value::Unquoted("echo".into())),
+                    Argument::Value(Value::Expansion(Expansion::Param(param.into())))
+                ]
+            );
+        }
+    }
 }
 
 mod shells {
