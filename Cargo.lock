@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "async-trait",
  "criterion2",
