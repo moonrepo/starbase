@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 use std::time::Instant;
 use tracing::{instrument, trace};
-use wax::{Any, LinkBehavior, Pattern};
+use wax::{
+    Any, Program,
+    walk::{Entry, FileIterator, LinkBehavior},
+};
 
 #[cfg(feature = "glob-cache")]
 pub use crate::glob_cache::GlobCache;
@@ -307,10 +310,12 @@ where
     let (expressions, mut negations) = split_patterns(patterns);
     negations.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
+    let negations_set = wax::any(negations).unwrap();
+
     for expression in expressions {
         for entry in create_glob(expression)?
             .walk_with_behavior(base_dir, LinkBehavior::ReadFile)
-            .not(negations.clone())
+            .not(negations_set.clone())
             .unwrap()
         {
             match entry {
