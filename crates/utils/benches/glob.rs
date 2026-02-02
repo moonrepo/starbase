@@ -4,7 +4,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use starbase_sandbox::{Sandbox, create_empty_sandbox};
 use starbase_utils::glob;
 use std::fs;
-use wax::Pattern;
+use wax::Program;
 
 fn simple_match(c: &mut Criterion) {
     let mut group = c.benchmark_group("simple_match");
