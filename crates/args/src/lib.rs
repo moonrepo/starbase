@@ -57,18 +57,9 @@ impl Expansion {
     }
 
     fn detect(value: &str) -> Option<Self> {
-        if value.starts_with('~') {
-            return Some(Self::Tilde(value.into()));
-        } else if value.starts_with("$((") {
-            return Some(Self::Arithmetic(value.into()));
-        } else if value.starts_with("${") {
-            return Some(Self::Param(value.into()));
-        } else if value.starts_with("@") {
-            return Some(Self::TokenFunc(value.into()));
-        }
-
         let mut found = vec![];
         let mut last_ch = ' ';
+        let mut in_bracket = false;
 
         for ch in value.chars() {
             // https://www.gnu.org/software/bash/manual/html_node/Brace-Expansion.html
@@ -76,8 +67,14 @@ impl Expansion {
                 found.push(Self::Brace(value.into()));
             }
 
+            if ch == '{' {
+                in_bracket = true;
+            } else if ch == '}' {
+                in_bracket = false;
+            }
+
             // https://www.gnu.org/software/bash/manual/html_node/Filename-Expansion.html
-            if ch == '*'
+            if (ch == '*'
                 || ch == '?'
                 || ch == '['
                 || (ch == '('
@@ -85,7 +82,8 @@ impl Expansion {
                         || last_ch == '*'
                         || last_ch == '+'
                         || last_ch == '@'
-                        || last_ch == '!'))
+                        || last_ch == '!')))
+                && !in_bracket
             {
                 found.push(Self::Wildcard(value.into()));
             }
@@ -373,7 +371,7 @@ impl Deref for CommandLine {
 }
 
 fn parse_value(pair: Pair<'_, Rule>) -> Value {
-    let inner = pair.as_str();
+    let inner = pair.as_str().trim();
 
     match pair.as_rule() {
         Rule::value_murex_brace_quote => {
@@ -421,6 +419,8 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
                 Value::Expansion(Expansion::Brace(inner.into()))
             }
         }
+        Rule::param_special => Value::Expansion(Expansion::Param(inner.into())),
+        Rule::tilde_expansion => Value::Expansion(Expansion::Tilde(inner.into())),
         Rule::moon_token_expansion => Value::Expansion(Expansion::TokenFunc(inner.into())),
 
         // Substitution
@@ -431,8 +431,8 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
     }
 }
 
-fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
-    match pair.as_rule() {
+fn parse_argument(pair: Pair<'_, Rule>) -> Option<Argument> {
+    let arg = match pair.as_rule() {
         // Values
         Rule::value_murex_brace_quote
         | Rule::value_nu_raw_quote
@@ -441,14 +441,12 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
         | Rule::value_unquoted
         | Rule::arithmetic_expansion
         | Rule::parameter_expansion
+        | Rule::tilde_expansion
         | Rule::moon_token_expansion
         | Rule::param
+        | Rule::param_special
         | Rule::command_substitution
         | Rule::process_substitution => Argument::Value(parse_value(pair)),
-
-        Rule::param_special => {
-            Argument::Value(Value::Expansion(Expansion::Param(pair.as_str().into())))
-        }
 
         // Env vars
         Rule::env_var => {
@@ -485,8 +483,10 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
             Argument::Option(key.as_str().into(), Some(parse_value(value)))
         }
 
-        _ => unreachable!(),
-    }
+        _ => return None,
+    };
+
+    Some(arg)
 }
 
 fn parse_command(pair: Pair<'_, Rule>) -> Command {
@@ -495,7 +495,9 @@ fn parse_command(pair: Pair<'_, Rule>) -> Command {
             let mut args = vec![];
 
             for inner in pair.into_inner() {
-                args.push(parse_argument(inner));
+                if let Some(arg) = parse_argument(inner) {
+                    args.push(arg);
+                }
             }
 
             Command(args)
