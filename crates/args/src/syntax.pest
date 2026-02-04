@@ -11,6 +11,7 @@ id_starbase = _{ ALPHABETIC | ASCII_DIGIT | JOIN_CONTROL | "_" | "-" | "." | "/"
 
 blank       = _{ " " | "\t" }
 whitespace  = _{ blank | "\n" | "\r" }
+boundary    = _{ whitespace | EOI }
 meta_char   = _{ whitespace | "|" | "&" | ";" }
 escape_char = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
 fd_char     = _{ ASCII_DIGIT | "-" | "out+err" | "o+e" | "out" | "o" | "err" | "e"  }
@@ -91,17 +92,23 @@ value_dynamic = _{ expansion | substitution | value }
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Parameter-Expansion.html
 
 arithmetic_expansion = { "$((" ~ (!"))" ~ ANY)+ ~ "))" }
-parameter_expansion  = { "${" ~ (!"}" ~ ANY)+ ~ "}" | "{" ~ (!"}" ~ ANY)+ ~ "}" }
+
+brace_expansion = { "{" ~ (!"}" ~ ANY)+ ~ "}"  }
+
+parameter_expansion  = { "${" ~ (!"}" ~ ANY)+ ~ "}" ~ boundary }
+
+tilde_expansion = { "~" ~ ("+" | "-")? ~ ASCII_DIGIT? ~ ANY* }
 
 moon_token_expansion = @{ "@" ~ id_starbase+ ~ "(" ~ id_starbase+ ~ ")" }
 
-expansion = _{ arithmetic_expansion | parameter_expansion | moon_token_expansion}
+expansion = _{ arithmetic_expansion | parameter_expansion | brace_expansion | tilde_expansion | moon_token_expansion }
 
 // SUBSTITUTION:
 // https://www.gnu.org/software/bash/manual/html_node/Command-Substitution.html
 // https://www.gnu.org/software/bash/manual/html_node/Process-Substitution.html
 
 command_substitution = { "$(" ~ (!")" ~ ANY)+ ~ ")" | "!(" ~ (!")" ~ ANY)+ ~ ")" | "(" ~ (!")" ~ ANY)+ ~ ")" | "`" ~ (!"`" ~ ANY)+ ~ "`" }
+
 process_substitution = { "<(" ~ (!")" ~ ANY)+ ~ ")" | ">(" ~ (!")" ~ ANY)+ ~ ")" }
 
 substitution = _{ process_substitution | command_substitution }
@@ -119,7 +126,7 @@ option            = @{ ("&" | "--") ~ ASCII_ALPHA ~ (id | "-" | ".")* }
 option_with_value = ${ option ~ "=" ~ value_dynamic }
 
 param_special = @{ "$" ~ ("#" | "*" | "@" | "?" | "-" | "$" | "!") }
-param = @{ ("$" | "@") ~ (((ASCII_ALPHA | "_") ~ id*) | ASCII_DIGIT+) }
+param = @{ ("$" | "@") ~ (((ASCII_ALPHA | "_") ~ id*) | ASCII_DIGIT+) ~ boundary }
 
 argument = _{ expansion | substitution | env_var | param_special | param | flag_group | flag | option_with_value | option | value }
 
@@ -134,6 +141,7 @@ pipeline_negated  = { "!" }
 pipeline_operator = { "|&" | "&|" | "^|" | "|" | "->" | "=>" | "?" }
 pipeline          = { pipeline_negated? ~ command_list ~ (pipeline_operator ~ command_list)* }
 
-args = _{
-    SOI ~ pipeline ~ EOI
-}
+// PARSERS:
+
+command_line = _{ SOI ~ pipeline ~ EOI }
+unquoted_expansion_or_substitution = _{ SOI ~ (expansion | substitution) ~ EOI }

@@ -57,18 +57,9 @@ impl Expansion {
     }
 
     fn detect(value: &str) -> Option<Self> {
-        if value.starts_with('~') {
-            return Some(Self::Tilde(value.into()));
-        } else if value.starts_with("$((") {
-            return Some(Self::Arithmetic(value.into()));
-        } else if value.starts_with("${") {
-            return Some(Self::Param(value.into()));
-        } else if value.starts_with("@") {
-            return Some(Self::TokenFunc(value.into()));
-        }
-
         let mut found = vec![];
         let mut last_ch = ' ';
+        let mut in_bracket = false;
 
         for ch in value.chars() {
             // https://www.gnu.org/software/bash/manual/html_node/Brace-Expansion.html
@@ -76,8 +67,14 @@ impl Expansion {
                 found.push(Self::Brace(value.into()));
             }
 
+            if ch == '{' {
+                in_bracket = true;
+            } else if ch == '}' {
+                in_bracket = false;
+            }
+
             // https://www.gnu.org/software/bash/manual/html_node/Filename-Expansion.html
-            if ch == '*'
+            if (ch == '*'
                 || ch == '?'
                 || ch == '['
                 || (ch == '('
@@ -85,7 +82,8 @@ impl Expansion {
                         || last_ch == '*'
                         || last_ch == '+'
                         || last_ch == '@'
-                        || last_ch == '!'))
+                        || last_ch == '!')))
+                && !in_bracket
             {
                 found.push(Self::Wildcard(value.into()));
             }
@@ -372,10 +370,26 @@ impl Deref for CommandLine {
     }
 }
 
-fn parse_value(pair: Pair<'_, Rule>) -> Value {
-    let inner = pair.as_str();
+fn handle_unquoted_value(pair: Pair<'_, Rule>) -> Value {
+    let inner = pair.as_str().trim();
+
+    if let Ok(value) = parse_unquoted_value(inner) {
+        return value;
+    }
+
+    if let Some(value) = Expansion::detect(inner) {
+        return Value::Expansion(value);
+    }
+
+    Value::Unquoted(inner.into())
+}
+
+fn handle_value(pair: Pair<'_, Rule>) -> Value {
+    let inner = pair.as_str().trim();
 
     match pair.as_rule() {
+        Rule::value_unquoted => handle_unquoted_value(pair),
+
         Rule::value_murex_brace_quote => {
             Value::MurexBraceQuoted(inner.trim_start_matches("%(").trim_end_matches(")").into())
         }
@@ -407,13 +421,9 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
             }
         }
 
-        Rule::value_unquoted => match Expansion::detect(inner) {
-            Some(exp) => Value::Expansion(exp),
-            None => Value::Unquoted(inner.into()),
-        },
-
         // Expansions
         Rule::arithmetic_expansion => Value::Expansion(Expansion::Arithmetic(inner.into())),
+        Rule::brace_expansion => Value::Expansion(Expansion::Brace(inner.into())),
         Rule::parameter_expansion | Rule::param => {
             if inner.starts_with(['$', '@']) {
                 Value::Expansion(Expansion::Param(inner.into()))
@@ -421,6 +431,8 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
                 Value::Expansion(Expansion::Brace(inner.into()))
             }
         }
+        Rule::param_special => Value::Expansion(Expansion::Param(inner.into())),
+        Rule::tilde_expansion => Value::Expansion(Expansion::Tilde(inner.into())),
         Rule::moon_token_expansion => Value::Expansion(Expansion::TokenFunc(inner.into())),
 
         // Substitution
@@ -431,8 +443,8 @@ fn parse_value(pair: Pair<'_, Rule>) -> Value {
     }
 }
 
-fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
-    match pair.as_rule() {
+fn handle_argument(pair: Pair<'_, Rule>) -> Option<Argument> {
+    let arg = match pair.as_rule() {
         // Values
         Rule::value_murex_brace_quote
         | Rule::value_nu_raw_quote
@@ -440,15 +452,14 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
         | Rule::value_single_quote
         | Rule::value_unquoted
         | Rule::arithmetic_expansion
+        | Rule::brace_expansion
         | Rule::parameter_expansion
+        | Rule::tilde_expansion
         | Rule::moon_token_expansion
         | Rule::param
+        | Rule::param_special
         | Rule::command_substitution
-        | Rule::process_substitution => Argument::Value(parse_value(pair)),
-
-        Rule::param_special => {
-            Argument::Value(Value::Expansion(Expansion::Param(pair.as_str().into())))
-        }
+        | Rule::process_substitution => Argument::Value(handle_value(pair)),
 
         // Env vars
         Rule::env_var => {
@@ -468,7 +479,7 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
             let key = inner.next().expect("Missing env var key!");
             let value = inner.next().expect("Missing env var value!");
 
-            Argument::EnvVar(key.as_str().into(), parse_value(value), namespace)
+            Argument::EnvVar(key.as_str().into(), handle_value(value), namespace)
         }
 
         // Flags
@@ -482,20 +493,24 @@ fn parse_argument(pair: Pair<'_, Rule>) -> Argument {
             let key = inner.next().expect("Missing option key!");
             let value = inner.next().expect("Missing option value!");
 
-            Argument::Option(key.as_str().into(), Some(parse_value(value)))
+            Argument::Option(key.as_str().into(), Some(handle_value(value)))
         }
 
-        _ => unreachable!(),
-    }
+        _ => return None,
+    };
+
+    Some(arg)
 }
 
-fn parse_command(pair: Pair<'_, Rule>) -> Command {
+fn handle_command(pair: Pair<'_, Rule>) -> Command {
     match pair.as_rule() {
         Rule::command => {
             let mut args = vec![];
 
             for inner in pair.into_inner() {
-                args.push(parse_argument(inner));
+                if let Some(arg) = handle_argument(inner) {
+                    args.push(arg);
+                }
             }
 
             Command(args)
@@ -504,7 +519,7 @@ fn parse_command(pair: Pair<'_, Rule>) -> Command {
     }
 }
 
-fn parse_command_list(pair: Pair<'_, Rule>) -> CommandList {
+fn handle_command_list(pair: Pair<'_, Rule>) -> CommandList {
     match pair.as_rule() {
         Rule::command_list => {
             let mut list = vec![];
@@ -514,7 +529,7 @@ fn parse_command_list(pair: Pair<'_, Rule>) -> CommandList {
             for inner in pair.into_inner() {
                 match inner.as_rule() {
                     Rule::command => {
-                        let command = parse_command(inner);
+                        let command = handle_command(inner);
 
                         if list.is_empty() {
                             list.push(Sequence::Start(command));
@@ -558,7 +573,7 @@ fn parse_command_list(pair: Pair<'_, Rule>) -> CommandList {
     }
 }
 
-fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
+fn handle_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
     match pair.as_rule() {
         Rule::pipeline => {
             let mut list = vec![];
@@ -569,7 +584,7 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
             for inner in pair.into_inner() {
                 match inner.as_rule() {
                     Rule::command_list => {
-                        let command_list = parse_command_list(inner);
+                        let command_list = handle_command_list(inner);
 
                         if list.is_empty() {
                             if negated {
@@ -613,14 +628,30 @@ fn parse_pipeline(pair: Pair<'_, Rule>) -> Vec<Pipeline> {
 
 #[allow(clippy::result_large_err)]
 pub fn parse<T: AsRef<str>>(input: T) -> Result<CommandLine, pest::error::Error<Rule>> {
-    let pairs = ArgsParser::parse(Rule::args, input.as_ref().trim())?;
+    let pairs = ArgsParser::parse(Rule::command_line, input.as_ref().trim())?;
     let mut pipeline = vec![];
 
     for pair in pairs {
         if pair.as_rule() == Rule::pipeline {
-            pipeline.extend(parse_pipeline(pair));
+            pipeline.extend(handle_pipeline(pair));
         }
     }
 
     Ok(CommandLine(pipeline))
+}
+
+#[allow(clippy::result_large_err)]
+pub fn parse_unquoted_value<T: AsRef<str>>(input: T) -> Result<Value, pest::error::Error<Rule>> {
+    let pairs = ArgsParser::parse(
+        Rule::unquoted_expansion_or_substitution,
+        input.as_ref().trim(),
+    )?;
+
+    for pair in pairs {
+        if pair.as_rule() != Rule::EOI {
+            return Ok(handle_value(pair));
+        }
+    }
+
+    Ok(Value::Unquoted(input.as_ref().into()))
 }
