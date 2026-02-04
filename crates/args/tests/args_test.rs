@@ -1139,14 +1139,14 @@ mod value {
         );
 
         // elvish
-        // test_args!(
-        //     "put {a b} {1 2}",
-        //     [
-        //         Argument::Value(Value::Unquoted("put".into())),
-        //         Argument::Value(Value::Expansion(Expansion::Brace("{a b}".into()))),
-        //         Argument::Value(Value::Expansion(Expansion::Brace("{1 2}".into()))),
-        //     ]
-        // );
+        test_args!(
+            "put {a b} {1 2}",
+            [
+                Argument::Value(Value::Unquoted("put".into())),
+                Argument::Value(Value::Expansion(Expansion::Brace("{a b}".into()))),
+                Argument::Value(Value::Expansion(Expansion::Brace("{1 2}".into()))),
+            ]
+        );
     }
 
     #[test]
@@ -1401,21 +1401,21 @@ mod shells {
         );
 
         // https://elv.sh/ref/language.html#pipeline-exception
-        // test_commands!(
-        //     "while $true { put foo } > run &-",
-        //     [
-        //         Sequence::Start(Command(vec![
-        //             Argument::Value(Value::Unquoted("while".into())),
-        //             Argument::Value(Value::Expansion(Expansion::Param("$true".into()))),
-        //             Argument::Value(Value::Expansion(Expansion::Brace("{ put foo }".into()))),
-        //         ])),
-        //         Sequence::Redirect(
-        //             Command(vec![Argument::Value(Value::Unquoted("run".into())),]),
-        //             ">".into()
-        //         ),
-        //         Sequence::Stop("&-".into()),
-        //     ]
-        // );
+        test_commands!(
+            "while $true { put foo } > run &-",
+            [
+                Sequence::Start(Command(vec![
+                    Argument::Value(Value::Unquoted("while".into())),
+                    Argument::Value(Value::Expansion(Expansion::Param("$true".into()))),
+                    Argument::Value(Value::Expansion(Expansion::Brace("{ put foo }".into()))),
+                ])),
+                Sequence::Redirect(
+                    Command(vec![Argument::Value(Value::Unquoted("run".into())),]),
+                    ">".into()
+                ),
+                Sequence::Stop("&-".into()),
+            ]
+        );
     }
 
     #[test]
