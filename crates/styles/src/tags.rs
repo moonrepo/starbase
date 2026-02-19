@@ -160,3 +160,8 @@ pub fn remove_style_tags<T: AsRef<str>>(value: T) -> String {
 
     result.join("")
 }
+
+/// Encode a string so that style tags are not replaced.
+pub fn encode_style_tags<T: AsRef<str>>(value: T) -> String {
+    value.as_ref().replace(">", "＞").replace("<", "＜")
+}
