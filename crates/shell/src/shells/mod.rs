@@ -1,5 +1,6 @@
 mod ash;
 mod bash;
+mod dash;
 mod elvish;
 mod fish;
 mod ion;
@@ -13,6 +14,7 @@ mod zsh;
 
 pub use ash::*;
 pub use bash::*;
+pub use dash::*;
 pub use elvish::*;
 pub use fish::*;
 pub use ion::*;
