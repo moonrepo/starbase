@@ -8,6 +8,7 @@ use tracing::{debug, instrument};
 pub enum ShellType {
     Ash,
     Bash,
+    Dash,
     Elvish,
     Fish,
     Ion,
@@ -26,6 +27,7 @@ impl ShellType {
         vec![
             Self::Ash,
             Self::Bash,
+            Self::Dash,
             Self::Elvish,
             Self::Fish,
             Self::Ion,
@@ -110,6 +112,7 @@ impl ShellType {
         match self {
             Self::Ash => Box::new(Ash::new()),
             Self::Bash => Box::new(Bash::new()),
+            Self::Dash => Box::new(Dash::new()),
             Self::Elvish => Box::new(Elvish::new()),
             Self::Fish => Box::new(Fish::new()),
             Self::Ion => Box::new(Ion::new()),
@@ -142,6 +145,7 @@ impl fmt::Display for ShellType {
             match self {
                 Self::Ash => "ash",
                 Self::Bash => "bash",
+                Self::Dash => "dash",
                 Self::Elvish => "elvish",
                 Self::Fish => "fish",
                 Self::Ion => "ion",
@@ -164,6 +168,7 @@ impl FromStr for ShellType {
         match value {
             "ash" => Ok(ShellType::Ash),
             "bash" => Ok(ShellType::Bash),
+            "dash" => Ok(ShellType::Dash),
             "elv" | "elvish" => Ok(ShellType::Elvish),
             "fish" => Ok(ShellType::Fish),
             "ion" => Ok(ShellType::Ion),
