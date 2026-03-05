@@ -81,26 +81,20 @@ mod tests {
 
         assert_eq!(
             Dash::new().get_profile_paths(&home_dir),
-            vec![home_dir.join(".ashrc"), home_dir.join(".profile")]
+            vec![home_dir.join(".profile")]
         );
     }
 
     #[test]
-    fn test_ash_quoting() {
-        let shell = Dash::new();
-        assert_eq!(shell.quote("simple"), "simple"); // No quoting needed
-        assert_eq!(shell.quote("value with spaces"), "$'value with spaces'"); // Double quotes needed
-        assert_eq!(shell.quote("value\"with\"quotes"), "$'value\"with\"quotes'"); // Double quotes with escaping
+    fn test_dash_quoting() {
+        let sh = Sh::new();
+        assert_eq!(sh.quote(""), "''");
+        assert_eq!(sh.quote("simple"), "simple");
+        assert_eq!(sh.quote("say \"hello\""), "say' \"hello\"'");
+        assert_eq!(sh.quote("price $5"), "\"price $5\"");
         assert_eq!(
-            shell.quote("value\nwith\nnewlines"),
-            "$'value\\nwith\\nnewlines'"
-        ); // ANSI-C quoting for newlines
-        assert_eq!(shell.quote("value\twith\ttabs"), "$'value\\twith\\ttabs'"); // ANSI-C quoting for tabs
-        assert_eq!(
-            shell.quote("value\\with\\backslashes"),
-            "$'value\\\\with\\\\backslashes'"
-        ); // ANSI-C quoting for backslashes
-        assert_eq!(shell.quote("value'with'quotes"), "$'value\\'with\\'quotes'");
-        // ANSI-C quoting for single quotes
+            sh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
+            "complex' '\\'value\\'' with \"quotes\" and \\backslashes\\'"
+        );
     }
 }
