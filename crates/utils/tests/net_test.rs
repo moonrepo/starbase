@@ -1,5 +1,15 @@
 use starbase_sandbox::create_empty_sandbox;
 use starbase_utils::net;
+use std::collections::HashMap;
+
+fn headers_with_custom_header() -> HashMap<String, String> {
+    let mut headers = HashMap::new();
+    headers.insert(
+        "X-Proto-Test-Header".to_string(),
+        "proto-starbase-headers-test".to_string(),
+    );
+    headers
+}
 
 mod download {
     use super::*;
@@ -51,5 +61,72 @@ mod download {
 
         assert!(dest_file.exists());
         assert_ne!(dest_file.metadata().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn downloads_with_headers() {
+        let sandbox = create_empty_sandbox();
+        let dest_file = sandbox.path().join("headers.json");
+
+        net::download_from_url_with_headers(
+            "https://httpbin.org/headers",
+            &dest_file,
+            headers_with_custom_header(),
+        )
+        .await
+        .unwrap();
+
+        let body = std::fs::read_to_string(&dest_file).unwrap();
+        assert!(
+            body.contains("proto-starbase-headers-test"),
+            "expected response to contain custom header value, got: {body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn downloads_with_client_and_headers() {
+        let sandbox = create_empty_sandbox();
+        let dest_file = sandbox.path().join("headers.json");
+        let client = reqwest::Client::new();
+
+        net::download_from_url_with_client_and_headers(
+            "https://httpbin.org/headers",
+            &dest_file,
+            &client,
+            headers_with_custom_header(),
+        )
+        .await
+        .unwrap();
+
+        let body = std::fs::read_to_string(&dest_file).unwrap();
+        assert!(
+            body.contains("proto-starbase-headers-test"),
+            "expected response to contain custom header value, got: {body}"
+        );
+    }
+
+    #[tokio::test]
+    async fn downloads_with_options_headers() {
+        let sandbox = create_empty_sandbox();
+        let dest_file = sandbox.path().join("headers.json");
+
+        net::download_from_url_with_options(
+            "https://httpbin.org/headers",
+            &dest_file,
+            net::DownloadOptions {
+                downloader: Some(Box::new(
+                    net::DefaultDownloader::new_with_headers(headers_with_custom_header()).unwrap(),
+                )),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        let body = std::fs::read_to_string(&dest_file).unwrap();
+        assert!(
+            body.contains("proto-starbase-headers-test"),
+            "expected response to contain custom header value, got: {body}"
+        );
     }
 }
