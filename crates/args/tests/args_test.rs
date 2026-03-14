@@ -799,6 +799,21 @@ mod command {
             ]
         );
     }
+
+    #[test]
+    fn can_end_with_passthrough() {
+        assert_eq!(
+            extract_commands(&parse("a b c --").unwrap()),
+            &[
+                Sequence::Start(Command(vec![
+                    Argument::Value(Value::Unquoted("a".into())),
+                    Argument::Value(Value::Unquoted("b".into())),
+                    Argument::Value(Value::Unquoted("c".into())),
+                ],)),
+                Sequence::Stop("--".into())
+            ]
+        );
+    }
 }
 
 mod args {

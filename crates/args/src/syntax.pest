@@ -1,8 +1,8 @@
 COMMENT    = _{ "#" ~ (!"#" ~ ANY)* }
 WHITESPACE = _{ " " | "\t" }
 
-id     = _{ ASCII_ALPHANUMERIC | "_" }
-id_env = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
+id          = _{ ASCII_ALPHANUMERIC | "_" }
+id_env      = _{ ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" }
 id_starbase = _{ ALPHABETIC | ASCII_DIGIT | JOIN_CONTROL | "_" | "-" | "." | "/" | "\\" }
 
 // SYNTAX:
@@ -14,7 +14,7 @@ whitespace  = _{ blank | "\n" | "\r" }
 boundary    = _{ whitespace | EOI }
 meta_char   = _{ whitespace | "|" | "&" | ";" }
 escape_char = _{ "\\" | "/" | "b" | "f" | "n" | "r" | "t" }
-fd_char     = _{ ASCII_DIGIT | "-" | "out+err" | "o+e" | "out" | "o" | "err" | "e"  }
+fd_char     = _{ ASCII_DIGIT | "-" | "out+err" | "o+e" | "out" | "o" | "err" | "e" }
 
 // OPERATORS:
 // https://www.gnu.org/software/bash/manual/html_node/Redirections.html
@@ -79,7 +79,7 @@ value_single_quote_inner = _{
 value_single_quote       = @{ "$"? ~ "'" ~ value_single_quote_inner* ~ "'" }
 
 value_murex_brace_quote = @{ "%(" ~ (!")" ~ ANY)+ ~ ")" }
-value_nu_raw_quote = @{ "r#'" ~ value_single_quote_inner* ~ "'#" }
+value_nu_raw_quote      = @{ "r#'" ~ value_single_quote_inner* ~ "'#" }
 
 value_unquoted_inner = _{ !(meta_char | operator) ~ ANY }
 value_unquoted       = @{ value_unquoted_inner+ }
@@ -93,9 +93,9 @@ value_dynamic = _{ expansion | substitution | value }
 
 arithmetic_expansion = { "$((" ~ (!"))" ~ ANY)+ ~ "))" }
 
-brace_expansion = { "{" ~ (!"}" ~ ANY)+ ~ "}"  }
+brace_expansion = { "{" ~ (!"}" ~ ANY)+ ~ "}" }
 
-parameter_expansion  = { "${" ~ (!"}" ~ ANY)+ ~ "}" ~ boundary }
+parameter_expansion = { "${" ~ (!"}" ~ ANY)+ ~ "}" ~ boundary }
 
 tilde_expansion = { "~" ~ ("+" | "-")? ~ ASCII_DIGIT? ~ ANY* }
 
@@ -126,7 +126,7 @@ option            = @{ ("&" | "--") ~ ASCII_ALPHA ~ (id | "-" | ".")* }
 option_with_value = ${ option ~ "=" ~ value_dynamic }
 
 param_special = @{ "$" ~ ("#" | "*" | "@" | "?" | "-" | "$" | "!") }
-param = @{ ("$" | "@") ~ (((ASCII_ALPHA | "_") ~ id*) | ASCII_DIGIT+) ~ boundary }
+param         = @{ ("$" | "@") ~ (((ASCII_ALPHA | "_") ~ id*) | ASCII_DIGIT+) ~ boundary }
 
 argument = _{ expansion | substitution | env_var | param_special | param | flag_group | flag | option_with_value | option | value }
 
@@ -134,7 +134,7 @@ argument = _{ expansion | substitution | env_var | param_special | param | flag_
 // https://www.gnu.org/software/bash/manual/html_node/Shell-Commands.html
 
 command            = { argument+ }
-command_terminator = { ";" | "&-" | "&!" | "&" | "2>&1" | "\n" }
+command_terminator = { ";" | "&-" | "&!" | "&" | "2>&1" | "\n" | "--" }
 command_list       = { command ~ (operator ~ command)* ~ command_terminator? }
 
 pipeline_negated  = { "!" }
@@ -143,5 +143,5 @@ pipeline          = { pipeline_negated? ~ command_list ~ (pipeline_operator ~ co
 
 // PARSERS:
 
-command_line = _{ SOI ~ pipeline ~ EOI }
+command_line                       = _{ SOI ~ pipeline ~ EOI }
 unquoted_expansion_or_substitution = _{ SOI ~ (expansion | substitution) ~ EOI }
