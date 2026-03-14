@@ -20,6 +20,7 @@ pub struct ConsoleStream {
     channel: Option<mpsc::Sender<bool>>,
     stream: ConsoleStreamType,
 
+    pub(crate) closed: Arc<AtomicBool>,
     pub(crate) handle: Option<JoinHandle<()>>,
     pub(crate) quiet: Option<Arc<AtomicBool>>,
     pub(crate) test_mode: bool,
@@ -41,6 +42,7 @@ impl ConsoleStream {
         Self {
             buffer,
             channel: Some(tx),
+            closed: Arc::new(AtomicBool::new(false)),
             handle,
             stream,
             quiet: None,
@@ -62,11 +64,16 @@ impl ConsoleStream {
         Self {
             buffer: Arc::new(Mutex::new(Vec::new())),
             channel: None,
+            closed: Arc::new(AtomicBool::new(false)),
             stream,
             handle: None,
             quiet: None,
             test_mode: false,
         }
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::Relaxed)
     }
 
     pub fn is_quiet(&self) -> bool {
@@ -95,6 +102,7 @@ impl ConsoleStream {
             }
         );
 
+        self.closed.store(true, Ordering::Release);
         self.flush()?;
 
         // Send the closed message
@@ -122,7 +130,7 @@ impl ConsoleStream {
         };
 
         // When testing just flush immediately
-        if self.test_mode {
+        if self.test_mode || self.is_closed() {
             let mut buffer = Vec::new();
 
             op(&mut buffer).map_err(handle_error)?;
@@ -194,6 +202,7 @@ impl Clone for ConsoleStream {
     fn clone(&self) -> Self {
         Self {
             buffer: Arc::clone(&self.buffer),
+            closed: Arc::clone(&self.closed),
             stream: self.stream,
             quiet: self.quiet.clone(),
             test_mode: self.test_mode,
@@ -208,6 +217,7 @@ impl fmt::Debug for ConsoleStream {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ConsoleStream")
             .field("buffer", &self.buffer)
+            .field("closed", &self.closed)
             .field("stream", &self.stream)
             .field("quiet", &self.quiet)
             .field("test_mode", &self.test_mode)
