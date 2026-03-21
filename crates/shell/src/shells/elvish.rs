@@ -6,6 +6,7 @@ use crate::helpers::{
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -20,46 +21,69 @@ impl Elvish {
     }
 
     /// Quotes a string according to Elvish shell quoting rules.
-    /// @see <https://elv.sh/ref/language.html#single-quoted-string>
     #[allow(clippy::no_effect_replace)]
     fn do_quote(value: String) -> String {
-        // Check if the value is a bareword (only specific characters allowed)
-        let is_bareword = value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-._:@/%~=+".contains(c));
+        let replacements = HashMap::from_iter([
+            // Bell
+            ('\x07', "\\a"),
+            // Backspace
+            ('\x08', "\\b"),
+            // Horizontal tab
+            ('\x09', "\\t"),
+            ('\t', "\\t"),
+            // Newline
+            ('\x0A', "\\n"),
+            ('\n', "\\n"),
+            // Vertical tab
+            ('\x0B', "\\v"),
+            // Form feed
+            ('\x0C', "\\f"),
+            // Carriage return
+            ('\x0D', "\\r"),
+            ('\r', "\\r"),
+            // Escape
+            ('\x1B', "\\e"),
+            // Double quote
+            ('"', "\\\""),
+            // Backslash
+            ('\\', "\\\\"),
+            // Zero byte
+            ('\0', "\x00"),
+        ]);
 
-        if is_bareword {
-            // Barewords: no quotes needed
+        // Barewords: no quotes needed
+        // https://elv.sh/ref/language.html#bareword
+        if value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || "!%+,-./:@\\_".contains(ch))
+        {
             value.to_string()
-        } else if value.contains("{~}") {
-            // Special case for {~} within the value to escape quoting
+        }
+        // Special case for {~} within the value to escape quoting
+        else if value.contains("{~}") {
             value.to_string()
-        } else if value.chars().any(|c| {
-            c.is_whitespace()
-                || [
-                    '$', '"', '`', '\\', '\n', '\t', '\x07', '\x08', '\x0C', '\r', '\x1B', '\x7F',
-                ]
-                .contains(&c)
-        }) {
-            // Double-quoted strings with escape sequences
-            format!(
-                r#""{}""#,
-                value
-                    .replace('\\', "\\\\")
-                    .replace('\n', "\\n")
-                    .replace('\t', "\\t")
-                    .replace('\x07', "\\a")
-                    .replace('\x08', "\\b")
-                    .replace('\x0C', "\\f")
-                    .replace('\r', "\\r")
-                    .replace('\x1B', "\\e")
-                    .replace('\"', "\\\"")
-                    .replace('\x7F', "\\^?")
-                    .replace('\0', "\x00")
+        }
+        // Double-quoted strings with escape sequences
+        // https://elv.sh/ref/language.html#double-quoted-string
+        else if value
+            .chars()
+            .any(|ch| ch == '$' || ch.is_whitespace() || replacements.contains_key(&ch))
+        {
+            apply_quote(&value, ("\"", "\""), replacements)
+        }
+        // Single-quoted strings for non-barewords containing special characters
+        // https://elv.sh/ref/language.html#single-quoted-string
+        else {
+            apply_quote(
+                &value,
+                ("'", "'"),
+                HashMap::from_iter([
+                    // Single quote
+                    ('\'', "''"),
+                    // Zero byte
+                    ('\0', "\x00"),
+                ]),
             )
-        } else {
-            // Single-quoted strings for non-barewords containing special characters
-            format!("'{}'", value.replace('\'', "''").replace('\0', "\x00"))
         }
     }
 
@@ -302,7 +326,7 @@ mod tests {
         assert_eq!(Elvish.quote("value\twith\ttabs"), r#""value\twith\ttabs""#);
         assert_eq!(
             Elvish.quote("value\\with\\backslashes"),
-            r#""value\\with\\backslashes""#
+            "value\\with\\backslashes"
         );
 
         // Escape sequences
@@ -311,9 +335,8 @@ mod tests {
         assert_eq!(Elvish.quote("\x09"), r#""\t""#);
         assert_eq!(Elvish.quote("\x07"), r#""\a""#);
         assert_eq!(Elvish.quote("\x1B"), r#""\e""#);
-        assert_eq!(Elvish.quote("\x7F"), r#""\^?""#);
 
         // Unsupported sequences
-        assert_eq!(Elvish.quote("\0"), "'\x00'".to_string());
+        assert_eq!(Elvish.quote("\0"), "\"\x00\"".to_string());
     }
 }

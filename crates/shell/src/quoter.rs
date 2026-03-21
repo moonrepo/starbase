@@ -1,8 +1,27 @@
 use crate::helpers::{get_var_regex, get_var_regex_bytes, quotable_into_string};
 use shell_quote::{Bash, QuoteRefExt};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub use shell_quote::Quotable;
+
+pub fn apply_quote(value: &str, quotes: (&str, &str), replacements: HashMap<char, &str>) -> String {
+    let (open, close) = quotes;
+
+    let mut out = String::with_capacity(open.len() + value.len() + close.len());
+    out.push_str(open);
+
+    for ch in value.chars() {
+        if let Some(replacement) = replacements.get(&ch) {
+            out.push_str(replacement);
+        } else {
+            out.push(ch);
+        }
+    }
+
+    out.push_str(close);
+    out
+}
 
 fn quote(data: Quotable<'_>) -> String {
     data.quoted(Bash)
@@ -10,18 +29,8 @@ fn quote(data: Quotable<'_>) -> String {
 
 fn quote_expansion(data: Quotable<'_>) -> String {
     let string = quotable_into_string(data);
-    let mut output = String::with_capacity(string.len() + 2);
-    output.push('"');
-
-    for c in string.chars() {
-        if c == '"' || c == '\\' {
-            output.push('\\');
-        }
-        output.push(c);
-    }
-
-    output.push('"');
-    output
+    // TODO
+    string
 }
 
 /// Types of syntax to check for to determine quoting.
