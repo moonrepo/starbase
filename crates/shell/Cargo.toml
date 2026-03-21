@@ -22,7 +22,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [target."cfg(windows)".dependencies]
-sysinfo = { version = "0.38.3", default-features = false, features = [
+sysinfo = { version = "0.38.4", default-features = false, features = [
 	"system",
 ] }
 

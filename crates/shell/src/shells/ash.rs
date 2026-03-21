@@ -1,4 +1,4 @@
-use super::{Bash, Shell};
+use super::{Sh, Shell};
 use crate::hooks::*;
 use crate::quoter::*;
 use std::fmt;
@@ -6,13 +6,13 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Ash {
-    inner: Bash,
+    inner: Sh,
 }
 
 impl Ash {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self { inner: Bash::new() }
+        Self { inner: Sh::new() }
     }
 }
 

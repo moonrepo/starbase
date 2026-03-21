@@ -4,7 +4,7 @@ use crate::helpers::{
     quotable_into_string,
 };
 use crate::hooks::*;
-use crate::quoter::*;
+use crate::quoter::{self, *};
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -32,31 +32,30 @@ impl Nu {
     /// Quotes a string according to Nu shell quoting rules.
     /// @see <https://www.nushell.sh/book/working_with_strings.html>
     fn do_quote(value: String) -> String {
-        if value.contains('`') {
-            // Use backtick quoting for strings containing backticks
-            format!("`{value}`")
-        } else if value.contains('\'') {
-            // Use double quotes with proper escaping for single-quoted strings
-            format!(
-                "\"{}\"",
-                value
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-                    .replace('\n', "\\n")
-            )
-        } else if value.contains('"') {
-            // Escape double quotes if present
-            format!(
-                "\"{}\"",
-                value
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-                    .replace('\n', "\\n")
-            )
-        } else {
-            // Use single quotes for other cases
-            format!("'{}'", value.replace('\n', "\\n"))
-        }
+        // if !value.contains('\'') {
+        //     // Single-quoted strings are completely literal in Nu — no escaping needed.
+        //     quoter::quote_str(
+        //         &value,
+        //         &quoter::QuoteStyle {
+        //             open: "'",
+        //             close: "'",
+        //             escape: '\\',
+        //             escapes: &[],
+        //         },
+        //     )
+        // } else {
+        //     // Double-quoted strings support escape sequences.
+        //     quoter::quote_str(
+        //         &value,
+        //         &quoter::QuoteStyle {
+        //             open: "\"",
+        //             close: "\"",
+        //             escape: '\\',
+        //             escapes: &[('\\', '\\'), ('"', '"'), ('\n', 'n'), ('\r', 'r'), ('\t', 't')],
+        //         },
+        //     )
+        // }
+        value
     }
 
     fn do_quote_expansion(value: String) -> String {

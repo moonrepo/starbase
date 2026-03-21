@@ -1,27 +1,76 @@
 use crate::helpers::{get_var_regex, get_var_regex_bytes, quotable_into_string};
 use shell_quote::{Bash, QuoteRefExt};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 pub use shell_quote::Quotable;
+
+pub fn default_escape_chars() -> HashMap<char, &'static str> {
+    HashMap::from_iter([
+        // Zero byte
+        ('\0', "\x00"),
+        // Bell
+        ('\x07', "\\a"),
+        // Backspace
+        ('\x08', "\\b"),
+        // Horizontal tab
+        ('\x09', "\\t"),
+        ('\t', "\\t"),
+        // Newline
+        ('\x0A', "\\n"),
+        ('\n', "\\n"),
+        // Vertical tab
+        ('\x0B', "\\v"),
+        // Form feed
+        ('\x0C', "\\f"),
+        // Carriage return
+        ('\x0D', "\\r"),
+        ('\r', "\\r"),
+        // Escape
+        ('\x1B', "\\e"),
+        // Double quote
+        ('"', "\\\""),
+        // Backslash
+        ('\\', "\\\\"),
+    ])
+}
+
+pub fn apply_quote(
+    value: String,
+    quotes: (&str, &str),
+    replacements: HashMap<char, &str>,
+) -> String {
+    let (open, close) = quotes;
+
+    let mut out = String::with_capacity(open.len() + value.len() + close.len());
+    out.push_str(open);
+
+    for ch in value.chars() {
+        if let Some(replacement) = replacements.get(&ch) {
+            out.push_str(replacement);
+        } else {
+            out.push(ch);
+        }
+    }
+
+    out.push_str(close);
+    out
+}
+
+pub fn apply_single_quote(value: String) -> String {
+    apply_quote(value, ("'", "'"), HashMap::from_iter([('\'', "\\'")]))
+}
+
+pub fn apply_double_quote(value: String) -> String {
+    apply_quote(value, ("\"", "\""), default_escape_chars())
+}
 
 fn quote(data: Quotable<'_>) -> String {
     data.quoted(Bash)
 }
 
 fn quote_expansion(data: Quotable<'_>) -> String {
-    let string = quotable_into_string(data);
-    let mut output = String::with_capacity(string.len() + 2);
-    output.push('"');
-
-    for c in string.chars() {
-        if c == '"' || c == '\\' {
-            output.push('\\');
-        }
-        output.push(c);
-    }
-
-    output.push('"');
-    output
+    apply_double_quote(quotable_into_string(data))
 }
 
 /// Types of syntax to check for to determine quoting.
