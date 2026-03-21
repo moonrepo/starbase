@@ -19,10 +19,6 @@ impl Murex {
     /// Quotes a string according to Murex shell quoting rules.
     /// @see <https://murex.rocks/tour.html#basic-syntax>
     fn do_quote(value: String) -> String {
-        if value.starts_with('$') {
-            return format!("\"{value}\"");
-        }
-
         // Check for simple values that don't need quoting
         if value
             .chars()
@@ -31,20 +27,13 @@ impl Murex {
             return value.to_string();
         }
 
-        // Handle brace quotes %(...)
-        if value.starts_with("%(") && value.ends_with(')') {
-            return value.to_string(); // Return as-is for brace quotes
+        // Single quotes
+        if !value.contains('$') {
+            return apply_single_quote(value);
         }
 
-        // Check for values with spaces or special characters requiring double quotes
-        if value.contains(' ') || value.contains('"') || value.contains('$') {
-            // Escape existing backslashes and double quotes
-            let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
-            return format!("\"{escaped_value}\"");
-        }
-
-        // Default case for complex values
-        value.to_string()
+        // Double quotes
+        apply_double_quote(value)
     }
 
     // $FOO -> $ENV.FOO
@@ -219,7 +208,7 @@ mod tests {
     #[test]
     fn test_murex_quoting() {
         assert_eq!(Murex.quote("value"), "value");
-        assert_eq!(Murex.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(Murex.quote("value with spaces"), "'value with spaces'");
         assert_eq!(Murex.quote("$(echo hello)"), "\"$(echo hello)\"");
         assert_eq!(Murex.quote(""), "''");
         assert_eq!(Murex.quote("abc123"), "abc123");

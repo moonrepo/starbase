@@ -35,7 +35,11 @@ pub fn default_escape_chars() -> HashMap<char, &'static str> {
     ])
 }
 
-pub fn apply_quote(value: &str, quotes: (&str, &str), replacements: HashMap<char, &str>) -> String {
+pub fn apply_quote(
+    value: String,
+    quotes: (&str, &str),
+    replacements: HashMap<char, &str>,
+) -> String {
     let (open, close) = quotes;
 
     let mut out = String::with_capacity(open.len() + value.len() + close.len());
@@ -53,12 +57,20 @@ pub fn apply_quote(value: &str, quotes: (&str, &str), replacements: HashMap<char
     out
 }
 
+pub fn apply_single_quote(value: String) -> String {
+    apply_quote(value, ("'", "'"), HashMap::from_iter([('\'', "\\'")]))
+}
+
+pub fn apply_double_quote(value: String) -> String {
+    apply_quote(value, ("\"", "\""), default_escape_chars())
+}
+
 fn quote(data: Quotable<'_>) -> String {
     data.quoted(Bash)
 }
 
 fn quote_expansion(data: Quotable<'_>) -> String {
-    quote(data)
+    apply_double_quote(quotable_into_string(data))
 }
 
 /// Types of syntax to check for to determine quoting.

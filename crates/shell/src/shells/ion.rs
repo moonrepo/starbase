@@ -3,7 +3,6 @@ use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, quotable_int
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
-use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -22,15 +21,13 @@ impl Ion {
     /// https://doc.redox-os.org/ion-manual/general.html
     /// https://github.com/redox-os/ion/blob/master/src/lib/expansion/methods/strings.rs
     fn do_quote(value: String) -> String {
-        let replacements = default_escape_chars();
-
         // Variables expanded in double quotes
         if value.contains('$') || value.contains('@') {
-            apply_quote(&value, ("\"", "\""), replacements)
+            apply_double_quote(value)
         }
         // Single quotes to prevent brace expansion
         else if value.contains('{') || value.contains('}') {
-            apply_quote(&value, ("'", "'"), HashMap::from_iter([('\'', "\\'")]))
+            apply_single_quote(value)
         }
         // No quoting needed for simple values
         else if value.chars().all(|c| {
@@ -40,7 +37,7 @@ impl Ion {
         }
         // Double quotes for other cases
         else {
-            apply_quote(&value, ("\"", "\""), replacements)
+            apply_double_quote(value)
         }
     }
 

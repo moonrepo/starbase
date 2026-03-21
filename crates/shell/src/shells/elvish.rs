@@ -6,7 +6,6 @@ use crate::helpers::{
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
-use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -43,21 +42,12 @@ impl Elvish {
             .chars()
             .any(|ch| ch == '$' || ch.is_whitespace() || replacements.contains_key(&ch))
         {
-            apply_quote(&value, ("\"", "\""), replacements)
+            apply_double_quote(value)
         }
         // Single-quoted strings for non-barewords containing special characters
         // https://elv.sh/ref/language.html#single-quoted-string
         else {
-            apply_quote(
-                &value,
-                ("'", "'"),
-                HashMap::from_iter([
-                    // Single quote
-                    ('\'', "''"),
-                    // Zero byte
-                    ('\0', "\x00"),
-                ]),
-            )
+            apply_single_quote(value)
         }
     }
 
