@@ -3,6 +3,7 @@ use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, quotable_int
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -17,22 +18,29 @@ impl Ion {
     }
 
     /// Quotes a string according to Ion shell quoting rules.
-    /// @see <https://doc.redox-os.org/ion-manual/general.html>
+    ///
+    /// https://doc.redox-os.org/ion-manual/general.html
+    /// https://github.com/redox-os/ion/blob/master/src/lib/expansion/methods/strings.rs
     fn do_quote(value: String) -> String {
-        if value.starts_with('$') {
-            // Variables expanded in double quotes
-            format!("\"{value}\"")
-        } else if value.contains('{') || value.contains('}') {
-            // Single quotes to prevent brace expansion
-            format!("'{value}'")
-        } else if value.chars().all(|c| {
+        let replacements = default_escape_chars();
+
+        // Variables expanded in double quotes
+        if value.contains('$') || value.contains('@') {
+            apply_quote(&value, ("\"", "\""), replacements)
+        }
+        // Single quotes to prevent brace expansion
+        else if value.contains('{') || value.contains('}') {
+            apply_quote(&value, ("'", "'"), HashMap::from_iter([('\'', "\\'")]))
+        }
+        // No quoting needed for simple values
+        else if value.chars().all(|c| {
             c.is_ascii_graphic() && !c.is_whitespace() && c != '"' && c != '\'' && c != '\\'
         }) {
-            // No quoting needed for simple values
             value.to_string()
-        } else {
-            // Double quotes for other cases
-            format!("\"{}\"", value.replace('"', "\\\""))
+        }
+        // Double quotes for other cases
+        else {
+            apply_quote(&value, ("\"", "\""), replacements)
         }
     }
 
@@ -59,6 +67,7 @@ impl Shell for Ion {
                     Syntax::Pair("@(".into(), ")".into()),
                 ],
                 on_quote: Arc::new(|data| Ion::do_quote(quotable_into_string(data))),
+                on_quote_expansion: Arc::new(|data| Ion::do_quote(quotable_into_string(data))),
                 ..Default::default()
             },
         )

@@ -23,33 +23,7 @@ impl Elvish {
     /// Quotes a string according to Elvish shell quoting rules.
     #[allow(clippy::no_effect_replace)]
     fn do_quote(value: String) -> String {
-        let replacements = HashMap::from_iter([
-            // Bell
-            ('\x07', "\\a"),
-            // Backspace
-            ('\x08', "\\b"),
-            // Horizontal tab
-            ('\x09', "\\t"),
-            ('\t', "\\t"),
-            // Newline
-            ('\x0A', "\\n"),
-            ('\n', "\\n"),
-            // Vertical tab
-            ('\x0B', "\\v"),
-            // Form feed
-            ('\x0C', "\\f"),
-            // Carriage return
-            ('\x0D', "\\r"),
-            ('\r', "\\r"),
-            // Escape
-            ('\x1B', "\\e"),
-            // Double quote
-            ('"', "\\\""),
-            // Backslash
-            ('\\', "\\\\"),
-            // Zero byte
-            ('\0', "\x00"),
-        ]);
+        let replacements = default_escape_chars();
 
         // Barewords: no quotes needed
         // https://elv.sh/ref/language.html#bareword
