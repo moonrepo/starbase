@@ -2,8 +2,10 @@ use super::Shell;
 use crate::helpers::normalize_newlines;
 use crate::hooks::*;
 use crate::quoter::*;
+use shell_quote::{Bash as BashQuoter, QuoteRefExt};
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Bash;
@@ -34,7 +36,8 @@ fn profile_for_bash(home_dir: &Path) -> PathBuf {
 impl Shell for Bash {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
         let mut options = QuoterOptions::default();
-        options.quote_pairs.push(("$'".into(), "'".into()));
+        options.quote_pairs.push(("$'".into(), "'".into(), false));
+        options.on_quote = Some(Arc::new(|data| data.quoted(BashQuoter)));
 
         Quoter::new(data, options)
     }
@@ -191,8 +194,11 @@ mod tests {
     fn test_bash_quoting() {
         let shell = Bash;
         assert_eq!(shell.quote("simple"), "simple"); // No quoting needed
-        assert_eq!(shell.quote("value with spaces"), "$'value with spaces'"); // Double quotes needed
-        assert_eq!(shell.quote("value\"with\"quotes"), "$'value\"with\"quotes'"); // Double quotes with escaping
+        assert_eq!(shell.quote("value with spaces"), "\"value with spaces\""); // Double quotes needed
+        assert_eq!(
+            shell.quote("value\"with\"quotes"),
+            "\"value\\\"with\\\"quotes\""
+        ); // Double quotes with escaping
         assert_eq!(
             shell.quote("value\nwith\nnewlines"),
             "$'value\\nwith\\nnewlines'"

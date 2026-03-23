@@ -1,14 +1,12 @@
 use super::Shell;
 use crate::helpers::{
     PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines,
-    quotable_into_string,
 };
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Elvish;
@@ -17,38 +15,6 @@ impl Elvish {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
-    }
-
-    /// Quotes a string according to Elvish shell quoting rules.
-    #[allow(clippy::no_effect_replace)]
-    fn do_quote(value: String) -> String {
-        let replacements = default_escape_chars();
-
-        // Barewords: no quotes needed
-        // https://elv.sh/ref/language.html#bareword
-        if value
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || "!%+,-./:@\\_".contains(ch))
-        {
-            value.to_string()
-        }
-        // Special case for {~} within the value to escape quoting
-        else if value.contains("{~}") {
-            value.to_string()
-        }
-        // Double-quoted strings with escape sequences
-        // https://elv.sh/ref/language.html#double-quoted-string
-        else if value
-            .chars()
-            .any(|ch| ch == '$' || ch.is_whitespace() || replacements.contains_key(&ch))
-        {
-            apply_double_quote(value)
-        }
-        // Single-quoted strings for non-barewords containing special characters
-        // https://elv.sh/ref/language.html#single-quoted-string
-        else {
-            apply_single_quote(value)
-        }
     }
 
     // $FOO -> ${env::FOO}
@@ -70,13 +36,13 @@ impl Shell for Elvish {
                 unquoted_syntax: vec![
                     // brace
                     Syntax::Pair("{".into(), "}".into()),
+                    // tilde
+                    Syntax::Symbol("{~}".into()),
                     // file, glob
                     Syntax::Symbol("**".into()),
                     Syntax::Symbol("*".into()),
                     Syntax::Symbol("?".into()),
                 ],
-                on_quote: Arc::new(|data| Elvish::do_quote(quotable_into_string(data))),
-                on_quote_expansion: Arc::new(|data| Elvish::do_quote(quotable_into_string(data))),
                 ..Default::default()
             },
         )

@@ -88,8 +88,11 @@ mod tests {
     fn test_ash_quoting() {
         let shell = Ash::new();
         assert_eq!(shell.quote("simple"), "simple"); // No quoting needed
-        assert_eq!(shell.quote("value with spaces"), "$'value with spaces'"); // Double quotes needed
-        assert_eq!(shell.quote("value\"with\"quotes"), "$'value\"with\"quotes'"); // Double quotes with escaping
+        assert_eq!(shell.quote("value with spaces"), "\"value with spaces\""); // Double quotes needed
+        assert_eq!(
+            shell.quote("value\"with\"quotes"),
+            "\"value\\\"with\\\"quotes\""
+        ); // Double quotes with escaping
         assert_eq!(
             shell.quote("value\nwith\nnewlines"),
             "$'value\\nwith\\nnewlines'"

@@ -1,5 +1,4 @@
 use crate::helpers::{get_var_regex, get_var_regex_bytes, quotable_into_string};
-use shell_quote::{Bash, QuoteRefExt};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -65,12 +64,27 @@ pub fn apply_double_quote(value: String) -> String {
     apply_quote(value, ("\"", "\""), default_escape_chars())
 }
 
-fn quote(data: Quotable<'_>) -> String {
-    data.quoted(Bash)
-}
+pub fn do_quote(
+    value: Quotable<'_>,
+    quotes: (&str, &str),
+    replacements: &HashMap<char, &str>,
+) -> String {
+    let value = quotable_into_string(value);
+    let (open, close) = quotes;
 
-fn quote_expansion(data: Quotable<'_>) -> String {
-    apply_double_quote(quotable_into_string(data))
+    let mut out = String::with_capacity(open.len() + value.len() + close.len());
+    out.push_str(open);
+
+    for ch in value.chars() {
+        if let Some(replacement) = replacements.get(&ch) {
+            out.push_str(replacement);
+        } else {
+            out.push(ch);
+        }
+    }
+
+    out.push_str(close);
+    out
 }
 
 /// Types of syntax to check for to determine quoting.
@@ -80,9 +94,10 @@ pub enum Syntax {
 }
 
 /// Options for [`Quoter`].
-pub struct QuoterOptions {
+pub struct QuoterOptions<'a> {
     /// List of start and end quotes for strings.
-    pub quote_pairs: Vec<(String, String)>,
+    /// The boolean indicates whether the quotes should be used for expansion or not.
+    pub quote_pairs: Vec<(String, String, bool)>,
 
     /// List of syntax and characters that must be quoted for expansion.
     pub quoted_syntax: Vec<Syntax>,
@@ -90,17 +105,26 @@ pub struct QuoterOptions {
     /// List of syntax and characters that must not be quoted.
     pub unquoted_syntax: Vec<Syntax>,
 
-    /// Handler to apply quoting.
-    pub on_quote: Arc<dyn Fn(Quotable<'_>) -> String>,
+    /// Handler to apply quoting for non-expansion, typically for single quotes.
+    pub on_quote: Option<Arc<dyn Fn(Quotable<'a>) -> String>>,
 
-    /// Handler to apply quoting for expansion.
-    pub on_quote_expansion: Arc<dyn Fn(Quotable<'_>) -> String>,
+    /// Handler to apply quoting for expansion, typically for double quotes.
+    pub on_quote_expansion: Option<Arc<dyn Fn(Quotable<'a>) -> String>>,
+
+    /// Map of characters to replace with during non-expansion, typically for escaping.
+    pub replacements: HashMap<char, &'a str>,
+
+    /// Map of characters to replace with during expansion, typically for escaping.
+    pub replacements_expansion: HashMap<char, &'a str>,
 }
 
-impl Default for QuoterOptions {
+impl Default for QuoterOptions<'_> {
     fn default() -> Self {
         Self {
-            quote_pairs: vec![("'".into(), "'".into()), ("\"".into(), "\"".into())],
+            quote_pairs: vec![
+                ("'".into(), "'".into(), false),
+                ("\"".into(), "\"".into(), true),
+            ],
             // https://www.gnu.org/software/bash/manual/bash.html#Shell-Expansions
             quoted_syntax: vec![
                 // param
@@ -127,8 +151,10 @@ impl Default for QuoterOptions {
                 Syntax::Pair("@(".into(), ")".into()),
                 Syntax::Pair("!(".into(), ")".into()),
             ],
-            on_quote: Arc::new(quote),
-            on_quote_expansion: Arc::new(quote_expansion),
+            on_quote: None,
+            on_quote_expansion: None,
+            replacements: HashMap::default(),
+            replacements_expansion: default_escape_chars(),
         }
     }
 }
@@ -136,15 +162,30 @@ impl Default for QuoterOptions {
 /// A utility for quoting a string.
 pub struct Quoter<'a> {
     data: Quotable<'a>,
-    options: QuoterOptions,
+    options: QuoterOptions<'a>,
 }
 
 impl<'a> Quoter<'a> {
     /// Create a new instance.
-    pub fn new(data: impl Into<Quotable<'a>>, options: QuoterOptions) -> Quoter<'a> {
+    pub fn new(data: impl Into<Quotable<'a>>, mut options: QuoterOptions<'a>) -> Quoter<'a> {
+        // Whitespace must always be quoted
+        options.quoted_syntax.push(Syntax::Symbol(" ".into()));
+
         Self {
             data: data.into(),
             options,
+        }
+    }
+
+    /// Return true if the provided string is a bareword.
+    pub fn is_bareword(&self) -> bool {
+        fn is_bare(ch: u8) -> bool {
+            !ch.is_ascii_whitespace() && (ch.is_ascii_alphanumeric() || ch == b'_')
+        }
+
+        match &self.data {
+            Quotable::Bytes(bytes) => bytes.iter().all(|ch| is_bare(*ch)),
+            Quotable::Text(text) => text.chars().all(|ch| is_bare(ch as u8)),
         }
     }
 
@@ -158,7 +199,7 @@ impl<'a> Quoter<'a> {
 
     /// Return true if the provided string is already quoted.
     pub fn is_quoted(&self) -> bool {
-        for (sq, eq) in &self.options.quote_pairs {
+        for (sq, eq, _) in &self.options.quote_pairs {
             match &self.data {
                 Quotable::Bytes(bytes) => {
                     if bytes.starts_with(sq.as_bytes()) && bytes.ends_with(eq.as_bytes()) {
@@ -186,7 +227,7 @@ impl<'a> Quoter<'a> {
             return format!("{}{}", pair.0, pair.1);
         }
 
-        if self.is_quoted() {
+        if self.is_quoted() || self.is_bareword() {
             return quotable_into_string(self.data);
         }
 
@@ -204,25 +245,75 @@ impl<'a> Quoter<'a> {
     /// Quote the provided string for expansion, substition, etc.
     /// This assumes the string is not already quoted.
     pub fn quote_expansion(self) -> String {
-        (self.options.on_quote_expansion)(self.data)
+        if let Some(on_quote_expansion) = &self.options.on_quote_expansion {
+            return on_quote_expansion(self.data);
+        }
+
+        let (open, close, _) = self
+            .options
+            .quote_pairs
+            .iter()
+            .find(|(_, _, is_expansion)| *is_expansion)
+            .or(self.options.quote_pairs.last())
+            .unwrap();
+
+        do_quote(
+            self.data,
+            (open, close),
+            &self.options.replacements_expansion,
+        )
     }
 
     /// Quote the provided string.
     /// This assumes the string is not already quoted.
     pub fn quote(self) -> String {
-        (self.options.on_quote)(self.data)
+        if let Some(on_quote) = &self.options.on_quote {
+            return on_quote(self.data);
+        }
+
+        let (open, close, _) = self
+            .options
+            .quote_pairs
+            .iter()
+            .find(|(_, _, is_expansion)| !is_expansion)
+            .or(self.options.quote_pairs.first())
+            .unwrap();
+
+        do_quote(self.data, (open, close), &self.options.replacements)
     }
 
     /// Return true if the provided string requires expansion.
     pub fn requires_expansion(&self) -> bool {
+        // Unique syntax
         if quotable_contains_syntax(&self.data, &self.options.quoted_syntax) {
             return true;
         }
 
-        match &self.data {
+        // Variables
+        if match &self.data {
             Quotable::Bytes(bytes) => get_var_regex_bytes().is_match(bytes),
             Quotable::Text(text) => get_var_regex().is_match(text),
+        } {
+            return true;
         }
+
+        // Replacements / escape chars
+        for ch in self.options.replacements_expansion.keys() {
+            match &self.data {
+                Quotable::Bytes(bytes) => {
+                    if bytes.contains(&(*ch as u8)) {
+                        return true;
+                    }
+                }
+                Quotable::Text(text) => {
+                    if text.contains(*ch) {
+                        return true;
+                    }
+                }
+            };
+        }
+
+        false
     }
 
     /// Return true if the provided string must be unquoted.

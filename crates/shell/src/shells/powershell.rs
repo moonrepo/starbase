@@ -1,14 +1,11 @@
 use super::{Shell, ShellCommand};
-use crate::helpers::{
-    ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines, quotable_into_string,
-};
+use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct PowerShell;
@@ -54,63 +51,24 @@ impl PowerShell {
 
         format!("Join-Path {}", parts.join(" "))
     }
-
-    /// Quotes a string according to PowerShell shell quoting rules.
-    /// @see <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules>
-    fn do_quote(value: String) -> String {
-        // Check if the string contains any characters that need to be escaped
-        if value.contains('\'') || value.contains('"') || value.contains('`') || value.contains('$')
-        {
-            // If the string contains a single quote, use a single-quoted string and escape single quotes by doubling them
-            if value.contains('\'') {
-                let escaped = value.replace('\'', "''");
-
-                return format!("'{escaped}'");
-            } else {
-                // Use a double-quoted string and escape necessary characters
-                let escaped = value.replace('`', "``").replace('"', "`\"");
-
-                return format!("\"{escaped}\"");
-            }
-        }
-
-        // If the string does not contain any special characters, return a single-quoted string
-        format!("'{value}'")
-    }
-
-    fn do_quote_expansion(value: String) -> String {
-        let mut output = String::with_capacity(value.len() + 2);
-        output.push('"');
-
-        for c in value.chars() {
-            if c == '"' {
-                output.push('"');
-            }
-            output.push(c);
-        }
-
-        output.push('"');
-        output
-    }
 }
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-5.1
 impl Shell for PowerShell {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
-        Quoter::new(
-            data,
-            QuoterOptions {
-                quoted_syntax: vec![
-                    Syntax::Pair("$(".into(), ")".into()),
-                    Syntax::Pair("${".into(), "}".into()),
-                ],
-                on_quote: Arc::new(|data| PowerShell::do_quote(quotable_into_string(data))),
-                on_quote_expansion: Arc::new(|data| {
-                    PowerShell::do_quote_expansion(quotable_into_string(data))
-                }),
-                ..Default::default()
-            },
-        )
+        let mut options = QuoterOptions {
+            quoted_syntax: vec![
+                Syntax::Pair("$(".into(), ")".into()),
+                Syntax::Pair("${".into(), "}".into()),
+            ],
+            ..Default::default()
+        };
+
+        // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_quoting_rules
+        options.replacements.insert('\'', "''");
+        options.replacements_expansion.insert('"', "\"\"");
+
+        Quoter::new(data, options)
     }
 
     fn format(&self, statement: Statement<'_>) -> String {

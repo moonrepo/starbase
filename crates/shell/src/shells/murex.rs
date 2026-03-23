@@ -1,11 +1,10 @@
 use super::Shell;
-use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines, quotable_into_string};
+use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Murex;
@@ -14,26 +13,6 @@ impl Murex {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
-    }
-
-    /// Quotes a string according to Murex shell quoting rules.
-    /// @see <https://murex.rocks/tour.html#basic-syntax>
-    fn do_quote(value: String) -> String {
-        // Check for simple values that don't need quoting
-        if value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        {
-            return value.to_string();
-        }
-
-        // Single quotes
-        if !value.contains('$') {
-            return apply_single_quote(value);
-        }
-
-        // Double quotes
-        apply_double_quote(value)
     }
 
     // $FOO -> $ENV.FOO
@@ -46,11 +25,8 @@ impl Murex {
 
 impl Shell for Murex {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
-        let mut options = QuoterOptions {
-            on_quote: Arc::new(|data| Murex::do_quote(quotable_into_string(data))),
-            ..Default::default()
-        };
-        options.quote_pairs.push(("%(".into(), ")".into()));
+        let mut options = QuoterOptions::default();
+        options.quote_pairs.push(("%(".into(), ")".into(), false));
 
         Quoter::new(data, options)
     }
