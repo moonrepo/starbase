@@ -113,7 +113,12 @@ pub trait Shell: Debug + Display + Send + Sync {
 
     /// Quote the provided string.
     fn quote(&self, value: &str) -> String {
-        self.create_quoter(Quotable::from(value)).maybe_quote()
+        self.quote_with(Quotable::from(value))
+    }
+
+    /// Quote the provided value.
+    fn quote_with(&self, value: Quotable<'_>) -> String {
+        self.create_quoter(value).maybe_quote()
     }
 }
 
