@@ -1,4 +1,4 @@
-use super::{Shell, ShellCommand};
+use super::Shell;
 use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -6,6 +6,7 @@ use shell_quote::Quotable;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Clone, Copy, Debug)]
 pub struct PowerShell;
@@ -69,6 +70,13 @@ impl Shell for PowerShell {
         options.replacements_expansion.insert('"', "\"\"");
 
         Quoter::new(data, options)
+    }
+
+    fn create_wrapped_command(&self, script: &str) -> Command {
+        let mut command = Command::new(self.to_string());
+        command.args(["-NoLogo", "-c"]);
+        command.arg(script);
+        command
     }
 
     fn format(&self, statement: Statement<'_>) -> String {
@@ -138,13 +146,6 @@ impl Shell for PowerShell {
 
     fn get_env_regex(&self) -> regex::Regex {
         regex::Regex::new(r"\$(Env|env):(?<name>[A-Za-z0-9_]+)").unwrap()
-    }
-
-    fn get_exec_command(&self) -> ShellCommand {
-        ShellCommand {
-            shell_args: vec!["-NoLogo".into(), "-c".into()],
-            pass_args_stdin: false,
-        }
     }
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {

@@ -1,5 +1,5 @@
+use super::Shell;
 use super::powershell::PowerShell;
-use super::{Shell, ShellCommand};
 use crate::helpers::{ProfileSet, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -7,6 +7,7 @@ use shell_quote::Quotable;
 use std::env;
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Pwsh {
@@ -26,6 +27,10 @@ impl Pwsh {
 impl Shell for Pwsh {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
         self.inner.create_quoter(data)
+    }
+
+    fn create_wrapped_command(&self, script: &str) -> Command {
+        self.inner.create_wrapped_command(script)
     }
 
     fn format(&self, statement: Statement<'_>) -> String {
@@ -94,10 +99,6 @@ if ($currentAction) {{
 
     fn get_env_regex(&self) -> regex::Regex {
         self.inner.get_env_regex()
-    }
-
-    fn get_exec_command(&self) -> ShellCommand {
-        self.inner.get_exec_command()
     }
 
     fn get_profile_paths(&self, home_dir: &Path) -> Vec<PathBuf> {
