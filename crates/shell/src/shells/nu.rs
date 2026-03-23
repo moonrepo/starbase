@@ -1,14 +1,12 @@
 use super::Shell;
 use crate::helpers::{
     ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, normalize_newlines,
-    quotable_into_string,
 };
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Nu;
@@ -28,57 +26,23 @@ impl Nu {
 
         format!("path join {}", parts.join(" "))
     }
-
-    /// Quotes a string according to Nu shell quoting rules.
-    /// @see <https://www.nushell.sh/book/working_with_strings.html>
-    fn do_quote(value: String) -> String {
-        if value.contains('`') {
-            // Use backtick quoting for strings containing backticks
-            format!("`{value}`")
-        } else if value.contains('\'') {
-            // Use double quotes with proper escaping for single-quoted strings
-            format!(
-                "\"{}\"",
-                value
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-                    .replace('\n', "\\n")
-            )
-        } else if value.contains('"') {
-            // Escape double quotes if present
-            format!(
-                "\"{}\"",
-                value
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-                    .replace('\n', "\\n")
-            )
-        } else {
-            // Use single quotes for other cases
-            format!("'{}'", value.replace('\n', "\\n"))
-        }
-    }
-
-    fn do_quote_expansion(value: String) -> String {
-        if value.starts_with("$\"") {
-            value
-        } else {
-            format!("$\"{value}\"")
-        }
-    }
 }
 
 impl Shell for Nu {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
-        let mut options = QuoterOptions {
-            on_quote: Arc::new(|data| Nu::do_quote(quotable_into_string(data))),
-            on_quote_expansion: Arc::new(|data| Nu::do_quote_expansion(quotable_into_string(data))),
-            ..Default::default()
-        };
-        options.quote_pairs.push(("r#".into(), "#".into()));
-        options.quote_pairs.push(("`".into(), "`".into()));
-        options.quote_pairs.push(("$'".into(), "'".into()));
-        options.quote_pairs.push(("$\"".into(), "\"".into()));
+        let mut options = QuoterOptions::default();
+
+        // https://www.nushell.sh/book/working_with_strings.html
+        options.quote_pairs.clear();
+        options.quote_pairs.push(("'".into(), "'".into(), false));
+        options.quote_pairs.push(("\"".into(), "\"".into(), false));
+        options.quote_pairs.push(("r#".into(), "#".into(), false));
+        options.quote_pairs.push(("`".into(), "`".into(), false));
+        options.quote_pairs.push(("$'".into(), "'".into(), false));
+        options.quote_pairs.push(("$\"".into(), "\"".into(), true));
+
+        // https://www.nushell.sh/book/working_with_strings.html#double-quoted-strings
+        options.replacements_expansion.insert('\0', "\\u{0}");
 
         Quoter::new(data, options)
     }
@@ -408,10 +372,10 @@ mod tests {
 
     #[test]
     fn test_nu_quoting() {
-        assert_eq!(Nu.quote("hello"), "'hello'");
+        assert_eq!(Nu.quote("hello"), "hello");
         assert_eq!(Nu.quote(""), "''");
-        assert_eq!(Nu.quote("echo 'hello'"), "\"echo 'hello'\"");
-        assert_eq!(Nu.quote("echo \"$HOME\""), "$\"echo \"$HOME\"\"");
+        assert_eq!(Nu.quote("echo 'hello'"), "'echo 'hello''");
+        assert_eq!(Nu.quote("echo \"$HOME\""), "$\"echo \\\"$HOME\\\"\"");
         assert_eq!(Nu.quote("\"hello\""), "\"hello\"");
         assert_eq!(Nu.quote("\"hello\nworld\""), "\"hello\nworld\"");
         assert_eq!(Nu.quote("$'hello world'"), "$'hello world'");

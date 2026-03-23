@@ -1,11 +1,10 @@
 use super::Shell;
-use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines, quotable_into_string};
+use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Murex;
@@ -14,37 +13,6 @@ impl Murex {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
-    }
-
-    /// Quotes a string according to Murex shell quoting rules.
-    /// @see <https://murex.rocks/tour.html#basic-syntax>
-    fn do_quote(value: String) -> String {
-        if value.starts_with('$') {
-            return format!("\"{value}\"");
-        }
-
-        // Check for simple values that don't need quoting
-        if value
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
-        {
-            return value.to_string();
-        }
-
-        // Handle brace quotes %(...)
-        if value.starts_with("%(") && value.ends_with(')') {
-            return value.to_string(); // Return as-is for brace quotes
-        }
-
-        // Check for values with spaces or special characters requiring double quotes
-        if value.contains(' ') || value.contains('"') || value.contains('$') {
-            // Escape existing backslashes and double quotes
-            let escaped_value = value.replace('\\', "\\\\").replace('"', "\\\"");
-            return format!("\"{escaped_value}\"");
-        }
-
-        // Default case for complex values
-        value.to_string()
     }
 
     // $FOO -> $ENV.FOO
@@ -57,11 +25,8 @@ impl Murex {
 
 impl Shell for Murex {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
-        let mut options = QuoterOptions {
-            on_quote: Arc::new(|data| Murex::do_quote(quotable_into_string(data))),
-            ..Default::default()
-        };
-        options.quote_pairs.push(("%(".into(), ")".into()));
+        let mut options = QuoterOptions::default();
+        options.quote_pairs.push(("%(".into(), ")".into(), false));
 
         Quoter::new(data, options)
     }
@@ -219,7 +184,7 @@ mod tests {
     #[test]
     fn test_murex_quoting() {
         assert_eq!(Murex.quote("value"), "value");
-        assert_eq!(Murex.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(Murex.quote("value with spaces"), "'value with spaces'");
         assert_eq!(Murex.quote("$(echo hello)"), "\"$(echo hello)\"");
         assert_eq!(Murex.quote(""), "''");
         assert_eq!(Murex.quote("abc123"), "abc123");

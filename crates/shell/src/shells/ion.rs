@@ -1,11 +1,10 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, quotable_into_string};
+use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Ion;
@@ -14,26 +13,6 @@ impl Ion {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self
-    }
-
-    /// Quotes a string according to Ion shell quoting rules.
-    /// @see <https://doc.redox-os.org/ion-manual/general.html>
-    fn do_quote(value: String) -> String {
-        if value.starts_with('$') {
-            // Variables expanded in double quotes
-            format!("\"{value}\"")
-        } else if value.contains('{') || value.contains('}') {
-            // Single quotes to prevent brace expansion
-            format!("'{value}'")
-        } else if value.chars().all(|c| {
-            c.is_ascii_graphic() && !c.is_whitespace() && c != '"' && c != '\'' && c != '\\'
-        }) {
-            // No quoting needed for simple values
-            value.to_string()
-        } else {
-            // Double quotes for other cases
-            format!("\"{}\"", value.replace('"', "\\\""))
-        }
     }
 
     // $FOO -> ${env::FOO}
@@ -49,6 +28,7 @@ impl Shell for Ion {
         Quoter::new(
             data,
             QuoterOptions {
+                // https://github.com/redox-os/ion/blob/master/src/lib/expansion/methods/strings.rs
                 // https://doc.redox-os.org/ion-manual/expansions/00-expansions.html
                 quoted_syntax: vec![
                     Syntax::Symbol("$".into()),
@@ -58,7 +38,10 @@ impl Shell for Ion {
                     Syntax::Pair("@{".into(), "}".into()),
                     Syntax::Pair("@(".into(), ")".into()),
                 ],
-                on_quote: Arc::new(|data| Ion::do_quote(quotable_into_string(data))),
+                unquoted_syntax: vec![
+                    // brace
+                    Syntax::Pair("{".into(), "}".into()),
+                ],
                 ..Default::default()
             },
         )
@@ -162,7 +145,7 @@ mod tests {
     #[test]
     fn test_ion_quoting() {
         assert_eq!(Ion.quote("simplevalue"), "simplevalue");
-        assert_eq!(Ion.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(Ion.quote("value with spaces"), r#"'value with spaces'"#);
         assert_eq!(
             Ion.quote(r#"value "with" quotes"#),
             r#""value \"with\" quotes""#
@@ -171,7 +154,7 @@ mod tests {
         assert_eq!(Ion.quote("{brace_expansion}"), "{brace_expansion}");
         assert_eq!(
             Ion.quote("value with 'single quotes'"),
-            r#""value with 'single quotes'""#
+            r#"'value with 'single quotes''"#
         );
     }
 }

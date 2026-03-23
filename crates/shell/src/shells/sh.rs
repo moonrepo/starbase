@@ -1,7 +1,7 @@
 use super::Shell;
 use crate::hooks::*;
 use crate::quoter::*;
-use shell_quote::{Quotable, Sh as ShQuote};
+use shell_quote::{Quotable, Sh as ShQuoter};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -21,9 +21,9 @@ impl Shell for Sh {
         Quoter::new(
             data,
             QuoterOptions {
-                on_quote: Arc::new(|data| {
-                    String::from_utf8_lossy(&ShQuote::quote_vec(data)).into()
-                }),
+                on_quote: Some(Arc::new(|data| {
+                    String::from_utf8_lossy(&ShQuoter::quote_vec(data)).into()
+                })),
                 ..Default::default()
             },
         )
@@ -107,11 +107,11 @@ mod tests {
         let sh = Sh::new();
         assert_eq!(sh.quote(""), "''");
         assert_eq!(sh.quote("simple"), "simple");
-        assert_eq!(sh.quote("say \"hello\""), "say' \"hello\"'");
+        assert_eq!(sh.quote("say \"hello\""), "\"say \\\"hello\\\"\"");
         assert_eq!(sh.quote("price $5"), "\"price $5\"");
         assert_eq!(
             sh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
-            "complex' '\\'value\\'' with \"quotes\" and \\backslashes\\'"
+            "\"complex 'value' with \\\"quotes\\\" and \\\\backslashes\\\\\""
         );
     }
 }

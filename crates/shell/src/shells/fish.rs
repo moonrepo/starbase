@@ -2,7 +2,7 @@ use super::Shell;
 use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
-use shell_quote::{Fish as FishQuote, Quotable, QuoteRefExt};
+use shell_quote::{Fish as FishQuoter, Quotable, QuoteRefExt};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -23,7 +23,7 @@ impl Shell for Fish {
         Quoter::new(
             data,
             QuoterOptions {
-                on_quote: Arc::new(|data| data.quoted(FishQuote)),
+                on_quote: Some(Arc::new(|data| data.quoted(FishQuoter))),
                 ..Default::default()
             },
         )

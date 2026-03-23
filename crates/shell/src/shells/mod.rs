@@ -31,30 +31,23 @@ use crate::hooks::*;
 use crate::quoter::*;
 use crate::shell_error::ShellError;
 use shell_quote::Quotable;
-use std::ffi::OsString;
 use std::fmt::{Debug, Display};
 use std::path::{Path, PathBuf};
-
-#[derive(Debug)]
-pub struct ShellCommand {
-    pub shell_args: Vec<OsString>,
-    pub pass_args_stdin: bool,
-}
-
-impl Default for ShellCommand {
-    fn default() -> Self {
-        // This is pretty much the same for all shells except pwsh.
-        // bash -c "command", nu -c "command", etc...
-        Self {
-            shell_args: vec![OsString::from("-c")],
-            pass_args_stdin: false,
-        }
-    }
-}
+use std::process::Command;
 
 pub trait Shell: Debug + Display + Send + Sync {
     /// Create a quoter for the provided string.
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a>;
+
+    /// Create a command that wraps the provided script/command in the current shell.
+    fn create_wrapped_command(&self, script: &str) -> Command {
+        let mut command = Command::new(self.to_string());
+        // This is pretty much the same for all shells except pwsh.
+        // bash -c "command", nu -c "command", etc...
+        command.arg("-c");
+        command.arg(script);
+        command
+    }
 
     /// Format the provided statement.
     fn format(&self, statement: Statement<'_>) -> String;
@@ -112,11 +105,6 @@ pub trait Shell: Debug + Display + Send + Sync {
     /// Return a regex pattern for matching against environment variables.
     fn get_env_regex(&self) -> regex::Regex {
         get_env_var_regex()
-    }
-
-    /// Return parameters for executing a one-off command and then exiting.
-    fn get_exec_command(&self) -> ShellCommand {
-        ShellCommand::default()
     }
 
     /// Return a list of all possible profile/rc/config paths.

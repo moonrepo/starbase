@@ -144,10 +144,10 @@ mod tests {
         assert_eq!(zsh.quote(""), "''");
         assert_eq!(zsh.quote("simple"), "simple");
         assert_eq!(zsh.quote("don't"), "$'don\\'t'");
-        assert_eq!(zsh.quote("say \"hello\""), "$'say \"hello\"'");
+        assert_eq!(zsh.quote("say \"hello\""), "\"say \\\"hello\\\"\"");
         assert_eq!(
             zsh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
-            "$'complex \\'value\\' with \"quotes\" and \\\\backslashes\\\\'"
+            "\"complex 'value' with \\\"quotes\\\" and \\\\backslashes\\\\\""
         );
     }
 }
