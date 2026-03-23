@@ -15,7 +15,7 @@ starbase_styles = { version = "0.6.7", path = "../styles", features = [
 	"theme",
 ] }
 async-trait = { workspace = true }
-chrono = { version = "0.4.43", default-features = false, features = [
+chrono = { version = "0.4.44", default-features = false, features = [
 	"clock",
 	"std",
 ] }
@@ -27,7 +27,7 @@ tracing-log = { version = "0.2.0", optional = true, default-features = false, fe
 	"log-tracer",
 	"std",
 ] }
-tracing-subscriber = { version = "0.3.22", optional = true, default-features = false, features = [
+tracing-subscriber = { version = "0.3.23", optional = true, default-features = false, features = [
 	"ansi",
 	"env-filter",
 	"fmt",
