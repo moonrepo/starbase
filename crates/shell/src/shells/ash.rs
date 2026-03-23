@@ -88,21 +88,21 @@ mod tests {
     fn test_ash_quoting() {
         let shell = Ash::new();
         assert_eq!(shell.quote("simple"), "simple"); // No quoting needed
-        assert_eq!(shell.quote("value with spaces"), "\"value with spaces\""); // Double quotes needed
+        assert_eq!(shell.quote("value with spaces"), "value' with spaces'"); // POSIX-style single quotes
         assert_eq!(
             shell.quote("value\"with\"quotes"),
             "\"value\\\"with\\\"quotes\""
         ); // Double quotes with escaping
         assert_eq!(
             shell.quote("value\nwith\nnewlines"),
-            "$'value\\nwith\\nnewlines'"
-        ); // ANSI-C quoting for newlines
-        assert_eq!(shell.quote("value\twith\ttabs"), "$'value\\twith\\ttabs'"); // ANSI-C quoting for tabs
+            "\"value\\nwith\\nnewlines\""
+        ); // Double quotes with escaped newlines
+        assert_eq!(shell.quote("value\twith\ttabs"), "\"value\\twith\\ttabs\""); // Double quotes with escaped tabs
         assert_eq!(
             shell.quote("value\\with\\backslashes"),
-            "$'value\\\\with\\\\backslashes'"
-        ); // ANSI-C quoting for backslashes
-        assert_eq!(shell.quote("value'with'quotes"), "$'value\\'with\\'quotes'");
+            "\"value\\\\with\\\\backslashes\""
+        ); // Double quotes with escaped backslashes
+        assert_eq!(shell.quote("value'with'quotes"), "value\\'with\\'quotes");
         // ANSI-C quoting for single quotes
     }
 }

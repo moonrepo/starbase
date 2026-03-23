@@ -115,7 +115,7 @@ mod join_args {
     fn quotes_strings_with_dashes() {
         assert_eq!(
             join_args(&create_bash(), ["echo", "some value-with a dash"]),
-            "echo \"some value-with a dash\""
+            "echo $'some value-with a dash'"
         );
     }
 

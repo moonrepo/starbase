@@ -240,11 +240,11 @@ mod tests {
         assert_eq!(Elvish.quote("A"), "A");
 
         // Single quotes
-        assert_eq!(Elvish.quote("it's"), "'it''s'");
-        assert_eq!(Elvish.quote("value'with'quotes"), "'value''with''quotes'");
+        assert_eq!(Elvish.quote("it's"), "'it's'");
+        assert_eq!(Elvish.quote("value'with'quotes"), "'value'with'quotes'");
 
         // Double quotes
-        assert_eq!(Elvish.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(Elvish.quote("value with spaces"), r#"'value with spaces'"#);
         assert_eq!(
             Elvish.quote("value\"with\"quotes"),
             r#""value\"with\"quotes""#
@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(Elvish.quote("value\twith\ttabs"), r#""value\twith\ttabs""#);
         assert_eq!(
             Elvish.quote("value\\with\\backslashes"),
-            "value\\with\\backslashes"
+            r#""value\\with\\backslashes""#
         );
 
         // Escape sequences

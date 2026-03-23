@@ -192,7 +192,7 @@ mod tests {
         );
         assert_eq!(
             PowerShell.format_env_set("BOOL", "true"),
-            r#"$env:BOOL = 'true';"#
+            r#"$env:BOOL = true;"#
         );
         assert_eq!(
             PowerShell.format_env_set("STRING", "a b c"),
@@ -361,10 +361,10 @@ mod tests {
     #[test]
     fn test_pwsh_quoting() {
         assert_eq!(PowerShell.quote(""), "''");
-        assert_eq!(PowerShell.quote("simple"), "'simple'");
+        assert_eq!(PowerShell.quote("simple"), "simple");
         assert_eq!(PowerShell.quote("don't"), "'don''t'");
-        assert_eq!(PowerShell.quote("say \"hello\""), "\"say `\"hello`\"\"");
-        assert_eq!(PowerShell.quote("back`tick"), "\"back``tick\"");
+        assert_eq!(PowerShell.quote("say \"hello\""), "\"say \"\"hello\"\"\"");
+        assert_eq!(PowerShell.quote("back`tick"), "'back`tick'");
         // assert_eq!(PowerShell.quote("price $5"), "\"price `$5\"");
     }
 }

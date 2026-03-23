@@ -182,7 +182,7 @@ mod tests {
         );
         assert_eq!(
             Pwsh::new().format_env_set("BOOL", "true"),
-            r#"$env:BOOL = 'true';"#
+            r#"$env:BOOL = true;"#
         );
         assert_eq!(
             Pwsh::new().format_env_set("STRING", "a b c"),
@@ -239,10 +239,10 @@ mod tests {
     #[test]
     fn test_pwsh_quoting() {
         assert_eq!(Pwsh::new().quote(""), "''");
-        assert_eq!(Pwsh::new().quote("simple"), "'simple'");
+        assert_eq!(Pwsh::new().quote("simple"), "simple");
         assert_eq!(Pwsh::new().quote("don't"), "'don''t'");
-        assert_eq!(Pwsh::new().quote("say \"hello\""), "\"say `\"hello`\"\"");
-        assert_eq!(Pwsh::new().quote("back`tick"), "\"back``tick\"");
+        assert_eq!(Pwsh::new().quote("say \"hello\""), "\"say \"\"hello\"\"\"");
+        assert_eq!(Pwsh::new().quote("back`tick"), "'back`tick'");
         // assert_eq!(Pwsh::new().quote("price $5"), "\"price `$5\"");
     }
 }

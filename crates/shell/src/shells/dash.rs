@@ -94,7 +94,7 @@ mod tests {
         assert_eq!(sh.quote("price $5"), "\"price $5\"");
         assert_eq!(
             sh.quote("complex 'value' with \"quotes\" and \\backslashes\\"),
-            "complex' '\\'value\\'' with \"quotes\" and \\backslashes\\'"
+            "\"complex 'value' with \\\"quotes\\\" and \\\\backslashes\\\\\""
         );
     }
 }

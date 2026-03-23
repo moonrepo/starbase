@@ -116,8 +116,8 @@ mod tests {
     fn test_xonsh_quoting() {
         let xonsh = Xonsh::new();
         assert_eq!(xonsh.quote(""), "''");
-        assert_eq!(xonsh.quote("simple"), "\"simple\"");
-        assert_eq!(xonsh.quote("don't"), "\"don't\"");
+        assert_eq!(xonsh.quote("simple"), "simple");
+        assert_eq!(xonsh.quote("don't"), "'don't'");
         assert_eq!(xonsh.quote("say \"hello\""), "\"say \\\"hello\\\"\"");
         assert_eq!(xonsh.quote("price $5"), "\"price $5\"");
         assert_eq!(

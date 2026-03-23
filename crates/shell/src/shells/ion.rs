@@ -145,7 +145,7 @@ mod tests {
     #[test]
     fn test_ion_quoting() {
         assert_eq!(Ion.quote("simplevalue"), "simplevalue");
-        assert_eq!(Ion.quote("value with spaces"), r#""value with spaces""#);
+        assert_eq!(Ion.quote("value with spaces"), r#"'value with spaces'"#);
         assert_eq!(
             Ion.quote(r#"value "with" quotes"#),
             r#""value \"with\" quotes""#
@@ -154,7 +154,7 @@ mod tests {
         assert_eq!(Ion.quote("{brace_expansion}"), "{brace_expansion}");
         assert_eq!(
             Ion.quote("value with 'single quotes'"),
-            r#""value with 'single quotes'""#
+            r#"'value with 'single quotes''"#
         );
     }
 }

@@ -167,10 +167,7 @@ pub struct Quoter<'a> {
 
 impl<'a> Quoter<'a> {
     /// Create a new instance.
-    pub fn new(data: impl Into<Quotable<'a>>, mut options: QuoterOptions<'a>) -> Quoter<'a> {
-        // Whitespace must always be quoted
-        options.quoted_syntax.push(Syntax::Symbol(" ".into()));
-
+    pub fn new(data: impl Into<Quotable<'a>>, options: QuoterOptions<'a>) -> Quoter<'a> {
         Self {
             data: data.into(),
             options,
