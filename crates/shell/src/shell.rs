@@ -1,3 +1,4 @@
+use crate::shell::os::is_executable;
 use crate::{shell_error::ShellError, shells::*};
 use std::path::Path;
 use std::str::FromStr;
@@ -224,7 +225,7 @@ pub fn find_shell_on_path(shell: ShellType) -> bool {
     for dir in env::split_paths(&path) {
         let shell_path = dir.join(&file);
 
-        if shell_path.exists() && shell_path.is_file() {
+        if shell_path.exists() && shell_path.is_file() && is_executable(&shell_path) {
             return true;
         }
     }
@@ -308,6 +309,14 @@ mod os {
             ShellType::Sh
         }
     }
+
+    pub fn is_executable(path: &Path) -> bool {
+        use std::os::unix::fs::PermissionsExt;
+
+        path.metadata()
+            .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
 }
 
 #[cfg(windows)]
@@ -359,5 +368,9 @@ mod os {
         } else {
             ShellType::PowerShell
         }
+    }
+
+    pub fn is_executable(_path: &Path) -> bool {
+        true
     }
 }
