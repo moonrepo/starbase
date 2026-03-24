@@ -128,32 +128,31 @@ pub trait Shell: Debug + Display + Send + Sync {
     }
 }
 
-pub trait ShellExt: Shell {
-    /// Join an executable and its arguments into a single string.
-    fn join_exe_args<T, I, A>(&self, exe: T, args: I, quote: bool) -> OsString
-    where
-        T: AsRef<OsStr>,
-        I: IntoIterator<Item = A>,
-        A: AsRef<OsStr>,
-    {
-        let mut out = OsString::new();
+/// Join an executable and its arguments into a single string.
+pub fn join_exe_args<S, T, I, A>(shell: &S, exe: T, args: I, quote: bool) -> OsString
+where
+    S: Shell,
+    T: AsRef<OsStr>,
+    I: IntoIterator<Item = A>,
+    A: AsRef<OsStr>,
+{
+    let mut out = OsString::new();
 
-        // Always quote the executable since it may be a path that
-        // contains spaces or other characters that must be quoted
-        out.push(self.quote_with(Quotable::from(exe.as_ref())));
+    // Always quote the executable since it may be a path that
+    // contains spaces or other characters that must be quoted
+    out.push(shell.quote_with(Quotable::from(exe.as_ref())));
 
-        for arg in args {
-            out.push(OsStr::new(" "));
+    for arg in args {
+        out.push(OsStr::new(" "));
 
-            if quote {
-                out.push(self.quote_with(Quotable::from(arg.as_ref())));
-            } else {
-                out.push(arg.as_ref());
-            }
+        if quote {
+            out.push(shell.quote_with(Quotable::from(arg.as_ref())));
+        } else {
+            out.push(arg.as_ref());
         }
-
-        out
     }
+
+    out
 }
 
 pub type BoxedShell = Box<dyn Shell>;
