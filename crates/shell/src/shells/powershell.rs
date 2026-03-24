@@ -4,6 +4,7 @@ use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::env;
+use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -72,7 +73,7 @@ impl Shell for PowerShell {
         Quoter::new(data, options)
     }
 
-    fn create_wrapped_command(&self, script: &str) -> Command {
+    fn create_wrapped_command_with(&self, script: OsString) -> Command {
         let mut command = Command::new(self.to_string());
         command.args(["-NoLogo", "-c"]);
         command.arg(script);

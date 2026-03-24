@@ -35,36 +35,6 @@ pub fn default_escape_chars() -> HashMap<char, &'static str> {
 }
 
 pub fn apply_quote(
-    value: String,
-    quotes: (&str, &str),
-    replacements: HashMap<char, &str>,
-) -> String {
-    let (open, close) = quotes;
-
-    let mut out = String::with_capacity(open.len() + value.len() + close.len());
-    out.push_str(open);
-
-    for ch in value.chars() {
-        if let Some(replacement) = replacements.get(&ch) {
-            out.push_str(replacement);
-        } else {
-            out.push(ch);
-        }
-    }
-
-    out.push_str(close);
-    out
-}
-
-pub fn apply_single_quote(value: String) -> String {
-    apply_quote(value, ("'", "'"), HashMap::from_iter([('\'', "\\'")]))
-}
-
-pub fn apply_double_quote(value: String) -> String {
-    apply_quote(value, ("\"", "\""), default_escape_chars())
-}
-
-pub fn do_quote(
     value: Quotable<'_>,
     quotes: (&str, &str),
     replacements: &HashMap<char, &str>,
@@ -254,7 +224,7 @@ impl<'a> Quoter<'a> {
             .or(self.options.quote_pairs.last())
             .unwrap();
 
-        do_quote(
+        apply_quote(
             self.data,
             (open, close),
             &self.options.replacements_expansion,
@@ -276,7 +246,7 @@ impl<'a> Quoter<'a> {
             .or(self.options.quote_pairs.first())
             .unwrap();
 
-        do_quote(self.data, (open, close), &self.options.replacements)
+        apply_quote(self.data, (open, close), &self.options.replacements)
     }
 
     /// Return true if the provided string requires expansion.

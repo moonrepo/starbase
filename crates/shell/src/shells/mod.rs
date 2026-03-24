@@ -31,6 +31,7 @@ use crate::hooks::*;
 use crate::quoter::*;
 use crate::shell_error::ShellError;
 use shell_quote::Quotable;
+use std::ffi::{OsStr, OsString};
 use std::fmt::{Debug, Display};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -39,13 +40,18 @@ pub trait Shell: Debug + Display + Send + Sync {
     /// Create a quoter for the provided string.
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a>;
 
-    /// Create a command that wraps the provided script/command in the current shell.
-    fn create_wrapped_command(&self, script: &str) -> Command {
+    /// Create a command that wraps the provided command line in the current shell.
+    fn create_wrapped_command(&self, line: &str) -> Command {
+        self.create_wrapped_command_with(OsString::from(line))
+    }
+
+    /// Create a command that wraps the provided value in the current shell.
+    fn create_wrapped_command_with(&self, line: OsString) -> Command {
         let mut command = Command::new(self.to_string());
         // This is pretty much the same for all shells except pwsh.
         // bash -c "command", nu -c "command", etc...
         command.arg("-c");
-        command.arg(script);
+        command.arg(line);
         command
     }
 
@@ -119,6 +125,34 @@ pub trait Shell: Debug + Display + Send + Sync {
     /// Quote the provided value.
     fn quote_with(&self, value: Quotable<'_>) -> String {
         self.create_quoter(value).maybe_quote()
+    }
+}
+
+pub trait ShellExt: Shell {
+    /// Join an executable and its arguments into a single string.
+    fn join_exe_args<T, I, A>(&self, exe: T, args: I, quote: bool) -> OsString
+    where
+        T: AsRef<OsStr>,
+        I: IntoIterator<Item = A>,
+        A: AsRef<OsStr>,
+    {
+        let mut out = OsString::new();
+
+        // Always quote the executable since it may be a path that
+        // contains spaces or other characters that must be quoted
+        out.push(self.quote_with(Quotable::from(exe.as_ref())));
+
+        for arg in args {
+            out.push(OsStr::new(" "));
+
+            if quote {
+                out.push(self.quote_with(Quotable::from(arg.as_ref())));
+            } else {
+                out.push(arg.as_ref());
+            }
+        }
+
+        out
     }
 }
 
