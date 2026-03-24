@@ -1,4 +1,4 @@
-use super::{Sh, Shell, ShellExt};
+use super::{Sh, Shell};
 use crate::hooks::*;
 use crate::quoter::*;
 use std::fmt;
@@ -38,8 +38,6 @@ impl Shell for Dash {
         vec![home_dir.join(".profile")]
     }
 }
-
-impl ShellExt for Dash {}
 
 impl fmt::Display for Dash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

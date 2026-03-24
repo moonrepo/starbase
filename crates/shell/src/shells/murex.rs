@@ -1,4 +1,4 @@
-use super::{Shell, ShellExt};
+use super::Shell;
 use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -101,8 +101,6 @@ event onPrompt {function}_hook=before {{
         ]
     }
 }
-
-impl ShellExt for Murex {}
 
 impl fmt::Display for Murex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -1,4 +1,4 @@
-use super::{Shell, ShellExt};
+use super::Shell;
 use crate::helpers::{
     PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines,
 };
@@ -145,8 +145,6 @@ set @edit:before-readline = $@edit:before-readline {{
         profiles.into_list()
     }
 }
-
-impl ShellExt for Elvish {}
 
 impl fmt::Display for Elvish {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

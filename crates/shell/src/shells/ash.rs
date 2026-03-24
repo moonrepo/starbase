@@ -1,4 +1,4 @@
-use super::{Sh, Shell, ShellExt};
+use super::{Sh, Shell};
 use crate::hooks::*;
 use crate::quoter::*;
 use std::fmt;
@@ -38,8 +38,6 @@ impl Shell for Ash {
         vec![home_dir.join(".ashrc"), home_dir.join(".profile")]
     }
 }
-
-impl ShellExt for Ash {}
 
 impl fmt::Display for Ash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
