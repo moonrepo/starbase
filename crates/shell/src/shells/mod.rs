@@ -129,9 +129,8 @@ pub trait Shell: Debug + Display + Send + Sync {
 }
 
 /// Join an executable and its arguments into a single string.
-pub fn join_exe_args<S, T, I, A>(shell: &S, exe: T, args: I, quote: bool) -> OsString
+pub fn join_exe_args<T, I, A>(shell: &BoxedShell, exe: T, args: I, quote: bool) -> OsString
 where
-    S: Shell,
     T: AsRef<OsStr>,
     I: IntoIterator<Item = A>,
     A: AsRef<OsStr>,
@@ -143,12 +142,15 @@ where
     out.push(shell.quote_with(Quotable::from(exe.as_ref())));
 
     for arg in args {
+        let arg = arg.as_ref();
+
         out.push(OsStr::new(" "));
 
-        if quote {
-            out.push(shell.quote_with(Quotable::from(arg.as_ref())));
+        // Spaces must always be quoted
+        if quote || arg.as_encoded_bytes().contains(&b' ') {
+            out.push(shell.quote_with(Quotable::from(arg)));
         } else {
-            out.push(arg.as_ref());
+            out.push(arg);
         }
     }
 
@@ -156,3 +158,21 @@ where
 }
 
 pub type BoxedShell = Box<dyn Shell>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ShellType;
+
+    #[test]
+    fn test_join_exe_args() {
+        let shell = ShellType::Bash.build();
+        let result = join_exe_args(&shell, "echo", ["hello world", "foo"], false);
+
+        assert_eq!(result, "echo $'hello world' foo");
+
+        let result = join_exe_args(&shell, "echo", ["hello world", "foo"], true);
+
+        assert_eq!(result, "echo $'hello world' foo");
+    }
+}
