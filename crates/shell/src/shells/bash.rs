@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Shell, ShellExt};
 use crate::helpers::normalize_newlines;
 use crate::hooks::*;
 use crate::quoter::*;
@@ -121,6 +121,8 @@ fi
         }
     }
 }
+
+impl ShellExt for Bash {}
 
 impl fmt::Display for Bash {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

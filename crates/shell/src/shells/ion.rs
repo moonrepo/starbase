@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Shell, ShellExt};
 use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -96,6 +96,8 @@ impl Shell for Ion {
             .into_list()
     }
 }
+
+impl ShellExt for Ion {}
 
 impl fmt::Display for Ion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Shell, ShellExt};
 use crate::helpers::{
     ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, normalize_newlines,
 };
@@ -204,6 +204,8 @@ export-env {{
         profiles.into_list()
     }
 }
+
+impl ShellExt for Nu {}
 
 impl fmt::Display for Nu {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

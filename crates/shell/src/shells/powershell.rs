@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Shell, ShellExt};
 use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -171,6 +171,8 @@ impl Shell for PowerShell {
         profiles.into_list()
     }
 }
+
+impl ShellExt for PowerShell {}
 
 impl fmt::Display for PowerShell {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

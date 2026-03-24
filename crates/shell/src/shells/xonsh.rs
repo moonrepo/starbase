@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Shell, ShellExt};
 use crate::helpers::{ProfileSet, get_config_dir};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -63,6 +63,8 @@ impl Shell for Xonsh {
             .into_list()
     }
 }
+
+impl ShellExt for Xonsh {}
 
 impl fmt::Display for Xonsh {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

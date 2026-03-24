@@ -1,5 +1,5 @@
-use super::Shell;
 use super::powershell::PowerShell;
+use super::{Shell, ShellExt};
 use crate::helpers::{ProfileSet, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -159,6 +159,8 @@ if ($currentAction) {{
         profiles.into_list()
     }
 }
+
+impl ShellExt for Pwsh {}
 
 impl fmt::Display for Pwsh {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

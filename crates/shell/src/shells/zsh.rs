@@ -1,4 +1,4 @@
-use super::{Bash, Shell};
+use super::{Bash, Shell, ShellExt};
 use crate::helpers::{is_absolute_dir, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -77,6 +77,8 @@ fi
         ]
     }
 }
+
+impl ShellExt for Zsh {}
 
 impl fmt::Display for Zsh {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

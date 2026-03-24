@@ -157,3 +157,5 @@ pub trait ShellExt: Shell {
 }
 
 pub type BoxedShell = Box<dyn Shell>;
+
+pub type BoxedShellExt = Box<dyn ShellExt>;

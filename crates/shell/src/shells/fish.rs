@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Shell, ShellExt};
 use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
@@ -88,6 +88,8 @@ end;
             .into_list()
     }
 }
+
+impl ShellExt for Fish {}
 
 impl fmt::Display for Fish {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

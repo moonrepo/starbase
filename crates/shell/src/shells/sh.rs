@@ -1,4 +1,4 @@
-use super::Shell;
+use super::{Shell, ShellExt};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Quotable, Sh as ShQuoter};
@@ -67,6 +67,8 @@ impl Shell for Sh {
         vec![home_dir.join(".profile")]
     }
 }
+
+impl ShellExt for Sh {}
 
 impl fmt::Display for Sh {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
