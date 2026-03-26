@@ -236,6 +236,12 @@ impl fmt::Display for Argument {
 #[derive(Debug, PartialEq)]
 pub struct Command(pub Vec<Argument>);
 
+impl Command {
+    pub fn is_valid(&self) -> bool {
+        !self.0.is_empty()
+    }
+}
+
 impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -298,6 +304,20 @@ impl fmt::Display for Sequence {
 #[derive(Debug, PartialEq)]
 pub struct CommandList(pub Vec<Sequence>);
 
+impl CommandList {
+    pub fn is_simple_command(&self) -> bool {
+        if self.0.len() != 1 {
+            return false;
+        }
+
+        if let Some(Sequence::Start(command)) = self.0.first() {
+            return command.is_valid();
+        }
+
+        false
+    }
+}
+
 impl fmt::Display for CommandList {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -347,6 +367,24 @@ impl fmt::Display for Pipeline {
 
 #[derive(Debug, PartialEq)]
 pub struct CommandLine(pub Vec<Pipeline>);
+
+impl CommandLine {
+    pub fn is_complex_command(&self) -> bool {
+        !self.is_simple_command()
+    }
+
+    pub fn is_simple_command(&self) -> bool {
+        if self.0.len() != 1 {
+            return false;
+        }
+
+        if let Some(Pipeline::Start(command_list)) = self.0.first() {
+            return command_list.is_simple_command();
+        }
+
+        false
+    }
+}
 
 impl fmt::Display for CommandLine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
