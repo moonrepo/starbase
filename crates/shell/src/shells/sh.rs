@@ -110,10 +110,7 @@ mod tests {
 
     #[test]
     fn formats_alias_set() {
-        assert_eq!(
-            Sh.format_alias_set("ll", "ls -la"),
-            "alias ll=ls' -la';"
-        );
+        assert_eq!(Sh.format_alias_set("ll", "ls -la"), "alias ll=ls' -la';");
     }
 
     #[test]

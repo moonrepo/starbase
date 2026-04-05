@@ -239,10 +239,7 @@ mod tests {
 
     #[test]
     fn formats_alias_set() {
-        assert_eq!(
-            Elvish.format_alias_set("ll", "ls -la"),
-            "fn ll { ls -la }"
-        );
+        assert_eq!(Elvish.format_alias_set("ll", "ls -la"), "fn ll { ls -la }");
     }
 
     #[test]
