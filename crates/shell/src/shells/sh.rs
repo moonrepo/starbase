@@ -109,6 +109,19 @@ mod tests {
     }
 
     #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Sh.format_alias_set("ll", "ls -la"),
+            "alias ll=ls' -la';"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Sh.format_alias_unset("ll"), "unalias ll;");
+    }
+
+    #[test]
     fn test_sh_quoting() {
         let sh = Sh::new();
         assert_eq!(sh.quote(""), "''");

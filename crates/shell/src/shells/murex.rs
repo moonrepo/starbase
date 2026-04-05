@@ -188,6 +188,19 @@ mod tests {
     }
 
     #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Murex.format_alias_set("ll", "ls -la"),
+            "alias ll='ls -la';"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Murex.format_alias_unset("ll"), "!alias ll;");
+    }
+
+    #[test]
     fn test_murex_quoting() {
         assert_eq!(Murex.quote("value"), "value");
         assert_eq!(Murex.quote("value with spaces"), "'value with spaces'");

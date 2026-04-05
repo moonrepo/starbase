@@ -238,6 +238,19 @@ mod tests {
     }
 
     #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Elvish.format_alias_set("ll", "ls -la"),
+            "fn ll { ls -la }"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Elvish.format_alias_unset("ll"), "del ll;");
+    }
+
+    #[test]
     fn test_elvish_quoting() {
         // Barewords
         assert_eq!(Elvish.quote("simple"), "simple");

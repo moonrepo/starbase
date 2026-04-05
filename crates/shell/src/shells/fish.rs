@@ -152,6 +152,19 @@ mod tests {
     }
 
     #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Fish.format_alias_set("ll", "ls -la"),
+            "alias ll ls' -la';"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Fish.format_alias_unset("ll"), "functions -e ll;");
+    }
+
+    #[test]
     fn test_fish_quoting() {
         // assert_eq!(Fish.quote("\n"), r#"\n"#);
         // assert_eq!(Fish.quote("\t"), r#"\t"#);

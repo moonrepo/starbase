@@ -149,6 +149,19 @@ mod tests {
     }
 
     #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Ion.format_alias_set("ll", "ls -la"),
+            "alias ll = 'ls -la'"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Ion.format_alias_unset("ll"), "unalias ll");
+    }
+
+    #[test]
     fn test_ion_quoting() {
         assert_eq!(Ion.quote("simplevalue"), "simplevalue");
         assert_eq!(Ion.quote("value with spaces"), r#"'value with spaces'"#);

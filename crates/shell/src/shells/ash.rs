@@ -85,6 +85,19 @@ mod tests {
     }
 
     #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Ash::new().format_alias_set("ll", "ls -la"),
+            "alias ll=ls' -la';"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Ash::new().format_alias_unset("ll"), "unalias ll;");
+    }
+
+    #[test]
     fn test_ash_quoting() {
         let shell = Ash::new();
         assert_eq!(shell.quote("simple"), "simple"); // No quoting needed

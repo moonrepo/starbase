@@ -139,6 +139,19 @@ mod tests {
     }
 
     #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Zsh::new().format_alias_set("ll", "ls -la"),
+            "alias ll=$'ls -la';"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Zsh::new().format_alias_unset("ll"), "unalias ll;");
+    }
+
+    #[test]
     fn test_zsh_quoting() {
         let zsh = Zsh::new();
         assert_eq!(zsh.quote(""), "''");
