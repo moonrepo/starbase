@@ -48,12 +48,18 @@ impl Shell for Murex {
                     None => format!(r#"$ENV.{key}="{value}""#),
                 }
             }
+            Statement::SetAlias { name, value } => {
+                format!("alias {}={};", self.quote(name), self.quote(value))
+            }
             Statement::SetEnv { key, value } => {
                 format!(
                     "$ENV.{}={}",
                     self.quote(key),
                     self.quote(self.replace_env(value).as_str())
                 )
+            }
+            Statement::UnsetAlias { name } => {
+                format!("!alias {};", self.quote(name))
             }
             Statement::UnsetEnv { key } => {
                 format!("unset {};", self.quote(key))
@@ -179,6 +185,16 @@ mod tests {
                 home_dir.join(".murex_preload"),
             ]
         );
+    }
+
+    #[test]
+    fn formats_alias_set() {
+        assert_eq!(Murex.format_alias_set("ll", "ls -la"), "alias ll='ls -la';");
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Murex.format_alias_unset("ll"), "!alias ll;");
     }
 
     #[test]

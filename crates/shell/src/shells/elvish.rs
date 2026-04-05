@@ -78,12 +78,18 @@ impl Shell for Elvish {
                     None => format!("set paths = [{value}];"),
                 }
             }
+            Statement::SetAlias { name, value } => {
+                format!("fn {name} {{ {value} }}")
+            }
             Statement::SetEnv { key, value } => {
                 format!(
                     "set-env {} {};",
                     self.quote(key),
                     self.quote(self.replace_env(value).as_str())
                 )
+            }
+            Statement::UnsetAlias { name } => {
+                format!("del {name};")
             }
             Statement::UnsetEnv { key } => {
                 format!("unset-env {};", self.quote(key))
@@ -229,6 +235,16 @@ mod tests {
                 ]
             );
         }
+    }
+
+    #[test]
+    fn formats_alias_set() {
+        assert_eq!(Elvish.format_alias_set("ll", "ls -la"), "fn ll { ls -la }");
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Elvish.format_alias_unset("ll"), "del ll;");
     }
 
     #[test]

@@ -238,6 +238,22 @@ mod tests {
     }
 
     #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Pwsh::new().format_alias_set("ll", "Get-ChildItem"),
+            "Set-Alias -Name ll -Value 'Get-ChildItem';"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(
+            Pwsh::new().format_alias_unset("ll"),
+            "Remove-Alias -Name ll -Force;"
+        );
+    }
+
+    #[test]
     fn test_pwsh_quoting() {
         assert_eq!(Pwsh::new().quote(""), "''");
         assert_eq!(Pwsh::new().quote("simple"), "simple");

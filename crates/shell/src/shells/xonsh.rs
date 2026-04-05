@@ -38,8 +38,14 @@ impl Shell for Xonsh {
                     None => format!(r#"${key} = "{value}""#),
                 }
             }
+            Statement::SetAlias { name, value } => {
+                format!("aliases[\"{name}\"] = {}", self.quote(value))
+            }
             Statement::SetEnv { key, value } => {
                 format!("${key} = {}", self.quote(value))
+            }
+            Statement::UnsetAlias { name } => {
+                format!("del aliases[\"{name}\"]")
             }
             Statement::UnsetEnv { key } => {
                 format!("del ${key}")
@@ -110,6 +116,19 @@ mod tests {
                 home_dir.join(".xonshrc"),
             ]
         );
+    }
+
+    #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            Xonsh.format_alias_set("ll", "ls -la"),
+            "aliases[\"ll\"] = 'ls -la'"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Xonsh.format_alias_unset("ll"), "del aliases[\"ll\"]");
     }
 
     #[test]

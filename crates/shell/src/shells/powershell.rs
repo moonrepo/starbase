@@ -124,6 +124,13 @@ impl Shell for PowerShell {
 
                 normalize_newlines(value)
             }
+            Statement::SetAlias { name, value } => {
+                format!(
+                    "Set-Alias -Name {} -Value {};",
+                    self.quote(name),
+                    self.quote(value)
+                )
+            }
             Statement::SetEnv { key, value } => {
                 let key = get_env_key_native(key);
 
@@ -136,6 +143,9 @@ impl Shell for PowerShell {
                         self.quote(self.replace_env(value).as_str())
                     )
                 }
+            }
+            Statement::UnsetAlias { name } => {
+                format!("Remove-Alias -Name {} -Force;", self.quote(name))
             }
             Statement::UnsetEnv { key } => {
                 format!(
@@ -391,6 +401,22 @@ mod tests {
                     .join("WindowsPowerShell")
                     .join("Microsoft.PowerShell_profile.ps1"),
             ]
+        );
+    }
+
+    #[test]
+    fn formats_alias_set() {
+        assert_eq!(
+            PowerShell.format_alias_set("ll", "Get-ChildItem"),
+            "Set-Alias -Name ll -Value 'Get-ChildItem';"
+        );
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(
+            PowerShell.format_alias_unset("ll"),
+            "Remove-Alias -Name ll -Force;"
         );
     }
 

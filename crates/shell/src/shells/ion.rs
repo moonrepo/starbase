@@ -63,12 +63,18 @@ impl Shell for Ion {
                     None => format!(r#"export {key} = "{value}""#,),
                 }
             }
+            Statement::SetAlias { name, value } => {
+                format!("alias {} = {}", self.quote(name), self.quote(value))
+            }
             Statement::SetEnv { key, value } => {
                 format!(
                     "export {}={}",
                     self.quote(key),
                     self.quote(self.replace_env(value).as_str())
                 )
+            }
+            Statement::UnsetAlias { name } => {
+                format!("unalias {}", self.quote(name))
             }
             Statement::UnsetEnv { key } => {
                 format!("drop {}", self.quote(key))
@@ -140,6 +146,16 @@ mod tests {
             Ion::new().get_profile_paths(&home_dir),
             vec![home_dir.join(".config").join("ion").join("initrc")]
         );
+    }
+
+    #[test]
+    fn formats_alias_set() {
+        assert_eq!(Ion.format_alias_set("ll", "ls -la"), "alias ll = 'ls -la'");
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Ion.format_alias_unset("ll"), "unalias ll");
     }
 
     #[test]

@@ -4,9 +4,16 @@ pub enum Statement<'data> {
         key: Option<&'data str>,
         orig_key: Option<&'data str>,
     },
+    SetAlias {
+        name: &'data str,
+        value: &'data str,
+    },
     SetEnv {
         key: &'data str,
         value: &'data str,
+    },
+    UnsetAlias {
+        name: &'data str,
     },
     UnsetEnv {
         key: &'data str,

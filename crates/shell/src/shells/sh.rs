@@ -46,8 +46,14 @@ impl Shell for Sh {
 
                 format!(r#"export {key}="{value}";"#)
             }
+            Statement::SetAlias { name, value } => {
+                format!("alias {}={};", self.quote(name), self.quote(value))
+            }
             Statement::SetEnv { key, value } => {
                 format!("export {}={};", self.quote(key), self.quote(value))
+            }
+            Statement::UnsetAlias { name } => {
+                format!("unalias {};", self.quote(name))
             }
             Statement::UnsetEnv { key } => {
                 format!("unset {};", self.quote(key))
@@ -100,6 +106,16 @@ mod tests {
             Sh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin";"#
         );
+    }
+
+    #[test]
+    fn formats_alias_set() {
+        assert_eq!(Sh.format_alias_set("ll", "ls -la"), "alias ll=ls' -la';");
+    }
+
+    #[test]
+    fn formats_alias_unset() {
+        assert_eq!(Sh.format_alias_unset("ll"), "unalias ll;");
     }
 
     #[test]
