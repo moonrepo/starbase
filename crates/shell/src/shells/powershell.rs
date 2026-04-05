@@ -74,9 +74,23 @@ impl Shell for PowerShell {
     }
 
     fn create_wrapped_command_with(&self, script: OsString) -> Command {
+        let mut new_script = OsString::new();
+
+        // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_operators?view=powershell-7.6#call-operator-
+        // If the executable starts with a quote, we need to use the call
+        // operator (&) to execute it, otherwise PowerShell treats it as
+        // a string literal...
+        if script.as_encoded_bytes().starts_with("\"".as_bytes())
+            || script.as_encoded_bytes().starts_with("'".as_bytes())
+        {
+            new_script.push(OsString::from("& "));
+        }
+
+        new_script.push(script);
+
         let mut command = Command::new(self.to_string());
         command.args(["-NoLogo", "-c"]);
-        command.arg(script);
+        command.arg(new_script);
         command
     }
 
@@ -181,6 +195,26 @@ impl fmt::Display for PowerShell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn creates_wrapped_command() {
+        let command = PowerShell.create_wrapped_command_with("echo hello".into());
+        assert_eq!(command.get_program(), "powershell");
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            ["-NoLogo", "-c", "echo hello"]
+        );
+    }
+
+    #[test]
+    fn creates_wrapped_command_with_quotes() {
+        let command = PowerShell.create_wrapped_command_with("'echo' hello".into());
+        assert_eq!(command.get_program(), "powershell");
+        assert_eq!(
+            command.get_args().collect::<Vec<_>>(),
+            ["-NoLogo", "-c", "& 'echo' hello"]
+        );
+    }
 
     #[test]
     fn formats_env_var() {
