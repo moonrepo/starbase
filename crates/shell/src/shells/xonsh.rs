@@ -38,8 +38,14 @@ impl Shell for Xonsh {
                     None => format!(r#"${key} = "{value}""#),
                 }
             }
+            Statement::SetAlias { name, value } => {
+                format!("aliases[{}] = {}", self.quote(name), self.quote(value))
+            }
             Statement::SetEnv { key, value } => {
                 format!("${key} = {}", self.quote(value))
+            }
+            Statement::UnsetAlias { name } => {
+                format!("del aliases[{}]", self.quote(name))
             }
             Statement::UnsetEnv { key } => {
                 format!("del ${key}")

@@ -48,12 +48,18 @@ impl Shell for Murex {
                     None => format!(r#"$ENV.{key}="{value}""#),
                 }
             }
+            Statement::SetAlias { name, value } => {
+                format!("alias {}={};", self.quote(name), self.quote(value))
+            }
             Statement::SetEnv { key, value } => {
                 format!(
                     "$ENV.{}={}",
                     self.quote(key),
                     self.quote(self.replace_env(value).as_str())
                 )
+            }
+            Statement::UnsetAlias { name } => {
+                format!("!alias {};", self.quote(name))
             }
             Statement::UnsetEnv { key } => {
                 format!("unset {};", self.quote(key))

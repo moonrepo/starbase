@@ -94,6 +94,9 @@ impl Shell for Nu {
 
                 normalize_newlines(value)
             }
+            Statement::SetAlias { name, value } => {
+                format!("alias {} = {}", name, self.quote(value))
+            }
             Statement::SetEnv { key, value } => {
                 if value.starts_with("$HOME/") {
                     let path = value.trim_start_matches("$HOME/");
@@ -106,6 +109,9 @@ impl Shell for Nu {
                 } else {
                     format!("$env.{} = {}", get_env_key_native(key), self.quote(value))
                 }
+            }
+            Statement::UnsetAlias { name } => {
+                format!("hide {name}")
             }
             Statement::UnsetEnv { key } => {
                 format!("hide-env {}", get_env_key_native(key))

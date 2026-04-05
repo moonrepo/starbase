@@ -124,6 +124,13 @@ impl Shell for PowerShell {
 
                 normalize_newlines(value)
             }
+            Statement::SetAlias { name, value } => {
+                format!(
+                    "Set-Alias -Name {} -Value {};",
+                    self.quote(name),
+                    self.quote(value)
+                )
+            }
             Statement::SetEnv { key, value } => {
                 let key = get_env_key_native(key);
 
@@ -136,6 +143,9 @@ impl Shell for PowerShell {
                         self.quote(self.replace_env(value).as_str())
                     )
                 }
+            }
+            Statement::UnsetAlias { name } => {
+                format!("Remove-Alias -Name {} -Force;", self.quote(name))
             }
             Statement::UnsetEnv { key } => {
                 format!(
