@@ -373,6 +373,23 @@ pub fn get_editor_config_props<T: AsRef<Path> + Debug>(
     })
 }
 
+/// Check if the provided path is executable. On Unix, this checks if the file has any executable
+/// permissions. On Windows, this checks if the file extension is `.exe`.
+#[cfg(unix)]
+pub fn is_executable<T: AsRef<Path>>(path: T) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::metadata(path.as_ref())
+        .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+}
+
+/// Check if the provided path is executable. On Unix, this checks if the file has any executable
+/// permissions. On Windows, this checks if the file extension is `.exe`.
+#[cfg(windows)]
+pub fn is_executable<T: AsRef<Path>>(path: T) -> bool {
+    path.as_ref().extension().is_some_and(|ext| ext == "exe")
+}
+
 /// Check if the provided path is a stale file, by comparing modified, created, or accessed
 /// timestamps against the current timestamp and duration. If stale, return the file size
 /// and timestamp, otherwise return `None`.
