@@ -64,48 +64,6 @@ mod download {
     }
 
     #[tokio::test]
-    async fn downloads_with_headers() {
-        let sandbox = create_empty_sandbox();
-        let dest_file = sandbox.path().join("headers.json");
-
-        net::download_from_url_with_headers(
-            "https://httpbin.org/headers",
-            &dest_file,
-            headers_with_custom_header(),
-        )
-        .await
-        .unwrap();
-
-        let body = std::fs::read_to_string(&dest_file).unwrap();
-        assert!(
-            body.contains("proto-starbase-headers-test"),
-            "expected response to contain custom header value, got: {body}"
-        );
-    }
-
-    #[tokio::test]
-    async fn downloads_with_client_and_headers() {
-        let sandbox = create_empty_sandbox();
-        let dest_file = sandbox.path().join("headers.json");
-        let client = reqwest::Client::new();
-
-        net::download_from_url_with_client_and_headers(
-            "https://httpbin.org/headers",
-            &dest_file,
-            &client,
-            headers_with_custom_header(),
-        )
-        .await
-        .unwrap();
-
-        let body = std::fs::read_to_string(&dest_file).unwrap();
-        assert!(
-            body.contains("proto-starbase-headers-test"),
-            "expected response to contain custom header value, got: {body}"
-        );
-    }
-
-    #[tokio::test]
     async fn downloads_with_options_headers() {
         let sandbox = create_empty_sandbox();
         let dest_file = sandbox.path().join("headers.json");

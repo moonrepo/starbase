@@ -96,6 +96,15 @@ pub struct DownloadOptions {
     pub on_chunk: Option<OnChunkFn>,
 }
 
+impl DownloadOptions {
+    pub fn new(downloader: impl Downloader + 'static) -> Self {
+        Self {
+            downloader: Some(Box::new(downloader)),
+            on_chunk: None,
+        }
+    }
+}
+
 /// Download a file from the provided source URL, to the destination file path,
 /// using custom options.
 #[instrument(skip(options))]
@@ -202,38 +211,10 @@ pub async fn download_from_url_with_client<S: AsRef<str> + Debug, D: AsRef<Path>
     download_from_url_with_options(
         source_url,
         dest_file,
-        DownloadOptions {
-            downloader: Some(Box::new(DefaultDownloader {
-                client: client.to_owned(),
-                headers: None,
-            })),
-            on_chunk: None,
-        },
-    )
-    .await
-}
-
-/// Download a file from the provided source URL, to the destination file path,
-/// using a custom `reqwest` [`Client`] and HTTP headers.
-pub async fn download_from_url_with_client_and_headers<
-    S: AsRef<str> + Debug,
-    D: AsRef<Path> + Debug,
->(
-    source_url: S,
-    dest_file: D,
-    client: &Client,
-    headers: HashMap<String, String>,
-) -> Result<(), NetError> {
-    download_from_url_with_options(
-        source_url,
-        dest_file,
-        DownloadOptions {
-            downloader: Some(Box::new(DefaultDownloader::new_with_client_and_headers(
-                client.to_owned(),
-                headers,
-            )?)),
-            on_chunk: None,
-        },
+        DownloadOptions::new(DefaultDownloader {
+            client: client.to_owned(),
+            headers: None,
+        }),
     )
     .await
 }
@@ -244,24 +225,6 @@ pub async fn download_from_url<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
     dest_file: D,
 ) -> Result<(), NetError> {
     download_from_url_with_options(source_url, dest_file, DownloadOptions::default()).await
-}
-
-/// Download a file from the provided source URL, to the destination file path,
-/// with HTTP headers.
-pub async fn download_from_url_with_headers<S: AsRef<str> + Debug, D: AsRef<Path> + Debug>(
-    source_url: S,
-    dest_file: D,
-    headers: HashMap<String, String>,
-) -> Result<(), NetError> {
-    download_from_url_with_options(
-        source_url,
-        dest_file,
-        DownloadOptions {
-            downloader: Some(Box::new(DefaultDownloader::new_with_headers(headers)?)),
-            ..Default::default()
-        },
-    )
-    .await
 }
 
 mod offline {
