@@ -271,6 +271,35 @@ mod examples {
     }
 }
 
+mod simple_vs_complex {
+    use super::*;
+
+    #[test]
+    fn simple_command() {
+        assert!(parse("foo").unwrap().is_simple_command());
+        assert!(parse("foo --bar").unwrap().is_simple_command());
+        assert!(parse("foo --bar -xyz").unwrap().is_simple_command());
+        assert!(parse("foo --bar -xyz 'value'").unwrap().is_simple_command());
+
+        // Special case
+        assert!(parse("foo --").unwrap().is_simple_command());
+        assert!(parse("foo -- bar").unwrap().is_simple_command());
+    }
+
+    #[test]
+    fn complex_command() {
+        assert!(parse("foo | bar").unwrap().is_complex_command());
+        assert!(parse("foo |& bar").unwrap().is_complex_command());
+        assert!(parse("foo; bar").unwrap().is_complex_command());
+        assert!(parse("foo && bar").unwrap().is_complex_command());
+        assert!(parse("foo || bar").unwrap().is_complex_command());
+        assert!(parse("foo > bar").unwrap().is_complex_command());
+        assert!(parse("foo << bar").unwrap().is_complex_command());
+        assert!(parse("foo;").unwrap().is_complex_command());
+        assert!(parse("foo &").unwrap().is_complex_command());
+    }
+}
+
 mod pipeline {
     use super::*;
 

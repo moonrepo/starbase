@@ -31,7 +31,7 @@ use crate::hooks::*;
 use crate::quoter::*;
 use crate::shell_error::ShellError;
 use shell_quote::Quotable;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fmt::{Debug, Display};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -146,63 +146,4 @@ pub trait Shell: Debug + Display + Send + Sync {
     }
 }
 
-#[cfg(unix)]
-fn into_quotable(arg: &OsStr) -> Quotable<'_> {
-    Quotable::from(arg)
-}
-
-// Windows does not support `OsStr` or `OsString`.
-// https://github.com/allenap/shell-quote/issues/39
-#[cfg(windows)]
-fn into_quotable(arg: &OsStr) -> Quotable<'_> {
-    Quotable::from(arg.as_encoded_bytes())
-}
-
-/// Join an executable and its arguments into a single string.
-pub fn join_exe_args<T, I, A>(shell: &BoxedShell, exe: T, args: I, quote: bool) -> OsString
-where
-    T: AsRef<OsStr>,
-    I: IntoIterator<Item = A>,
-    A: AsRef<OsStr>,
-{
-    let mut out = OsString::new();
-
-    // Always quote the executable since it may be a path that
-    // contains spaces or other characters that must be quoted
-    out.push(shell.quote_with(into_quotable(exe.as_ref())));
-
-    for arg in args {
-        let arg = arg.as_ref();
-
-        out.push(OsStr::new(" "));
-
-        // Spaces must always be quoted
-        if quote || arg.as_encoded_bytes().contains(&b' ') {
-            out.push(shell.quote_with(into_quotable(arg)));
-        } else {
-            out.push(arg);
-        }
-    }
-
-    out
-}
-
 pub type BoxedShell = Box<dyn Shell>;
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::ShellType;
-
-    #[test]
-    fn test_join_exe_args() {
-        let shell = ShellType::Bash.build();
-        let result = join_exe_args(&shell, "echo", ["hello world", "foo"], false);
-
-        assert_eq!(result, "echo $'hello world' foo");
-
-        let result = join_exe_args(&shell, "echo", ["hello world", "foo"], true);
-
-        assert_eq!(result, "echo $'hello world' foo");
-    }
-}

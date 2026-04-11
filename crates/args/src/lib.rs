@@ -306,13 +306,27 @@ pub struct CommandList(pub Vec<Sequence>);
 
 impl CommandList {
     pub fn is_simple_command(&self) -> bool {
-        if self.0.len() != 1 {
-            return false;
-        }
+        match self.0.len() {
+            1 => {
+                if let Some(Sequence::Start(command)) = self.0.first() {
+                    return command.is_valid();
+                }
+            }
+            2 => {
+                if let Some(Sequence::Start(command)) = self.0.first()
+                    && command.is_valid()
+                {
+                    if let Some(Sequence::Stop(del)) = self.0.last() {
+                        return del == "--";
+                    }
 
-        if let Some(Sequence::Start(command)) = self.0.first() {
-            return command.is_valid();
-        }
+                    if let Some(Sequence::Passthrough(pass)) = self.0.last() {
+                        return pass.is_valid();
+                    }
+                }
+            }
+            _ => {}
+        };
 
         false
     }
