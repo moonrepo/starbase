@@ -36,15 +36,24 @@ fn apply_quote(
 
 /// Join an executable and its arguments into a single string. This function *will not* auto-quote
 /// all arguments by default, and will only quote when an argument contains spaces or slashes.
-pub fn join_exe_args<I, A>(shell: &BoxedShell, exe: A, args: I, force_quote: bool) -> OsString
+pub fn join_exe_args<E, I, A>(shell: &BoxedShell, exe: E, args: I, force_quote: bool) -> OsString
 where
+    E: AsRef<OsStr>,
     I: IntoIterator<Item = A>,
     A: AsRef<OsStr>,
 {
-    let mut list = vec![exe];
-    list.extend(args);
+    let mut out = OsString::new();
 
-    join_args(shell, list, force_quote)
+    apply_quote(shell, exe.as_ref(), force_quote, true, &mut out);
+
+    let args = join_args(shell, args, force_quote);
+
+    if !args.is_empty() {
+        out.push(OsStr::new(" "));
+        out.push(args);
+    }
+
+    out
 }
 
 /// Join a list of arguments into a single string. This function *will not* auto-quote
@@ -63,7 +72,7 @@ where
             out.push(OsStr::new(" "));
         }
 
-        apply_quote(shell, arg, force_quote, i == 0, &mut out);
+        apply_quote(shell, arg, force_quote, false, &mut out);
     }
 
     out
