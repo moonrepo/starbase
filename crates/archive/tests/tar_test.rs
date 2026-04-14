@@ -46,7 +46,7 @@ mod tar {
         create_malicious_tar_common(file, entry_path, entry_content);
     }
 
-    generate_relative_path_traversal_test!("malicious.tar", create_malicious_tar_plain);
+    generate_relative_path_traversal_tests!("malicious.tar", create_malicious_tar_plain);
 }
 
 mod tar_gz {
@@ -60,7 +60,7 @@ mod tar_gz {
         create_malicious_tar_common(encoder, entry_path, entry_content);
     }
 
-    generate_relative_path_traversal_test!("malicious.tar.gz", create_malicious_tar_gz);
+    generate_relative_path_traversal_tests!("malicious.tar.gz", create_malicious_tar_gz);
 }
 
 mod tar_xz {
@@ -78,7 +78,7 @@ mod tar_xz {
         create_malicious_tar_common(encoder, entry_path, entry_content);
     }
 
-    generate_relative_path_traversal_test!("malicious.tar.xz", create_malicious_tar_xz);
+    generate_relative_path_traversal_tests!("malicious.tar.xz", create_malicious_tar_xz);
 }
 
 mod tar_zstd {
@@ -97,7 +97,7 @@ mod tar_zstd {
         create_malicious_tar_common(encoder, entry_path, entry_content);
     }
 
-    generate_relative_path_traversal_test!("malicious.tar.zst", create_malicious_tar_zstd);
+    generate_relative_path_traversal_tests!("malicious.tar.zst", create_malicious_tar_zstd);
 }
 
 mod tar_bz2 {
@@ -112,5 +112,5 @@ mod tar_bz2 {
         create_malicious_tar_common(encoder, entry_path, entry_content);
     }
 
-    generate_relative_path_traversal_test!("malicious.tar.bz2", create_malicious_tar_bz2);
+    generate_relative_path_traversal_tests!("malicious.tar.bz2", create_malicious_tar_bz2);
 }

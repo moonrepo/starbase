@@ -199,15 +199,26 @@ impl TarUnpacker {
     fn safe_entry_path(entry: &TarEntry<Box<dyn Read>>) -> Option<PathBuf> {
         let path = entry.path().ok()?;
         let mut clean_path = PathBuf::new();
+        let mut normal_parts = 0;
 
         for part in path.components() {
             match part {
                 Component::Prefix(..) | Component::RootDir | Component::CurDir => continue,
 
-                // Avoid zip slip vulnerability (CWE-23: Relative Path Traversal)
-                Component::ParentDir => return None,
+                Component::ParentDir => {
+                    // Avoid zip slip vulnerability (CWE-23: Relative Path Traversal)
+                    if normal_parts == 0 {
+                        return None;
+                    }
 
-                Component::Normal(part) => clean_path.push(part),
+                    clean_path.pop();
+                    normal_parts -= 1;
+                }
+
+                Component::Normal(part) => {
+                    clean_path.push(part);
+                    normal_parts += 1;
+                }
             }
         }
 

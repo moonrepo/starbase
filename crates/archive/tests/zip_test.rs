@@ -42,7 +42,7 @@ mod zip {
         );
     }
 
-    generate_relative_path_traversal_test!("malicious.zip", create_malicious_zip_plain);
+    generate_relative_path_traversal_tests!("malicious.zip", create_malicious_zip_plain);
 }
 
 mod zip_deflate {
@@ -59,5 +59,5 @@ mod zip_deflate {
         );
     }
 
-    generate_relative_path_traversal_test!("malicious.zip", create_malicious_zip_deflated);
+    generate_relative_path_traversal_tests!("malicious.zip", create_malicious_zip_deflated);
 }

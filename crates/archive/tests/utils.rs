@@ -454,7 +454,7 @@ macro_rules! generate_tests {
 }
 
 #[macro_export]
-macro_rules! generate_relative_path_traversal_test {
+macro_rules! generate_relative_path_traversal_tests {
     ($archive_filename:expr, $archive_factory:path) => {
         #[test]
         fn ignores_entries_causing_relative_path_traversal() {
@@ -469,7 +469,7 @@ macro_rules! generate_relative_path_traversal_test {
             // Attempt to unpack inside out directory
             let output = sandbox.path().join("out");
             let archiver = Archiver::new(&output, &archive_path);
-            let _ = archiver.unpack_from_ext();
+            archiver.unpack_from_ext().unwrap();
 
             // Verify that after extraction zip slip (relative path
             // traversal) hasn't occured.
@@ -486,6 +486,27 @@ macro_rules! generate_relative_path_traversal_test {
                 $archive_filename,
                 leaked_path.display()
             );
+        }
+
+        #[test]
+        fn allows_entries_with_parent_dir_in_middle() {
+            let malicious_entry_path = Path::new("a/../b/valid.txt");
+            let content = b"this file should exist on extraction";
+
+            // Create archive
+            let sandbox = create_empty_sandbox();
+            let archive_path = sandbox.path().join($archive_filename);
+            $archive_factory(&archive_path, malicious_entry_path, content);
+
+            // Attempt to unpack inside out directory
+            let output = sandbox.path().join("out");
+            let archiver = Archiver::new(&output, &archive_path);
+            archiver.unpack_from_ext().unwrap();
+
+            let valid_path = sandbox.path().join("out/b/valid.txt");
+
+            assert!(output.exists());
+            assert!(valid_path.exists());
         }
     };
 }
