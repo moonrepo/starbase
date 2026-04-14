@@ -9,10 +9,10 @@ fn extract_commands(line: &CommandLine) -> &Vec<Sequence> {
 }
 
 fn extract_args(line: &CommandLine) -> &Vec<Argument> {
-    if let Some(Pipeline::Start(commands)) = line.0.first() {
-        if let Some(Sequence::Start(command)) = commands.0.first() {
-            return &command.0;
-        }
+    if let Some(Pipeline::Start(commands)) = line.0.first()
+        && let Some(Sequence::Start(command)) = commands.0.first()
+    {
+        return &command.0;
     }
 
     unimplemented!()

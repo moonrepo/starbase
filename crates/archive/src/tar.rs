@@ -2,10 +2,10 @@ use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
 pub use crate::tar_error::TarError;
 use crate::tree_differ::TreeDiffer;
-use binstall_tar::{Archive as TarArchive, Builder as TarBuilder};
+use binstall_tar::{Archive as TarArchive, Builder as TarBuilder, Entry as TarEntry};
 use starbase_utils::fs;
 use std::io::{Write, prelude::*};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use tracing::{instrument, trace};
 
 /// Creates tar archives.
@@ -190,6 +190,35 @@ impl TarUnpacker {
             Box::new(bzip2::read::BzDecoder::new(fs::open_file(input_file)?)),
         )
     }
+
+    // Validations inspired from binstall_tar::Entry::unpack_in().
+    //
+    // Didn't use unpack_in() directly for safety as it cannot handle
+    // our prefix (stripping) related requirement since it considers
+    // the entry as read-only.
+    fn safe_entry_path(entry: &TarEntry<Box<dyn Read>>) -> Option<PathBuf> {
+        let path = entry.path().ok()?;
+        let mut clean_path = PathBuf::new();
+
+        for part in path.components() {
+            match part {
+                Component::Prefix(..) | Component::RootDir | Component::CurDir => continue,
+
+                // Avoid zip slip vulnerability (CWE-23: Relative Path Traversal)
+                Component::ParentDir => return None,
+
+                Component::Normal(part) => clean_path.push(part),
+            }
+        }
+
+        // Original path consisted of only prefix, rootdir, or curdir
+        // components (could be a valid directory, but not a valid file path)
+        if clean_path.as_os_str().is_empty() {
+            return None;
+        }
+
+        Some(clean_path)
+    }
 }
 
 impl ArchiveUnpacker for TarUnpacker {
@@ -211,7 +240,12 @@ impl ArchiveUnpacker for TarUnpacker {
             let mut entry = entry.map_err(|error| TarError::UnpackFailure {
                 error: Box::new(error),
             })?;
-            let mut path: PathBuf = entry.path().unwrap().into_owned();
+
+            // Skip unpacking if the entry is unsafe (avoid zip slips!)
+            let mut path = match Self::safe_entry_path(&entry) {
+                Some(path) => path,
+                None => continue,
+            };
 
             // Remove the prefix
             if !prefix.is_empty()

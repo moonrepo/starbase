@@ -452,3 +452,40 @@ macro_rules! generate_tests {
         }
     };
 }
+
+#[macro_export]
+macro_rules! generate_relative_path_traversal_test {
+    ($archive_filename:expr, $archive_factory:path) => {
+        #[test]
+        fn ignores_entries_causing_relative_path_traversal() {
+            let malicious_entry_path = Path::new("../leak.txt");
+            let content = b"this file should not exist on extraction";
+
+            // Create malicious archive
+            let sandbox = create_empty_sandbox();
+            let archive_path = sandbox.path().join($archive_filename);
+            $archive_factory(&archive_path, malicious_entry_path, content);
+
+            // Attempt to unpack inside out directory
+            let output = sandbox.path().join("out");
+            let archiver = Archiver::new(&output, &archive_path);
+            let _ = archiver.unpack_from_ext();
+
+            // Verify that after extraction zip slip (relative path
+            // traversal) hasn't occured.
+            //
+            // (i.e. entry ../leak.txt extracted inside
+            // <sandbox-path>/out/ should not have created the file
+            // <sandbox-path>/leak.txt)
+            let leaked_path = sandbox.path().join("leak.txt");
+
+            assert!(output.exists());
+            assert!(
+                !leaked_path.exists(),
+                "VULNERABILITY: Format {} leaked content to {}!",
+                $archive_filename,
+                leaked_path.display()
+            );
+        }
+    };
+}
