@@ -2,9 +2,10 @@ use super::Shell;
 use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
+use base64::Engine;
 use shell_quote::Quotable;
 use std::env;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -50,6 +51,21 @@ use std::process::Command;
 // This will obfuscate the command being ran (if debugging the `Command` directly), but it will
 // save so much time and headache trying to get the quoting/escaping right, and it will also be
 // more robust to edge cases.
+
+fn base64_encode<T: AsRef<OsStr>>(decoded: T) -> String {
+    // The string must be formatted using UTF-16LE character encoding:
+    // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1#-encodedcommand-base64encodedcommand
+    let utf16: Vec<u8> = decoded
+        .as_ref()
+        .to_string_lossy()
+        .encode_utf16()
+        .flat_map(|u| u.to_le_bytes())
+        .collect();
+
+    // We should include padding:
+    // https://learn.microsoft.com/en-us/dotnet/api/system.convert.tobase64string?view=net-10.0#remarks
+    base64::prelude::BASE64_STANDARD.encode(&utf16)
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct PowerShell;
@@ -115,24 +131,16 @@ impl Shell for PowerShell {
         Quoter::new(data, options)
     }
 
+    /// Build a PowerShell/pwsh `Command` that runs `script` via `-EncodedCommand`.
+    /// `program` is the executable name (`powershell` or `pwsh`).
+    ///
+    /// The script is encoded as UTF-16LE + base64. PowerShell decodes it
+    /// internally, which bypasses the mismatch between Rust's Windows argument
+    /// quoting (MSVCRT-style `\"`) and PowerShell's own parser (`""` / backtick).
     fn create_wrapped_command_with(&self, script: OsString) -> Command {
-        let mut new_script = OsString::new();
-
-        // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_operators?view=powershell-7.6#call-operator-
-        // If the executable starts with a quote, we need to use the call
-        // operator (&) to execute it, otherwise PowerShell treats it as
-        // a string literal...
-        if script.as_encoded_bytes().starts_with("\"".as_bytes())
-            || script.as_encoded_bytes().starts_with("'".as_bytes())
-        {
-            new_script.push(OsString::from("& "));
-        }
-
-        new_script.push(script);
-
         let mut command = Command::new(self.to_string());
-        command.args(["-NoLogo", "-c"]);
-        command.arg(new_script);
+        command.args(["-NoLogo", "-NoProfile", "-EncodedCommand"]);
+        command.arg(base64_encode(script));
         command
     }
 
@@ -248,24 +256,67 @@ impl fmt::Display for PowerShell {
 mod tests {
     use super::*;
 
+    /// Decode a base64 string produced by `base64_encode`, then interpret the
+    /// bytes as UTF-16LE and return the resulting Rust string. Used only by
+    /// the tests below to assert the wrapped command round-trips.
+    fn base64_decode<T: AsRef<str>>(encoded: T) -> String {
+        let bytes = base64::prelude::BASE64_STANDARD
+            .decode(encoded.as_ref())
+            .unwrap();
+
+        let utf16: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+
+        String::from_utf16(&utf16).unwrap()
+    }
+
     #[test]
     fn creates_wrapped_command() {
         let command = PowerShell.create_wrapped_command_with("echo hello".into());
         assert_eq!(command.get_program(), "powershell");
-        assert_eq!(
-            command.get_args().collect::<Vec<_>>(),
-            ["-NoLogo", "-c", "echo hello"]
-        );
+
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(&args[..3], &["-NoLogo", "-NoProfile", "-EncodedCommand"]);
+        assert_eq!(base64_decode(args[3].to_str().unwrap()), "echo hello");
     }
 
     #[test]
     fn creates_wrapped_command_with_quotes() {
+        // The `&` call-operator workaround is no longer needed: -EncodedCommand
+        // bypasses PowerShell's command-line parser entirely, so a leading
+        // quote is just data.
         let command = PowerShell.create_wrapped_command_with("'echo' hello".into());
         assert_eq!(command.get_program(), "powershell");
-        assert_eq!(
-            command.get_args().collect::<Vec<_>>(),
-            ["-NoLogo", "-c", "& 'echo' hello"]
-        );
+
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(&args[..3], &["-NoLogo", "-NoProfile", "-EncodedCommand"]);
+        assert_eq!(base64_decode(args[3].to_str().unwrap()), "'echo' hello");
+    }
+
+    #[test]
+    fn creates_wrapped_command_with_embedded_double_quotes() {
+        // This is the case that was broken: Rust's Windows arg escaping
+        // emits `\"` for embedded quotes, which PowerShell mis-parses.
+        // With -EncodedCommand the exact bytes round-trip.
+        let script = r#"Write-Host "he said ""hi"""; $x = 'a b'; dir C:\temp"#;
+        let command = PowerShell.create_wrapped_command_with(script.into());
+
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(base64_decode(args[3].to_str().unwrap()), script);
+    }
+
+    #[test]
+    fn base64_encode_known_vectors() {
+        // Standard RFC 4648 test vectors.
+        assert_eq!(base64_encode(""), "");
+        assert_eq!(base64_encode("f"), "ZgA=");
+        assert_eq!(base64_encode("fo"), "ZgBvAA==");
+        assert_eq!(base64_encode("foo"), "ZgBvAG8A");
+        assert_eq!(base64_encode("foob"), "ZgBvAG8AYgA=");
+        assert_eq!(base64_encode("fooba"), "ZgBvAG8AYgBhAA==");
+        assert_eq!(base64_encode("foobar"), "ZgBvAG8AYgBhAHIA");
     }
 
     #[test]

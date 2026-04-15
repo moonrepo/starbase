@@ -5,6 +5,7 @@ use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::env;
+use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -29,8 +30,8 @@ impl Shell for Pwsh {
         self.inner.create_quoter(data)
     }
 
-    fn create_wrapped_command(&self, script: &str) -> Command {
-        self.inner.create_wrapped_command(script)
+    fn create_wrapped_command_with(&self, script: OsString) -> Command {
+        self.inner.create_wrapped_command_with(script)
     }
 
     fn format(&self, statement: Statement<'_>) -> String {

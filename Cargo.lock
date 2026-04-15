@@ -2710,6 +2710,7 @@ dependencies = [
 name = "starbase_shell"
 version = "0.12.2"
 dependencies = [
+ "base64",
  "miette",
  "regex",
  "serial_test",
