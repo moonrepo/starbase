@@ -9,6 +9,48 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// On Unix, arguments are passed to a command using `argv` (a list of strings),
+// and do not need to be quoted/escaped because they are never joined into a string.
+// On Windows (sigh), arguments are passed to a command using `GetCommandLineW`
+// (a single string), and so they need to be quoted/escaped properly to ensure they
+// are parsed correctly by the receiving process.
+//
+// Internally Rust will join all arguments into a string and attempt to quote/escape
+// them, which is documented here:
+// https://github.com/rust-lang/rust/blob/main/library/std/src/sys/process/windows.rs#L859
+//
+// The quoting/escaping rules for each argument is documented here:
+// https://github.com/rust-lang/rust/blob/main/library/std/src/sys/args/windows.rs#L173
+//
+// Let's demonstrate this. If we have the executable `echo` and the arguments
+// `["hello world", "foo"]`, Rust will join them into this string:
+//
+//     echo "hello world" foo
+//
+// The last argument is not quoted because it does not contain any spaces, but the first
+// argument is quoted because it contains a space. This makes sense when the command is
+// NOT run in a shell, because when we do run in a shell, we need to join the command line
+// into a single string ourselves, and then pass it as an argument to the shell.
+//
+// For example, using the same command above, if we want to run it in PowerShell, we need
+// to join it and the executable is now `pwsh` and the arguments are now
+// `["-c", "echo \"hello world\" foo"]`. This makes sense, but now we're in another
+// layer of quoting/escaping, which can be difficult to get right.
+//
+// Internally Rust will join them into this string:
+//
+//     pwsh -c "echo \"hello world\" foo"
+//
+// But what happens when we have multiple nested quotes, each with their own escaping, and
+// then Rust applies even more quoting/escaping on top of that? It becomes a nightmare.
+// I have spent WAY too much time trying to get this right, and I have come to the conclusion
+// that the only way to get this right is to use `-EncodedCommand` in PowerShell.
+// https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_powershell_exe?view=powershell-5.1#-encodedcommand-base64encodedcommand
+//
+// This will obfuscate the command being ran (if debugging the `Command` directly), but it will
+// save so much time and headache trying to get the quoting/escaping right, and it will also be
+// more robust to edge cases.
+
 #[derive(Clone, Copy, Debug)]
 pub struct PowerShell;
 
