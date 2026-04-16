@@ -4,7 +4,7 @@ use starbase_styles::{Style, Stylize};
 use std::path::PathBuf;
 use thiserror::Error;
 
-///.File system errors.
+/// File system errors.
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
 pub enum FsError {
