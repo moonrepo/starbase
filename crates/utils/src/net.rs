@@ -231,24 +231,27 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
         Ok::<(), NetError>(())
     };
 
-    let result = do_write().await;
+    match do_write().await {
+        Ok(_) => {
+            #[cfg(feature = "fs-lock")]
+            if lock_file {
+                fs::release_lock(dest_file, &file)?;
+            }
 
-    // Release the lock on success or failure
-    #[cfg(feature = "fs-lock")]
-    if lock_file {
-        fs::release_lock(dest_file, &file)?;
+            Ok(())
+        }
+        Err(error) => {
+            // Cleanup on failure, otherwise the file may only be partially written to
+            let _ = fs::remove_file(dest_file);
+
+            #[cfg(feature = "fs-lock")]
+            if lock_file {
+                fs::release_lock(dest_file, &file)?;
+            }
+
+            Err(error)
+        }
     }
-
-    drop(file);
-
-    // Cleanup on failure, otherwise the file may only be partially written to
-    if let Err(error) = result {
-        let _ = fs::remove_file(dest_file);
-
-        return Err(error);
-    }
-
-    Ok(())
 }
 
 /// Download a file from the provided source URL, to the destination file path,
