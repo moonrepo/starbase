@@ -165,6 +165,11 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
     let do_write = || async {
         let mut file = fs::create_file(dest_file)?;
 
+        file.lock().map_err(|error| FsError::Lock {
+            path: dest_file.to_path_buf(),
+            error: Box::new(error),
+        })?;
+
         // Write the bytes in chunks
         match on_chunk {
             Some(on_chunk) => {
@@ -187,6 +192,11 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
                 file.write_all(&bytes).map_err(handle_fs_error)?;
             }
         }
+
+        file.unlock().map_err(|error| FsError::Unlock {
+            path: dest_file.to_path_buf(),
+            error: Box::new(error),
+        })?;
 
         Ok::<(), NetError>(())
     };
