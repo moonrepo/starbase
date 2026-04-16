@@ -4,15 +4,16 @@ use reqwest::{
     Client, Response,
     header::{HeaderMap, HeaderName, HeaderValue},
 };
+use std::cmp;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fs::File;
 use std::io::Write;
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use std::{cmp, fs::File};
 use tracing::{instrument, trace};
 use url::Url;
 

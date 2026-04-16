@@ -329,7 +329,7 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
 pub fn acquire_exclusive_lock<T: AsRef<Path> + Debug>(path: T, file: &File) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Locking file");
+    trace!(file = ?path, "Locking file exclusively");
 
     file.lock().map_err(|error| FsError::Lock {
         path: path.to_path_buf(),
