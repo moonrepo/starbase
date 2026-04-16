@@ -3,6 +3,8 @@ pub mod envx;
 
 /// Utilities for reading and writing files and directories.
 pub mod fs;
+#[cfg(feature = "editor-config")]
+mod fs_editor; // Exported from fs
 mod fs_error;
 #[cfg(feature = "fs-lock")]
 mod fs_lock; // Exported from fs

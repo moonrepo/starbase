@@ -1,11 +1,13 @@
-use std::cmp;
 use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::fs::{self, File, OpenOptions};
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 use tracing::{instrument, trace};
 
+#[cfg(feature = "editor-config")]
+pub use crate::fs_editor::*;
 pub use crate::fs_error::FsError;
 #[cfg(feature = "fs-lock")]
 pub use crate::fs_lock::*;
@@ -15,8 +17,6 @@ pub use crate::fs_lock::*;
 #[inline]
 #[instrument(skip(data))]
 pub fn append_file<D: AsRef<[u8]>>(path: impl AsRef<Path> + Debug, data: D) -> Result<(), FsError> {
-    use std::io::Write;
-
     let path = path.as_ref();
 
     if let Some(parent) = path.parent() {
@@ -173,60 +173,6 @@ pub fn create_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
-/// Detect the indentation of the provided string, by scanning and comparing each line.
-#[instrument(skip(content))]
-pub fn detect_indentation<T: AsRef<str>>(content: T) -> String {
-    let mut spaces = 0;
-    let mut tabs = 0;
-    let mut lowest_space_width = 0;
-    let mut lowest_tab_width = 0;
-
-    fn count_line_indent(line: &str, indent: char) -> usize {
-        let mut line_count = 0;
-        let mut line_check = line;
-
-        while let Some(inner) = line_check.strip_prefix(indent) {
-            line_count += 1;
-            line_check = inner;
-        }
-
-        line_count
-    }
-
-    for line in content.as_ref().lines() {
-        if line.starts_with(' ') {
-            let line_spaces = count_line_indent(line, ' ');
-
-            // Throw out odd numbers so comments don't throw us
-            if line_spaces % 2 == 1 {
-                continue;
-            }
-
-            spaces += 1;
-
-            if lowest_space_width == 0 || line_spaces < lowest_space_width {
-                lowest_space_width = line_spaces;
-            }
-        } else if line.starts_with('\t') {
-            let line_tabs = count_line_indent(line, '\t');
-
-            tabs += 1;
-
-            if lowest_tab_width == 0 || line_tabs < lowest_tab_width {
-                lowest_tab_width = line_tabs;
-            }
-        } else {
-            continue;
-        }
-    }
-
-    if tabs > spaces {
-        "\t".repeat(cmp::max(lowest_tab_width, 1))
-    } else {
-        " ".repeat(cmp::max(lowest_space_width, 2))
-    }
-}
-
 /// Return the name of a file or directory, or "unknown" if invalid UTF-8,
 /// or unknown path component.
 #[inline]
@@ -311,68 +257,6 @@ where
     find_upwards_until(name, start_dir, end_dir).map(|p| p.parent().unwrap().to_path_buf())
 }
 
-/// Options for `.editorconfig` integration.
-#[cfg(feature = "editor-config")]
-pub struct EditorConfigProps {
-    pub eof: String,
-    pub indent: String,
-}
-
-#[cfg(feature = "editor-config")]
-impl EditorConfigProps {
-    pub fn apply_eof(&self, data: &mut String) {
-        if !self.eof.is_empty() && !data.ends_with(&self.eof) {
-            data.push_str(&self.eof);
-        }
-    }
-}
-
-/// Load properties from the closest `.editorconfig` file.
-#[cfg(feature = "editor-config")]
-#[instrument]
-pub fn get_editor_config_props<T: AsRef<Path> + Debug>(
-    path: T,
-) -> Result<EditorConfigProps, FsError> {
-    use ec4rs::property::*;
-
-    let path = path.as_ref();
-    let editor_config = ec4rs::properties_of(path).unwrap_or_default();
-    let tab_width = editor_config
-        .get::<TabWidth>()
-        .unwrap_or(TabWidth::Value(4));
-    let indent_size = editor_config
-        .get::<IndentSize>()
-        .unwrap_or(IndentSize::Value(2));
-    let indent_style = editor_config.get::<IndentStyle>().ok();
-    let insert_final_newline = editor_config
-        .get::<FinalNewline>()
-        .unwrap_or(FinalNewline::Value(true));
-
-    Ok(EditorConfigProps {
-        eof: if matches!(insert_final_newline, FinalNewline::Value(true)) {
-            "\n".into()
-        } else {
-            "".into()
-        },
-        indent: match indent_style {
-            Some(IndentStyle::Tabs) => "\t".into(),
-            Some(IndentStyle::Spaces) => match indent_size {
-                IndentSize::UseTabWidth => match tab_width {
-                    TabWidth::Value(value) => " ".repeat(value),
-                },
-                IndentSize::Value(value) => " ".repeat(value),
-            },
-            None => {
-                if path.exists() {
-                    detect_indentation(read_file(path)?)
-                } else {
-                    "  ".into()
-                }
-            }
-        },
-    })
-}
-
 /// Check if the provided path is executable. On Unix, this checks if the file has any executable
 /// permissions. On Windows, this checks if the file extension is `.exe`.
 #[cfg(unix)]
@@ -388,37 +272,6 @@ pub fn is_executable<T: AsRef<Path>>(path: T) -> bool {
 #[cfg(windows)]
 pub fn is_executable<T: AsRef<Path>>(path: T) -> bool {
     path.as_ref().extension().is_some_and(|ext| ext == "exe")
-}
-
-/// Check if the provided path is a stale file, by comparing modified, created, or accessed
-/// timestamps against the current timestamp and duration. If stale, return the file size
-/// and timestamp, otherwise return `None`.
-#[inline]
-#[instrument]
-pub fn stale<T: AsRef<Path> + Debug>(
-    path: T,
-    accessed: bool,
-    duration: Duration,
-    current_time: SystemTime,
-) -> Result<Option<(u64, SystemTime)>, FsError> {
-    let path = path.as_ref();
-
-    // Avoid bubbling up result errors and just mark as stale
-    if let Ok(meta) = metadata(path) {
-        let mut time = meta.modified().or_else(|_| meta.created());
-
-        if accessed && let Ok(accessed_time) = meta.accessed() {
-            time = Ok(accessed_time);
-        }
-
-        if let Ok(check_time) = time
-            && check_time < (current_time - duration)
-        {
-            return Ok(Some((meta.len(), check_time)));
-        }
-    }
-
-    Ok(None)
 }
 
 /// Check if the provided path is a stale file, by comparing modified, created, or accessed
@@ -760,6 +613,61 @@ pub fn rename<F: AsRef<Path> + Debug, T: AsRef<Path> + Debug>(
     })
 }
 
+/// Check if the provided path is a stale file, by comparing modified, created, or accessed
+/// timestamps against the current timestamp and duration. If stale, return the file size
+/// and timestamp, otherwise return `None`.
+#[inline]
+#[instrument]
+pub fn stale<T: AsRef<Path> + Debug>(
+    path: T,
+    accessed: bool,
+    duration: Duration,
+    current_time: SystemTime,
+) -> Result<Option<(u64, SystemTime)>, FsError> {
+    let path = path.as_ref();
+
+    // Avoid bubbling up result errors and just mark as stale
+    if let Ok(meta) = metadata(path) {
+        let mut time = meta.modified().or_else(|_| meta.created());
+
+        if accessed && let Ok(accessed_time) = meta.accessed() {
+            time = Ok(accessed_time);
+        }
+
+        if let Ok(check_time) = time
+            && check_time < (current_time - duration)
+        {
+            return Ok(Some((meta.len(), check_time)));
+        }
+    }
+
+    Ok(None)
+}
+
+/// Truncate a file at the provided handle to zero length, and reset
+/// the cursor to the start of the file.
+#[inline]
+#[instrument]
+pub fn truncate_file_handle<T: AsRef<Path> + Debug>(
+    path: T,
+    file: &mut File,
+) -> Result<(), FsError> {
+    let path = path.as_ref();
+
+    file.set_len(0).map_err(|error| FsError::Write {
+        path: path.to_owned(),
+        error: Box::new(error),
+    })?;
+
+    file.seek(SeekFrom::Start(0))
+        .map_err(|error| FsError::Write {
+            path: path.to_owned(),
+            error: Box::new(error),
+        })?;
+
+    Ok(())
+}
+
 /// Update the permissions of a file at the provided path. If a mode is not provided,
 /// the default of 0o755 will be used. The path must already exist.
 #[cfg(unix)]
@@ -802,33 +710,6 @@ pub fn write_file<D: AsRef<[u8]>>(path: impl AsRef<Path> + Debug, data: D) -> Re
     }
 
     trace!(file = ?path, "Writing file");
-
-    fs::write(path, data).map_err(|error| FsError::Write {
-        path: path.to_path_buf(),
-        error: Box::new(error),
-    })
-}
-
-/// Write a file with the provided data to the provided path, while taking the
-/// closest `.editorconfig` into account
-#[cfg(feature = "editor-config")]
-#[inline]
-#[instrument(skip(data))]
-pub fn write_file_with_config<D: AsRef<[u8]>>(
-    path: impl AsRef<Path> + Debug,
-    data: D,
-) -> Result<(), FsError> {
-    let path = path.as_ref();
-    let editor_config = get_editor_config_props(path)?;
-
-    let mut data = unsafe { String::from_utf8_unchecked(data.as_ref().to_vec()) };
-    editor_config.apply_eof(&mut data);
-
-    if let Some(parent) = path.parent() {
-        create_dir_all(parent)?;
-    }
-
-    trace!(file = ?path, "Writing file with .editorconfig");
 
     fs::write(path, data).map_err(|error| FsError::Write {
         path: path.to_path_buf(),

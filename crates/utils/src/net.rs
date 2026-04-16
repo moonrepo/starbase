@@ -7,7 +7,7 @@ use reqwest::{
 use std::cmp;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::sync::Arc;
@@ -163,12 +163,15 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
 
     // Wrap in a closure so that we can capture the error and cleanup
     let do_write = || async {
-        let mut file = fs::create_file(dest_file)?;
+        let mut file = fs::create_file_if_missing(dest_file)?;
 
         file.lock().map_err(|error| FsError::Lock {
             path: dest_file.to_path_buf(),
             error: Box::new(error),
         })?;
+
+        file.set_len(0).map_err(handle_fs_error)?;
+        file.seek(SeekFrom::Start(0)).map_err(handle_fs_error)?;
 
         // Write the bytes in chunks
         match on_chunk {
