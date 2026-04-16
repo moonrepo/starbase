@@ -7,7 +7,10 @@ use tracing::{instrument, trace};
 
 /// Options for `.editorconfig` integration.
 pub struct EditorConfigProps {
+    /// Value to append to the end of the file, if not already present.
     pub eof: String,
+
+    /// The indentation string to use for the file.
     pub indent: String,
 }
 
@@ -141,5 +144,7 @@ pub fn write_file_with_config<D: AsRef<[u8]>>(
     std::fs::write(path, data).map_err(|error| FsError::Write {
         path: path.to_path_buf(),
         error: Box::new(error),
-    })
+    })?;
+
+    Ok(())
 }

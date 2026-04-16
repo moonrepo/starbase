@@ -4,15 +4,15 @@ use reqwest::{
     Client, Response,
     header::{HeaderMap, HeaderName, HeaderValue},
 };
-use std::cmp;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::Write;
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use std::{cmp, fs::File};
 use tracing::{instrument, trace};
 use url::Url;
 
@@ -90,9 +90,21 @@ impl Downloader for DefaultDownloader {
 pub type OnChunkFn = Arc<dyn Fn(u64, u64) + Send + Sync>;
 
 /// Options for customizing network downloads.
-#[derive(Default)]
 pub struct DownloadOptions {
+    /// The downloader to use for fetching the file. If not provided, a default
+    /// downloader backed by `reqwest` will be used.
     pub downloader: Option<BoxedDownloader>,
+
+    /// Handle for the file being written to. If not provided, a new file will be
+    /// created at the destination path.
+    pub file: Option<File>,
+
+    /// Whether to acquire an exclusive lock on the destination file while writing.
+    /// Requires the `fs-lock` feature. Defaults to `true`.
+    pub lock: bool,
+
+    /// An optional callback that is called with the current and total size of the
+    /// download for each chunk received.
     pub on_chunk: Option<OnChunkFn>,
 }
 
@@ -100,6 +112,19 @@ impl DownloadOptions {
     pub fn new(downloader: impl Downloader + 'static) -> Self {
         Self {
             downloader: Some(Box::new(downloader)),
+            file: None,
+            lock: true,
+            on_chunk: None,
+        }
+    }
+}
+
+impl Default for DownloadOptions {
+    fn default() -> Self {
+        Self {
+            downloader: None,
+            file: None,
+            lock: true,
             on_chunk: None,
         }
     }
@@ -117,6 +142,8 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
     let dest_file = dest_file.as_ref();
     let DownloadOptions {
         downloader,
+        file: file_handle,
+        lock: lock_file,
         on_chunk,
     } = options;
 
@@ -161,17 +188,22 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
         });
     }
 
+    let mut file = match file_handle {
+        Some(file) => file,
+        // Don't truncate the file in case there's a parallel process
+        // interacting with this file! This happens more than you think!
+        None => fs::create_file_if_missing(dest_file)?,
+    };
+
+    #[cfg(feature = "fs-lock")]
+    if lock_file {
+        fs::acquire_exclusive_lock(dest_file, &file)?;
+    }
+
     // Wrap in a closure so that we can capture the error and cleanup
     let do_write = || async {
-        let mut file = fs::create_file_if_missing(dest_file)?;
-
-        file.lock().map_err(|error| FsError::Lock {
-            path: dest_file.to_path_buf(),
-            error: Box::new(error),
-        })?;
-
-        file.set_len(0).map_err(handle_fs_error)?;
-        file.seek(SeekFrom::Start(0)).map_err(handle_fs_error)?;
+        // Now truncate the file after we have a lock
+        fs::truncate_file_handle(dest_file, &mut file)?;
 
         // Write the bytes in chunks
         match on_chunk {
@@ -196,16 +228,21 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
             }
         }
 
-        file.unlock().map_err(|error| FsError::Unlock {
-            path: dest_file.to_path_buf(),
-            error: Box::new(error),
-        })?;
-
         Ok::<(), NetError>(())
     };
 
-    // Cleanup on failure, otherwise the file was only partially written to
-    if let Err(error) = do_write().await {
+    let result = do_write().await;
+
+    // Release the lock on success or failure
+    #[cfg(feature = "fs-lock")]
+    if lock_file {
+        fs::release_lock(dest_file, &file)?;
+    }
+
+    drop(file);
+
+    // Cleanup on failure, otherwise the file may only be partially written to
+    if let Err(error) = result {
         let _ = fs::remove_file(dest_file);
 
         return Err(error);

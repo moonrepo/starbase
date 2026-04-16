@@ -7,6 +7,7 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 
+/// Name of the lock file used for directory locking.
 pub const LOCK_FILE: &str = ".lock";
 
 fn is_lock_contended(file: &File) -> bool {
@@ -19,7 +20,7 @@ fn is_lock_contended(file: &File) -> bool {
     }
 }
 
-/// Instance representing a file lock.
+/// Instance representing a file lock (within a directory).
 pub struct FileLock {
     lock: PathBuf,
     file: File,
@@ -239,28 +240,18 @@ pub fn lock_file<T: AsRef<Path> + Debug>(path: T) -> Result<FileLock, FsError> {
 /// Lock the provided file with exclusive access and execute the operation.
 #[inline]
 #[instrument(skip(file, op))]
-pub fn lock_file_exclusive<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
+pub fn run_with_exclusive_lock<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
 where
     T: AsRef<Path> + Debug,
     F: FnOnce(&mut File) -> Result<V, FsError>,
 {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Locking file exclusively");
-
-    file.lock().map_err(|error| FsError::Lock {
-        path: path.to_path_buf(),
-        error: Box::new(error),
-    })?;
+    acquire_exclusive_lock(path, &file)?;
 
     let result = op(&mut file)?;
 
-    file.unlock().map_err(|error| FsError::Unlock {
-        path: path.to_path_buf(),
-        error: Box::new(error),
-    })?;
-
-    trace!(file = ?path, "Unlocking file exclusively");
+    release_lock(path, &file)?;
 
     Ok(result)
 }
@@ -268,28 +259,18 @@ where
 /// Lock the provided file with shared access and execute the operation.
 #[inline]
 #[instrument(skip(file, op))]
-pub fn lock_file_shared<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
+pub fn run_with_shared_lock<T, F, V>(path: T, mut file: File, op: F) -> Result<V, FsError>
 where
     T: AsRef<Path> + Debug,
     F: FnOnce(&mut File) -> Result<V, FsError>,
 {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Locking file");
-
-    file.lock_shared().map_err(|error| FsError::Lock {
-        path: path.to_path_buf(),
-        error: Box::new(error),
-    })?;
+    acquire_shared_lock(path, &file)?;
 
     let result = op(&mut file)?;
 
-    file.unlock().map_err(|error| FsError::Unlock {
-        path: path.to_path_buf(),
-        error: Box::new(error),
-    })?;
-
-    trace!(file = ?path, "Unlocking file");
+    release_lock(path, &file)?;
 
     Ok(result)
 }
@@ -300,7 +281,7 @@ where
 pub fn read_file_with_lock<T: AsRef<Path>>(path: T) -> Result<String, FsError> {
     let path = path.as_ref();
 
-    lock_file_shared(path, fs::open_file(path)?, |file| {
+    run_with_shared_lock(path, fs::open_file(path)?, |file| {
         let mut buffer = String::new();
 
         file.read_to_string(&mut buffer)
@@ -325,7 +306,7 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
     // Don't use create_file() as it truncates, which will cause
     // other processes to crash if they attempt to read it while
     // the lock is active!
-    lock_file_exclusive(path, fs::create_file_if_missing(path)?, |file| {
+    run_with_exclusive_lock(path, fs::create_file_if_missing(path)?, |file| {
         trace!(file = ?path, "Writing file");
 
         // Truncate then write file
@@ -338,6 +319,52 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
             })?;
 
         Ok(())
+    })?;
+
+    Ok(())
+}
+
+/// Acquire an exclusive lock on the provided file, blocking until it can be acquired.
+#[inline]
+pub fn acquire_exclusive_lock<T: AsRef<Path> + Debug>(path: T, file: &File) -> Result<(), FsError> {
+    let path = path.as_ref();
+
+    trace!(file = ?path, "Locking file");
+
+    file.lock().map_err(|error| FsError::Lock {
+        path: path.to_path_buf(),
+        error: Box::new(error),
+    })?;
+
+    Ok(())
+}
+
+/// Acquire a shared lock on the provided file, blocking until it can be acquired.
+#[inline]
+pub fn acquire_shared_lock<T: AsRef<Path> + Debug>(path: T, file: &File) -> Result<(), FsError> {
+    let path = path.as_ref();
+
+    trace!(file = ?path, "Locking file");
+
+    file.lock_shared().map_err(|error| FsError::Lock {
+        path: path.to_path_buf(),
+        error: Box::new(error),
+    })?;
+
+    Ok(())
+}
+
+/// Release a lock on the provided file. This does not verify that the file is currently locked,
+/// and will not error if it is not.
+#[inline]
+pub fn release_lock<T: AsRef<Path> + Debug>(path: T, file: &File) -> Result<(), FsError> {
+    let path = path.as_ref();
+
+    trace!(file = ?path, "Unlocking file");
+
+    file.unlock().map_err(|error| FsError::Unlock {
+        path: path.to_path_buf(),
+        error: Box::new(error),
     })?;
 
     Ok(())

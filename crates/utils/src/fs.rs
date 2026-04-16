@@ -551,6 +551,8 @@ pub fn remove_dir_all_except<T: AsRef<Path> + Debug>(
     Ok(())
 }
 
+/// Result of removing stale contents from a directory, including the number of files deleted,
+/// and the total bytes saved.
 pub struct RemoveDirContentsResult {
     pub files_deleted: usize,
     pub bytes_saved: u64,
