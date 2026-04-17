@@ -10,26 +10,18 @@ use tracing::{instrument, trace};
 /// Name of the lock file used for directory locking.
 pub const LOCK_FILE: &str = ".lock";
 
-fn is_lock_contended(file: &File) -> bool {
-    match file.try_lock_shared() {
-        Ok(()) => {
-            let _ = file.unlock();
-            false
-        }
-        Err(error) => matches!(error, std::fs::TryLockError::WouldBlock),
-    }
-}
-
 /// Instance representing a file lock (within a directory).
 pub struct FileLock {
-    lock: PathBuf,
-    file: File,
+    pub file: File,
+    pub path: PathBuf,
+
+    remove: bool,
     unlocked: bool,
 }
 
 impl FileLock {
     pub fn new(path: PathBuf) -> Result<Self, FsError> {
-        let mut file: File;
+        let file: File;
 
         #[cfg(unix)]
         {
@@ -75,39 +67,72 @@ impl FileLock {
             }
         }
 
-        trace!(
-            lock = ?path,
-            "Waiting to acquire lock",
-        );
+        Self::with_file(path, file)
+    }
 
-        // This blocks if another process has access!
-        file.lock().map_err(|error| FsError::Lock {
-            path: path.clone(),
-            error: Box::new(error),
-        })?;
+    pub async fn new_async(path: PathBuf) -> Result<Self, FsError> {
+        let file: File;
 
-        let pid = std::process::id();
+        #[cfg(unix)]
+        {
+            file = fs::create_file_if_missing(&path)?;
+        }
 
-        trace!(
-            lock = ?path,
-            pid,
-            "Acquired lock, writing PID",
-        );
+        // Attempt to create/access the file in a loop
+        // because this can error with "permission denied"
+        // when another process has exclusive access
+        #[cfg(windows)]
+        {
+            use std::time::Duration;
+            use tokio::time::sleep;
 
-        // Let other processes know that we have locked it
-        fs::truncate_file_handle(&path, &mut file)?;
+            let mut elapsed = 0;
 
-        file.write_all(format!("{pid}").as_bytes())
-            .map_err(|error| FsError::Write {
-                path: path.clone(),
-                error: Box::new(error),
-            })?;
+            loop {
+                match fs::create_file_if_missing(&path) {
+                    Ok(inner) => {
+                        file = inner;
+                        break;
+                    }
+                    Err(error) => {
+                        if let FsError::Create {
+                            error: io_error, ..
+                        } = &error
+                        {
+                            // Access denied
+                            if io_error.raw_os_error().is_some_and(|code| code == 5) {
+                                sleep(Duration::from_millis(100)).await;
+                                elapsed += 100;
+
+                                // Abort after 60 seconds
+                                if elapsed <= 60000 {
+                                    continue;
+                                }
+                            }
+                        }
+
+                        return Err(error);
+                    }
+                }
+            }
+        }
+
+        Self::with_file(path, file)
+    }
+
+    pub fn with_file(path: PathBuf, file: File) -> Result<Self, FsError> {
+        acquire_exclusive_lock(&path, &file)?;
 
         Ok(Self {
-            lock: path,
+            path,
             file,
+            remove: false,
             unlocked: false,
         })
+    }
+
+    pub fn remove_on_unlock(&mut self) {
+        self.remove = true;
     }
 
     pub fn unlock(&mut self) -> Result<(), FsError> {
@@ -115,31 +140,34 @@ impl FileLock {
             return Ok(());
         }
 
-        trace!(path = ?self.lock, "Unlocking path");
-
-        let handle_error = |error: std::io::Error| FsError::Unlock {
-            path: self.lock.to_path_buf(),
-            error: Box::new(error),
-        };
+        // Remove the file before unlocking but swallow the error
+        // so that we don't leave this file permanently locked
+        if self.remove {
+            let _ = fs::remove_file(&self.path);
+        }
 
         // On Windows this may have already been unlocked,
         // and will trigger a "already unlocked" error,
         // so account for it instead of panicing!
         #[cfg(windows)]
-        if let Err(error) = self.file.unlock() {
-            if error.raw_os_error().is_some_and(|os| os == 158) {
+        if let Err(error) = release_lock(&self.path, &self.file) {
+            if let FsError::Unlock {
+                error: io_error, ..
+            } = &error
+                && io_error.raw_os_error().is_some_and(|os| os == 158)
+            {
                 // Ignore uncategorized: The segment is already unlocked.
             } else {
-                return Err(handle_error(error));
+                return Err(error);
             }
         }
 
         #[cfg(unix)]
-        self.file.unlock().map_err(handle_error)?;
+        release_lock(&self.path, &self.file)?;
 
         self.unlocked = true;
 
-        fs::remove_file(&self.lock)
+        Ok(())
     }
 }
 
@@ -150,7 +178,7 @@ impl Drop for FileLock {
             // critical error. If the remove has failed, that's not important,
             // because the file can simply be ignored and locked again.
             if matches!(error, FsError::Unlock { .. }) {
-                panic!("Failed to remove lock {}: {}", self.lock.display(), error);
+                panic!("Failed to remove lock {}: {}", self.path.display(), error);
             }
         }
     }
@@ -178,7 +206,13 @@ pub fn is_file_locked<T: AsRef<Path>>(path: T) -> bool {
         return false;
     };
 
-    is_lock_contended(&file)
+    match file.try_lock_shared() {
+        Ok(()) => {
+            let _ = file.unlock();
+            false
+        }
+        Err(error) => matches!(error, std::fs::TryLockError::WouldBlock),
+    }
 }
 
 /// Lock a directory so that other processes cannot interact with it.
@@ -212,7 +246,22 @@ pub fn lock_directory<T: AsRef<Path> + Debug>(path: T) -> Result<DirLock, FsErro
     // for write access, and will be "unlocked" automatically by the kernel.
     //
     // Context: https://www.reddit.com/r/rust/comments/14hlx8u/comment/jpbmsh2/?utm_source=reddit&utm_medium=web2x&context=3
-    DirLock::new(path.join(LOCK_FILE))
+    let mut lock = DirLock::new(path.join(LOCK_FILE))?;
+    lock.remove_on_unlock();
+
+    let pid = std::process::id();
+
+    // Let other processes know that we have locked it
+    fs::truncate_file_handle(&lock.path, &mut lock.file)?;
+
+    lock.file
+        .write_all(format!("{pid}").as_bytes())
+        .map_err(|error| FsError::Write {
+            path: lock.path.clone(),
+            error: Box::new(error),
+        })?;
+
+    Ok(lock)
 }
 
 /// Lock the provided file with exclusive access and write the current process ID
@@ -329,12 +378,17 @@ pub fn write_file_with_lock<T: AsRef<Path>, D: AsRef<[u8]>>(
 pub fn acquire_exclusive_lock<T: AsRef<Path> + Debug>(path: T, file: &File) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Locking file exclusively");
+    trace!(
+        file = ?path,
+        "Waiting to acquire exclusive lock",
+    );
 
     file.lock().map_err(|error| FsError::Lock {
         path: path.to_path_buf(),
         error: Box::new(error),
     })?;
+
+    trace!(file = ?path, "Acquired exclusive lock");
 
     Ok(())
 }
@@ -344,12 +398,17 @@ pub fn acquire_exclusive_lock<T: AsRef<Path> + Debug>(path: T, file: &File) -> R
 pub fn acquire_shared_lock<T: AsRef<Path> + Debug>(path: T, file: &File) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Locking file");
+    trace!(
+        file = ?path,
+        "Waiting to acquire shared lock",
+    );
 
     file.lock_shared().map_err(|error| FsError::Lock {
         path: path.to_path_buf(),
         error: Box::new(error),
     })?;
+
+    trace!(file = ?path, "Acquired shared lock");
 
     Ok(())
 }
