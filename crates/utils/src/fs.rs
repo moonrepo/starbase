@@ -300,19 +300,61 @@ pub fn metadata<T: AsRef<Path> + Debug>(path: T) -> Result<fs::Metadata, FsError
     })
 }
 
-/// Open a file at the provided path and return a [`File`] instance.
-/// The path must already exist.
+/// Open a file in read-only mode at the provided path and return a [`File`] instance.
+/// The path must exist or an error is returned.
 #[inline]
 #[instrument]
 pub fn open_file<T: AsRef<Path> + Debug>(path: T) -> Result<File, FsError> {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Opening file");
+    trace!(file = ?path, "Opening file in read-only mode");
 
     File::open(path).map_err(|error| FsError::Read {
         path: path.to_path_buf(),
         error: Box::new(error),
     })
+}
+
+/// Open a file in append-write mode at the provided path and return a [`File`] instance.
+/// The path must exist or an error is returned.
+#[inline]
+#[instrument]
+pub fn open_file_for_appending<T: AsRef<Path> + Debug>(path: T) -> Result<File, FsError> {
+    let path = path.as_ref();
+
+    trace!(file = ?path, "Opening file in append mode");
+
+    let file = OpenOptions::new()
+        .read(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| FsError::Write {
+            path: path.to_path_buf(),
+            error: Box::new(error),
+        })?;
+
+    Ok(file)
+}
+
+/// Open a file in read-write mode at the provided path and return a [`File`] instance.
+/// The path must exist or an error is returned.
+#[inline]
+#[instrument]
+pub fn open_file_for_writing<T: AsRef<Path> + Debug>(path: T) -> Result<File, FsError> {
+    let path = path.as_ref();
+
+    trace!(file = ?path, "Opening file in write mode");
+
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|error| FsError::Write {
+            path: path.to_path_buf(),
+            error: Box::new(error),
+        })?;
+
+    Ok(file)
 }
 
 /// Read direct contents for the provided directory path. If the directory

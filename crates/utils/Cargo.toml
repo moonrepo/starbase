@@ -36,7 +36,7 @@ scc = { workspace = true, optional = true }
 wax = { version = "0.7.0", optional = true, features = ["walk"] }
 
 # json
-json-strip-comments = { version = "3.1.0", optional = true }
+json-strip-comments = { version = "3.1.1", optional = true }
 serde_json = { workspace = true, optional = true }
 
 # toml
@@ -64,7 +64,7 @@ toml = ["dep:toml", "dep:serde"]
 yaml = ["dep:regex", "dep:serde", "dep:serde_norway"]
 
 [dev-dependencies]
-criterion2 = { version = "3.0.2", default-features = false }
+criterion2 = { version = "3.0.3", default-features = false }
 reqwest = { workspace = true, features = ["rustls"] }
 starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [
