@@ -1,24 +1,63 @@
 mod format;
 mod level;
+#[cfg(feature = "otel")]
+mod otel;
 
 use crate::tracing::format::*;
+pub use crate::tracing::level::LogLevel;
+#[cfg(feature = "otel")]
+pub use crate::tracing::otel::OtelOptions;
+use std::error::Error;
 use std::fs::File;
 use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
-use std::{env, fs};
+use std::{env, fmt as std_fmt, fs};
 use tracing::subscriber::set_global_default;
-use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
-use tracing_subscriber::fmt::{self, SubscriberBuilder};
-use tracing_subscriber::{EnvFilter, prelude::*};
-
-pub use crate::tracing::level::LogLevel;
 pub use tracing::{
     debug, debug_span, enabled, error, error_span, event, event_enabled, info, info_span,
     instrument, span, span_enabled, trace, trace_span, warn, warn_span,
 };
+use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
+use tracing_subscriber::fmt::{self, SubscriberBuilder};
+use tracing_subscriber::{EnvFilter, prelude::*};
+
+pub type TracingResult<T> = Result<T, TracingError>;
+
+#[derive(Debug)]
+pub struct TracingError {
+    message: String,
+    source: Option<Box<dyn Error + Send + Sync>>,
+}
+
+impl TracingError {
+    #[cfg(feature = "otel")]
+    pub(super) fn otlp_exporter(
+        signal: &'static str,
+        source: impl Error + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            message: format!("failed to initialize OTLP {signal} exporter"),
+            source: Some(Box::new(source)),
+        }
+    }
+}
+
+impl std_fmt::Display for TracingError {
+    fn fmt(&self, f: &mut std_fmt::Formatter<'_>) -> std_fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for TracingError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.source
+            .as_deref()
+            .map(|source| source as &(dyn Error + 'static))
+    }
+}
 
 pub struct TracingOptions {
     /// Minimum level of messages to display.
@@ -35,6 +74,9 @@ pub struct TracingOptions {
     pub log_env: String,
     /// Absolute path to a file to write logs to.
     pub log_file: Option<PathBuf>,
+    /// OpenTelemetry export settings.
+    #[cfg(feature = "otel")]
+    pub otel: OtelOptions,
     /// Show span hierarchy in log output.
     pub show_spans: bool,
     /// Name of the testing environment variable.
@@ -51,6 +93,8 @@ impl Default for TracingOptions {
             intercept_log: true,
             log_env: "STARBASE_LOG".into(),
             log_file: None,
+            #[cfg(feature = "otel")]
+            otel: OtelOptions::default(),
             show_spans: false,
             test_env: "STARBASE_TEST".into(),
         }
@@ -60,10 +104,12 @@ impl Default for TracingOptions {
 pub struct TracingGuard {
     chrome_guard: Option<FlushGuard>,
     log_file: Option<Arc<File>>,
+    #[cfg(feature = "otel")]
+    otel_guard: Option<otel::OtelGuard>,
 }
 
 #[tracing::instrument(skip_all)]
-pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
+pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
     TEST_ENV.store(env::var(options.test_env).is_ok(), Ordering::Release);
 
     // Determine modules to log
@@ -108,42 +154,51 @@ pub fn setup_tracing(options: TracingOptions) -> TracingGuard {
     let mut guard = TracingGuard {
         chrome_guard: None,
         log_file: None,
+        #[cfg(feature = "otel")]
+        otel_guard: None,
     };
 
-    let _ = set_global_default(
+    let subscriber = subscriber
+        // Write to a log file
+        .with(if let Some(log_file) = options.log_file {
+            if let Some(dir) = log_file.parent() {
+                fs::create_dir_all(dir).expect("Failed to create log directory.");
+            }
+
+            let file = Arc::new(File::create(log_file).expect("Failed to create log file."));
+
+            guard.log_file = Some(Arc::clone(&file));
+
+            Some(fmt::layer().with_ansi(false).with_writer(file))
+        } else {
+            None
+        })
+        // Dump a trace profile
+        .with(if options.dump_trace {
+            let (chrome_layer, chrome_guard) = ChromeLayerBuilder::new()
+                .include_args(true)
+                .include_locations(true)
+                .file(format!(
+                    "./dump-{}.json",
+                    SystemTime::UNIX_EPOCH.elapsed().unwrap().as_micros()
+                ))
+                .build();
+
+            guard.chrome_guard = Some(chrome_guard);
+
+            Some(chrome_layer)
+        } else {
+            None
+        });
+
+    #[cfg(feature = "otel")]
+    let subscriber = {
+        let (subscriber, otel_guard) = otel::extend_subscriber(subscriber, &options.otel)?;
+        guard.otel_guard = Some(otel_guard);
         subscriber
-            // Write to a log file
-            .with(if let Some(log_file) = options.log_file {
-                if let Some(dir) = log_file.parent() {
-                    fs::create_dir_all(dir).expect("Failed to create log directory.");
-                }
+    };
 
-                let file = Arc::new(File::create(log_file).expect("Failed to create log file."));
+    let _ = set_global_default(subscriber);
 
-                guard.log_file = Some(Arc::clone(&file));
-
-                Some(fmt::layer().with_ansi(false).with_writer(file))
-            } else {
-                None
-            })
-            // Dump a trace profile
-            .with(if options.dump_trace {
-                let (chrome_layer, chrome_guard) = ChromeLayerBuilder::new()
-                    .include_args(true)
-                    .include_locations(true)
-                    .file(format!(
-                        "./dump-{}.json",
-                        SystemTime::UNIX_EPOCH.elapsed().unwrap().as_micros()
-                    ))
-                    .build();
-
-                guard.chrome_guard = Some(chrome_guard);
-
-                Some(chrome_layer)
-            } else {
-                None
-            }),
-    );
-
-    guard
+    Ok(guard)
 }
