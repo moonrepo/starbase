@@ -289,9 +289,7 @@ mod tests {
             let mut total = 0_usize;
             let mut buf = [0_u8; 8192];
             loop {
-                let n = unsafe {
-                    libc::read(read_fd, buf.as_mut_ptr() as *mut _, buf.len())
-                };
+                let n = unsafe { libc::read(read_fd, buf.as_mut_ptr() as *mut _, buf.len()) };
                 if n <= 0 {
                     break;
                 }
