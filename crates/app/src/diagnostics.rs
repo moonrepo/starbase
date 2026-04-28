@@ -2,7 +2,7 @@ use starbase_styles::theme::create_graphical_theme;
 
 pub use miette::*;
 
-#[tracing::instrument]
+#[cfg_attr(feature = "tracing", tracing::instrument)]
 pub fn setup_miette() {
     miette::set_panic_hook();
 

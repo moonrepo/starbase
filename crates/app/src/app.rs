@@ -1,10 +1,17 @@
 use crate::session::{AppResult, AppSession};
+#[cfg(feature = "tracing")]
 use crate::tracing::TracingOptions;
 use miette::IntoDiagnostic;
 use std::process::ExitCode;
 use tokio::spawn;
 use tokio::task::JoinHandle;
+#[cfg(feature = "tracing")]
 use tracing::{instrument, trace};
+
+#[cfg(not(feature = "tracing"))]
+macro_rules! trace {
+    ($($arg:tt)*) => {};
+}
 
 /// A result for `main` that handles errors and exit codes.
 pub type MainResult = miette::Result<ExitCode>;
@@ -34,13 +41,18 @@ impl App {
 
     /// Setup `tracing` messages with default options.
     #[cfg(feature = "tracing")]
-    pub fn setup_tracing_with_defaults(&self) -> crate::tracing::TracingGuard {
+    pub fn setup_tracing_with_defaults(
+        &self,
+    ) -> crate::tracing::TracingResult<crate::tracing::TracingGuard> {
         self.setup_tracing(TracingOptions::default())
     }
 
     /// Setup `tracing` messages with custom options.
     #[cfg(feature = "tracing")]
-    pub fn setup_tracing(&self, options: TracingOptions) -> crate::tracing::TracingGuard {
+    pub fn setup_tracing(
+        &self,
+        options: TracingOptions,
+    ) -> crate::tracing::TracingResult<crate::tracing::TracingGuard> {
         crate::tracing::setup_tracing(options)
     }
 
@@ -60,7 +72,7 @@ impl App {
     ///
     /// This method is similar to [`App#run`](#method.run) but doesn't consume
     /// the session, and instead accepts a mutable reference.
-    #[instrument(skip_all)]
+    #[cfg_attr(feature = "tracing", instrument(skip_all))]
     pub async fn run_with_session<S, F, Fut>(mut self, session: &mut S, op: F) -> miette::Result<u8>
     where
         S: AppSession + 'static,
@@ -96,7 +108,7 @@ impl App {
 
     // Private
 
-    #[instrument(skip_all)]
+    #[cfg_attr(feature = "tracing", instrument(skip_all))]
     async fn run_startup<S>(&mut self, session: &mut S) -> miette::Result<()>
     where
         S: AppSession,
@@ -109,7 +121,7 @@ impl App {
         Ok(())
     }
 
-    #[instrument(skip_all)]
+    #[cfg_attr(feature = "tracing", instrument(skip_all))]
     async fn run_analyze<S>(&mut self, session: &mut S) -> miette::Result<()>
     where
         S: AppSession,
@@ -122,7 +134,7 @@ impl App {
         Ok(())
     }
 
-    #[instrument(skip_all)]
+    #[cfg_attr(feature = "tracing", instrument(skip_all))]
     async fn run_execute<S, F, Fut>(&mut self, session: &mut S, op: F) -> miette::Result<()>
     where
         S: AppSession + 'static,
@@ -147,7 +159,7 @@ impl App {
         Ok(())
     }
 
-    #[instrument(skip_all)]
+    #[cfg_attr(feature = "tracing", instrument(skip_all))]
     async fn run_shutdown<S>(
         &mut self,
         session: &mut S,
@@ -156,9 +168,13 @@ impl App {
     where
         S: AppSession,
     {
-        if let Some(error) = error {
+        if error.is_some() {
             trace!("Running shutdown phase (because another phase failed)");
-            trace!("Error: {error}");
+
+            #[cfg(feature = "tracing")]
+            if let Some(error) = error {
+                trace!("Error: {error}");
+            }
         } else {
             trace!("Running shutdown phase");
         }
