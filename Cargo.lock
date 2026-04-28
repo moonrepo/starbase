@@ -718,6 +718,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "example_eagain_repro"
+version = "0.0.1"
+dependencies = [
+ "libc",
+ "miette",
+ "starbase_console",
+]
+
+[[package]]
 name = "example_lib"
 version = "0.6.7"
 dependencies = [
@@ -2653,6 +2662,7 @@ version = "0.6.25"
 dependencies = [
  "crossterm",
  "iocraft",
+ "libc",
  "miette",
  "parking_lot",
  "starbase_console",

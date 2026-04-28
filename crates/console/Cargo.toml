@@ -19,6 +19,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 starbase_console = { path = ".", features = ["ui"] }
+libc = "0.2"
 
 [features]
 default = []

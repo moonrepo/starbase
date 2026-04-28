@@ -1,0 +1,10 @@
+[package]
+name = "example_eagain_repro"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+starbase_console = { path = "../../crates/console" }
+libc = "0.2"
+miette = { workspace = true, features = ["fancy"] }
