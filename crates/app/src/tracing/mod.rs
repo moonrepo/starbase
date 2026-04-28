@@ -7,6 +7,7 @@ use crate::tracing::format::*;
 pub use crate::tracing::level::LogLevel;
 #[cfg(feature = "otel")]
 pub use crate::tracing::otel::OtelOptions;
+use miette::Diagnostic;
 use std::error::Error;
 use std::fs::File;
 use std::io;
@@ -26,7 +27,7 @@ use tracing_subscriber::{EnvFilter, prelude::*};
 
 pub type TracingResult<T> = Result<T, TracingError>;
 
-#[derive(Debug)]
+#[derive(Debug, Diagnostic)]
 pub struct TracingError {
     message: String,
     source: Option<Box<dyn Error + Send + Sync>>,

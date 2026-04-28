@@ -17,6 +17,7 @@ use starbase_console::{ConsoleStream, ConsoleStreamType};
 use std::io::Write;
 use std::process::ExitCode;
 
+#[cfg(unix)]
 fn set_stdout_nonblocking() {
     unsafe {
         let fd = libc::STDOUT_FILENO;
@@ -28,6 +29,11 @@ fn set_stdout_nonblocking() {
             panic!("fcntl F_SETFL O_NONBLOCK failed");
         }
     }
+}
+
+#[cfg(windows)]
+fn set_stdout_nonblocking() {
+    // Windows doesn't have O_NONBLOCK, but the test is only relevant on Unix
 }
 
 fn main() -> ExitCode {

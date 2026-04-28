@@ -511,7 +511,7 @@ async fn render(session: TestSession, ui: String) {
 async fn main() -> MainResult {
     let app = App::default();
     app.setup_diagnostics();
-    app.setup_tracing_with_defaults();
+    app.setup_tracing_with_defaults()?;
 
     let args = std::env::args().collect::<Vec<_>>();
     let ui = args.get(1).cloned().expect("Missing UI argument!");
