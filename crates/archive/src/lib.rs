@@ -4,7 +4,7 @@ pub mod gz;
 #[cfg(feature = "gz")]
 mod gz_error;
 
-/// Handles `.tar`, `.tar.bz2`, `.tar.gz`, and `.tar.xz` files.
+/// Handles `.tar`, `.tar.bz2`, `.tar.gz`, `.tar.xz`, and `.tar.zst` files.
 #[cfg(feature = "tar")]
 pub mod tar;
 #[cfg(feature = "tar")]
@@ -77,19 +77,32 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
     // Order is important here! Must be from most
     // specific to least specific!
     vec![
-        "tar.gz".into(),
-        "tar.xz".into(),
-        "tar.bz2".into(),
+        // gzip
+        "gz".into(),
+        "gzip".into(),
+        // tar
         "tar".into(),
-        "tgz".into(),
-        "txz".into(),
+        // tar + bzip2
+        "tar.bz2".into(),
         "tbz".into(),
         "tbz2".into(),
         "tz2".into(),
+        // tar + gzip
+        "tar.gz".into(),
+        "tgz".into(),
+        // tar + xz
+        "tar.xz".into(),
+        "txz".into(),
+        // tar + zstd
+        "tar.zstd".into(),
+        "tar.zst".into(),
+        "tzst".into(),
+        "tzs".into(),
+        // zip
+        "zip".into(),
+        // zstd
         "zstd".into(),
         "zst".into(),
-        "zip".into(),
-        "gz".into(),
     ]
 }
 
