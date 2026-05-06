@@ -162,7 +162,7 @@ impl<'owner> Archiver<'owner> {
         let out = self.archive_file.to_path_buf();
 
         match ext.as_deref() {
-            Some("gz") => {
+            Some("gz" | "gzip") => {
                 #[cfg(feature = "gz")]
                 self.pack(crate::gz::GzPacker::new)?;
 
@@ -182,7 +182,7 @@ impl<'owner> Archiver<'owner> {
                     path: self.archive_file.to_path_buf(),
                 });
             }
-            Some("tar.bz2" | "tz2" | "tbz" | "tbz2") => {
+            Some("tar.bz2" | "tbz" | "tbz2" | "tz2") => {
                 #[cfg(feature = "tar-bz2")]
                 self.pack(crate::tar::TarPacker::new_bz2)?;
 
@@ -209,6 +209,16 @@ impl<'owner> Archiver<'owner> {
                 #[cfg(not(feature = "tar-xz"))]
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-xz".into(),
+                    path: self.archive_file.to_path_buf(),
+                });
+            }
+            Some("tar.zstd" | "tar.zst" | "tzst" | "tzs") => {
+                #[cfg(feature = "tar-zstd")]
+                self.pack(crate::tar::TarPacker::new_zstd)?;
+
+                #[cfg(not(feature = "tar-zstd"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-zstd".into(),
                     path: self.archive_file.to_path_buf(),
                 });
             }
@@ -292,7 +302,7 @@ impl<'owner> Archiver<'owner> {
         let out;
 
         match ext.as_deref() {
-            Some("gz") => {
+            Some("gz" | "gzip") => {
                 #[cfg(feature = "gz")]
                 {
                     out = self.unpack(crate::gz::GzUnpacker::new)?;
@@ -349,6 +359,18 @@ impl<'owner> Archiver<'owner> {
                 #[cfg(not(feature = "tar-xz"))]
                 return Err(ArchiveError::FeatureNotEnabled {
                     feature: "tar-xz".into(),
+                    path: self.archive_file.to_path_buf(),
+                });
+            }
+            Some("tar.zstd" | "tar.zst" | "tzst" | "tzs") => {
+                #[cfg(feature = "tar-zstd")]
+                {
+                    out = self.unpack(crate::tar::TarUnpacker::new_zstd)?;
+                }
+
+                #[cfg(not(feature = "tar-zstd"))]
+                return Err(ArchiveError::FeatureNotEnabled {
+                    feature: "tar-zstd".into(),
                     path: self.archive_file.to_path_buf(),
                 });
             }

@@ -26,6 +26,21 @@ impl TarPacker {
         TarPacker::create(Box::new(fs::create_file(output_file)?))
     }
 
+    /// Create a new `.tar.bz2` packer.
+    #[cfg(feature = "tar-bz2")]
+    pub fn new_bz2(output_file: &Path) -> Result<Self, ArchiveError> {
+        Self::new_bz2_with_level(output_file, 6) // Default in lib
+    }
+
+    /// Create a new `.tar.bz2` packer with a custom compression level.
+    #[cfg(feature = "tar-bz2")]
+    pub fn new_bz2_with_level(output_file: &Path, level: u32) -> Result<Self, ArchiveError> {
+        TarPacker::create(Box::new(bzip2::write::BzEncoder::new(
+            fs::create_file(output_file)?,
+            bzip2::Compression::new(level),
+        )))
+    }
+
     /// Create a new `.tar.gz` packer.
     #[cfg(feature = "tar-gz")]
     pub fn new_gz(output_file: &Path) -> Result<Self, ArchiveError> {
@@ -56,13 +71,13 @@ impl TarPacker {
         )))
     }
 
-    /// Create a new `.tar.zstd` packer.
+    /// Create a new `.tar.zst` packer.
     #[cfg(feature = "tar-zstd")]
     pub fn new_zstd(output_file: &Path) -> Result<Self, ArchiveError> {
         Self::new_zstd_with_level(output_file, 3) // Default in lib
     }
 
-    /// Create a new `.tar.zstd` packer with a custom compression level.
+    /// Create a new `.tar.zst` packer with a custom compression level.
     #[cfg(feature = "tar-zstd")]
     pub fn new_zstd_with_level(output_file: &Path, level: u32) -> Result<Self, ArchiveError> {
         let encoder = zstd::stream::Encoder::new(fs::create_file(output_file)?, level as i32)
@@ -71,21 +86,6 @@ impl TarPacker {
             })?;
 
         TarPacker::create(Box::new(encoder.auto_finish()))
-    }
-
-    /// Create a new `.tar.bz2` packer.
-    #[cfg(feature = "tar-bz2")]
-    pub fn new_bz2(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new_bz2_with_level(output_file, 6) // Default in lib
-    }
-
-    /// Create a new `.tar.gz` packer with a custom compression level.
-    #[cfg(feature = "tar-bz2")]
-    pub fn new_bz2_with_level(output_file: &Path, level: u32) -> Result<Self, ArchiveError> {
-        TarPacker::create(Box::new(bzip2::write::BzEncoder::new(
-            fs::create_file(output_file)?,
-            bzip2::Compression::new(level),
-        )))
     }
 }
 
@@ -152,6 +152,15 @@ impl TarUnpacker {
         TarUnpacker::create(output_dir, Box::new(fs::open_file(input_file)?))
     }
 
+    /// Create a new `.tar.bz2` unpacker.
+    #[cfg(feature = "tar-bz2")]
+    pub fn new_bz2(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
+        TarUnpacker::create(
+            output_dir,
+            Box::new(bzip2::read::BzDecoder::new(fs::open_file(input_file)?)),
+        )
+    }
+
     /// Create a new `.tar.gz` unpacker.
     #[cfg(feature = "tar-gz")]
     pub fn new_gz(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
@@ -170,7 +179,7 @@ impl TarUnpacker {
         )
     }
 
-    /// Create a new `.tar.zstd` unpacker.
+    /// Create a new `.tar.zst` unpacker.
     #[cfg(feature = "tar-zstd")]
     pub fn new_zstd(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
         let decoder = zstd::stream::Decoder::new(fs::open_file(input_file)?).map_err(|error| {
@@ -180,15 +189,6 @@ impl TarUnpacker {
         })?;
 
         TarUnpacker::create(output_dir, Box::new(decoder))
-    }
-
-    /// Create a new `.tar.bz2` unpacker.
-    #[cfg(feature = "tar-bz2")]
-    pub fn new_bz2(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        TarUnpacker::create(
-            output_dir,
-            Box::new(bzip2::read::BzDecoder::new(fs::open_file(input_file)?)),
-        )
     }
 
     // Validations inspired from binstall_tar::Entry::unpack_in().

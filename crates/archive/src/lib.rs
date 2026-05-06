@@ -4,7 +4,7 @@ pub mod gz;
 #[cfg(feature = "gz")]
 mod gz_error;
 
-/// Handles `.tar`, `.tar.bz2`, `.tar.gz`, and `.tar.xz` files.
+/// Handles `.tar`, `.tar.bz2`, `.tar.gz`, `.tar.xz`, and `.tar.zst` files.
 #[cfg(feature = "tar")]
 pub mod tar;
 #[cfg(feature = "tar")]
@@ -75,20 +75,34 @@ pub fn get_full_file_extension(path: &Path) -> Option<String> {
 /// regardless of which Cargo features are enabled.
 pub fn get_supported_archive_extensions() -> Vec<String> {
     // Order is important here! Must be from most
-    // specific to least specific!
+    // specific to least specific (any entry whose suffix is
+    // another entry in this list MUST come before that entry).
     vec![
-        "tar.gz".into(),
-        "tar.xz".into(),
+        // tar + bzip2
         "tar.bz2".into(),
-        "tar".into(),
-        "tgz".into(),
-        "txz".into(),
-        "tbz".into(),
         "tbz2".into(),
+        "tbz".into(),
         "tz2".into(),
+        // tar + gzip (must precede `gz`/`gzip`)
+        "tar.gz".into(),
+        "tgz".into(),
+        // tar + xz
+        "tar.xz".into(),
+        "txz".into(),
+        // tar + zstd (must precede `zstd`/`zst`)
+        "tar.zstd".into(),
+        "tar.zst".into(),
+        "tzst".into(),
+        "tzs".into(),
+        // tar
+        "tar".into(),
+        // zip
+        "zip".into(),
+        // zstd
         "zstd".into(),
         "zst".into(),
-        "zip".into(),
+        // gzip
+        "gzip".into(),
         "gz".into(),
     ]
 }
