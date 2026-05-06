@@ -75,34 +75,35 @@ pub fn get_full_file_extension(path: &Path) -> Option<String> {
 /// regardless of which Cargo features are enabled.
 pub fn get_supported_archive_extensions() -> Vec<String> {
     // Order is important here! Must be from most
-    // specific to least specific!
+    // specific to least specific (any entry whose suffix is
+    // another entry in this list MUST come before that entry).
     vec![
-        // gzip
-        "gz".into(),
-        "gzip".into(),
-        // tar
-        "tar".into(),
         // tar + bzip2
         "tar.bz2".into(),
-        "tbz".into(),
         "tbz2".into(),
+        "tbz".into(),
         "tz2".into(),
-        // tar + gzip
+        // tar + gzip (must precede `gz`/`gzip`)
         "tar.gz".into(),
         "tgz".into(),
         // tar + xz
         "tar.xz".into(),
         "txz".into(),
-        // tar + zstd
+        // tar + zstd (must precede `zstd`/`zst`)
         "tar.zstd".into(),
         "tar.zst".into(),
         "tzst".into(),
         "tzs".into(),
+        // tar
+        "tar".into(),
         // zip
         "zip".into(),
         // zstd
         "zstd".into(),
         "zst".into(),
+        // gzip
+        "gzip".into(),
+        "gz".into(),
     ]
 }
 
