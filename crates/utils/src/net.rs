@@ -234,21 +234,26 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
 
     match do_write().await {
         Ok(_) => {
+            // The data is already committed; if unlock fails here the kernel
+            // will release it when `file` drops anyway, so don't fail the call.
             #[cfg(feature = "fs-lock")]
             if lock_file {
-                fs::release_lock(dest_file, &file)?;
+                let _ = fs::release_lock(dest_file, &file);
             }
 
             Ok(())
         }
         Err(error) => {
-            // Cleanup on failure, otherwise the file may only be partially written to
-            let _ = fs::remove_file(dest_file);
-
+            // Release the lock before removing the file so a concurrent caller
+            // can't slip in between, create a new inode at the same path, and
+            // acquire its own lock while ours is still held on the orphan inode.
             #[cfg(feature = "fs-lock")]
             if lock_file {
-                fs::release_lock(dest_file, &file)?;
+                let _ = fs::release_lock(dest_file, &file);
             }
+
+            // Cleanup on failure, otherwise the file may only be partially written to
+            let _ = fs::remove_file(dest_file);
 
             Err(error)
         }
