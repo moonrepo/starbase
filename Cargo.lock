@@ -2953,7 +2953,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "starbase"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3005,7 +3005,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_console"
-version = "0.6.26"
+version = "0.6.27"
 dependencies = [
  "crossterm",
  "iocraft",
@@ -3067,7 +3067,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "base64",
  "miette",
@@ -3093,7 +3093,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.13.3"
+version = "0.13.4"
 dependencies = [
  "async-trait",
  "criterion2",
