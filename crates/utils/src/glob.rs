@@ -16,13 +16,8 @@ pub use crate::glob_cache::GlobCache;
 pub use crate::glob_error::GlobError;
 pub use wax::{self, Glob};
 
-static GLOBAL_NEGATIONS: LazyLock<RwLock<Vec<&'static str>>> = LazyLock::new(|| {
-    RwLock::new(vec![
-        "**/.{git,svn}/**",
-        "**/.DS_Store",
-        "**/node_modules/**",
-    ])
-});
+static GLOBAL_NEGATIONS: LazyLock<RwLock<Vec<&'static str>>> =
+    LazyLock::new(|| RwLock::new(vec!["**/.{git,svn}/**", "**/.DS_Store", "node_modules/**"]));
 
 /// Add global negated patterns to all glob sets and walking operations.
 pub fn add_global_negations<I>(patterns: I)
@@ -353,7 +348,7 @@ where
 }
 
 /// Options to customize walking behavior.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GlobWalkOptions {
     pub cache: bool,
     pub ignore_dot_dirs: bool,
@@ -398,19 +393,6 @@ impl GlobWalkOptions {
     pub fn log_results(mut self) -> Self {
         self.log_results = true;
         self
-    }
-}
-
-impl Default for GlobWalkOptions {
-    fn default() -> Self {
-        Self {
-            cache: false,
-            ignore_dot_dirs: true,
-            ignore_dot_files: false,
-            log_results: false,
-            only_dirs: false,
-            only_files: false,
-        }
     }
 }
 

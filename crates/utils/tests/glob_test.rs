@@ -64,11 +64,24 @@ mod globset {
 
     #[test]
     fn doesnt_match_global_negations() {
-        let set = GlobSet::new(["files/**/*"]).unwrap();
+        let set = GlobSet::new(["**/*"]).unwrap();
 
         assert!(set.matches("files/test.js"));
-        assert!(!set.matches("files/node_modules/test.js"));
+        assert!(!set.matches(".git/cache"));
         assert!(!set.matches("files/.git/cache"));
+        assert!(!set.matches(".DS_Store"));
+        assert!(!set.matches("files/.DS_Store"));
+    }
+
+    #[test]
+    fn only_negates_root_node_modules() {
+        let set = GlobSet::new(["**/*"]).unwrap();
+
+        assert!(!set.matches("node_modules/foo.js"));
+        assert!(!set.matches("node_modules/sub/foo.js"));
+
+        assert!(set.matches("packages/foo/node_modules/bar.js"));
+        assert!(set.matches("apps/web/node_modules/dep/index.js"));
     }
 }
 
@@ -178,6 +191,18 @@ mod walk_fast {
     use starbase_sandbox::create_empty_sandbox;
 
     #[test]
+    fn default_options_are_all_disabled() {
+        let options = GlobWalkOptions::default();
+
+        assert!(!options.cache);
+        assert!(!options.ignore_dot_dirs);
+        assert!(!options.ignore_dot_files);
+        assert!(!options.log_results);
+        assert!(!options.only_dirs);
+        assert!(!options.only_files);
+    }
+
+    #[test]
     fn handles_dot_folders() {
         let sandbox = create_empty_sandbox();
         sandbox.create_file("1.txt", "");
@@ -192,6 +217,7 @@ mod walk_fast {
         assert_eq!(
             paths,
             vec![
+                sandbox.path().join(".hidden/3.txt"),
                 sandbox.path().join("1.txt"),
                 sandbox.path().join("dir/2.txt"),
             ]
@@ -200,7 +226,7 @@ mod walk_fast {
         let mut paths = walk_fast_with_options(
             sandbox.path(),
             ["**/*.txt"],
-            GlobWalkOptions::default().dot_dirs(false).dot_files(false),
+            GlobWalkOptions::default().dot_dirs(true).dot_files(true),
         )
         .unwrap();
         paths.sort();
@@ -208,9 +234,29 @@ mod walk_fast {
         assert_eq!(
             paths,
             vec![
-                sandbox.path().join(".hidden/3.txt"),
                 sandbox.path().join("1.txt"),
                 sandbox.path().join("dir/2.txt"),
+            ]
+        );
+    }
+
+    #[test]
+    fn walks_into_nested_node_modules() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("node_modules/root.js", "");
+        sandbox.create_file("packages/a/node_modules/dep.js", "");
+        sandbox.create_file("packages/a/src/index.js", "");
+
+        let mut paths =
+            walk_fast_with_options(sandbox.path(), ["**/*.js"], GlobWalkOptions::default())
+                .unwrap();
+        paths.sort();
+
+        assert_eq!(
+            paths,
+            vec![
+                sandbox.path().join("packages/a/node_modules/dep.js"),
+                sandbox.path().join("packages/a/src/index.js"),
             ]
         );
     }
