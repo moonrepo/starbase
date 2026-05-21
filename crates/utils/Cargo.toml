@@ -23,7 +23,6 @@ serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
-
 # editor-config
 ec4rs = { version = "1.2.0", optional = true }
 

@@ -20,15 +20,18 @@ chrono = { version = "0.4.44", default-features = false, features = [
 	"std",
 ] }
 miette = { workspace = true, features = ["fancy"] }
-opentelemetry = { version = "0.31.0", optional = true, features = ["logs", "metrics"] }
-opentelemetry-appender-tracing = { version = "0.31.1", optional = true }
-opentelemetry-otlp = { version = "0.31.1", optional = true, default-features = false, features = [
+opentelemetry = { version = "0.32.0", optional = true, features = [
+	"logs",
+	"metrics",
+] }
+opentelemetry-appender-tracing = { version = "0.32.0", optional = true }
+opentelemetry-otlp = { version = "0.32.0", optional = true, default-features = false, features = [
 	"grpc-tonic",
 	"logs",
 	"metrics",
 	"trace",
 ] }
-opentelemetry_sdk = { version = "0.31.0", optional = true, features = [
+opentelemetry_sdk = { version = "0.32.0", optional = true, features = [
 	"logs",
 	"metrics",
 	"rt-tokio",
@@ -40,7 +43,7 @@ tracing-log = { version = "0.2.0", optional = true, default-features = false, fe
 	"log-tracer",
 	"std",
 ] }
-tracing-opentelemetry = { version = "0.32.1", optional = true }
+tracing-opentelemetry = { version = "0.33.0", optional = true }
 tracing-subscriber = { version = "0.3.23", optional = true, default-features = false, features = [
 	"ansi",
 	"env-filter",
@@ -48,7 +51,7 @@ tracing-subscriber = { version = "0.3.23", optional = true, default-features = f
 ] }
 
 [dev-dependencies]
-opentelemetry-proto = "0.31.0"
+opentelemetry-proto = "0.32.0"
 serial_test = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.18", features = ["net"] }
