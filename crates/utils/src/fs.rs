@@ -500,14 +500,10 @@ pub fn remove_link<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     {
         trace!(file = ?path, "Removing symlink");
 
-        if let Err(error) = fs::remove_file(path)
-            && error.kind() != ErrorKind::NotFound
-        {
-            return Err(FsError::Remove {
-                path: path.to_path_buf(),
-                error: Box::new(error),
-            });
-        }
+        fs::remove_file(path).map_err(|error| FsError::Remove {
+            path: path.to_path_buf(),
+            error: Box::new(error),
+        })?;
     }
 
     Ok(())
@@ -519,15 +515,15 @@ pub fn remove_link<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
 pub fn remove_file<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    trace!(file = ?path, "Removing file");
+    // We use an exists check to avoid removing broken symlinks.
+    // Refer to the `remove_link` function for more details.
+    if path.exists() {
+        trace!(file = ?path, "Removing file");
 
-    if let Err(error) = fs::remove_file(path)
-        && error.kind() != ErrorKind::NotFound
-    {
-        return Err(FsError::Remove {
+        fs::remove_file(path).map_err(|error| FsError::Remove {
             path: path.to_path_buf(),
             error: Box::new(error),
-        });
+        })?;
     }
 
     Ok(())
@@ -661,7 +657,6 @@ pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
     fn traverse(
         dir: &Path,
         duration: Duration,
-        current_time: SystemTime,
         files_deleted: &mut usize,
         bytes_saved: &mut u64,
     ) -> Result<(), FsError> {
@@ -682,7 +677,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
             let path = entry.path();
 
             if file_type.is_dir() {
-                traverse(&path, duration, current_time, files_deleted, bytes_saved)?;
+                traverse(&path, duration, files_deleted, bytes_saved)?;
             } else if file_type.is_file()
                 && let Ok(size) = remove_file_if_stale(path, duration)
             {
@@ -694,13 +689,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
         Ok(())
     }
 
-    traverse(
-        dir,
-        duration,
-        SystemTime::now(),
-        &mut files_deleted,
-        &mut bytes_saved,
-    )?;
+    traverse(dir, duration, &mut files_deleted, &mut bytes_saved)?;
 
     Ok(RemoveDirContentsResult {
         files_deleted,
