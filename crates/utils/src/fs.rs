@@ -1,6 +1,6 @@
 use std::ffi::OsStr;
 use std::fmt::Debug;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, DirEntry, File, FileType, OpenOptions};
 use std::io::{ErrorKind, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -21,6 +21,22 @@ fn read_dir_iter(path: &Path) -> Result<Option<fs::ReadDir>, FsError> {
             error: Box::new(error),
         }),
     }
+}
+
+fn extract_entry_and_type(
+    path: &Path,
+    entry: std::io::Result<DirEntry>,
+) -> Result<Option<(DirEntry, FileType)>, FsError> {
+    let entry = entry.map_err(|error| FsError::Read {
+        path: path.to_path_buf(),
+        error: Box::new(error),
+    })?;
+
+    let Ok(file_type) = entry.file_type() else {
+        return Ok(None);
+    };
+
+    Ok(Some((entry, file_type)))
 }
 
 /// Append a file with the provided content. If the parent directory does not exist,
@@ -62,18 +78,10 @@ pub fn copy_file<S: AsRef<Path> + Debug, D: AsRef<Path> + Debug>(
     from: S,
     to: D,
 ) -> Result<(), FsError> {
-    copy_file_internal(from, to, true)
-}
-
-fn copy_file_internal<S: AsRef<Path> + Debug, D: AsRef<Path> + Debug>(
-    from: S,
-    to: D,
-    create_dir: bool,
-) -> Result<(), FsError> {
     let from = from.as_ref();
     let to = to.as_ref();
 
-    if create_dir && let Some(parent) = to.parent() {
+    if let Some(parent) = to.parent() {
         create_dir_all(parent)?;
     }
 
@@ -109,15 +117,8 @@ pub fn copy_dir_all<F: AsRef<Path> + Debug, T: AsRef<Path> + Debug>(
         "Copying directory"
     );
 
-    let mut created_dir = false;
-
     for entry in entries {
-        let entry = entry.map_err(|error| FsError::Read {
-            path: from_root.to_path_buf(),
-            error: Box::new(error),
-        })?;
-
-        let Ok(file_type) = entry.file_type() else {
+        let Some((entry, file_type)) = extract_entry_and_type(from_root, entry)? else {
             continue;
         };
 
@@ -125,12 +126,7 @@ pub fn copy_dir_all<F: AsRef<Path> + Debug, T: AsRef<Path> + Debug>(
         let to_path = to_root.join(entry.file_name());
 
         if file_type.is_file() {
-            if !created_dir {
-                create_dir_all(to_root)?;
-                created_dir = true;
-            }
-
-            copy_file_internal(from_path, to_path, false)?;
+            copy_file(from_path, to_path)?;
         } else if file_type.is_dir() {
             copy_dir_all(from_path, to_path)?;
         }
@@ -189,24 +185,26 @@ pub fn create_file_if_missing<T: AsRef<Path> + Debug>(path: T) -> Result<File, F
 pub fn create_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    if path.as_os_str().is_empty() {
+    // We must use an exists check here because on Unix platforms,
+    // the `create_dir_all` acts like `mkdir -p` and will not trigger
+    // the `AlreadyExists` error if the path already exists,
+    // which results in the logs being spammed with "Creating directory"
+    if path.as_os_str().is_empty() || path.exists() {
         return Ok(());
     }
 
-    if let Err(error) = fs::create_dir_all(path) {
-        if error.kind() == ErrorKind::AlreadyExists {
-            return Ok(());
+    match fs::create_dir_all(path) {
+        Ok(()) => {
+            trace!(dir = ?path, "Creating directory");
         }
-
-        return Err(FsError::Create {
-            path: path.to_path_buf(),
-            error: Box::new(error),
-        });
-    }
-
-    // We place this log after the directory is successfully created to
-    // avoid logging for directories that already exist
-    trace!(dir = ?path, "Creating directory");
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
+        Err(error) => {
+            return Err(FsError::Create {
+                path: path.to_path_buf(),
+                error: Box::new(error),
+            });
+        }
+    };
 
     Ok(())
 }
@@ -399,11 +397,11 @@ pub fn open_file_for_writing<T: AsRef<Path> + Debug>(path: T) -> Result<File, Fs
     Ok(file)
 }
 
-/// Read direct contents for the provided directory path. If the directory
+/// Eagerly read direct contents for the provided directory path. If the directory
 /// does not exist, an empty vector is returned.
 #[inline]
 #[instrument]
-pub fn read_dir<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
+pub fn read_dir<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<DirEntry>, FsError> {
     let path = path.as_ref();
     let mut results = vec![];
 
@@ -423,10 +421,10 @@ pub fn read_dir<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<fs::DirEntry>, Fs
     Ok(results)
 }
 
-/// Read all contents recursively for the provided directory path.
+/// Eagerly read all contents recursively for the provided directory path.
 #[inline]
 #[instrument]
-pub fn read_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<fs::DirEntry>, FsError> {
+pub fn read_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<DirEntry>, FsError> {
     let entries = read_dir(path)?;
     let mut results = vec![];
 
@@ -502,12 +500,18 @@ pub fn remove_link<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     if let Ok(metadata) = path.symlink_metadata()
         && metadata.is_symlink()
     {
-        trace!(file = ?path, "Removing symlink");
-
-        fs::remove_file(path).map_err(|error| FsError::Remove {
-            path: path.to_path_buf(),
-            error: Box::new(error),
-        })?;
+        match fs::remove_file(path) {
+            Ok(()) => {
+                trace!(file = ?path, "Removing symlink");
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(FsError::Remove {
+                    path: path.to_path_buf(),
+                    error: Box::new(error),
+                });
+            }
+        };
     }
 
     Ok(())
@@ -522,12 +526,18 @@ pub fn remove_file<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     // We use an exists check to avoid removing broken symlinks.
     // Refer to the `remove_link` function for more details.
     if path.exists() {
-        trace!(file = ?path, "Removing file");
-
-        fs::remove_file(path).map_err(|error| FsError::Remove {
-            path: path.to_path_buf(),
-            error: Box::new(error),
-        })?;
+        match fs::remove_file(path) {
+            Ok(()) => {
+                trace!(file = ?path, "Removing file");
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(FsError::Remove {
+                    path: path.to_path_buf(),
+                    error: Box::new(error),
+                });
+            }
+        };
     }
 
     Ok(())
@@ -544,12 +554,7 @@ pub fn remove_file_if_stale<T: AsRef<Path> + Debug>(
     let path = path.as_ref();
 
     if let Some((size, _)) = stale(path, true, duration, SystemTime::now())? {
-        trace!(file = ?path, size, "Removing stale file");
-
-        fs::remove_file(path).map_err(|error| FsError::Remove {
-            path: path.to_path_buf(),
-            error: Box::new(error),
-        })?;
+        remove_file(path)?;
 
         return Ok(size);
     }
@@ -564,20 +569,18 @@ pub fn remove_file_if_stale<T: AsRef<Path> + Debug>(
 pub fn remove_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    if let Err(error) = fs::remove_dir_all(path) {
-        if error.kind() == ErrorKind::NotFound {
-            return Ok(());
+    match fs::remove_dir_all(path) {
+        Ok(()) => {
+            trace!(dir = ?path, "Removing directory");
         }
-
-        return Err(FsError::Remove {
-            path: path.to_path_buf(),
-            error: Box::new(error),
-        });
-    }
-
-    // We place this log after the directory is successfully removed to
-    // avoid logging for directories that do not exist
-    trace!(dir = ?path, "Removing directory");
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(FsError::Remove {
+                path: path.to_path_buf(),
+                error: Box::new(error),
+            });
+        }
+    };
 
     Ok(())
 }
@@ -600,12 +603,7 @@ pub fn remove_dir_all_except<T: AsRef<Path> + Debug>(
         };
 
         for entry in entries {
-            let entry = entry.map_err(|error| FsError::Read {
-                path: traverse_dir.to_path_buf(),
-                error: Box::new(error),
-            })?;
-
-            let Ok(file_type) = entry.file_type() else {
+            let Some((entry, file_type)) = extract_entry_and_type(traverse_dir, entry)? else {
                 continue;
             };
 
@@ -672,12 +670,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
         };
 
         for entry in entries {
-            let entry = entry.map_err(|error| FsError::Read {
-                path: dir.to_path_buf(),
-                error: Box::new(error),
-            })?;
-
-            let Ok(file_type) = entry.file_type() else {
+            let Some((entry, file_type)) = extract_entry_and_type(dir, entry)? else {
                 continue;
             };
 
