@@ -260,6 +260,26 @@ mod walk_fast {
             ]
         );
     }
+
+    #[test]
+    fn matches_depth_bounded_patterns() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("pkg/moon.yml", "");
+        sandbox.create_file("pkg/nested/moon.yml", "");
+        sandbox.create_file("apps/api/moon.yml", "");
+        sandbox.create_file("apps/api/nested/moon.yml", "");
+
+        let mut paths = walk_fast(sandbox.path(), ["*/moon.yml", "apps/*/moon.yml"]).unwrap();
+        paths.sort();
+
+        assert_eq!(
+            paths,
+            vec![
+                sandbox.path().join("apps/api/moon.yml"),
+                sandbox.path().join("pkg/moon.yml"),
+            ]
+        );
+    }
 }
 
 mod partition_patterns {

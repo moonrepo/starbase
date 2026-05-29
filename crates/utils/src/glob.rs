@@ -8,6 +8,7 @@ use std::time::Instant;
 use tracing::{instrument, trace};
 use wax::{
     Any, Program,
+    query::{Boundedness, Variance},
     walk::{Entry, FileIterator, LinkBehavior},
 };
 
@@ -452,7 +453,7 @@ fn internal_walk(
     trace!(dir = ?dir, globs = ?patterns, "Finding files");
 
     let instant = Instant::now();
-    let traverse = should_traverse_deep(patterns);
+    let max_depth = max_traversal_depth(patterns)?;
     let globset = GlobSet::new(patterns)?;
     let mut paths = vec![];
 
@@ -474,12 +475,17 @@ fn internal_walk(
         }
     };
 
-    if traverse {
+    if max_depth.is_none_or(|depth| depth > 1) {
         let ignore_dot_dirs = options.ignore_dot_dirs;
-
-        for entry in jwalk::WalkDir::new(dir)
+        let mut walk = jwalk::WalkDir::new(dir)
             .follow_links(false)
-            .skip_hidden(false)
+            .skip_hidden(false);
+
+        if let Some(max_depth) = max_depth {
+            walk = walk.max_depth(max_depth);
+        }
+
+        for entry in walk
             .process_read_dir(move |depth, path, _state, children| {
                 // Only ignore nested hidden dirs, but do not ignore
                 // if the root dir is hidden, as globs resolve from it
@@ -597,14 +603,77 @@ where
     partitions
 }
 
-fn should_traverse_deep(patterns: &[String]) -> bool {
-    patterns
-        .iter()
-        .any(|pattern| pattern.contains("**") || pattern.contains("/"))
+fn max_traversal_depth(patterns: &[String]) -> Result<Option<usize>, GlobError> {
+    let mut max_depth = 1;
+
+    for pattern in patterns {
+        if pattern.starts_with('!') {
+            continue;
+        }
+
+        match create_glob(pattern)?.depth() {
+            Variance::Invariant(depth) => {
+                max_depth = max_depth.max(depth);
+            }
+            Variance::Variant(range) => match range.upper() {
+                Boundedness::Bounded(depth) => {
+                    max_depth = max_depth.max(depth.get());
+                }
+                Boundedness::Unbounded => {
+                    return Ok(None);
+                }
+            },
+        }
+    }
+
+    Ok(Some(max_depth))
 }
 
 fn is_hidden_dot(path: &Path) -> bool {
     path.file_name()
         .and_then(|file| file.to_str())
         .is_some_and(|name| name.starts_with('.'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn patterns(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| value.to_string()).collect()
+    }
+
+    #[test]
+    fn detects_bounded_traversal_depth() {
+        assert_eq!(max_traversal_depth(&patterns(&["*"])).unwrap(), Some(1));
+        assert_eq!(
+            max_traversal_depth(&patterns(&["*/moon.yml"])).unwrap(),
+            Some(2)
+        );
+        assert_eq!(
+            max_traversal_depth(&patterns(&["a/*/file.txt"])).unwrap(),
+            Some(3)
+        );
+        assert_eq!(
+            max_traversal_depth(&patterns(&["*/moon.yml", "a/*/file.txt"])).unwrap(),
+            Some(3)
+        );
+    }
+
+    #[test]
+    fn detects_unbounded_traversal_depth() {
+        assert_eq!(max_traversal_depth(&patterns(&["**/*"])).unwrap(), None);
+        assert_eq!(
+            max_traversal_depth(&patterns(&["*/moon.yml", "**/*.rs"])).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn ignores_negations_for_traversal_depth() {
+        assert_eq!(
+            max_traversal_depth(&patterns(&["*", "!**/target/**"])).unwrap(),
+            Some(1)
+        );
+    }
 }
