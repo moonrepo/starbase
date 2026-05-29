@@ -193,16 +193,20 @@ pub fn create_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
         return Ok(());
     }
 
-    trace!(dir = ?path, "Creating directory");
+    if let Err(error) = fs::create_dir_all(path) {
+        if error.kind() == ErrorKind::AlreadyExists {
+            return Ok(());
+        }
 
-    if let Err(error) = fs::create_dir_all(path)
-        && error.kind() != ErrorKind::AlreadyExists
-    {
         return Err(FsError::Create {
             path: path.to_path_buf(),
             error: Box::new(error),
         });
     }
+
+    // We place this log after the directory is successfully created to
+    // avoid logging for directories that already exist
+    trace!(dir = ?path, "Creating directory");
 
     Ok(())
 }
@@ -403,11 +407,11 @@ pub fn read_dir<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<fs::DirEntry>, Fs
     let path = path.as_ref();
     let mut results = vec![];
 
-    trace!(dir = ?path, "Reading directory");
-
     let Some(entries) = read_dir_iter(path)? else {
         return Ok(results);
     };
+
+    trace!(dir = ?path, "Reading directory");
 
     for entry in entries {
         results.push(entry.map_err(|error| FsError::Read {
@@ -560,16 +564,20 @@ pub fn remove_file_if_stale<T: AsRef<Path> + Debug>(
 pub fn remove_dir_all<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    trace!(dir = ?path, "Removing directory");
+    if let Err(error) = fs::remove_dir_all(path) {
+        if error.kind() == ErrorKind::NotFound {
+            return Ok(());
+        }
 
-    if let Err(error) = fs::remove_dir_all(path)
-        && error.kind() != ErrorKind::NotFound
-    {
         return Err(FsError::Remove {
             path: path.to_path_buf(),
             error: Box::new(error),
         });
     }
+
+    // We place this log after the directory is successfully removed to
+    // avoid logging for directories that do not exist
+    trace!(dir = ?path, "Removing directory");
 
     Ok(())
 }
@@ -605,19 +613,18 @@ pub fn remove_dir_all_except<T: AsRef<Path> + Debug>(
             let rel_path = abs_path.strip_prefix(base_dir).unwrap_or(&abs_path);
             let is_excluded = exclude
                 .iter()
-                .any(|ex| rel_path == ex || ex.starts_with(rel_path));
+                .any(|ex| rel_path == ex || rel_path.starts_with(ex));
+            let contains_excluded_path = exclude.iter().any(|ex| ex.starts_with(rel_path));
 
-            // Is excluded, but the relative path may be a directory,
-            // so we need to continue traversing.
             if is_excluded {
-                if file_type.is_dir() {
-                    traverse(base_dir, &abs_path, exclude)?;
-                }
+                continue;
+            } else if contains_excluded_path && file_type.is_dir() {
+                traverse(base_dir, &abs_path, exclude)?;
             } else if file_type.is_dir() {
                 remove_dir_all(abs_path)?;
             } else if file_type.is_symlink() {
                 remove_link(abs_path)?;
-            } else if file_type.is_file() || file_type.is_symlink() {
+            } else if file_type.is_file() {
                 remove_file(abs_path)?;
             }
         }
