@@ -26,21 +26,25 @@ pub fn clean<T: AsRef<str>>(json: T) -> Result<String, std::io::Error> {
 #[inline]
 #[instrument(name = "merge_json", skip_all)]
 pub fn merge(prev: &JsonValue, next: &JsonValue) -> JsonValue {
+    let mut merged = prev.to_owned();
+
+    merge_into(&mut merged, next);
+
+    merged
+}
+
+fn merge_into(prev: &mut JsonValue, next: &JsonValue) {
     match (prev, next) {
         (JsonValue::Object(prev_object), JsonValue::Object(next_object)) => {
-            let mut object = prev_object.clone();
-
-            for (key, value) in next_object.iter() {
-                if let Some(prev_value) = prev_object.get(key) {
-                    object.insert(key.to_owned(), merge(prev_value, value));
+            for (key, value) in next_object {
+                if let Some(prev_value) = prev_object.get_mut(key) {
+                    merge_into(prev_value, value);
                 } else {
-                    object.insert(key.to_owned(), value.to_owned());
+                    prev_object.insert(key.to_owned(), value.to_owned());
                 }
             }
-
-            JsonValue::Object(object)
         }
-        _ => next.to_owned(),
+        (prev, next) => *prev = next.to_owned(),
     }
 }
 

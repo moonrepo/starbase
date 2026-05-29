@@ -65,6 +65,8 @@ mod merge {
                 }
             },
         });
+        let original_prev = prev.clone();
+        let original_next = next.clone();
 
         assert_eq!(
             json::merge(&prev, &next),
@@ -85,6 +87,8 @@ mod merge {
                 },
             })
         );
+        assert_eq!(prev, original_prev);
+        assert_eq!(next, original_next);
     }
 }
 

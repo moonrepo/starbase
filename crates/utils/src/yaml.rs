@@ -1,10 +1,8 @@
 use crate::fs;
-use regex::Regex;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use std::path::Path;
-use std::sync::LazyLock;
 use tracing::{instrument, trace};
 
 pub use crate::yaml_error::YamlError;
@@ -13,27 +11,29 @@ pub use serde_norway::{
     Mapping as YamlMapping, Number as YamlNumber, Sequence as YamlSequence, Value as YamlValue,
 };
 
-static WHITESPACE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\s+)").unwrap());
-
 /// Recursively merge [`YamlValue`] objects, with values from next overwriting previous.
 #[inline]
 #[instrument(name = "merge_yaml", skip_all)]
 pub fn merge(prev: &YamlValue, next: &YamlValue) -> YamlValue {
+    let mut merged = prev.to_owned();
+
+    merge_into(&mut merged, next);
+
+    merged
+}
+
+fn merge_into(prev: &mut YamlValue, next: &YamlValue) {
     match (prev, next) {
         (YamlValue::Mapping(prev_object), YamlValue::Mapping(next_object)) => {
-            let mut object = prev_object.clone();
-
-            for (key, value) in next_object.iter() {
-                if let Some(prev_value) = prev_object.get(key) {
-                    object.insert(key.to_owned(), merge(prev_value, value));
+            for (key, value) in next_object {
+                if let Some(prev_value) = prev_object.get_mut(key) {
+                    merge_into(prev_value, value);
                 } else {
-                    object.insert(key.to_owned(), value.to_owned());
+                    prev_object.insert(key.to_owned(), value.to_owned());
                 }
             }
-
-            YamlValue::Mapping(object)
         }
-        _ => next.to_owned(),
+        (prev, next) => *prev = next.to_owned(),
     }
 }
 
@@ -75,35 +75,48 @@ where
 {
     trace!("Formatting YAML with preserved indentation");
 
-    let mut data = serde_norway::to_string(data)
-        .map_err(|error| YamlError::Format {
-            error: Box::new(error),
-        })?
-        .trim()
-        .to_string();
+    let data = serde_norway::to_string(data).map_err(|error| YamlError::Format {
+        error: Box::new(error),
+    })?;
+    let data = data.trim();
 
     // serde does not support customizing the indentation character. So to work around
     // this, we do it manually on the YAML string, but only if the indent is different than
     // a double space (the default), which can be customized with `.editorconfig`.
     if indent != "  " {
-        data = data
-            .split('\n')
-            .map(|line| {
-                if !line.starts_with("  ") {
-                    return line.to_string();
-                }
-
-                WHITESPACE_PREFIX
-                    .replace_all(line, |caps: &regex::Captures| {
-                        indent.repeat(caps.get(1).unwrap().as_str().len() / 2)
-                    })
-                    .to_string()
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+        return Ok(format_with_custom_indentation(data, indent));
     }
 
-    Ok(data)
+    Ok(data.to_owned())
+}
+
+fn format_with_custom_indentation(data: &str, indent: &str) -> String {
+    let mut output = String::with_capacity(data.len());
+
+    for (index, line) in data.split('\n').enumerate() {
+        if index > 0 {
+            output.push('\n');
+        }
+
+        if !line.starts_with("  ") {
+            output.push_str(line);
+            continue;
+        }
+
+        let leading_spaces = line
+            .as_bytes()
+            .iter()
+            .take_while(|char| **char == b' ')
+            .count();
+
+        for _ in 0..(leading_spaces / 2) {
+            output.push_str(indent);
+        }
+
+        output.push_str(&line[leading_spaces..]);
+    }
+
+    output
 }
 
 /// Read a file at the provided path and deserialize into the required type.

@@ -115,6 +115,12 @@ mod is_glob {
         assert!(!is_glob("file\\?.js"));
         assert!(!is_glob("folder-\\[id\\]"));
     }
+
+    #[test]
+    fn returns_true_when_later_glob_is_not_escaped() {
+        assert!(is_glob("\\*.rs/*.rs"));
+        assert!(is_glob("folder-\\[id\\]/[name]"));
+    }
 }
 
 mod split_patterns {
@@ -257,6 +263,26 @@ mod walk_fast {
             vec![
                 sandbox.path().join("packages/a/node_modules/dep.js"),
                 sandbox.path().join("packages/a/src/index.js"),
+            ]
+        );
+    }
+
+    #[test]
+    fn matches_depth_bounded_patterns() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("pkg/moon.yml", "");
+        sandbox.create_file("pkg/nested/moon.yml", "");
+        sandbox.create_file("apps/api/moon.yml", "");
+        sandbox.create_file("apps/api/nested/moon.yml", "");
+
+        let mut paths = walk_fast(sandbox.path(), ["*/moon.yml", "apps/*/moon.yml"]).unwrap();
+        paths.sort();
+
+        assert_eq!(
+            paths,
+            vec![
+                sandbox.path().join("apps/api/moon.yml"),
+                sandbox.path().join("pkg/moon.yml"),
             ]
         );
     }

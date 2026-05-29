@@ -5,6 +5,70 @@ use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::path::Path;
 
+mod merge {
+    use super::*;
+
+    #[test]
+    fn merges_fields_without_mutating_inputs() {
+        let prev: Value = yaml::parse(
+            r#"
+base:
+str: abc
+num: 123
+bool: true
+arr:
+  - 1
+  - 2
+obj:
+  key: 123
+  nested:
+    key2: abc
+"#,
+        )
+        .unwrap();
+        let next: Value = yaml::parse(
+            r#"
+base: {}
+str: xyz
+arr:
+  - 1
+  - 2
+  - 3
+obj:
+  key:
+  sub:
+    key3: false
+"#,
+        )
+        .unwrap();
+        let expected: Value = yaml::parse(
+            r#"
+base: {}
+str: xyz
+num: 123
+bool: true
+arr:
+  - 1
+  - 2
+  - 3
+obj:
+  key:
+  nested:
+    key2: abc
+  sub:
+    key3: false
+"#,
+        )
+        .unwrap();
+        let original_prev = prev.clone();
+        let original_next = next.clone();
+
+        assert_eq!(yaml::merge(&prev, &next), expected);
+        assert_eq!(prev, original_prev);
+        assert_eq!(next, original_next);
+    }
+}
+
 mod editor_config {
     use super::*;
 
