@@ -2,6 +2,7 @@ use crate::fs;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fmt::Debug;
+use std::fs::FileType;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 use std::time::Instant;
@@ -457,23 +458,26 @@ fn internal_walk(
     let globset = GlobSet::new(patterns)?;
     let mut paths = vec![];
 
-    let mut add_path = |path: PathBuf, base_dir: &Path, globset: &GlobSet<'_>| {
-        if path.is_file() && (options.only_dirs || options.ignore_dot_files && is_hidden_dot(&path))
-        {
-            return;
-        }
+    let mut add_path =
+        |path: PathBuf, file_type: FileType, base_dir: &Path, globset: &GlobSet<'_>| {
+            if file_type.is_file()
+                && (options.only_dirs || options.ignore_dot_files && is_hidden_dot(&path))
+            {
+                return;
+            }
 
-        if path.is_dir() && (options.only_files || options.ignore_dot_dirs && is_hidden_dot(&path))
-        {
-            return;
-        }
+            if file_type.is_dir()
+                && (options.only_files || options.ignore_dot_dirs && is_hidden_dot(&path))
+            {
+                return;
+            }
 
-        if let Ok(suffix) = path.strip_prefix(base_dir)
-            && globset.matches(suffix)
-        {
-            paths.push(path);
-        }
-    };
+            if let Ok(suffix) = path.strip_prefix(base_dir)
+                && globset.matches(suffix)
+            {
+                paths.push(path);
+            }
+        };
 
     if max_depth.is_none_or(|depth| depth > 1) {
         let ignore_dot_dirs = options.ignore_dot_dirs;
@@ -489,22 +493,20 @@ fn internal_walk(
             .process_read_dir(move |depth, path, _state, children| {
                 // Only ignore nested hidden dirs, but do not ignore
                 // if the root dir is hidden, as globs resolve from it
-                if ignore_dot_dirs
-                    && depth.is_some_and(|d| d > 0)
-                    && path.is_dir()
-                    && is_hidden_dot(path)
-                {
+                if ignore_dot_dirs && depth.is_some_and(|d| d > 0) && is_hidden_dot(path) {
                     children.retain(|_| false);
                 }
             })
             .into_iter()
             .flatten()
         {
-            add_path(entry.path(), dir, &globset);
+            add_path(entry.path(), entry.file_type(), dir, &globset);
         }
     } else {
         for entry in fs::read_dir(dir)? {
-            add_path(entry.path(), dir, &globset);
+            if let Ok(file_type) = entry.file_type() {
+                add_path(entry.path(), file_type, dir, &globset);
+            }
         }
     }
 
@@ -605,6 +607,14 @@ where
 
 fn max_traversal_depth(patterns: &[String]) -> Result<Option<usize>, GlobError> {
     let mut max_depth = 1;
+
+    if patterns
+        .iter()
+        .filter(|pattern| !pattern.starts_with('!'))
+        .all(|pattern| !pattern.contains('/') && !pattern.contains("**"))
+    {
+        return Ok(Some(max_depth));
+    }
 
     for pattern in patterns {
         if pattern.starts_with('!') {
