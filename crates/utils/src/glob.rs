@@ -200,36 +200,23 @@ pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
         return true;
     }
 
-    let single_values = vec!['*', '?'];
-    let paired_values = vec![('{', '}'), ('[', ']')];
-    let mut bytes = value.bytes();
-    let mut is_escaped = |index: usize| {
-        if index == 0 {
-            return false;
-        }
+    let is_escaped =
+        |index: usize| index > 0 && value.as_bytes().get(index - 1).is_some_and(|b| *b == b'\\');
 
-        bytes.nth(index - 1).unwrap_or(b' ') == b'\\'
-    };
-
-    for single in single_values {
-        if !value.contains(single) {
-            continue;
-        }
-
-        if let Some(index) = value.find(single)
-            && !is_escaped(index)
+    for single in ['*', '?'] {
+        if value
+            .match_indices(single)
+            .any(|(index, _)| !is_escaped(index))
         {
             return true;
         }
     }
 
-    for (open, close) in paired_values {
-        if !value.contains(open) || !value.contains(close) {
-            continue;
-        }
-
-        if let Some(index) = value.find(open)
-            && !is_escaped(index)
+    for (open, close) in [('{', '}'), ('[', ']')] {
+        if value.contains(close)
+            && value
+                .match_indices(open)
+                .any(|(index, _)| !is_escaped(index))
         {
             return true;
         }
@@ -245,7 +232,13 @@ pub fn normalize<T: AsRef<Path>>(path: T) -> Result<String, GlobError> {
     let path = path.as_ref();
 
     match path.to_str() {
-        Some(p) => Ok(p.replace('\\', "/")),
+        Some(p) => {
+            if p.contains('\\') {
+                Ok(p.replace('\\', "/"))
+            } else {
+                Ok(p.to_owned())
+            }
+        }
         None => Err(GlobError::InvalidPath {
             path: path.to_path_buf(),
         }),

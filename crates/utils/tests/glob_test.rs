@@ -115,6 +115,12 @@ mod is_glob {
         assert!(!is_glob("file\\?.js"));
         assert!(!is_glob("folder-\\[id\\]"));
     }
+
+    #[test]
+    fn returns_true_when_later_glob_is_not_escaped() {
+        assert!(is_glob("\\*.rs/*.rs"));
+        assert!(is_glob("folder-\\[id\\]/[name]"));
+    }
 }
 
 mod split_patterns {

@@ -3102,7 +3102,6 @@ dependencies = [
  "json-strip-comments",
  "jwalk",
  "miette",
- "regex",
  "reqwest",
  "scc 3.7.1",
  "serde",

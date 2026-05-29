@@ -77,9 +77,11 @@ pub fn paths() -> Vec<PathBuf> {
 pub fn bool_var(key: &str) -> bool {
     match env::var(key) {
         Ok(value) => {
-            let value = value.to_lowercase();
-
-            value == "1" || value == "true" || value == "yes" || value == "on" || value == "enable"
+            value == "1"
+                || value.eq_ignore_ascii_case("true")
+                || value.eq_ignore_ascii_case("yes")
+                || value.eq_ignore_ascii_case("on")
+                || value.eq_ignore_ascii_case("enable")
         }
         Err(_) => false,
     }

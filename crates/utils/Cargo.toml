@@ -18,7 +18,6 @@ harness = false
 starbase_styles = { version = "0.6.7", path = "../styles" }
 dirs = { workspace = true }
 miette = { workspace = true, optional = true }
-regex = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -60,7 +59,7 @@ miette = ["dep:miette"]
 net = ["dep:reqwest", "dep:url", "dep:async-trait"]
 json = ["dep:json-strip-comments", "dep:serde", "dep:serde_json"]
 toml = ["dep:toml", "dep:serde"]
-yaml = ["dep:regex", "dep:serde", "dep:serde_norway"]
+yaml = ["dep:serde", "dep:serde_norway"]
 
 [dev-dependencies]
 criterion2 = { version = "3.0.3", default-features = false }

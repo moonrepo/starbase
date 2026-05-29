@@ -4,14 +4,13 @@ use reqwest::{
     Client, Response,
     header::{HeaderMap, HeaderName, HeaderValue},
 };
-use std::cmp;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 use tracing::{instrument, trace};
@@ -201,38 +200,31 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
         fs::acquire_exclusive_lock(dest_file, &file)?;
     }
 
-    // Wrap in a closure so that we can capture the error and cleanup
-    let do_write = || async {
+    let write_result = async {
         // Now truncate the file after we have a lock
         fs::truncate_file_handle(dest_file, &mut file)?;
 
-        // Write the bytes in chunks
-        match on_chunk {
-            Some(on_chunk) => {
-                let total_size = response.content_length().unwrap_or(0);
-                let mut current_size: u64 = 0;
+        let total_size = response.content_length().unwrap_or(0);
+        let mut current_size: u64 = 0;
 
-                on_chunk(0, total_size);
+        if let Some(on_chunk) = &on_chunk {
+            on_chunk(0, total_size);
+        }
 
-                while let Some(chunk) = response.chunk().await.map_err(handle_net_error)? {
-                    file.write_all(&chunk).map_err(handle_fs_error)?;
+        while let Some(chunk) = response.chunk().await.map_err(handle_net_error)? {
+            file.write_all(&chunk).map_err(handle_fs_error)?;
 
-                    current_size = cmp::min(current_size + (chunk.len() as u64), total_size);
-
-                    on_chunk(current_size, total_size);
-                }
-            }
-            _ => {
-                let bytes = response.bytes().await.map_err(handle_net_error)?;
-
-                file.write_all(&bytes).map_err(handle_fs_error)?;
+            if let Some(on_chunk) = &on_chunk {
+                current_size = current_size.saturating_add(chunk.len() as u64);
+                on_chunk(current_size.min(total_size), total_size);
             }
         }
 
         Ok::<(), NetError>(())
-    };
+    }
+    .await;
 
-    match do_write().await {
+    match write_result {
         Ok(_) => {
             // The data is already committed; if unlock fails here the kernel
             // will release it when `file` drops anyway, so don't fail the call.
@@ -305,15 +297,13 @@ mod offline {
         // Wrap in a thread because resolving a host to an IP address
         // may take an unknown amount of time. If longer than our timeout,
         // exit early.
-        let handle = thread::spawn(move || host.to_socket_addrs().ok());
+        let (sender, receiver) = mpsc::channel();
 
-        thread::sleep(Duration::from_millis(timeout));
+        thread::spawn(move || {
+            let _ = sender.send(host.to_socket_addrs().ok());
+        });
 
-        if !handle.is_finished() {
-            return false;
-        }
-
-        if let Ok(Some(addresses)) = handle.join() {
+        if let Ok(Some(addresses)) = receiver.recv_timeout(Duration::from_millis(timeout)) {
             for address in addresses {
                 if check_connection(address, timeout) {
                     return true;
@@ -366,6 +356,7 @@ pub fn is_offline(timeout: u64) -> bool {
 pub fn is_offline_with_hosts(timeout: u64, custom_hosts: Vec<String>) -> bool {
     is_offline_with_options(OfflineOptions {
         timeout,
+        custom_hosts,
         ..Default::default()
     })
 }
@@ -414,10 +405,21 @@ pub fn is_offline_with_options(options: OfflineOptions) -> bool {
         ips.push(SocketAddr::new(custom_ip, 53));
     }
 
-    let online = ips
-        .into_iter()
-        .map(|address| thread::spawn(move || offline::check_connection(address, options.timeout)))
-        .any(|handle| handle.join().is_ok_and(|v| v));
+    let (sender, receiver) = mpsc::channel();
+    let checks = ips.len();
+
+    for address in ips {
+        let sender = sender.clone();
+        let timeout = options.timeout;
+
+        thread::spawn(move || {
+            let _ = sender.send(offline::check_connection(address, timeout));
+        });
+    }
+
+    drop(sender);
+
+    let online = (0..checks).any(|_| receiver.recv().is_ok_and(|online| online));
 
     if online {
         trace!("Online!");
@@ -442,12 +444,21 @@ pub fn is_offline_with_options(options: OfflineOptions) -> bool {
         hosts.extend(options.custom_hosts);
     }
 
-    let online = hosts
-        .into_iter()
-        .map(|host| {
-            thread::spawn(move || offline::check_connection_from_host(host, options.timeout))
-        })
-        .any(|handle| handle.join().is_ok_and(|v| v));
+    let (sender, receiver) = mpsc::channel();
+    let checks = hosts.len();
+
+    for host in hosts {
+        let sender = sender.clone();
+        let timeout = options.timeout;
+
+        thread::spawn(move || {
+            let _ = sender.send(offline::check_connection_from_host(host, timeout));
+        });
+    }
+
+    drop(sender);
+
+    let online = (0..checks).any(|_| receiver.recv().is_ok_and(|online| online));
 
     if online {
         trace!("Online!");
