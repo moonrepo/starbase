@@ -3093,7 +3093,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "async-trait",
  "criterion2",
