@@ -15,7 +15,7 @@ starbase_styles = { version = "0.6.7", path = "../styles", features = [
 	"theme",
 ] }
 async-trait = { workspace = true }
-chrono = { version = "0.4.44", default-features = false, features = [
+chrono = { version = "0.4.45", default-features = false, features = [
 	"clock",
 	"std",
 ] }
@@ -55,7 +55,7 @@ opentelemetry-proto = "0.32.0"
 serial_test = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1.18", features = ["net"] }
-tonic = "0.14.5"
+tonic = "0.14.6"
 
 [features]
 default = ["tracing"]
