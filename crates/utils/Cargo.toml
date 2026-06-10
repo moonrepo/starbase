@@ -1,6 +1,6 @@
 [package]
 name = "starbase_utils"
-version = "0.13.6"
+version = "0.13.7"
 edition = "2024"
 license = "MIT"
 description = "General fs, io, serde, net, etc, utilities."
@@ -15,7 +15,7 @@ name = "glob"
 harness = false
 
 [dependencies]
-starbase_styles = { version = "0.6.7", path = "../styles" }
+starbase_styles = { version = "0.6.8", path = "../styles" }
 dirs = { workspace = true }
 miette = { workspace = true, optional = true }
 reflink-copy = "0.1.29"
