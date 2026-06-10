@@ -1,3 +1,4 @@
+use reflink_copy::reflink_or_copy;
 use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::fs::{self, DirEntry, File, FileType, OpenOptions};
@@ -467,6 +468,32 @@ pub fn read_file_bytes<T: AsRef<Path> + Debug>(path: T) -> Result<Vec<u8>, FsErr
         path: path.to_path_buf(),
         error: Box::new(error),
     })
+}
+
+/// Reflink a file from source to destination. If the destination directory does not exist,
+/// it will be created. If the reflink fails, a fallback copy will be used instead.
+#[inline]
+#[instrument]
+pub fn reflink_file<S: AsRef<Path> + Debug, D: AsRef<Path> + Debug>(
+    from: S,
+    to: D,
+) -> Result<(), FsError> {
+    let from = from.as_ref();
+    let to = to.as_ref();
+
+    if let Some(parent) = to.parent() {
+        create_dir_all(parent)?;
+    }
+
+    trace!(from = ?from, to = ?to, "Reflinking file");
+
+    reflink_or_copy(from, to).map_err(|error| FsError::Copy {
+        from: from.to_path_buf(),
+        to: to.to_path_buf(),
+        error: Box::new(error),
+    })?;
+
+    Ok(())
 }
 
 /// Remove a file or directory (recursively) at the provided path.
