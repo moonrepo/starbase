@@ -44,6 +44,14 @@ pub enum FsError {
         error: Box<std::io::Error>,
     },
 
+    #[error("Failed to reflink {} to {}.\n{error}", .from.style(Style::Path), .to.style(Style::Path))]
+    Reflink {
+        from: PathBuf,
+        to: PathBuf,
+        #[source]
+        error: Box<std::io::Error>,
+    },
+
     #[error("Failed to remove path {}.\n{error}", .path.style(Style::Path))]
     Remove {
         path: PathBuf,
@@ -121,6 +129,15 @@ pub enum FsError {
     #[error("Failed to read path {}.", .path.style(Style::Path))]
     Read {
         path: PathBuf,
+        #[source]
+        error: Box<std::io::Error>,
+    },
+
+    #[diagnostic(code(fs::reflink), help("Does the source file exist?"))]
+    #[error("Failed to reflink {} to {}.", .from.style(Style::Path), .to.style(Style::Path))]
+    Reflink {
+        from: PathBuf,
+        to: PathBuf,
         #[source]
         error: Box<std::io::Error>,
     },
