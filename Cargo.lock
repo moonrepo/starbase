@@ -222,6 +222,9 @@ name = "bitflags"
 version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
+dependencies = [
+ "serde_core",
+]
 
 [[package]]
 name = "block-buffer"
@@ -579,6 +582,7 @@ dependencies = [
  "mio",
  "parking_lot",
  "rustix",
+ "serde",
  "signal-hook",
  "signal-hook-mio",
  "winapi",
@@ -3000,6 +3004,8 @@ dependencies = [
  "libc",
  "miette",
  "parking_lot",
+ "serde",
+ "serde_json",
  "starbase_console",
  "starbase_styles",
  "thiserror",

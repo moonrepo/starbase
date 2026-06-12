@@ -9,6 +9,7 @@ pub fn style_to_color(style: Style) -> Color {
 
 // https://www.ditig.com/publications/256-colors-cheat-sheet
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConsoleTheme {
     pub brand_color: Color,
 
@@ -204,6 +205,8 @@ impl ConsoleTheme {
 }
 
 #[derive(Clone, Copy, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum Variant {
     Caution,
     Failure,
