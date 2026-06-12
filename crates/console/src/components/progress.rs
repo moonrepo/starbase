@@ -9,12 +9,19 @@ use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::time::sleep;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum ProgressDisplay {
     Bar,
     Loader,
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(tag = "state", content = "value", rename_all = "kebab-case")
+)]
 pub enum ProgressState {
     CustomInt(usize),
     CustomString(String),

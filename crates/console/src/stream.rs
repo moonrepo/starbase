@@ -9,6 +9,8 @@ use std::thread::{JoinHandle, spawn};
 use tracing::trace;
 
 #[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum ConsoleStreamType {
     Stderr,
     #[default]
