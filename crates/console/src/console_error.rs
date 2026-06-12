@@ -24,4 +24,15 @@ pub enum ConsoleError {
         #[source]
         error: Box<io::Error>,
     },
+
+    #[cfg_attr(
+        all(feature = "miette", feature = "serde"),
+        diagnostic(code(console::write_json_failed))
+    )]
+    #[cfg_attr(feature = "serde", error("Failed to write JSON output to console."))]
+    #[cfg(feature = "serde")]
+    WriteJsonFailed {
+        #[source]
+        error: Box<serde_json::Error>,
+    },
 }
