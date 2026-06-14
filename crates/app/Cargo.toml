@@ -48,6 +48,8 @@ tracing-subscriber = { version = "0.3.23", optional = true, default-features = f
 	"ansi",
 	"env-filter",
 	"fmt",
+	"json",
+	"std",
 ] }
 
 [dev-dependencies]
