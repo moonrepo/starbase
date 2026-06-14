@@ -17,13 +17,14 @@ use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 use std::{env, fmt as std_fmt, fs};
 use tracing::subscriber::set_global_default;
+use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
+use tracing_subscriber::fmt;
+use tracing_subscriber::{EnvFilter, prelude::*};
+
 pub use tracing::{
     debug, debug_span, enabled, error, error_span, event, event_enabled, info, info_span,
     instrument, span, span_enabled, trace, trace_span, warn, warn_span,
 };
-use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
-use tracing_subscriber::fmt::{self, SubscriberBuilder};
-use tracing_subscriber::{EnvFilter, prelude::*};
 
 pub type TracingResult<T> = Result<T, TracingError>;
 
@@ -75,6 +76,8 @@ pub struct TracingOptions {
     pub log_env: String,
     /// Absolute path to a file to write logs to.
     pub log_file: Option<PathBuf>,
+    /// Whether to output logs in NDJSON format.
+    pub ndjson: bool,
     /// OpenTelemetry export settings.
     #[cfg(feature = "otel")]
     pub otel: OtelOptions,
@@ -94,6 +97,7 @@ impl Default for TracingOptions {
             intercept_log: true,
             log_env: "STARBASE_LOG".into(),
             log_file: None,
+            ndjson: false,
             #[cfg(feature = "otel")]
             otel: OtelOptions::default(),
             show_spans: false,
@@ -141,15 +145,30 @@ pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
         tracing_log::LogTracer::init().expect("Failed to initialize log interceptor.");
     }
 
-    // Build our subscriber
-    let subscriber = SubscriberBuilder::default()
-        .event_format(EventFormatter {
-            show_spans: options.show_spans,
-        })
-        .fmt_fields(FieldFormatter)
-        .with_env_filter(EnvFilter::from_env(options.log_env))
-        .with_writer(io::stderr)
-        .finish();
+    // Build the formatting layer. NDJSON and the console formatter produce
+    // different field/event formatter types, so box them into a single layer
+    // type that both `if` arms can return.
+    let fmt_layer = if options.ndjson {
+        fmt::layer()
+            .json()
+            .with_span_list(false)
+            .with_current_span(options.show_spans)
+            .with_ansi(false)
+            .with_target(true)
+            .with_writer(io::stderr)
+            .flatten_event(true)
+            .boxed()
+    } else {
+        fmt::layer()
+            .with_ansi(true)
+            .with_target(true)
+            .with_writer(io::stderr)
+            .event_format(EventFormatter {
+                show_spans: options.show_spans,
+            })
+            .fmt_fields(FieldFormatter)
+            .boxed()
+    };
 
     // Add layers to our subscriber
     let mut guard = TracingGuard {
@@ -159,7 +178,9 @@ pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
         otel_guard: None,
     };
 
-    let subscriber = subscriber
+    let subscriber = tracing_subscriber::registry()
+        .with(EnvFilter::from_env(options.log_env))
+        .with(fmt_layer)
         // Write to a log file
         .with(if let Some(log_file) = options.log_file {
             if let Some(dir) = log_file.parent() {
