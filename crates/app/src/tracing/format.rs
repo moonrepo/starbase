@@ -1,22 +1,27 @@
 use chrono::{Local, Timelike};
 use starbase_styles::{apply_style_tags, color};
+use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
-use tracing::{Level, Metadata, Subscriber, field::Visit, metadata::LevelFilter};
+use tracing::{
+    Event, Level, Metadata, Subscriber,
+    field::{Field, Visit},
+    metadata::LevelFilter,
+};
 use tracing_subscriber::{
     field::RecordFields,
     fmt::{self, FormatEvent, FormatFields, time::FormatTime},
     registry::LookupSpan,
 };
 
-pub static LAST_HOUR: AtomicU8 = AtomicU8::new(0);
-pub static TEST_ENV: AtomicBool = AtomicBool::new(false);
+pub(crate) static LAST_HOUR: AtomicU8 = AtomicU8::new(0);
+pub(crate) static TEST_ENV: AtomicBool = AtomicBool::new(false);
 
 struct FieldVisitor<'writer> {
     writer: fmt::format::Writer<'writer>,
 }
 
 impl Visit for FieldVisitor<'_> {
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+    fn record_str(&mut self, field: &Field, value: &str) {
         if field.name() == "message" {
             self.record_debug(field, &format_args!("{value}"))
         } else {
@@ -24,17 +29,16 @@ impl Visit for FieldVisitor<'_> {
         }
     }
 
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "message" {
-            write!(self.writer, "  {} ", apply_style_tags(format!("{value:?}"))).unwrap()
+    fn record_debug(&mut self, field: &Field, value: &dyn Debug) {
+        let _ = if field.name() == "message" {
+            write!(self.writer, "  {} ", apply_style_tags(format!("{value:?}")))
         } else {
             write!(
                 self.writer,
                 " {}",
                 color::muted(format!("{}={:?}", field.name(), value))
             )
-            .unwrap()
-        }
+        };
     }
 }
 
@@ -60,10 +64,6 @@ pub struct EventFormatter {
 
 impl FormatTime for EventFormatter {
     fn format_time(&self, writer: &mut fmt::format::Writer<'_>) -> std::fmt::Result {
-        // if TEST_ENV.load(Ordering::Relaxed) {
-        //     return write!(writer, "YYYY-MM-DD");
-        // }
-
         let mut date_format = "%Y-%m-%d %H:%M:%S%.3f";
         let current_timestamp = Local::now();
         let current_hour = current_timestamp.hour() as u8;
@@ -91,7 +91,7 @@ where
         &self,
         ctx: &fmt::FmtContext<'_, S, N>,
         mut writer: fmt::format::Writer<'_>,
-        event: &tracing::Event<'_>,
+        event: &Event<'_>,
     ) -> std::fmt::Result {
         let meta: &Metadata = event.metadata();
         let level: &Level = meta.level();
@@ -99,6 +99,7 @@ where
 
         // [level timestamp]
         write!(writer, "{}", color::muted("["))?;
+
         write!(
             writer,
             "{} ",
@@ -134,26 +135,6 @@ where
 
         // message ...field=value
         ctx.format_fields(writer.by_ref(), event)?;
-
-        // spans(vars=values)...
-        // if let Some(scope) = ctx.event_scope() {
-        //     for span in scope.from_root() {
-        //         let ext = span.extensions();
-
-        //         if let Some(fields) = &ext.get::<FormattedFields<N>>() {
-        //             write!(
-        //                 writer,
-        //                 " {}{}{}{}",
-        //                 color::muted_light(span.name()),
-        //                 color::muted_light("("),
-        //                 fields,
-        //                 color::muted_light(")"),
-        //             )?;
-        //         } else {
-        //             write!(writer, " {}", color::muted_light(span.name()))?;
-        //         }
-        //     }
-        // }
 
         writeln!(writer)
     }
