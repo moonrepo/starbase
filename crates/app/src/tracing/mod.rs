@@ -44,6 +44,10 @@ pub enum TracingError {
         error: std::io::Error,
     },
 
+    #[diagnostic(code(app::tracing::log_level_invalid))]
+    #[error("Invalid log level: {level}")]
+    LogLevelInvalid { level: String },
+
     #[cfg(feature = "log-compat")]
     #[diagnostic(code(app::tracing::intercept_log_failed))]
     #[error("Failed to initialize log interceptor.")]
