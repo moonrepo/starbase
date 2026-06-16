@@ -17,6 +17,12 @@ mod glob_cache;
 #[cfg(feature = "glob")]
 mod glob_error;
 
+#[cfg(feature = "hash")]
+/// Utilities for generating hashes.
+pub mod hash;
+#[cfg(feature = "hash")]
+mod hash_error;
+
 #[cfg(feature = "json")]
 /// Utilities for parsing and formatting JSON.
 pub mod json;

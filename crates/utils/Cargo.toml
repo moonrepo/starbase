@@ -34,6 +34,11 @@ jwalk = { version = "0.8.1", optional = true }
 scc = { workspace = true, optional = true }
 wax = { version = "0.7.0", optional = true, features = ["walk"] }
 
+# hash
+base64 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+
 # json
 json-strip-comments = { version = "3.1.1", optional = true }
 serde_json = { workspace = true, optional = true }
@@ -55,6 +60,8 @@ editor-config = ["dep:ec4rs"]
 fs-lock = ["dep:tokio"]
 glob = ["dep:wax", "dep:jwalk"]
 glob-cache = ["dep:scc"]
+hash = ["dep:hex", "dep:sha2"]
+hash-base64 = ["dep:base64"]
 # glob-miette = ["glob", "miette", "wax/miette"]
 miette = ["dep:miette"]
 net = ["dep:reqwest", "dep:url", "dep:async-trait"]
@@ -72,6 +79,8 @@ starbase_utils = { path = ".", features = [
     "glob",
     "glob-cache",
     # "glob-miette",
+    "hash",
+    "hash-base64",
     "miette",
     "net",
     "json",
