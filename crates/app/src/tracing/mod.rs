@@ -134,6 +134,8 @@ pub struct TracingGuard {
     otel_guard: Option<otel::OtelGuard>,
 }
 
+/// Setup tracing with the provided options, returning a guard that will flush
+/// and clean up resources when dropped.
 #[instrument]
 pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
     TEST_ENV.store(env::var(options.test_env).is_ok(), Ordering::Release);

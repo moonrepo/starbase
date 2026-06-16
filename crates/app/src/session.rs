@@ -21,7 +21,7 @@ pub trait AppSession: Clone + Send + Sync {
     }
 
     /// Run operations in the background of the main execution. The main
-    /// execution is defined in [`App#run`](crate::App), _not_ here.
+    /// execution is defined in [`App::run`](crate::App#method.run), _not_ here.
     async fn execute(&mut self) -> AppResult<Self::Error> {
         Ok(None)
     }
