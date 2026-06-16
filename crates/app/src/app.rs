@@ -29,6 +29,7 @@ pub enum AppPhase {
 /// The outcome of an application run, including the last phase, any error, and the exit code.
 /// This type exists to provide a mechanism for failures to define their own exit codes,
 /// otherwise [`Err`] handling will swallow it.
+#[derive(Debug)]
 pub struct AppRunOutcome<E> {
     pub last_phase: AppPhase,
     pub error: Option<E>,

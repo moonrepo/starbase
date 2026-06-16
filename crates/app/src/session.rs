@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 /// Generic result for session operations.
 pub type AppResult<E> = Result<Option<u8>, E>;
@@ -6,7 +6,7 @@ pub type AppResult<E> = Result<Option<u8>, E>;
 /// A session that is passed to each application run.
 #[async_trait::async_trait]
 pub trait AppSession: Clone + Send + Sync {
-    type Error: Display + Send;
+    type Error: Debug + Display + Send + 'static;
 
     /// Run operations at the start of the application process to setup
     /// the initial state of the session.
