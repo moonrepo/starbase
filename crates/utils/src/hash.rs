@@ -5,6 +5,7 @@ use std::path::Path;
 use tracing::instrument;
 
 pub use crate::hash_error::HashError;
+pub use hex;
 
 #[cfg(feature = "hash-base64")]
 /// Generate Base64 encoded hashes.
@@ -47,7 +48,8 @@ pub mod base64 {
             })?;
         }
 
-        // Base64 output is always valid ASCII, so this never fails.
+        // SAFETY: Base64 output is restricted to the ASCII alphabet, so it is
+        // always valid UTF-8.
         Ok(unsafe { String::from_utf8_unchecked(output) })
     }
 }
@@ -63,8 +65,8 @@ macro_rules! generate_sha_funcs {
             /// Create a hash based on the provided value.
             #[inline]
             #[instrument(skip(value))]
-            pub fn from_bytes<T: AsRef<[u8]>>(value: T) -> Result<String, HashError> {
-                Ok(hex::encode($digest::digest(value)))
+            pub fn from_bytes<T: AsRef<[u8]>>(value: T) -> String {
+                hex::encode($digest::digest(value))
             }
 
             /// Create a hash based on the provided file path.

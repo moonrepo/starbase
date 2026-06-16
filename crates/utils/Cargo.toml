@@ -35,7 +35,7 @@ scc = { workspace = true, optional = true }
 wax = { version = "0.7.0", optional = true, features = ["walk"] }
 
 # hash
-base64 = { version = "0.22.1", optional = true }
+base64 = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 

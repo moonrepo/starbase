@@ -65,19 +65,19 @@ mod sha256_hash {
     #[test]
     fn from_bytes_known_vectors() {
         assert_eq!(
-            sha256::from_bytes("").unwrap(),
+            sha256::from_bytes(""),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
         assert_eq!(
-            sha256::from_bytes("abc").unwrap(),
+            sha256::from_bytes("abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
         assert_eq!(
-            sha256::from_bytes("hello").unwrap(),
+            sha256::from_bytes("hello"),
             "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
         );
         assert_eq!(
-            sha256::from_bytes("hello world").unwrap(),
+            sha256::from_bytes("hello world"),
             "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
         );
     }
@@ -87,7 +87,7 @@ mod sha256_hash {
         for input in ["", "abc", "hello", "hello world"] {
             assert_eq!(
                 sha256::from_reader(Cursor::new(input)).unwrap(),
-                sha256::from_bytes(input).unwrap(),
+                sha256::from_bytes(input),
                 "mismatch for {input:?}"
             );
         }
@@ -99,7 +99,7 @@ mod sha256_hash {
         let input = "abcdefghij".repeat(20_000); // 200 KB
         assert_eq!(
             sha256::from_reader(Cursor::new(&input)).unwrap(),
-            sha256::from_bytes(&input).unwrap()
+            sha256::from_bytes(&input)
         );
     }
 
@@ -110,7 +110,7 @@ mod sha256_hash {
 
         assert_eq!(
             sha256::from_file(sandbox.path().join("data.txt")).unwrap(),
-            sha256::from_bytes("hello world").unwrap()
+            sha256::from_bytes("hello world")
         );
     }
 
@@ -128,17 +128,17 @@ mod sha512_hash {
     #[test]
     fn from_bytes_known_vectors() {
         assert_eq!(
-            sha512::from_bytes("").unwrap(),
+            sha512::from_bytes(""),
             "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce\
              47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"
         );
         assert_eq!(
-            sha512::from_bytes("abc").unwrap(),
+            sha512::from_bytes("abc"),
             "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a\
              2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"
         );
         assert_eq!(
-            sha512::from_bytes("hello").unwrap(),
+            sha512::from_bytes("hello"),
             "9b71d224bd62f3785d96d46ad3ea3d73319bfbc2890caadae2dff72519673ca7\
              2323c3d99ba5c11d7c7acc6e14b8c5da0c4663475c2e5c3adef46f73bcdec043"
         );
@@ -149,7 +149,7 @@ mod sha512_hash {
         for input in ["", "abc", "hello", "hello world"] {
             assert_eq!(
                 sha512::from_reader(Cursor::new(input)).unwrap(),
-                sha512::from_bytes(input).unwrap(),
+                sha512::from_bytes(input),
                 "mismatch for {input:?}"
             );
         }
@@ -160,7 +160,7 @@ mod sha512_hash {
         let input = "abcdefghij".repeat(20_000); // 200 KB
         assert_eq!(
             sha512::from_reader(Cursor::new(&input)).unwrap(),
-            sha512::from_bytes(&input).unwrap()
+            sha512::from_bytes(&input)
         );
     }
 
@@ -171,7 +171,7 @@ mod sha512_hash {
 
         assert_eq!(
             sha512::from_file(sandbox.path().join("data.txt")).unwrap(),
-            sha512::from_bytes("hello world").unwrap()
+            sha512::from_bytes("hello world")
         );
     }
 
