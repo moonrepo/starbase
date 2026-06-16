@@ -3134,7 +3134,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.13.7"
+version = "0.13.8"
 dependencies = [
  "async-trait",
  "base64",
