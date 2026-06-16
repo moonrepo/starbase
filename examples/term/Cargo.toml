@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-starbase = { path = "../../crates/app" }
+starbase = { path = "../../crates/app", features = ["miette"] }
 starbase_console = { path = "../../crates/console", features = ["ui"] }
 async-trait = { workspace = true }
 iocraft = { workspace = true }

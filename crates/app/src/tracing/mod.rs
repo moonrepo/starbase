@@ -4,7 +4,6 @@ mod level;
 mod otel;
 
 use crate::tracing::format::*;
-use miette::Diagnostic;
 use std::env;
 use std::fs::{self, File};
 use std::io;
@@ -25,31 +24,42 @@ pub use tracing::{
     instrument, span, span_enabled, trace, trace_span, warn, warn_span,
 };
 
+/// A result type for tracing setup and configuration.
 pub type TracingResult<T> = Result<T, TracingError>;
 
 /// Errors related to tracing setup and configuration.
-#[derive(Debug, Diagnostic, Error)]
+#[derive(Debug, Error)]
+#[cfg_attr(feature = "miette", derive(miette::Diagnostic))]
 pub enum TracingError {
-    #[diagnostic(code(app::tracing::create_log_dir_failed))]
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::create_log_dir_failed))
+    )]
     #[error("Failed to create log directory.")]
     CreateLogDirFailed {
         #[source]
         error: std::io::Error,
     },
 
-    #[diagnostic(code(app::tracing::create_log_file_failed))]
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::create_log_file_failed))
+    )]
     #[error("Failed to create log file.")]
     CreateLogFileFailed {
         #[source]
         error: std::io::Error,
     },
 
-    #[diagnostic(code(app::tracing::log_level_invalid))]
+    #[cfg_attr(feature = "miette", diagnostic(code(app::tracing::log_level_invalid)))]
     #[error("Invalid log level: {level}")]
     LogLevelInvalid { level: String },
 
     #[cfg(feature = "log-compat")]
-    #[diagnostic(code(app::tracing::intercept_log_failed))]
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::intercept_log_failed))
+    )]
     #[error("Failed to initialize log interceptor.")]
     InterceptLogFailed {
         #[source]
@@ -57,16 +67,20 @@ pub enum TracingError {
     },
 
     #[cfg(feature = "otel")]
-    #[diagnostic(code(app::tracing::otlp_exporter_failed))]
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::otlp_exporter_failed))
+    )]
     #[error("Failed to initialize OTLP {signal} exporter.")]
     OtlpExporterFailed {
         signal: String,
         #[source]
-        error: tracing_log::log_tracer::SetLoggerError,
+        error: opentelemetry_otlp::ExporterBuildError,
     },
 }
 
-/// Options for configuring `tracing` behavior.
+/// Options for configuring [`tracing`] behavior.
+#[derive(Debug)]
 pub struct TracingOptions {
     /// Minimum level of messages to display.
     pub default_level: LogLevel,
@@ -112,6 +126,7 @@ impl Default for TracingOptions {
     }
 }
 
+/// A guard that flushes and cleans up tracing resources when dropped.
 pub struct TracingGuard {
     chrome_guard: Option<FlushGuard>,
     log_file: Option<Arc<File>>,
@@ -119,7 +134,7 @@ pub struct TracingGuard {
     otel_guard: Option<otel::OtelGuard>,
 }
 
-#[tracing::instrument(skip_all)]
+#[instrument]
 pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
     TEST_ENV.store(env::var(options.test_env).is_ok(), Ordering::Release);
 

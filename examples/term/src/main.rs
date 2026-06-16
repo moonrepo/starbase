@@ -5,7 +5,6 @@ use iocraft::prelude::*;
 use starbase::{App, AppSession, MainResult};
 use starbase_console::ui::*;
 use starbase_console::{Console, EmptyReporter};
-use std::process::ExitCode;
 use std::time::Duration;
 
 #[derive(Clone, Debug)]
@@ -14,7 +13,9 @@ struct TestSession {
 }
 
 #[async_trait]
-impl AppSession for TestSession {}
+impl AppSession for TestSession {
+    type Error = miette::Report;
+}
 
 async fn render(session: TestSession, ui: String) {
     let con = &session.console;
@@ -516,17 +517,15 @@ async fn main() -> MainResult {
     let args = std::env::args().collect::<Vec<_>>();
     let ui = args.get(1).cloned().expect("Missing UI argument!");
 
-    let code = app
-        .run(
-            TestSession {
-                console: Console::new(false),
-            },
-            |session| async move {
-                render(session, ui).await;
-                Ok(None)
-            },
-        )
-        .await?;
-
-    Ok(ExitCode::from(code))
+    app.run(
+        TestSession {
+            console: Console::new(false),
+        },
+        |session| async move {
+            render(session, ui).await;
+            Ok(None)
+        },
+    )
+    .await
+    .into_exit_result()
 }

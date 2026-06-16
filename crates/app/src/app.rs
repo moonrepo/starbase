@@ -1,7 +1,6 @@
 use crate::session::{AppResult, AppSession};
 #[cfg(feature = "tracing")]
 use crate::tracing::TracingOptions;
-use miette::IntoDiagnostic;
 use std::process::ExitCode;
 use tokio::spawn;
 use tokio::task::JoinHandle;
@@ -14,6 +13,7 @@ macro_rules! trace {
 }
 
 /// A result for `main` that handles errors and exit codes.
+#[cfg(feature = "miette")]
 pub type MainResult = miette::Result<ExitCode>;
 
 /// Phases of an application's lifecycle.
@@ -26,20 +26,47 @@ pub enum AppPhase {
     Shutdown,
 }
 
+/// The outcome of an application run, including the last phase, any error, and the exit code.
+/// This type exists to provide a mechanism for failures to define their own exit codes,
+/// otherwise [`Err`] handling will swallow it.
+pub struct AppRunOutcome<E> {
+    pub last_phase: AppPhase,
+    pub error: Option<E>,
+    pub exit_code: u8,
+}
+
+impl<E> AppRunOutcome<E> {
+    /// Convert the outcome into a standard [`Result`] with a u8 exit code on
+    /// success or an error on failure.
+    pub fn into_result(self) -> Result<u8, E> {
+        match self.error {
+            Some(error) => Err(error),
+            None => Ok(self.exit_code),
+        }
+    }
+
+    /// Convert the outcome into a standard [`Result`] with an [`ExitCode`] on
+    /// success or an error on failure.
+    pub fn into_exit_result(self) -> Result<ExitCode, E> {
+        self.into_result().map(ExitCode::from)
+    }
+}
+
 /// An application that runs through lifecycles using a session instance.
 #[derive(Debug, Default)]
 pub struct App {
-    pub phase: AppPhase,
-    pub exit_code: Option<u8>,
+    phase: AppPhase,
+    exit_code: Option<u8>,
 }
 
 impl App {
-    /// Setup `miette` diagnostics by registering error and panic hooks.
+    /// Setup [`miette`] diagnostics by registering error and panic hooks.
+    #[cfg(feature = "miette")]
     pub fn setup_diagnostics(&self) {
         crate::diagnostics::setup_miette();
     }
 
-    /// Setup `tracing` messages with default options.
+    /// Setup [`tracing`] messages with default options.
     #[cfg(feature = "tracing")]
     pub fn setup_tracing_with_defaults(
         &self,
@@ -47,7 +74,7 @@ impl App {
         self.setup_tracing(TracingOptions::default())
     }
 
-    /// Setup `tracing` messages with custom options.
+    /// Setup [`tracing`] messages with custom options.
     #[cfg(feature = "tracing")]
     pub fn setup_tracing(
         &self,
@@ -58,11 +85,10 @@ impl App {
 
     /// Start the application with the provided session and execute all phases
     /// in order. If a phase fails, always run the shutdown phase.
-    pub async fn run<S, F, Fut>(self, mut session: S, op: F) -> miette::Result<u8>
+    pub async fn run<S, F>(self, mut session: S, op: F) -> AppRunOutcome<S::Error>
     where
         S: AppSession + 'static,
-        F: FnOnce(S) -> Fut + Send + 'static,
-        Fut: Future<Output = AppResult> + Send + 'static,
+        F: AsyncFnOnce(S) -> AppResult<S::Error> + 'static,
     {
         self.run_with_session(&mut session, op).await
     }
@@ -70,46 +96,37 @@ impl App {
     /// Start the application with the provided session and execute all phases
     /// in order. If a phase fails, always run the shutdown phase.
     ///
-    /// This method is similar to [`App#run`](#method.run) but doesn't consume
+    /// This method is similar to [`App::run`](#method.run) but doesn't consume
     /// the session, and instead accepts a mutable reference.
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
-    pub async fn run_with_session<S, F, Fut>(mut self, session: &mut S, op: F) -> miette::Result<u8>
+    pub async fn run_with_session<S, F>(mut self, session: &mut S, op: F) -> AppRunOutcome<S::Error>
     where
         S: AppSession + 'static,
-        F: FnOnce(S) -> Fut + Send + 'static,
-        Fut: Future<Output = AppResult> + Send + 'static,
+        F: AsyncFnOnce(S) -> AppResult<S::Error> + 'static,
     {
         // Startup
         if let Err(error) = self.run_startup(session).await {
-            self.run_shutdown(session, Some(&error)).await?;
-
-            return Err(error);
+            return self.run_shutdown(session, Some(error)).await;
         }
 
         // Analyze
         if let Err(error) = self.run_analyze(session).await {
-            self.run_shutdown(session, Some(&error)).await?;
-
-            return Err(error);
+            return self.run_shutdown(session, Some(error)).await;
         }
 
         // Execute
         if let Err(error) = self.run_execute(session, op).await {
-            self.run_shutdown(session, Some(&error)).await?;
-
-            return Err(error);
+            return self.run_shutdown(session, Some(error)).await;
         }
 
         // Shutdown
-        self.run_shutdown(session, None).await?;
-
-        Ok(self.exit_code.unwrap_or_default())
+        self.run_shutdown(session, None).await
     }
 
     // Private
 
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
-    async fn run_startup<S>(&mut self, session: &mut S) -> miette::Result<()>
+    async fn run_startup<S>(&mut self, session: &mut S) -> Result<(), S::Error>
     where
         S: AppSession,
     {
@@ -122,7 +139,7 @@ impl App {
     }
 
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
-    async fn run_analyze<S>(&mut self, session: &mut S) -> miette::Result<()>
+    async fn run_analyze<S>(&mut self, session: &mut S) -> Result<(), S::Error>
     where
         S: AppSession,
     {
@@ -135,11 +152,10 @@ impl App {
     }
 
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
-    async fn run_execute<S, F, Fut>(&mut self, session: &mut S, op: F) -> miette::Result<()>
+    async fn run_execute<S, F>(&mut self, session: &mut S, op: F) -> Result<(), S::Error>
     where
         S: AppSession + 'static,
-        F: FnOnce(S) -> Fut + Send + 'static,
-        Fut: Future<Output = AppResult> + Send + 'static,
+        F: AsyncFnOnce(S) -> AppResult<S::Error> + 'static,
     {
         trace!("Running execute phase");
 
@@ -147,14 +163,25 @@ impl App {
 
         let fg_session = session.clone();
         let mut bg_session = session.clone();
-        let mut futures: Vec<JoinHandle<AppResult>> = vec![];
 
-        futures.push(spawn(async move { op(fg_session).await }));
-        futures.push(spawn(async move { bg_session.execute().await }));
+        let handle: JoinHandle<AppResult<S::Error>> =
+            spawn(async move { bg_session.execute().await });
 
-        for future in futures {
-            self.handle_exit_code(future.await.into_diagnostic()??);
-        }
+        match op(fg_session).await {
+            Ok(code) => {
+                self.handle_exit_code(code);
+            }
+            Err(error) => {
+                handle.abort();
+                return Err(error);
+            }
+        };
+
+        match handle.await {
+            Ok(Ok(code)) => self.handle_exit_code(code),
+            Ok(Err(error)) => return Err(error),
+            Err(error) => std::panic::resume_unwind(error.into_panic()),
+        };
 
         Ok(())
     }
@@ -163,30 +190,46 @@ impl App {
     async fn run_shutdown<S>(
         &mut self,
         session: &mut S,
-        error: Option<&miette::Report>,
-    ) -> miette::Result<()>
+        error: Option<S::Error>,
+    ) -> AppRunOutcome<S::Error>
     where
         S: AppSession,
     {
-        if error.is_some() {
-            trace!("Running shutdown phase (because another phase failed)");
-
-            #[cfg(feature = "tracing")]
-            if let Some(error) = error {
-                trace!("Error: {error}");
-            }
+        #[allow(unused)]
+        if let Some(error) = &error {
+            trace!("Running shutdown phase (because another phase failed): {error}");
         } else {
             trace!("Running shutdown phase");
         }
 
+        let last_phase = self.phase;
+
         self.phase = AppPhase::Shutdown;
-        self.handle_exit_code(session.shutdown().await?);
+
+        match session.shutdown().await {
+            Ok(code) => {
+                self.handle_exit_code(code);
+            }
+            Err(error) => {
+                trace!("Shutdown phase failed with error: {error}");
+
+                return AppRunOutcome {
+                    last_phase: self.phase,
+                    error: Some(error),
+                    exit_code: self.exit_code.unwrap_or(1),
+                };
+            }
+        };
 
         if error.is_some() && self.exit_code.is_none() {
             self.handle_exit_code(Some(1));
         }
 
-        Ok(())
+        AppRunOutcome {
+            last_phase,
+            error,
+            exit_code: self.exit_code.unwrap_or(0),
+        }
     }
 
     fn handle_exit_code(&mut self, code: Option<u8>) {

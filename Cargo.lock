@@ -2995,6 +2995,7 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "serial_test",
+ "starbase",
  "starbase_styles",
  "thiserror",
  "tokio",

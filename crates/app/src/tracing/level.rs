@@ -3,7 +3,7 @@ use std::fmt;
 use std::str::FromStr;
 use tracing::Level;
 
-/// This is similar to tracing `Level` but provides "Off" and "Verbose" variants.
+/// This is similar to [`tracing::Level`] but provides "Off" and "Verbose" variants.
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum LogLevel {
@@ -14,19 +14,22 @@ pub enum LogLevel {
     Info,
     Debug,
     Trace,
-    /// Like tracing, but also includes all modules and spans.
+    /// Like `Trace`, but also includes all modules and spans.
     Verbose,
 }
 
 impl LogLevel {
+    /// Returns `true` if the log level is `Off`, meaning no messages will be logged.
     pub fn is_off(&self) -> bool {
         matches!(self, Self::Off)
     }
 
+    /// Returns `true` if the log level is `Verbose`, meaning all messages will be logged.
     pub fn is_verbose(&self) -> bool {
         matches!(self, Self::Verbose)
     }
 
+    /// Converts the `LogLevel` to an optional [`tracing::Level`].
     pub fn to_tracing_level(&self) -> Option<Level> {
         match self {
             Self::Off => None,
