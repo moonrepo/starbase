@@ -9,7 +9,6 @@ use starbase_shell::ShellType;
 use starbase_utils::{fs, glob};
 use std::env;
 use std::path::PathBuf;
-use std::process::ExitCode;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::sleep;
@@ -30,7 +29,9 @@ struct TestSession {
 
 #[async_trait]
 impl AppSession for TestSession {
-    async fn startup(&mut self) -> AppResult {
+    type Error = miette::Report;
+
+    async fn startup(&mut self) -> AppResult<Self::Error> {
         info!("startup 1");
 
         self.state = "original".into();
@@ -49,21 +50,21 @@ impl AppSession for TestSession {
         Ok(None)
     }
 
-    async fn analyze(&mut self) -> AppResult {
+    async fn analyze(&mut self) -> AppResult<Self::Error> {
         info!(val = self.state, "analyze {}", "foo.bar".style(Style::File));
         self.state = "mutated".into();
 
         Ok(None)
     }
 
-    async fn shutdown(&mut self) -> AppResult {
+    async fn shutdown(&mut self) -> AppResult<Self::Error> {
         info!(val = self.state, "shutdown");
 
         Ok(None)
     }
 }
 
-async fn create_file() -> AppResult {
+async fn create_file() -> miette::Result<()> {
     fs::create_dir_all("temp").into_diagnostic()?;
 
     example_lib::create_file()?;
@@ -73,26 +74,27 @@ async fn create_file() -> AppResult {
 
     sleep(Duration::new(10, 0)).await;
 
-    Ok(None)
+    Ok(())
 }
 
-async fn missing_file() -> AppResult {
+async fn missing_file() -> miette::Result<()> {
     fs::read_file(PathBuf::from("temp/fake.file")).into_diagnostic()?;
 
-    Ok(None)
+    Ok(())
 }
 
-async fn fail() -> AppResult {
+async fn fail() -> miette::Result<()> {
     if let Ok(fail) = std::env::var("FAIL") {
         if fail == "panic" {
             panic!("This paniced!");
         }
 
         warn!("<caution>fail</caution>");
-        return Err(AppError::Test)?;
+
+        return Err(AppError::Test.into());
     }
 
-    Ok(None)
+    Ok(())
 }
 
 #[tokio::main]
@@ -110,14 +112,12 @@ async fn main() -> MainResult {
 
     let mut session = TestSession::default();
 
-    let code = app
-        .run_with_session(&mut session, |session| async {
-            dbg!(session);
-            create_file().await?;
+    app.run_with_session(&mut session, |session| async {
+        dbg!(session);
+        create_file().await?;
 
-            Ok(None)
-        })
-        .await?;
-
-    Ok(ExitCode::from(code))
+        Ok(None)
+    })
+    .await
+    .into_exit_result()
 }

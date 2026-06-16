@@ -1,11 +1,23 @@
 #![allow(dead_code)]
 
 use async_trait::async_trait;
-use miette::{IntoDiagnostic, bail};
 use starbase::{App, AppPhase, AppResult, AppSession};
+use std::fmt;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::task;
+
+/// A minimal error type that only satisfies `Debug + Display + Send + 'static`,
+/// demonstrating that a session error does not need to implement
+/// `std::error::Error` (so `miette::Report`, `anyhow::Error`, etc. also work).
+#[derive(Debug)]
+struct TestError(String);
+
+impl fmt::Display for TestError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 struct TestSession {
@@ -29,13 +41,15 @@ impl TestSession {
 
 #[async_trait]
 impl AppSession for TestSession {
-    async fn startup(&mut self) -> AppResult {
+    type Error = TestError;
+
+    async fn startup(&mut self) -> AppResult<Self::Error> {
         dbg!(1);
 
         self.order.write().await.push("startup".into());
 
         if self.error_in_phase == Some(AppPhase::Startup) {
-            bail!("error in startup");
+            return Err(TestError("error in startup".into()));
         }
 
         if self.exit_in_phase == Some(AppPhase::Startup) {
@@ -45,13 +59,13 @@ impl AppSession for TestSession {
         Ok(None)
     }
 
-    async fn analyze(&mut self) -> AppResult {
+    async fn analyze(&mut self) -> AppResult<Self::Error> {
         dbg!(2);
 
         self.order.write().await.push("analyze".into());
 
         if self.error_in_phase == Some(AppPhase::Analyze) {
-            bail!("error in analyze");
+            return Err(TestError("error in analyze".into()));
         }
 
         if self.exit_in_phase == Some(AppPhase::Analyze) {
@@ -61,13 +75,13 @@ impl AppSession for TestSession {
         Ok(None)
     }
 
-    async fn execute(&mut self) -> AppResult {
+    async fn execute(&mut self) -> AppResult<Self::Error> {
         dbg!(3);
 
         self.order.write().await.push("execute".into());
 
         if self.error_in_phase == Some(AppPhase::Execute) {
-            bail!("error in execute");
+            return Err(TestError("error in execute".into()));
         }
 
         if self.exit_in_phase == Some(AppPhase::Execute) {
@@ -82,18 +96,18 @@ impl AppSession for TestSession {
             context.write().await.push("async-task".into());
         })
         .await
-        .into_diagnostic()?;
+        .map_err(|error| TestError(error.to_string()))?;
 
         Ok(None)
     }
 
-    async fn shutdown(&mut self) -> AppResult {
+    async fn shutdown(&mut self) -> AppResult<Self::Error> {
         dbg!(4);
 
         self.order.write().await.push("shutdown".into());
 
         if self.error_in_phase == Some(AppPhase::Shutdown) {
-            bail!("error in shutdown");
+            return Err(TestError("error in shutdown".into()));
         }
 
         if self.exit_in_phase == Some(AppPhase::Shutdown) {
@@ -106,11 +120,11 @@ impl AppSession for TestSession {
     }
 }
 
-async fn noop<S>(_session: S) -> AppResult {
+async fn noop(_session: TestSession) -> AppResult<TestError> {
     Ok(None)
 }
 
-async fn noop_code<S>(_session: S) -> AppResult {
+async fn noop_code(_session: TestSession) -> AppResult<TestError> {
     Ok(Some(5))
 }
 
@@ -121,6 +135,7 @@ async fn runs_in_order() {
     App::default()
         .run_with_session(&mut session, noop)
         .await
+        .into_result()
         .unwrap();
 
     assert_eq!(
@@ -136,6 +151,7 @@ async fn runs_other_contexts() {
     App::default()
         .run_with_session(&mut session, noop)
         .await
+        .into_result()
         .unwrap();
 
     assert_eq!(
@@ -154,10 +170,13 @@ mod startup {
             ..Default::default()
         };
 
-        let error = App::default().run_with_session(&mut session, noop).await;
+        let result = App::default()
+            .run_with_session(&mut session, noop)
+            .await
+            .into_result();
 
-        assert!(error.is_err());
-        assert_eq!(error.unwrap_err().to_string(), "error in startup");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "error in startup");
         assert_eq!(session.get_order(), vec!["startup", "shutdown"]);
     }
 
@@ -171,6 +190,7 @@ mod startup {
         let code = App::default()
             .run_with_session(&mut session, noop)
             .await
+            .into_result()
             .unwrap();
 
         assert_eq!(code, 1);
@@ -187,10 +207,13 @@ mod analyze {
             ..Default::default()
         };
 
-        let error = App::default().run_with_session(&mut session, noop).await;
+        let result = App::default()
+            .run_with_session(&mut session, noop)
+            .await
+            .into_result();
 
-        assert!(error.is_err());
-        assert_eq!(error.unwrap_err().to_string(), "error in analyze");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "error in analyze");
         assert_eq!(session.get_order(), vec!["startup", "analyze", "shutdown"]);
     }
 
@@ -204,6 +227,7 @@ mod analyze {
         let code = App::default()
             .run_with_session(&mut session, noop)
             .await
+            .into_result()
             .unwrap();
 
         assert_eq!(code, 2);
@@ -220,10 +244,13 @@ mod execute {
             ..Default::default()
         };
 
-        let error = App::default().run_with_session(&mut session, noop).await;
+        let result = App::default()
+            .run_with_session(&mut session, noop)
+            .await
+            .into_result();
 
-        assert!(error.is_err());
-        assert_eq!(error.unwrap_err().to_string(), "error in execute");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "error in execute");
         assert_eq!(
             session.get_order(),
             vec!["startup", "analyze", "execute", "shutdown"]
@@ -240,6 +267,7 @@ mod execute {
         let code = App::default()
             .run_with_session(&mut session, noop)
             .await
+            .into_result()
             .unwrap();
 
         assert_eq!(code, 3);
@@ -252,6 +280,7 @@ mod execute {
         let code = App::default()
             .run_with_session(&mut session, noop_code)
             .await
+            .into_result()
             .unwrap();
 
         assert_eq!(code, 5);
@@ -268,10 +297,13 @@ mod shutdown {
             ..Default::default()
         };
 
-        let error = App::default().run_with_session(&mut session, noop).await;
+        let result = App::default()
+            .run_with_session(&mut session, noop)
+            .await
+            .into_result();
 
-        assert!(error.is_err());
-        assert_eq!(error.unwrap_err().to_string(), "error in shutdown");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().to_string(), "error in shutdown");
         assert_eq!(
             session.get_order(),
             vec!["startup", "analyze", "execute", "shutdown"]
@@ -288,6 +320,7 @@ mod shutdown {
         let code = App::default()
             .run_with_session(&mut session, noop)
             .await
+            .into_result()
             .unwrap();
 
         assert_eq!(code, 4);

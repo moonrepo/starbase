@@ -4,63 +4,83 @@ mod level;
 mod otel;
 
 use crate::tracing::format::*;
-pub use crate::tracing::level::LogLevel;
-#[cfg(feature = "otel")]
-pub use crate::tracing::otel::OtelOptions;
-use miette::Diagnostic;
-use std::error::Error;
-use std::fs::File;
+use std::env;
+use std::fs::{self, File};
 use std::io;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::{Arc, atomic::Ordering};
 use std::time::SystemTime;
-use std::{env, fmt as std_fmt, fs};
+use thiserror::Error;
 use tracing::subscriber::set_global_default;
 use tracing_chrome::{ChromeLayerBuilder, FlushGuard};
 use tracing_subscriber::fmt;
 use tracing_subscriber::{EnvFilter, prelude::*};
 
+pub use crate::tracing::level::LogLevel;
+#[cfg(feature = "otel")]
+pub use crate::tracing::otel::OtelOptions;
 pub use tracing::{
     debug, debug_span, enabled, error, error_span, event, event_enabled, info, info_span,
     instrument, span, span_enabled, trace, trace_span, warn, warn_span,
 };
 
+/// A result type for tracing setup and configuration.
 pub type TracingResult<T> = Result<T, TracingError>;
 
-#[derive(Debug, Diagnostic)]
-pub struct TracingError {
-    message: String,
-    source: Option<Box<dyn Error + Send + Sync>>,
-}
+/// Errors related to tracing setup and configuration.
+#[derive(Debug, Error)]
+#[cfg_attr(feature = "miette", derive(miette::Diagnostic))]
+pub enum TracingError {
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::create_log_dir_failed))
+    )]
+    #[error("Failed to create log directory.")]
+    CreateLogDirFailed {
+        #[source]
+        error: std::io::Error,
+    },
 
-impl TracingError {
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::create_log_file_failed))
+    )]
+    #[error("Failed to create log file.")]
+    CreateLogFileFailed {
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[cfg_attr(feature = "miette", diagnostic(code(app::tracing::log_level_invalid)))]
+    #[error("Invalid log level: {level}")]
+    LogLevelInvalid { level: String },
+
+    #[cfg(feature = "log-compat")]
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::intercept_log_failed))
+    )]
+    #[error("Failed to initialize log interceptor.")]
+    InterceptLogFailed {
+        #[source]
+        error: tracing_log::log_tracer::SetLoggerError,
+    },
+
     #[cfg(feature = "otel")]
-    pub(super) fn otlp_exporter(
-        signal: &'static str,
-        source: impl Error + Send + Sync + 'static,
-    ) -> Self {
-        Self {
-            message: format!("failed to initialize OTLP {signal} exporter"),
-            source: Some(Box::new(source)),
-        }
-    }
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::otlp_exporter_failed))
+    )]
+    #[error("Failed to initialize OTLP {signal} exporter.")]
+    OtlpExporterFailed {
+        signal: String,
+        #[source]
+        error: opentelemetry_otlp::ExporterBuildError,
+    },
 }
 
-impl std_fmt::Display for TracingError {
-    fn fmt(&self, f: &mut std_fmt::Formatter<'_>) -> std_fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl Error for TracingError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        self.source
-            .as_deref()
-            .map(|source| source as &(dyn Error + 'static))
-    }
-}
-
+/// Options for configuring [`tracing`] behavior.
+#[derive(Debug)]
 pub struct TracingOptions {
     /// Minimum level of messages to display.
     pub default_level: LogLevel,
@@ -78,7 +98,7 @@ pub struct TracingOptions {
     pub log_file: Option<PathBuf>,
     /// Whether to output logs in NDJSON format.
     pub ndjson: bool,
-    /// OpenTelemetry export settings.
+    /// OpenTelemetry export settings. Requires the `otel` feature.
     #[cfg(feature = "otel")]
     pub otel: OtelOptions,
     /// Show span hierarchy in log output.
@@ -106,6 +126,7 @@ impl Default for TracingOptions {
     }
 }
 
+/// A guard that flushes and cleans up tracing resources when dropped.
 pub struct TracingGuard {
     chrome_guard: Option<FlushGuard>,
     log_file: Option<Arc<File>>,
@@ -113,7 +134,9 @@ pub struct TracingGuard {
     otel_guard: Option<otel::OtelGuard>,
 }
 
-#[tracing::instrument(skip_all)]
+/// Setup tracing with the provided options, returning a guard that will flush
+/// and clean up resources when dropped.
+#[instrument]
 pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
     TEST_ENV.store(env::var(options.test_env).is_ok(), Ordering::Release);
 
@@ -129,6 +152,8 @@ pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
                 || level.contains('=')
             {
                 level
+            } else if level == "verbose" {
+                "trace".into()
             } else {
                 options
                     .filter_modules
@@ -142,7 +167,8 @@ pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
 
     #[cfg(feature = "log-compat")]
     if options.intercept_log {
-        tracing_log::LogTracer::init().expect("Failed to initialize log interceptor.");
+        tracing_log::LogTracer::init()
+            .map_err(|error| TracingError::InterceptLogFailed { error })?;
     }
 
     // Build the formatting layer. NDJSON and the console formatter produce
@@ -184,14 +210,27 @@ pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
         // Write to a log file
         .with(if let Some(log_file) = options.log_file {
             if let Some(dir) = log_file.parent() {
-                fs::create_dir_all(dir).expect("Failed to create log directory.");
+                fs::create_dir_all(dir)
+                    .map_err(|error| TracingError::CreateLogDirFailed { error })?;
             }
 
-            let file = Arc::new(File::create(log_file).expect("Failed to create log file."));
+            let file = Arc::new(
+                File::create(log_file)
+                    .map_err(|error| TracingError::CreateLogFileFailed { error })?,
+            );
 
             guard.log_file = Some(Arc::clone(&file));
 
-            Some(fmt::layer().with_ansi(false).with_writer(file))
+            Some(
+                fmt::layer()
+                    .with_ansi(false)
+                    .with_target(true)
+                    .with_writer(file)
+                    .event_format(EventFormatter {
+                        show_spans: options.show_spans,
+                    })
+                    .fmt_fields(FieldFormatter),
+            )
         } else {
             None
         })

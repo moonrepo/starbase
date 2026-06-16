@@ -1,9 +1,11 @@
-use miette::miette;
+use super::TracingError;
 use std::fmt;
 use std::str::FromStr;
+use tracing::Level;
 
-// This is similar to tracing `Level` but provides an "Off" variant.
-#[derive(Clone, Debug, Default)]
+/// This is similar to [`tracing::Level`] but provides "Off" and "Verbose" variants.
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum LogLevel {
     Off,
     Error,
@@ -12,6 +14,32 @@ pub enum LogLevel {
     Info,
     Debug,
     Trace,
+    /// Like `Trace`, but also includes all modules and spans.
+    Verbose,
+}
+
+impl LogLevel {
+    /// Returns `true` if the log level is `Off`, meaning no messages will be logged.
+    pub fn is_off(&self) -> bool {
+        matches!(self, Self::Off)
+    }
+
+    /// Returns `true` if the log level is `Verbose`, meaning all messages will be logged.
+    pub fn is_verbose(&self) -> bool {
+        matches!(self, Self::Verbose)
+    }
+
+    /// Converts the `LogLevel` to an optional [`tracing::Level`].
+    pub fn to_tracing_level(&self) -> Option<Level> {
+        match self {
+            Self::Off => None,
+            Self::Error => Some(Level::ERROR),
+            Self::Warn => Some(Level::WARN),
+            Self::Info => Some(Level::INFO),
+            Self::Debug => Some(Level::DEBUG),
+            Self::Trace | Self::Verbose => Some(Level::TRACE),
+        }
+    }
 }
 
 impl fmt::Display for LogLevel {
@@ -26,29 +54,30 @@ impl fmt::Display for LogLevel {
                 Self::Info => "info",
                 Self::Debug => "debug",
                 Self::Trace => "trace",
+                Self::Verbose => "verbose",
             }
         )
     }
 }
 
 impl TryFrom<String> for LogLevel {
-    type Error = miette::Report;
+    type Error = TracingError;
 
-    fn try_from(value: String) -> Result<Self, <LogLevel as TryFrom<String>>::Error> {
+    fn try_from(value: String) -> Result<Self, TracingError> {
         Self::from_str(value.as_str())
     }
 }
 
 impl TryFrom<&str> for LogLevel {
-    type Error = miette::Report;
+    type Error = TracingError;
 
-    fn try_from(value: &str) -> Result<Self, <LogLevel as TryFrom<&str>>::Error> {
+    fn try_from(value: &str) -> Result<Self, TracingError> {
         Self::from_str(value)
     }
 }
 
 impl FromStr for LogLevel {
-    type Err = miette::Report;
+    type Err = TracingError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(match value.to_lowercase().as_str() {
@@ -58,7 +87,12 @@ impl FromStr for LogLevel {
             "info" => Self::Info,
             "debug" => Self::Debug,
             "trace" => Self::Trace,
-            other => return Err(miette!("Unknown log level {other}")),
+            "verbose" => Self::Verbose,
+            other => {
+                return Err(TracingError::LogLevelInvalid {
+                    level: other.to_string(),
+                });
+            }
         })
     }
 }

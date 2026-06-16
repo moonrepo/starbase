@@ -16,7 +16,8 @@ use tracing_subscriber::{Layer, layer::SubscriberExt, registry::LookupSpan};
 
 const OTEL_INSTRUMENTATION_SCOPE: &str = env!("CARGO_PKG_NAME");
 
-#[derive(Default)]
+/// OpenTelemetry configuration for exporting traces, metrics, and logs over OTLP.
+#[derive(Debug, Default)]
 pub struct OtelOptions {
     /// Whether to export traces and metrics over OTLP.
     pub enabled: bool,
@@ -31,7 +32,7 @@ pub struct OtelOptions {
 // all retain handles past TracingGuard, so keep the original providers here and
 // shut them down explicitly when the guard drops. This makes short-lived CLI
 // runs flush traces, metrics, and logs before exit.
-pub(super) struct OtelGuard {
+pub struct OtelGuard {
     logger_provider: Option<SdkLoggerProvider>,
     meter_provider: Option<SdkMeterProvider>,
     tracer_provider: Option<SdkTracerProvider>,
@@ -94,7 +95,10 @@ fn setup_otel_tracing(
     let exporter = SpanExporter::builder()
         .with_tonic()
         .build()
-        .map_err(|error| TracingError::otlp_exporter("traces", error))?;
+        .map_err(|error| TracingError::OtlpExporterFailed {
+            signal: "traces".into(),
+            error,
+        })?;
 
     Ok(Some(
         SdkTracerProvider::builder()
@@ -115,7 +119,10 @@ fn setup_otel_metrics(
     let exporter = MetricExporter::builder()
         .with_tonic()
         .build()
-        .map_err(|error| TracingError::otlp_exporter("metrics", error))?;
+        .map_err(|error| TracingError::OtlpExporterFailed {
+            signal: "metrics".into(),
+            error,
+        })?;
 
     let reader = PeriodicReader::builder(exporter).build();
 
@@ -140,7 +147,10 @@ fn setup_otel_logs(
     let exporter = LogExporter::builder()
         .with_tonic()
         .build()
-        .map_err(|error| TracingError::otlp_exporter("logs", error))?;
+        .map_err(|error| TracingError::OtlpExporterFailed {
+            signal: "logs".into(),
+            error,
+        })?;
 
     Ok(Some(
         SdkLoggerProvider::builder()
@@ -150,7 +160,7 @@ fn setup_otel_logs(
     ))
 }
 
-pub(super) fn extend_subscriber<S>(
+pub fn extend_subscriber<S>(
     subscriber: S,
     options: &OtelOptions,
 ) -> TracingResult<(impl Subscriber + Send + Sync + 'static, OtelGuard)>

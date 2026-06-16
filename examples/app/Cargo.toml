@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 example_lib = { path = "../lib" }
-starbase = { path = "../../crates/app" }
+starbase = { path = "../../crates/app", features = ["miette"] }
 starbase_shell = { path = "../../crates/shell" }
 starbase_utils = { path = "../../crates/utils", features = ["glob", "fs-lock"] }
 log = "0.4.25"
