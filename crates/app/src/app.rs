@@ -89,7 +89,7 @@ impl App {
     pub async fn run<S, F>(self, mut session: S, op: F) -> AppRunOutcome<S::Error>
     where
         S: AppSession + 'static,
-        F: AsyncFnOnce(S) -> AppResult<S::Error> + 'static,
+        F: AsyncFnOnce(S) -> AppResult<S::Error> + Send + 'static,
     {
         self.run_with_session(&mut session, op).await
     }
@@ -103,7 +103,7 @@ impl App {
     pub async fn run_with_session<S, F>(mut self, session: &mut S, op: F) -> AppRunOutcome<S::Error>
     where
         S: AppSession + 'static,
-        F: AsyncFnOnce(S) -> AppResult<S::Error> + 'static,
+        F: AsyncFnOnce(S) -> AppResult<S::Error> + Send + 'static,
     {
         // Startup
         if let Err(error) = self.run_startup(session).await {
@@ -156,7 +156,7 @@ impl App {
     async fn run_execute<S, F>(&mut self, session: &mut S, op: F) -> Result<(), S::Error>
     where
         S: AppSession + 'static,
-        F: AsyncFnOnce(S) -> AppResult<S::Error> + 'static,
+        F: AsyncFnOnce(S) -> AppResult<S::Error> + Send + 'static,
     {
         trace!("Running execute phase");
 
@@ -166,7 +166,7 @@ impl App {
         let mut bg_session = session.clone();
 
         let handle: JoinHandle<AppResult<S::Error>> =
-            spawn(async move { bg_session.execute().await });
+            spawn(Box::pin(async move { bg_session.execute().await }));
 
         match op(fg_session).await {
             Ok(code) => {
