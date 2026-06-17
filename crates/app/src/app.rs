@@ -1,6 +1,7 @@
 use crate::session::{AppResult, AppSession};
 #[cfg(feature = "tracing")]
 use crate::tracing::TracingOptions;
+use std::future::Future;
 use std::process::ExitCode;
 use tokio::spawn;
 use tokio::task::JoinHandle;
@@ -86,10 +87,11 @@ impl App {
 
     /// Start the application with the provided session and execute all phases
     /// in order. If a phase fails, always run the shutdown phase.
-    pub async fn run<S, F>(self, mut session: S, op: F) -> AppRunOutcome<S::Error>
+    pub async fn run<S, F, Fut>(self, mut session: S, op: F) -> AppRunOutcome<S::Error>
     where
         S: AppSession + 'static,
-        F: AsyncFnOnce(S) -> AppResult<S::Error> + Send + 'static,
+        F: FnOnce(S) -> Fut + Send + 'static,
+        Fut: Future<Output = AppResult<S::Error>> + Send + 'static,
     {
         self.run_with_session(&mut session, op).await
     }
@@ -100,10 +102,15 @@ impl App {
     /// This method is similar to [`App::run`](#method.run) but doesn't consume
     /// the session, and instead accepts a mutable reference.
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
-    pub async fn run_with_session<S, F>(mut self, session: &mut S, op: F) -> AppRunOutcome<S::Error>
+    pub async fn run_with_session<S, F, Fut>(
+        mut self,
+        session: &mut S,
+        op: F,
+    ) -> AppRunOutcome<S::Error>
     where
         S: AppSession + 'static,
-        F: AsyncFnOnce(S) -> AppResult<S::Error> + Send + 'static,
+        F: FnOnce(S) -> Fut + Send + 'static,
+        Fut: Future<Output = AppResult<S::Error>> + Send + 'static,
     {
         // Startup
         if let Err(error) = self.run_startup(session).await {
@@ -153,10 +160,11 @@ impl App {
     }
 
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
-    async fn run_execute<S, F>(&mut self, session: &mut S, op: F) -> Result<(), S::Error>
+    async fn run_execute<S, F, Fut>(&mut self, session: &mut S, op: F) -> Result<(), S::Error>
     where
         S: AppSession + 'static,
-        F: AsyncFnOnce(S) -> AppResult<S::Error> + Send + 'static,
+        F: FnOnce(S) -> Fut + Send + 'static,
+        Fut: Future<Output = AppResult<S::Error>> + Send + 'static,
     {
         trace!("Running execute phase");
 
@@ -165,20 +173,31 @@ impl App {
         let fg_session = session.clone();
         let mut bg_session = session.clone();
 
-        let handle: JoinHandle<AppResult<S::Error>> =
+        // Run the main execution on a spawned task instead of inline on the
+        // caller's future. The runtime drives the top-level future on the main
+        // thread (via `block_on`), and on some platforms that thread has a much
+        // smaller stack than spawned worker threads (~1MB on Windows vs the
+        // ~8MB main stack on Linux/macOS, and tokio's ~2MB workers). Deep
+        // workloads such as WASM plugin execution can overflow the small main
+        // stack, so move both the foreground and background work to workers.
+        let fg_handle: JoinHandle<AppResult<S::Error>> =
+            spawn(Box::pin(async move { op(fg_session).await }));
+        let bg_handle: JoinHandle<AppResult<S::Error>> =
             spawn(Box::pin(async move { bg_session.execute().await }));
 
-        match op(fg_session).await {
-            Ok(code) => {
-                self.handle_exit_code(code);
+        match fg_handle.await {
+            Ok(Ok(code)) => self.handle_exit_code(code),
+            Ok(Err(error)) => {
+                bg_handle.abort();
+                return Err(error);
             }
             Err(error) => {
-                handle.abort();
-                return Err(error);
+                bg_handle.abort();
+                std::panic::resume_unwind(error.into_panic());
             }
         };
 
-        match handle.await {
+        match bg_handle.await {
             Ok(Ok(code)) => self.handle_exit_code(code),
             Ok(Err(error)) => return Err(error),
             Err(error) => std::panic::resume_unwind(error.into_panic()),
