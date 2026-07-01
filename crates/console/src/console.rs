@@ -126,6 +126,20 @@ impl<R: Reporter> Console<R> {
     pub fn set_quiet(&self, value: bool) {
         self.quiet.store(value, Ordering::Release);
     }
+
+    pub fn with_reporter<T: Reporter>(&self, reporter: T) -> Console<T> {
+        let mut console: Console<T> = Console {
+            err: self.err.clone(),
+            err_handle: None,
+            out: self.out.clone(),
+            out_handle: None,
+            quiet: self.quiet.clone(),
+            reporter: None,
+            theme: self.theme.clone(),
+        };
+        console.set_reporter(reporter);
+        console
+    }
 }
 
 impl<R: Reporter> Clone for Console<R> {
