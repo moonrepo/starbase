@@ -5,8 +5,8 @@ use crate::stream::*;
 use crate::theme::ConsoleTheme;
 use std::fmt;
 use std::ops::Deref;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 use tracing::trace;
 
@@ -135,6 +135,7 @@ impl<R: Reporter> Console<R> {
             out_handle: None,
             quiet: self.quiet.clone(),
             reporter: None,
+            #[cfg(feature = "ui")]
             theme: self.theme.clone(),
         };
         console.set_reporter(reporter);
