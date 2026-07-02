@@ -2,8 +2,10 @@ mod format;
 mod level;
 #[cfg(feature = "otel")]
 mod otel;
+mod rotation;
 
 use crate::tracing::format::*;
+use crate::tracing::rotation::*;
 use std::env;
 use std::fs::{self, File};
 use std::io;
@@ -19,6 +21,7 @@ use tracing_subscriber::{EnvFilter, prelude::*};
 pub use crate::tracing::level::LogLevel;
 #[cfg(feature = "otel")]
 pub use crate::tracing::otel::OtelOptions;
+pub use crate::tracing::rotation::LogFileRotation;
 pub use tracing::{
     debug, debug_span, enabled, error, error_span, event, event_enabled, info, info_span,
     instrument, span, span_enabled, trace, trace_span, warn, warn_span,
@@ -47,6 +50,18 @@ pub enum TracingError {
     )]
     #[error("Failed to create log file.")]
     CreateLogFileFailed {
+        #[source]
+        error: std::io::Error,
+    },
+
+    #[cfg_attr(
+        feature = "miette",
+        diagnostic(code(app::tracing::rotate_log_file_failed))
+    )]
+    #[error("Failed to rotate log file {from}.")]
+    RotateLogFileFailed {
+        from: PathBuf,
+        to: Option<PathBuf>,
         #[source]
         error: std::io::Error,
     },
@@ -96,6 +111,8 @@ pub struct TracingOptions {
     pub log_env: String,
     /// Absolute path to a file to write logs to.
     pub log_file: Option<PathBuf>,
+    /// Settings for rotating old log files when [`TracingOptions::log_file`] is enabled.
+    pub log_file_rotation: LogFileRotation,
     /// Whether to output logs in NDJSON format.
     pub ndjson: bool,
     /// OpenTelemetry export settings. Requires the `otel` feature.
@@ -117,6 +134,7 @@ impl Default for TracingOptions {
             intercept_log: true,
             log_env: "STARBASE_LOG".into(),
             log_file: None,
+            log_file_rotation: LogFileRotation::default(),
             ndjson: false,
             #[cfg(feature = "otel")]
             otel: OtelOptions::default(),
@@ -213,6 +231,8 @@ pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
                 fs::create_dir_all(dir)
                     .map_err(|error| TracingError::CreateLogDirFailed { error })?;
             }
+
+            rotate_log_file(&log_file, options.log_file_rotation)?;
 
             let file = Arc::new(
                 File::create(log_file)
