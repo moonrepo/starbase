@@ -11,7 +11,7 @@ pub struct LogFileRotation {
 
 impl Default for LogFileRotation {
     fn default() -> Self {
-        Self { max_files: 5 }
+        Self { max_files: 7 }
     }
 }
 
