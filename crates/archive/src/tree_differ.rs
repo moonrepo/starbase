@@ -5,6 +5,24 @@ use std::io::{self, BufReader, Read, Seek};
 use std::path::{Path, PathBuf};
 use tracing::trace;
 
+/// Read repeatedly until `buf` is full or the reader is exhausted, returning the
+/// number of bytes read. This normalizes readers that yield data in different
+/// chunk sizes so callers can compare fixed-size windows accurately.
+fn fill_buffer<R: Read>(reader: &mut R, buf: &mut [u8]) -> io::Result<usize> {
+    let mut read = 0;
+
+    while read < buf.len() {
+        match reader.read(&mut buf[read..]) {
+            Ok(0) => break,
+            Ok(n) => read += n,
+            Err(ref error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    }
+
+    Ok(read)
+}
+
 /// The `TreeDiffer` will compare files within in archive to files
 /// at the destination, and only unpack files that differ, and also
 /// remove files from the destination that are not in the archive.
@@ -77,22 +95,35 @@ impl TreeDiffer {
     pub fn are_files_equal<S: Read, D: Read>(&self, source: &mut S, dest: &mut D) -> bool {
         let mut areader = BufReader::new(source);
         let mut breader = BufReader::new(dest);
-        let mut abuf = [0; 512];
-        let mut bbuf = [0; 512];
+        let mut abuf = [0u8; 512];
+        let mut bbuf = [0u8; 512];
 
-        while let (Ok(av), Ok(bv)) = (areader.read(&mut abuf), breader.read(&mut bbuf)) {
-            // We've reached the end of the file for either one
-            if av < 512 || bv < 512 {
-                return abuf == bbuf;
+        loop {
+            // Fill each buffer completely (rather than trusting a single `read`)
+            // so that readers which return data in differing chunk sizes -- such
+            // as decompression streams -- still compare byte-for-byte.
+            let (Ok(an), Ok(bn)) = (
+                fill_buffer(&mut areader, &mut abuf),
+                fill_buffer(&mut breader, &mut bbuf),
+            ) else {
+                return false;
+            };
+
+            // A differing amount of readable data means differing lengths.
+            if an != bn {
+                return false;
             }
 
-            // Otherwise, compare buffer
-            if abuf != bbuf {
+            // Both readers are exhausted at the same offset, so they're equal.
+            if an == 0 {
+                return true;
+            }
+
+            // Compare only the bytes that were actually read.
+            if abuf[..an] != bbuf[..bn] {
                 return false;
             }
         }
-
-        false
     }
 
     /// Remove all files in the destination directory that have not been

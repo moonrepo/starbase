@@ -24,6 +24,7 @@ impl GlobCache {
         hash.write(dir.as_os_str().as_encoded_bytes());
 
         for glob in globs {
+            hash.write(b":");
             hash.write(glob.as_bytes());
         }
 

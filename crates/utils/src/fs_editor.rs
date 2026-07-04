@@ -132,8 +132,15 @@ pub fn write_file_with_config<D: AsRef<[u8]>>(
     let path = path.as_ref();
     let editor_config = get_editor_config_props(path)?;
 
-    let mut data = unsafe { String::from_utf8_unchecked(data.as_ref().to_vec()) };
-    editor_config.apply_eof(&mut data);
+    // Operate on raw bytes so that non-UTF-8 payloads are written verbatim.
+    // Wrapping arbitrary caller bytes in `String::from_utf8_unchecked` and then
+    // running `str` methods over them (via `apply_eof`) is undefined behavior.
+    let mut data = data.as_ref().to_vec();
+    let eof = editor_config.eof.as_bytes();
+
+    if !eof.is_empty() && !data.ends_with(eof) {
+        data.extend_from_slice(eof);
+    }
 
     if let Some(parent) = path.parent() {
         create_dir_all(parent)?;

@@ -72,6 +72,16 @@ impl ArchivePacker for GzPacker {
     }
 }
 
+fn strip_gz_extension(name: &str) -> String {
+    for ext in [".gz", ".gzip"] {
+        if let Some(stripped) = name.strip_suffix(ext) {
+            return stripped.to_owned();
+        }
+    }
+
+    name.to_owned()
+}
+
 /// Opens a gzipped file.
 pub struct GzUnpacker {
     archive: GzDecoder<File>,
@@ -86,7 +96,7 @@ impl GzUnpacker {
 
         Ok(GzUnpacker {
             archive: GzDecoder::new(fs::open_file(input_file)?),
-            file_name: fs::file_name(input_file).replace(".gz", ""),
+            file_name: strip_gz_extension(&fs::file_name(input_file)),
             output_dir: output_dir.to_path_buf(),
         })
     }
@@ -110,5 +120,20 @@ impl ArchiveUnpacker for GzUnpacker {
         fs::write_file(&out_file, bytes)?;
 
         Ok(out_file)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_gz_extension;
+
+    #[test]
+    fn strips_only_trailing_gz_extension() {
+        assert_eq!(strip_gz_extension("archive.gz"), "archive");
+        assert_eq!(strip_gz_extension("data.gzip"), "data");
+        // Inner occurrences and multi-dot names are preserved.
+        assert_eq!(strip_gz_extension("my.gz.file.gz"), "my.gz.file");
+        assert_eq!(strip_gz_extension("report.tar"), "report.tar");
+        assert_eq!(strip_gz_extension("plain"), "plain");
     }
 }

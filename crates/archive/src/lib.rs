@@ -58,7 +58,7 @@ pub fn get_full_file_extension(path: &Path) -> Option<String> {
 
     if let Some(found) = get_supported_archive_extensions()
         .into_iter()
-        .find(|ext| file_name.ends_with(ext))
+        .find(|ext| file_name.ends_with(&format!(".{ext}")))
     {
         return Some(found);
     }
@@ -115,6 +115,6 @@ pub fn is_supported_archive_extension(path: &Path) -> bool {
         .is_some_and(|name| {
             get_supported_archive_extensions()
                 .into_iter()
-                .any(|ext| name.ends_with(&ext))
+                .any(|ext| name.ends_with(&format!(".{ext}")))
         })
 }
