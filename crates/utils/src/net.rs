@@ -216,7 +216,15 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
 
             if let Some(on_chunk) = &on_chunk {
                 current_size = current_size.saturating_add(chunk.len() as u64);
-                on_chunk(current_size.min(total_size), total_size);
+
+                on_chunk(
+                    if total_size > 0 {
+                        current_size.min(total_size)
+                    } else {
+                        current_size
+                    },
+                    total_size,
+                );
             }
         }
 

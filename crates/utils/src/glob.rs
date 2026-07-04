@@ -107,8 +107,8 @@ impl GlobSet<'_> {
         }
 
         Ok(GlobSet {
-            expressions: wax::any(ex).unwrap(),
-            negations: wax::any(ng).unwrap(),
+            expressions: any_glob(ex, "<expressions>")?,
+            negations: any_glob(ng, "<negations>")?,
             enabled: count > 0,
         })
     }
@@ -147,8 +147,8 @@ impl GlobSet<'_> {
         }
 
         Ok(GlobSet {
-            expressions: wax::any(ex).unwrap(),
-            negations: wax::any(ng).unwrap(),
+            expressions: any_glob(ex, "<expressions>")?,
+            negations: any_glob(ng, "<negations>")?,
             enabled: count > 0,
         })
     }
@@ -186,6 +186,19 @@ impl GlobSet<'_> {
 pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
     Glob::new(pattern).map_err(|error| GlobError::Create {
         glob: pattern.to_owned(),
+        error: Box::new(error),
+    })
+}
+
+/// Combine a list of globs into a single [`Any`] matcher, returning a
+/// [`GlobError`] instead of panicking if the combination is invalid.
+#[inline]
+pub fn any_glob<'a, I>(globs: I, desc: &str) -> Result<Any<'a>, GlobError>
+where
+    I: IntoIterator<Item = Glob<'a>>,
+{
+    wax::any(globs).map_err(|error| GlobError::Create {
+        glob: desc.to_owned(),
         error: Box::new(error),
     })
 }
@@ -300,14 +313,23 @@ where
     let (expressions, mut negations) = split_patterns(patterns);
     negations.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
-    let negations_set = wax::any(negations).unwrap();
+    // An invalid negation pattern must surface as an error rather than panic.
+    let negations_desc = negations.join(", ");
+    let negations_set = wax::any(negations).map_err(|error| GlobError::Create {
+        glob: negations_desc.clone(),
+        error: Box::new(error),
+    })?;
 
     for expression in expressions {
-        for entry in create_glob(expression)?
+        let walker = create_glob(expression)?
             .walk_with_behavior(base_dir, LinkBehavior::ReadFile)
             .not(negations_set.clone())
-            .unwrap()
-        {
+            .map_err(|error| GlobError::Create {
+                glob: negations_desc.clone(),
+                error: Box::new(error),
+            })?;
+
+        for entry in walker {
             match entry {
                 Ok(e) => {
                     paths.push(e.into_path());
@@ -669,10 +691,8 @@ fn relativize_negation(base_dir: &Path, bucket_dir: &Path, negation: &str) -> Op
     }
 }
 
-/// Return true if a single glob path segment matches a literal path segment.
 fn segment_matches(pattern: &str, segment: &str) -> bool {
-    is_glob(pattern)
-        && create_glob(pattern).is_ok_and(|glob| glob.is_match(Path::new(segment)))
+    is_glob(pattern) && create_glob(pattern).is_ok_and(|glob| glob.is_match(Path::new(segment)))
 }
 
 fn max_traversal_depth(patterns: &[String]) -> Result<Option<usize>, GlobError> {

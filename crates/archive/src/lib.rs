@@ -27,6 +27,34 @@ pub use tree_differ::*;
 use starbase_utils::fs;
 use std::path::Path;
 
+/// Returns `true` if writing to `target` would escape `root` by traversing a
+/// symlink -- for example a symlink entry planted earlier in the same archive
+/// that points outside the output directory (CWE-22 / CWE-59). Every already
+/// existing ancestor of `target` beneath `root` is checked, since
+/// `create_dir_all` and file writes would otherwise follow such a link.
+#[cfg(any(feature = "tar", feature = "zip"))]
+pub(crate) fn escapes_via_symlink(root: &Path, target: &Path) -> bool {
+    let Ok(rel) = target.strip_prefix(root) else {
+        // Not under the root at all, so treat it as unsafe.
+        return true;
+    };
+
+    let mut current = root.to_path_buf();
+
+    for component in rel.components() {
+        current.push(component);
+
+        if current
+            .symlink_metadata()
+            .is_ok_and(|meta| meta.file_type().is_symlink())
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Join a file name from a list of parts, removing any empty parts.
 pub fn join_file_name<I, V>(parts: I) -> String
 where
@@ -117,4 +145,36 @@ pub fn is_supported_archive_extension(path: &Path) -> bool {
                 .into_iter()
                 .any(|ext| name.ends_with(&format!(".{ext}")))
         })
+}
+
+#[cfg(all(test, unix, any(feature = "tar", feature = "zip")))]
+mod symlink_guard_tests {
+    use super::escapes_via_symlink;
+    use std::fs;
+    use std::os::unix::fs::symlink;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn flags_writes_through_a_symlinked_parent() {
+        let root = std::env::temp_dir().join(format!(
+            "starbase-symlink-guard-{}-{}",
+            std::process::id(),
+            UNIX_EPOCH.elapsed().unwrap_or_default().as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+
+        // A plain nested path inside the root is safe.
+        assert!(!escapes_via_symlink(&root, &root.join("safe/file.txt")));
+
+        // Plant `evil -> <outside>`, mimicking an earlier archive entry; a write
+        // through it must be rejected.
+        let outside = std::env::temp_dir();
+        symlink(&outside, root.join("evil")).unwrap();
+        assert!(escapes_via_symlink(&root, &root.join("evil/passwd")));
+
+        // A path that isn't under the root at all is also rejected.
+        assert!(escapes_via_symlink(&root, &outside.join("elsewhere")));
+
+        fs::remove_dir_all(&root).unwrap();
+    }
 }

@@ -228,6 +228,13 @@ impl ArchiveUnpacker for ZipUnpacker {
 
             let output_path = self.output_dir.join(&path);
 
+            // Refuse to write through a symlink planted by an earlier entry,
+            // which could redirect the write outside the output directory.
+            if crate::escapes_via_symlink(&self.output_dir, &output_path) {
+                trace!(source = ?path, "Skipping entry that would escape via a symlink");
+                continue;
+            }
+
             // If a folder, create the dir
             if file.is_dir() {
                 fs::create_dir_all(&output_path)?;
@@ -243,7 +250,12 @@ impl ArchiveUnpacker for ZipUnpacker {
                     error: Box::new(error),
                 })?;
 
-                fs::update_perms(&output_path, file.unix_mode())?;
+                // Only apply the archive's stored mode. Defaulting a missing
+                // mode to 0o755 would mark every file from a mode-less (e.g.
+                // Windows-created) zip as executable.
+                if let Some(mode) = file.unix_mode() {
+                    fs::update_perms(&output_path, Some(mode))?;
+                }
             }
 
             differ.untrack_file(&output_path);
