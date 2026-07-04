@@ -60,12 +60,15 @@ impl Id {
     /// by persisting alphanumeric characters and underscores,
     /// converting dashes to underscores, and removing everything else.
     pub fn to_env_var(&self) -> String {
-        let mut var = String::new();
+        let id = self.0.as_str();
+        let mut var = String::with_capacity(id.len());
 
-        for ch in self.0.as_str().chars() {
+        for ch in id.chars() {
             match ch {
+                // These are all ASCII, so uppercasing in place avoids the
+                // second full-string allocation of `to_uppercase()`.
                 'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
-                    var.push(ch);
+                    var.push(ch.to_ascii_uppercase());
                 }
                 '-' => {
                     var.push('_');
@@ -74,7 +77,7 @@ impl Id {
             }
         }
 
-        var.to_uppercase()
+        var
     }
 
     /// Convert the identifier to an [`OsString`].

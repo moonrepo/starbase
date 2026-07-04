@@ -304,6 +304,19 @@ where
     I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
+    walk_internal(base_dir, patterns, false)
+}
+
+fn walk_internal<'glob, P, I, V>(
+    base_dir: P,
+    patterns: I,
+    files_only: bool,
+) -> Result<Vec<PathBuf>, GlobError>
+where
+    P: AsRef<Path> + Debug,
+    I: IntoIterator<Item = &'glob V> + Debug,
+    V: AsRef<str> + 'glob + ?Sized,
+{
     let base_dir = base_dir.as_ref();
     let instant = Instant::now();
     let mut paths = vec![];
@@ -332,6 +345,12 @@ where
         for entry in walker {
             match entry {
                 Ok(e) => {
+                    // Reuse the file type already resolved during the walk
+                    // instead of re-stat-ing every returned path afterwards.
+                    if files_only && !e.file_type().is_file() {
+                        continue;
+                    }
+
                     paths.push(e.into_path());
                 }
                 Err(_) => {
@@ -356,12 +375,7 @@ where
     I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
-    let paths = walk(base_dir, patterns)?;
-
-    Ok(paths
-        .into_iter()
-        .filter(|p| p.is_file())
-        .collect::<Vec<_>>())
+    walk_internal(base_dir, patterns, true)
 }
 
 /// Options to customize walking behavior.

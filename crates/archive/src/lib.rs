@@ -152,7 +152,7 @@ mod symlink_guard_tests {
     use super::escapes_via_symlink;
     use std::fs;
     use std::os::unix::fs::symlink;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::UNIX_EPOCH;
 
     #[test]
     fn flags_writes_through_a_symlinked_parent() {

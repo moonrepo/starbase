@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 #[cfg(unix)]
 pub static PATH_DELIMITER: &str = ":";
@@ -26,16 +27,25 @@ pub fn get_config_dir(home_dir: &Path) -> PathBuf {
         .unwrap_or_else(|| home_dir.join(".config"))
 }
 
-pub fn get_var_regex() -> regex::Regex {
-    regex::Regex::new(r"\$(?<name>[A-Za-z0-9_]+)").unwrap()
+pub fn get_var_regex() -> &'static regex::Regex {
+    static REGEX: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\$(?<name>[A-Za-z0-9_]+)").unwrap());
+
+    &REGEX
 }
 
-pub fn get_var_regex_bytes() -> regex::bytes::Regex {
-    regex::bytes::Regex::new(r"\$(?<name>[A-Za-z0-9_]+)").unwrap()
+pub fn get_var_regex_bytes() -> &'static regex::bytes::Regex {
+    static REGEX: LazyLock<regex::bytes::Regex> =
+        LazyLock::new(|| regex::bytes::Regex::new(r"\$(?<name>[A-Za-z0-9_]+)").unwrap());
+
+    &REGEX
 }
 
-pub fn get_env_var_regex() -> regex::Regex {
-    regex::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap()
+pub fn get_env_var_regex() -> &'static regex::Regex {
+    static REGEX: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\$(?<name>[A-Z0-9_]+)").unwrap());
+
+    &REGEX
 }
 
 pub fn get_env_key_native(key: &str) -> &str {

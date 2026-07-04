@@ -503,11 +503,17 @@ pub fn reflink_file<S: AsRef<Path> + Debug, D: AsRef<Path> + Debug>(
 pub fn remove<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    if path.is_symlink() {
+    // Resolve the file type with a single stat instead of separate
+    // `is_symlink`/`is_file`/`is_dir` calls that each hit the filesystem.
+    let Ok(file_type) = path.symlink_metadata().map(|meta| meta.file_type()) else {
+        return Ok(());
+    };
+
+    if file_type.is_symlink() {
         remove_link(path)?;
-    } else if path.is_file() {
+    } else if file_type.is_file() {
         remove_file(path)?;
-    } else if path.is_dir() {
+    } else if file_type.is_dir() {
         remove_dir_all(path)?;
     }
 

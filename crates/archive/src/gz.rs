@@ -7,7 +7,7 @@ use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use starbase_utils::fs;
 use std::fs::File;
-use std::io::prelude::*;
+use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 
@@ -107,17 +107,12 @@ impl ArchiveUnpacker for GzUnpacker {
     fn unpack(&mut self, _prefix: &str, _differ: &mut TreeDiffer) -> Result<PathBuf, ArchiveError> {
         trace!(output_dir = ?self.output_dir, "Ungzipping file");
 
-        let mut bytes = vec![];
-
-        self.archive
-            .read_to_end(&mut bytes)
-            .map_err(|error| GzError::UnpackFailure {
-                error: Box::new(error),
-            })?;
-
         let out_file = self.output_dir.join(&self.file_name);
+        let mut output = fs::create_file(&out_file)?;
 
-        fs::write_file(&out_file, bytes)?;
+        io::copy(&mut self.archive, &mut output).map_err(|error| GzError::UnpackFailure {
+            error: Box::new(error),
+        })?;
 
         Ok(out_file)
     }

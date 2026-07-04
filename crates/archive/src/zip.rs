@@ -5,7 +5,7 @@ use crate::tree_differ::TreeDiffer;
 pub use crate::zip_error::ZipError;
 use starbase_utils::fs::{self, FsError};
 use std::fs::File;
-use std::io::{self, prelude::*};
+use std::io;
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 use zip::write::SimpleFileOptions;
@@ -84,12 +84,12 @@ impl ArchivePacker for ZipPacker {
                 error: Box::new(error),
             })?;
 
-        self.archive
-            .write_all(&fs::read_file_bytes(file)?)
-            .map_err(|error| FsError::Write {
-                path: file.to_path_buf(),
-                error: Box::new(error),
-            })?;
+        let mut input = fs::open_file_for_writing(file)?;
+
+        io::copy(&mut input, &mut self.archive).map_err(|error| FsError::Write {
+            path: file.to_path_buf(),
+            error: Box::new(error),
+        })?;
 
         Ok(())
     }
