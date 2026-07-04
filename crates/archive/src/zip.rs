@@ -84,7 +84,7 @@ impl ArchivePacker for ZipPacker {
                 error: Box::new(error),
             })?;
 
-        let mut input = fs::open_file_for_writing(file)?;
+        let mut input = fs::open_file(file)?;
 
         io::copy(&mut input, &mut self.archive).map_err(|error| FsError::Write {
             path: file.to_path_buf(),

@@ -18,7 +18,7 @@ harness = false
 starbase_styles = { version = "0.6.8", path = "../styles" }
 dirs = { workspace = true }
 miette = { workspace = true, optional = true }
-reflink-copy = "0.1.29"
+reflink-copy = "0.1.30"
 serde = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

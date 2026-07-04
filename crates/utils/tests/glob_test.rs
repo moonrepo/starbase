@@ -413,10 +413,7 @@ mod partition_patterns {
 
         assert_eq!(
             map,
-            BTreeMap::from_iter([(
-                "/root".into(),
-                vec!["**/*.js".into(), "!dist/**".into()]
-            )])
+            BTreeMap::from_iter([("/root".into(), vec!["**/*.js".into(), "!dist/**".into()])])
         );
     }
 

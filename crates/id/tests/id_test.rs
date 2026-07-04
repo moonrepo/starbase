@@ -49,7 +49,10 @@ mod id {
         assert_eq!(Id::new("moon").unwrap().to_env_var(), "MOON");
         assert_eq!(Id::new("my-app").unwrap().to_env_var(), "MY_APP");
         // `@`, `/`, and `.` are dropped; dashes become underscores.
-        assert_eq!(Id::new("@scope/pkg-1.2").unwrap().to_env_var(), "SCOPEPKG_12");
+        assert_eq!(
+            Id::new("@scope/pkg-1.2").unwrap().to_env_var(),
+            "SCOPEPKG_12"
+        );
     }
 
     #[test]
