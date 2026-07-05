@@ -17,7 +17,6 @@
 mod bz2;
 #[cfg(feature = "gz")]
 mod gz;
-#[cfg(any(feature = "bz2", feature = "gz", feature = "xz", feature = "zstd"))]
 mod state;
 #[cfg(feature = "xz")]
 mod xz;
@@ -28,8 +27,7 @@ mod zstd;
 pub use bz2::Bz2;
 #[cfg(feature = "gz")]
 pub use gz::Gz;
-#[cfg(any(feature = "bz2", feature = "gz", feature = "xz", feature = "zstd"))]
-pub(crate) use state::*;
+pub use state::*;
 #[cfg(feature = "xz")]
 pub use xz::Xz;
 #[cfg(feature = "zstd")]

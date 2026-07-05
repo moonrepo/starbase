@@ -3,20 +3,20 @@ use std::io::{self, Read, Write};
 use std::mem;
 
 /// Read-direction codec state: a decompressor that owns the wrapped stream.
-pub(crate) trait ReadState<T>: Read {
+pub trait ReadState<T>: Read {
     /// Return the wrapped stream, discarding decoder state.
     fn into_inner(self: Box<Self>) -> T;
 }
 
 /// Write-direction codec state: a compressor that owns the wrapped stream.
-pub(crate) trait WriteState<T>: Write {
+pub trait WriteState<T>: Write {
     /// Write the codec epilogue and return the wrapped stream.
     fn finish(self: Box<Self>) -> io::Result<T>;
 }
 
 /// Lazily-directed codec state. A codec starts as [`State::Pending`] and
 /// commits to reading (decompressing) or writing (compressing) on first use.
-pub(crate) enum State<T> {
+pub enum State<T> {
     /// Direction not chosen yet.
     Pending(T),
     /// Committed to decompressing reads.

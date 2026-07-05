@@ -32,7 +32,7 @@ impl<W: Write> FilePacker<W> {
 
 impl<W: Write + Finish> ArchivePacker for FilePacker<W> {
     fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
-        trace!(source = name, input = ?file, "Packing file");
+        trace!(source = name, input = ?file, "Adding file");
 
         if self.file_count > 0 {
             return Err(FileError::OneFile.into());
@@ -56,7 +56,7 @@ impl<W: Write + Finish> ArchivePacker for FilePacker<W> {
 
     #[instrument(name = "pack_file", skip_all)]
     fn pack(mut self) -> Result<(), ArchiveError> {
-        trace!("Creating single-file archive");
+        trace!("Packing single-file archive");
 
         // Writes codec epilogues through the entire stream chain.
         self.writer

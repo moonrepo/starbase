@@ -1,13 +1,14 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
-use crate::join_file_name;
-pub use crate::zip_error::ZipError;
+use crate::helpers::{escapes_via_symlink, join_file_name};
 use starbase_utils::fs::{self, FsError};
 use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
+
+pub use crate::zip_error::ZipError;
 
 /// Creates zip archives by writing to the provided stream.
 ///
@@ -38,7 +39,7 @@ impl<W: Write + Seek> ZipPacker<W> {
 
 impl<W: Write + Seek> ArchivePacker for ZipPacker<W> {
     fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
-        trace!(source = name, input = ?file, "Packing file");
+        trace!(source = name, input = ?file, "Adding file");
 
         #[allow(unused_mut)] // windows
         let mut options = SimpleFileOptions::default().compression_method(self.compression);
@@ -68,7 +69,7 @@ impl<W: Write + Seek> ArchivePacker for ZipPacker<W> {
     }
 
     fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError> {
-        trace!(source = name, input = ?dir, "Packing directory");
+        trace!(source = name, input = ?dir, "Adding directory");
 
         self.archive
             .add_directory(
@@ -105,7 +106,7 @@ impl<W: Write + Seek> ArchivePacker for ZipPacker<W> {
 
     #[instrument(name = "pack_zip", skip_all)]
     fn pack(self) -> Result<(), ArchiveError> {
-        trace!("Creating zip");
+        trace!("Packing zip");
 
         // Writes the central directory and returns the stream.
         let mut writer = self
@@ -148,7 +149,7 @@ impl<R: Read + Seek> ArchiveUnpacker for ZipUnpacker<R> {
     fn unpack(mut self, prefix: &str) -> Result<PathBuf, ArchiveError> {
         fs::create_dir_all(&self.output_dir)?;
 
-        trace!(output_dir = ?self.output_dir, "Opening zip");
+        trace!(output_dir = ?self.output_dir, "Unpacking zip");
 
         let mut count = 0;
 
@@ -176,7 +177,7 @@ impl<R: Read + Seek> ArchiveUnpacker for ZipUnpacker<R> {
 
             // Refuse to write through a symlink planted by an earlier entry,
             // which could redirect the write outside the output directory.
-            if crate::escapes_via_symlink(&self.output_dir, &output_path) {
+            if escapes_via_symlink(&self.output_dir, &output_path) {
                 trace!(source = ?path, "Skipping entry that would escape via a symlink");
                 continue;
             }
@@ -206,7 +207,7 @@ impl<R: Read + Seek> ArchiveUnpacker for ZipUnpacker<R> {
             count += 1;
         }
 
-        trace!("Unpacked {} files", count);
+        trace!("Unpacked {count} files");
 
         Ok(self.output_dir)
     }

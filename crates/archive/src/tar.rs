@@ -1,12 +1,14 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
 use crate::codecs::Finish;
-pub use crate::tar_error::TarError;
+use crate::helpers::escapes_via_symlink;
 use binstall_tar::{Archive as TarArchive, Builder as TarBuilder, Entry as TarEntry};
 use starbase_utils::fs;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use tracing::{instrument, trace};
+
+pub use crate::tar_error::TarError;
 
 /// Creates tar archives by writing to the provided stream. Compose the
 /// stream with a codec to create compressed tarballs.
@@ -31,7 +33,7 @@ impl<W: Write> TarPacker<W> {
 
 impl<W: Write + Finish> ArchivePacker for TarPacker<W> {
     fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
-        trace!(source = name, input = ?file, "Packing file");
+        trace!(source = name, input = ?file, "Adding file");
 
         self.archive
             .append_file(name, &mut fs::open_file(file)?)
@@ -44,7 +46,7 @@ impl<W: Write + Finish> ArchivePacker for TarPacker<W> {
     }
 
     fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError> {
-        trace!(source = name, input = ?dir, "Packing directory");
+        trace!(source = name, input = ?dir, "Adding directory");
 
         self.archive
             .append_dir_all(name, dir)
@@ -58,7 +60,7 @@ impl<W: Write + Finish> ArchivePacker for TarPacker<W> {
 
     #[instrument(name = "pack_tar", skip_all)]
     fn pack(self) -> Result<(), ArchiveError> {
-        trace!("Creating tarball");
+        trace!("Packing tarball");
 
         // Writes the tar footer and returns the stream.
         let mut writer = self
@@ -148,7 +150,7 @@ impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
 
         self.archive.set_overwrite(true);
 
-        trace!(output_dir = ?self.output_dir, "Opening tarball");
+        trace!(output_dir = ?self.output_dir, "Unpacking tarball");
 
         let mut count = 0;
 
@@ -180,7 +182,7 @@ impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
 
             // Refuse to write through a symlink planted by an earlier entry,
             // which could redirect the write outside the output directory.
-            if crate::escapes_via_symlink(&self.output_dir, &output_path) {
+            if escapes_via_symlink(&self.output_dir, &output_path) {
                 trace!(source = ?path, "Skipping entry that would escape via a symlink");
                 continue;
             }
@@ -199,7 +201,7 @@ impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
             count += 1;
         }
 
-        trace!("Unpacked {} files", count);
+        trace!("Unpacked {count} files");
 
         Ok(self.output_dir)
     }
