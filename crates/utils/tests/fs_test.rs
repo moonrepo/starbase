@@ -301,6 +301,25 @@ mod fs_base {
             assert!(!root.join("cache/nested/b.txt").exists());
             assert!(!root.join("cache/nested/deeper/c.txt").exists());
         }
+
+        #[test]
+        fn does_not_count_fresh_files() {
+            let sandbox = create_empty_sandbox();
+            sandbox.create_file("cache/a.txt", "1234");
+            sandbox.create_file("cache/nested/b.txt", "12");
+
+            let root = sandbox.path();
+
+            // Nothing is older than an hour, so nothing should be deleted or counted.
+            let result =
+                fs::remove_dir_stale_contents(root.join("cache"), Duration::from_secs(3600))
+                    .unwrap();
+
+            assert_eq!(result.files_deleted, 0);
+            assert_eq!(result.bytes_saved, 0);
+            assert!(root.join("cache/a.txt").exists());
+            assert!(root.join("cache/nested/b.txt").exists());
+        }
     }
 
     mod stale {

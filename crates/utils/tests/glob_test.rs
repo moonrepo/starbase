@@ -286,6 +286,20 @@ mod walk_fast {
             ]
         );
     }
+
+    #[test]
+    fn applies_negations_across_buckets() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("src/a.js", "");
+        sandbox.create_file("dist/b.js", "");
+
+        // The `!dist/**` negation must exclude files in `dist`, matching the
+        // behavior of the (non-partitioned) `walk`.
+        let mut paths = walk_fast(sandbox.path(), ["**/*.js", "!dist/**"]).unwrap();
+        paths.sort();
+
+        assert_eq!(paths, vec![sandbox.path().join("src/a.js")]);
+    }
 }
 
 mod partition_patterns {
@@ -375,12 +389,31 @@ mod partition_patterns {
         assert_eq!(
             map,
             BTreeMap::from_iter([
-                ("/root".into(), vec!["website".into()]),
+                (
+                    "/root".into(),
+                    vec![
+                        "website".into(),
+                        "!packages/cli".into(),
+                        "!packages/core-*".into()
+                    ]
+                ),
                 (
                     "/root/packages".into(),
                     vec!["*".into(), "!cli".into(), "!core-*".into()]
                 ),
             ])
+        );
+    }
+
+    #[test]
+    fn keeps_negations_in_broad_buckets() {
+        // The `!dist/**` negation must land in the `/root` bucket that walks
+        // `**/*.js`, not be siphoned off into a `/root/dist` bucket of its own.
+        let map = partition_patterns("/root", ["**/*.js", "!dist/**"]);
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([("/root".into(), vec!["**/*.js".into(), "!dist/**".into()])])
         );
     }
 

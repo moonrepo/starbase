@@ -91,6 +91,9 @@ pub fn flush_on_loop(
         // Has the thread been closed?
         match receiver.try_recv() {
             Ok(true) | Err(mpsc::TryRecvError::Disconnected) => {
+                // Flush once more to capture anything written between the flush
+                // above and this shutdown signal, then exit.
+                let _ = flush(&mut buffer.lock(), stream);
                 break;
             }
             _ => {}

@@ -107,8 +107,8 @@ impl GlobSet<'_> {
         }
 
         Ok(GlobSet {
-            expressions: wax::any(ex).unwrap(),
-            negations: wax::any(ng).unwrap(),
+            expressions: any_glob(ex, "<expressions>")?,
+            negations: any_glob(ng, "<negations>")?,
             enabled: count > 0,
         })
     }
@@ -147,8 +147,8 @@ impl GlobSet<'_> {
         }
 
         Ok(GlobSet {
-            expressions: wax::any(ex).unwrap(),
-            negations: wax::any(ng).unwrap(),
+            expressions: any_glob(ex, "<expressions>")?,
+            negations: any_glob(ng, "<negations>")?,
             enabled: count > 0,
         })
     }
@@ -186,6 +186,19 @@ impl GlobSet<'_> {
 pub fn create_glob(pattern: &str) -> Result<Glob<'_>, GlobError> {
     Glob::new(pattern).map_err(|error| GlobError::Create {
         glob: pattern.to_owned(),
+        error: Box::new(error),
+    })
+}
+
+/// Combine a list of globs into a single [`Any`] matcher, returning a
+/// [`GlobError`] instead of panicking if the combination is invalid.
+#[inline]
+pub fn any_glob<'a, I>(globs: I, desc: &str) -> Result<Any<'a>, GlobError>
+where
+    I: IntoIterator<Item = Glob<'a>>,
+{
+    wax::any(globs).map_err(|error| GlobError::Create {
+        glob: desc.to_owned(),
         error: Box::new(error),
     })
 }
@@ -291,6 +304,19 @@ where
     I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
+    walk_internal(base_dir, patterns, false)
+}
+
+fn walk_internal<'glob, P, I, V>(
+    base_dir: P,
+    patterns: I,
+    files_only: bool,
+) -> Result<Vec<PathBuf>, GlobError>
+where
+    P: AsRef<Path> + Debug,
+    I: IntoIterator<Item = &'glob V> + Debug,
+    V: AsRef<str> + 'glob + ?Sized,
+{
     let base_dir = base_dir.as_ref();
     let instant = Instant::now();
     let mut paths = vec![];
@@ -300,16 +326,31 @@ where
     let (expressions, mut negations) = split_patterns(patterns);
     negations.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
-    let negations_set = wax::any(negations).unwrap();
+    // An invalid negation pattern must surface as an error rather than panic.
+    let negations_desc = negations.join(", ");
+    let negations_set = wax::any(negations).map_err(|error| GlobError::Create {
+        glob: negations_desc.clone(),
+        error: Box::new(error),
+    })?;
 
     for expression in expressions {
-        for entry in create_glob(expression)?
+        let walker = create_glob(expression)?
             .walk_with_behavior(base_dir, LinkBehavior::ReadFile)
             .not(negations_set.clone())
-            .unwrap()
-        {
+            .map_err(|error| GlobError::Create {
+                glob: negations_desc.clone(),
+                error: Box::new(error),
+            })?;
+
+        for entry in walker {
             match entry {
                 Ok(e) => {
+                    // Reuse the file type already resolved during the walk
+                    // instead of re-stat-ing every returned path afterwards.
+                    if files_only && !e.file_type().is_file() {
+                        continue;
+                    }
+
                     paths.push(e.into_path());
                 }
                 Err(_) => {
@@ -334,12 +375,7 @@ where
     I: IntoIterator<Item = &'glob V> + Debug,
     V: AsRef<str> + 'glob + ?Sized,
 {
-    let paths = walk(base_dir, patterns)?;
-
-    Ok(paths
-        .into_iter()
-        .filter(|p| p.is_file())
-        .collect::<Vec<_>>())
+    walk_internal(base_dir, patterns, true)
 }
 
 /// Options to customize walking behavior.
@@ -537,20 +573,25 @@ where
     let mut patterns = patterns.into_iter().map(|p| p.as_ref()).collect::<Vec<_>>();
     patterns.sort_by_key(|a| a.len());
 
-    // Global negations (!**) need to applied to all buckets
-    let mut global_negations = vec![];
+    // Negations restrict *every* bucket that could contain a match, not just the
+    // one their literal prefix points at. Collect them up front (relative to the
+    // base dir, without the leading `!`) and apply them to each bucket below,
+    // re-relativized to that bucket. Routing a negation into its own bucket --
+    // as this used to -- silently drops it from the broader buckets that its
+    // positive counterpart actually walks.
+    let negations = patterns
+        .iter()
+        .filter_map(|pattern| {
+            pattern
+                .strip_prefix('!')
+                .map(|negation| negation.trim_start_matches("./").to_owned())
+        })
+        .collect::<Vec<_>>();
 
-    for mut pattern in patterns {
-        if pattern.starts_with("!**") {
-            global_negations.push(pattern.to_owned());
+    for pattern in patterns {
+        // Negations are handled separately below.
+        if pattern.starts_with('!') {
             continue;
-        }
-
-        let mut negated = false;
-
-        if let Some(suffix) = pattern.strip_prefix('!') {
-            negated = true;
-            pattern = suffix;
         }
 
         let mut dir = base_dir.to_path_buf();
@@ -580,22 +621,92 @@ where
             }
         }
 
-        let glob = glob_parts.join("/");
-
-        partitions.entry(dir).or_insert(vec![]).push(if negated {
-            format!("!{glob}")
-        } else {
-            glob
-        });
+        partitions
+            .entry(dir)
+            .or_insert(vec![])
+            .push(glob_parts.join("/"));
     }
 
-    if !global_negations.is_empty() {
-        partitions.iter_mut().for_each(|(_key, value)| {
-            value.extend(global_negations.clone());
-        });
+    if !negations.is_empty() {
+        for (dir, value) in partitions.iter_mut() {
+            for negation in &negations {
+                if let Some(rel) = relativize_negation(base_dir, dir, negation) {
+                    value.push(format!("!{rel}"));
+                }
+            }
+        }
     }
 
     partitions
+}
+
+/// Re-express a negation (relative to `base_dir`, without the leading `!`) so it
+/// applies within a specific bucket directory. Returns [`None`] when the negation
+/// cannot match anything inside that bucket, so it can be skipped there.
+fn relativize_negation(base_dir: &Path, bucket_dir: &Path, negation: &str) -> Option<String> {
+    // Floating negations (leading `**`) match at any depth, so they apply to
+    // every bucket unchanged.
+    if negation.starts_with("**") {
+        return Some(negation.to_owned());
+    }
+
+    // The base bucket sees paths exactly as authored.
+    let Ok(bucket_rel) = bucket_dir.strip_prefix(base_dir) else {
+        return Some(negation.to_owned());
+    };
+
+    if bucket_rel.as_os_str().is_empty() {
+        return Some(negation.to_owned());
+    }
+
+    // A non-UTF-8 bucket path can't be compared against string globs; keep the
+    // negation as-is so we err toward excluding rather than leaking files.
+    let Some(bucket_rel) = bucket_rel.to_str() else {
+        return Some(negation.to_owned());
+    };
+    let bucket_rel = bucket_rel.replace('\\', "/");
+
+    let mut neg_parts = negation.split('/');
+
+    for bucket_part in bucket_rel.split('/') {
+        match neg_parts.next() {
+            // `**` spans this bucket segment and any deeper ones, so the
+            // remainder (including the `**`) applies within the bucket.
+            Some("**") => {
+                let rest = std::iter::once("**")
+                    .chain(neg_parts)
+                    .collect::<Vec<_>>()
+                    .join("/");
+
+                return Some(rest);
+            }
+            // Consume a literal or wildcard segment that matches this bucket
+            // segment and keep descending.
+            Some(neg_part) if neg_part == bucket_part || segment_matches(neg_part, bucket_part) => {
+                continue;
+            }
+            // The negation diverges from this bucket's path, so it can't match
+            // anything inside it.
+            Some(_) => return None,
+            // The negation is a proper prefix of the bucket path and did not end
+            // in `**`, so it targets an ancestor entry, not this bucket's files.
+            None => return None,
+        }
+    }
+
+    let rest = neg_parts.collect::<Vec<_>>();
+
+    if rest.is_empty() {
+        // The negation names the bucket directory itself; a glob without a
+        // trailing wildcard doesn't match the directory's contents.
+        None
+    } else {
+        Some(rest.join("/"))
+    }
+}
+
+fn segment_matches(pattern: &str, segment: &str) -> bool {
+    is_glob(pattern) && create_glob(pattern).is_ok_and(|glob| glob.is_match(Path::new(segment)))
 }
 
 fn max_traversal_depth(patterns: &[String]) -> Result<Option<usize>, GlobError> {

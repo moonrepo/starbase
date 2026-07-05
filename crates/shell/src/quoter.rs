@@ -167,14 +167,24 @@ impl<'a> Quoter<'a> {
     /// Return true if the provided string is already quoted.
     pub fn is_quoted(&self) -> bool {
         for (sq, eq, _) in &self.options.quote_pairs {
+            // The value must be long enough to hold both the opening and closing
+            // quote without them overlapping, otherwise a lone quote character
+            // (e.g. `'`) would be mistaken for an already-quoted string and
+            // passed through unquoted.
             match &self.data {
                 Quotable::Bytes(bytes) => {
-                    if bytes.starts_with(sq.as_bytes()) && bytes.ends_with(eq.as_bytes()) {
+                    if bytes.len() >= sq.len() + eq.len()
+                        && bytes.starts_with(sq.as_bytes())
+                        && bytes.ends_with(eq.as_bytes())
+                    {
                         return true;
                     }
                 }
                 Quotable::Text(text) => {
-                    if text.starts_with(sq) && text.ends_with(eq) {
+                    if text.len() >= sq.len() + eq.len()
+                        && text.starts_with(sq)
+                        && text.ends_with(eq)
+                    {
                         return true;
                     }
                 }

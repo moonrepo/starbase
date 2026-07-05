@@ -268,6 +268,13 @@ impl ArchiveUnpacker for TarUnpacker {
             // Unpack the file if different than destination
             let output_path = self.output_dir.join(&path);
 
+            // Refuse to write through a symlink planted by an earlier entry,
+            // which could redirect the write outside the output directory.
+            if crate::escapes_via_symlink(&self.output_dir, &output_path) {
+                trace!(source = ?path, "Skipping entry that would escape via a symlink");
+                continue;
+            }
+
             if let Some(parent_dir) = output_path.parent() {
                 fs::create_dir_all(parent_dir)?;
             }

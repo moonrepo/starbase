@@ -121,10 +121,14 @@ where
     D: DeserializeOwned,
 {
     let path = path.as_ref();
-    let contents = clean(fs::read_file(path)?).map_err(|error| JsonError::CleanFile {
-        path: path.to_owned(),
-        error: Box::new(error),
-    })?;
+    let mut contents = fs::read_file(path)?;
+
+    if !contents.is_empty() {
+        json_strip_comments::strip(&mut contents).map_err(|error| JsonError::CleanFile {
+            path: path.to_owned(),
+            error: Box::new(error),
+        })?;
+    }
 
     trace!(file = ?path, "Reading JSON file");
 

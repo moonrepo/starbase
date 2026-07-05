@@ -161,26 +161,21 @@ pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
     // Determine modules to log
     let level = env::var(&options.log_env).unwrap_or_else(|_| options.default_level.to_string());
 
-    unsafe {
-        env::set_var(
-            &options.log_env,
-            if options.filter_modules.is_empty()
-                || level == "off"
-                || level.contains(',')
-                || level.contains('=')
-            {
-                level
-            } else if level == "verbose" {
-                "trace".into()
-            } else {
-                options
-                    .filter_modules
-                    .iter()
-                    .map(|prefix| format!("{prefix}={level}"))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            },
-        )
+    let filter = if options.filter_modules.is_empty()
+        || level == "off"
+        || level.contains(',')
+        || level.contains('=')
+    {
+        level
+    } else if level == "verbose" {
+        "trace".into()
+    } else {
+        options
+            .filter_modules
+            .iter()
+            .map(|prefix| format!("{prefix}={level}"))
+            .collect::<Vec<_>>()
+            .join(",")
     };
 
     #[cfg(feature = "log-compat")]
@@ -223,7 +218,7 @@ pub fn setup_tracing(options: TracingOptions) -> TracingResult<TracingGuard> {
     };
 
     let subscriber = tracing_subscriber::registry()
-        .with(EnvFilter::from_env(options.log_env))
+        .with(EnvFilter::new(filter))
         .with(fmt_layer)
         // Write to a log file
         .with(if let Some(log_file) = options.log_file {

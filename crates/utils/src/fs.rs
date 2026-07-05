@@ -295,7 +295,8 @@ where
     S: AsRef<Path> + Debug,
     E: AsRef<Path> + Debug,
 {
-    find_upwards_until(name, start_dir, end_dir).map(|p| p.parent().unwrap().to_path_buf())
+    find_upwards_until(name, start_dir, end_dir)
+        .and_then(|p| p.parent().map(|parent| parent.to_path_buf()))
 }
 
 /// Check if the provided path is executable. On Unix, this checks if the file has any executable
@@ -502,11 +503,17 @@ pub fn reflink_file<S: AsRef<Path> + Debug, D: AsRef<Path> + Debug>(
 pub fn remove<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     let path = path.as_ref();
 
-    if path.is_symlink() {
+    // Resolve the file type with a single stat instead of separate
+    // `is_symlink`/`is_file`/`is_dir` calls that each hit the filesystem.
+    let Ok(file_type) = path.symlink_metadata().map(|meta| meta.file_type()) else {
+        return Ok(());
+    };
+
+    if file_type.is_symlink() {
         remove_link(path)?;
-    } else if path.is_file() {
+    } else if file_type.is_file() {
         remove_file(path)?;
-    } else if path.is_dir() {
+    } else if file_type.is_dir() {
         remove_dir_all(path)?;
     }
 
@@ -570,23 +577,24 @@ pub fn remove_file<T: AsRef<Path> + Debug>(path: T) -> Result<(), FsError> {
     Ok(())
 }
 
-/// Remove a file at the provided path if it's older than the provided duration.
-/// If the file does not exist, or is younger than the duration, this is a no-op.
+/// Remove a file at the provided path if it's older than the provided duration,
+/// returning the number of bytes freed. If the file does not exist, or is younger
+/// than the duration, returns [`None`] to signal that nothing was removed.
 #[inline]
 #[instrument]
 pub fn remove_file_if_stale<T: AsRef<Path> + Debug>(
     path: T,
     duration: Duration,
-) -> Result<u64, FsError> {
+) -> Result<Option<u64>, FsError> {
     let path = path.as_ref();
 
     if let Some((size, _)) = stale(path, true, duration, SystemTime::now())? {
         remove_file(path)?;
 
-        return Ok(size);
+        return Ok(Some(size));
     }
 
-    Ok(0)
+    Ok(None)
 }
 
 /// Remove a directory, and all of its contents recursively, at the provided path.
@@ -706,7 +714,7 @@ pub fn remove_dir_stale_contents<P: AsRef<Path> + Debug>(
             if file_type.is_dir() {
                 traverse(&path, duration, files_deleted, bytes_saved)?;
             } else if file_type.is_file()
-                && let Ok(size) = remove_file_if_stale(path, duration)
+                && let Ok(Some(size)) = remove_file_if_stale(path, duration)
             {
                 *files_deleted += 1;
                 *bytes_saved += size;

@@ -128,7 +128,7 @@ pub trait Shell: Debug + Display + Send + Sync {
 
     /// Return a regex pattern for matching against environment variables.
     fn get_env_regex(&self) -> regex::Regex {
-        get_env_var_regex()
+        get_env_var_regex().to_owned()
     }
 
     /// Return a list of all possible profile/rc/config paths.

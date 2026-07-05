@@ -19,11 +19,11 @@ fn rotated_log_file_path(log_file: &Path, index: usize) -> PathBuf {
     let name = log_file
         .file_stem()
         .and_then(|name| name.to_str())
-        .unwrap_or_else(|| "app");
+        .unwrap_or("app");
     let ext = log_file
         .extension()
         .and_then(|name| name.to_str())
-        .unwrap_or_else(|| "log");
+        .unwrap_or("log");
 
     log_file.with_file_name(format!("{name}.{index}.{ext}"))
 }
