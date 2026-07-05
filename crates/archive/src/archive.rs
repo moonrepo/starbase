@@ -2,6 +2,7 @@ use crate::archive_error::ArchiveError;
 use crate::{get_full_file_extension, join_file_name};
 use rustc_hash::FxHashMap;
 use starbase_utils::{fs, glob};
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 
@@ -35,10 +36,10 @@ pub trait ArchiveUnpacker {
 #[derive(Debug)]
 pub struct Archiver<'owner> {
     /// The archive file itself (`.zip`, etc).
-    archive_file: &'owner Path,
+    archive_file: Cow<'owner, Path>,
 
     /// Prefix to append to all files.
-    prefix: &'owner str,
+    prefix: Cow<'owner, str>,
 
     /// Absolute file path to source, to relative file path in archive.
     source_files: FxHashMap<PathBuf, String>,
@@ -48,18 +49,30 @@ pub struct Archiver<'owner> {
 
     /// For packing, the root to join source files with.
     /// For unpacking, the root to extract files relative to.
-    pub source_root: &'owner Path,
+    pub source_root: Cow<'owner, Path>,
 }
 
 impl<'owner> Archiver<'owner> {
     /// Create a new archiver.
     pub fn new(source_root: &'owner Path, archive_file: &'owner Path) -> Self {
         Archiver {
-            archive_file,
-            prefix: "",
+            archive_file: Cow::Borrowed(archive_file),
+            prefix: Cow::Borrowed(""),
             source_files: FxHashMap::default(),
             source_globs: vec![],
-            source_root,
+            source_root: Cow::Borrowed(source_root),
+        }
+    }
+
+    /// Convert the archiver into an owned version, so it can be used
+    /// without a lifetime.
+    pub fn into_owned(self) -> Archiver<'static> {
+        Archiver {
+            archive_file: Cow::Owned(self.archive_file.into_owned()),
+            prefix: Cow::Owned(self.prefix.into_owned()),
+            source_files: self.source_files,
+            source_globs: self.source_globs,
+            source_root: Cow::Owned(self.source_root.into_owned()),
         }
     }
 
@@ -73,7 +86,7 @@ impl<'owner> Archiver<'owner> {
         custom_name: Option<&str>,
     ) -> &mut Self {
         let source = source.as_ref();
-        let source = source.strip_prefix(self.source_root).unwrap_or(source);
+        let source = source.strip_prefix(&self.source_root).unwrap_or(source);
 
         self.source_files.insert(
             self.source_root.join(source),
@@ -100,7 +113,7 @@ impl<'owner> Archiver<'owner> {
     /// Set the prefix to prepend to files with when packing,
     /// and to remove when unpacking.
     pub fn set_prefix(&mut self, prefix: &'owner str) -> &mut Self {
-        self.prefix = prefix;
+        self.prefix = Cow::Borrowed(prefix);
         self
     }
 
@@ -120,7 +133,7 @@ impl<'owner> Archiver<'owner> {
             "Packing archive",
         );
 
-        let mut archive = packer(self.archive_file)?;
+        let mut archive = packer(&self.archive_file)?;
 
         for (source, file) in &self.source_files {
             if !source.exists() {
@@ -129,7 +142,7 @@ impl<'owner> Archiver<'owner> {
                 continue;
             }
 
-            let name = join_file_name([self.prefix, file]);
+            let name = join_file_name([&self.prefix, file.as_str()]);
 
             if source.is_file() {
                 archive.add_file(&name, source)?;
@@ -141,14 +154,14 @@ impl<'owner> Archiver<'owner> {
         if !self.source_globs.is_empty() {
             trace!(globs = ?self.source_globs, "Packing files using glob");
 
-            for file in glob::walk_files(self.source_root, &self.source_globs)? {
+            for file in glob::walk_files(&self.source_root, &self.source_globs)? {
                 let file_name = file
-                    .strip_prefix(self.source_root)
+                    .strip_prefix(&self.source_root)
                     .unwrap()
                     .to_str()
                     .unwrap();
 
-                archive.add_file(&join_file_name([self.prefix, file_name]), &file)?;
+                archive.add_file(&join_file_name([&self.prefix, file_name]), &file)?;
             }
         }
 
@@ -160,7 +173,7 @@ impl<'owner> Archiver<'owner> {
     /// Determine the packer to use based on the archive file extension,
     /// then pack the archive using [`Archiver#pack`].
     pub fn pack_from_ext(&self) -> Result<(String, PathBuf), ArchiveError> {
-        let ext = get_full_file_extension(self.archive_file);
+        let ext = get_full_file_extension(&self.archive_file);
 
         macro_rules! pack {
             ($feature:literal, $enabled:meta, $factory:expr) => {{
@@ -250,7 +263,7 @@ impl<'owner> Archiver<'owner> {
             "Unpacking archive",
         );
 
-        unpacker(self.source_root, self.archive_file)?.unpack(self.prefix)
+        unpacker(&self.source_root, &self.archive_file)?.unpack(&self.prefix)
     }
 
     /// Determine the unpacker to use based on the archive file extension,
@@ -259,7 +272,7 @@ impl<'owner> Archiver<'owner> {
     /// Returns an absolute path to the directory or file that was created,
     /// and the extension that was extracted from the input archive file.
     pub fn unpack_from_ext(&self) -> Result<(String, PathBuf), ArchiveError> {
-        let ext = get_full_file_extension(self.archive_file);
+        let ext = get_full_file_extension(&self.archive_file);
 
         macro_rules! unpack {
             ($feature:literal, $enabled:meta, $factory:expr) => {{

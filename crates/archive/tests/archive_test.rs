@@ -1,5 +1,6 @@
 use starbase_archive::Archiver;
 use starbase_sandbox::{create_empty_sandbox, create_sandbox};
+use std::borrow::Cow;
 
 #[test]
 #[should_panic(expected = "UnsupportedFormat")]
@@ -40,7 +41,7 @@ fn can_add_files() {
 
     let out = create_empty_sandbox();
 
-    archiver.source_root = out.path();
+    archiver.source_root = Cow::Borrowed(out.path());
     archiver.unpack_from_ext().unwrap();
 
     assert!(out.path().join("file.txt").exists());
@@ -64,7 +65,7 @@ fn can_add_files_with_prefix() {
 
     let out = create_empty_sandbox();
 
-    archiver.source_root = out.path();
+    archiver.source_root = Cow::Borrowed(out.path());
     archiver.set_prefix(""); // Remove so we can see it unpacked
     archiver.unpack_from_ext().unwrap();
 
@@ -86,7 +87,7 @@ fn can_add_files_with_prefix_and_remove_when_unpacking() {
 
     let out = create_empty_sandbox();
 
-    archiver.source_root = out.path();
+    archiver.source_root = Cow::Borrowed(out.path());
     archiver.unpack_from_ext().unwrap();
 
     assert!(out.path().join("file.txt").exists());
@@ -105,7 +106,7 @@ fn can_add_globs() {
 
     let out = create_empty_sandbox();
 
-    archiver.source_root = out.path();
+    archiver.source_root = Cow::Borrowed(out.path());
     archiver.unpack_from_ext().unwrap();
 
     assert!(!out.path().join("file.txt").exists());
@@ -127,7 +128,7 @@ fn can_add_globs_with_prefix_and_remove_when_unpacking() {
 
     let out = create_empty_sandbox();
 
-    archiver.source_root = out.path();
+    archiver.source_root = Cow::Borrowed(out.path());
     archiver.unpack_from_ext().unwrap();
 
     assert!(!out.path().join("file.txt").exists());
@@ -149,7 +150,7 @@ fn can_use_negated_globs() {
 
     let out = create_empty_sandbox();
 
-    archiver.source_root = out.path();
+    archiver.source_root = Cow::Borrowed(out.path());
     archiver.unpack_from_ext().unwrap();
 
     assert!(!out.path().join("file.txt").exists());
