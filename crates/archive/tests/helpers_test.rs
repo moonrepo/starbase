@@ -1,18 +1,19 @@
-
 use starbase_archive::{
     escapes_via_symlink, get_full_file_extension, get_supported_archive_extensions,
     is_supported_archive_extension, join_file_name, strip_compression_suffix,
 };
 use std::fs;
-use std::os::unix::fs::symlink;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
 
 mod symlink_guard_tests {
     use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn flags_writes_through_a_symlinked_parent() {
+        use std::os::unix::fs::symlink;
+
         let root = std::env::temp_dir().join(format!(
             "starbase-symlink-guard-{}-{}",
             std::process::id(),
@@ -70,7 +71,11 @@ mod join_file_name_tests {
 
     #[test]
     fn accepts_owned_strings() {
-        let parts = vec!["some".to_owned(), "prefix".to_owned(), "file.txt".to_owned()];
+        let parts = vec![
+            "some".to_owned(),
+            "prefix".to_owned(),
+            "file.txt".to_owned(),
+        ];
 
         assert_eq!(join_file_name(parts), "some/prefix/file.txt");
     }
