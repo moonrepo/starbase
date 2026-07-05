@@ -6,6 +6,7 @@ export __ORIG_PATH="$PATH"
 
 _starbase_hook() {
   local previous_exit_status=$?;
+  local output;
   trap '' SIGINT;
   output=$(starbase hook bash)
   if [ -n "$output" ]; then

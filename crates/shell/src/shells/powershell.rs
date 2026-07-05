@@ -67,6 +67,18 @@ fn base64_encode<T: AsRef<OsStr>>(decoded: T) -> String {
     base64::prelude::BASE64_STANDARD.encode(&utf16)
 }
 
+/// Build a `Command` that runs `script` via `-EncodedCommand`, using `program`
+/// as the executable name (`powershell` or `pwsh`). The script is encoded as
+/// UTF-16LE + base64, which PowerShell decodes internally, bypassing the mismatch
+/// between Rust's Windows argument quoting (MSVCRT-style `\"`) and PowerShell's
+/// own parser (`""` / backtick).
+pub(crate) fn build_encoded_command(program: impl AsRef<str>, script: OsString) -> Command {
+    let mut command = Command::new(program.as_ref());
+    command.args(["-NoLogo", "-NoProfile", "-EncodedCommand"]);
+    command.arg(base64_encode(script));
+    command
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct PowerShell;
 
@@ -131,17 +143,8 @@ impl Shell for PowerShell {
         Quoter::new(data, options)
     }
 
-    /// Build a PowerShell/pwsh `Command` that runs `script` via `-EncodedCommand`.
-    /// `program` is the executable name (`powershell` or `pwsh`).
-    ///
-    /// The script is encoded as UTF-16LE + base64. PowerShell decodes it
-    /// internally, which bypasses the mismatch between Rust's Windows argument
-    /// quoting (MSVCRT-style `\"`) and PowerShell's own parser (`""` / backtick).
     fn create_wrapped_command_with(&self, script: OsString) -> Command {
-        let mut command = Command::new(self.to_string());
-        command.args(["-NoLogo", "-NoProfile", "-EncodedCommand"]);
-        command.arg(base64_encode(script));
-        command
+        build_encoded_command(self.to_string(), script)
     }
 
     fn format(&self, statement: Statement<'_>) -> String {

@@ -108,9 +108,9 @@ mod tests {
         ); // Double quotes with escaping
         assert_eq!(
             shell.quote("value\nwith\nnewlines"),
-            "\"value\\nwith\\nnewlines\""
-        ); // Double quotes with escaped newlines
-        assert_eq!(shell.quote("value\twith\ttabs"), "\"value\\twith\\ttabs\""); // Double quotes with escaped tabs
+            "value'\nwith\nnewlines'"
+        ); // Single quotes preserve real newlines (POSIX sh has no $'...' form)
+        assert_eq!(shell.quote("value\twith\ttabs"), "value'\twith\ttabs'"); // Single quotes preserve real tabs
         assert_eq!(
             shell.quote("value\\with\\backslashes"),
             "\"value\\\\with\\\\backslashes\""

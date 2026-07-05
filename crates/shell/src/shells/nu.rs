@@ -95,7 +95,10 @@ impl Shell for Nu {
                 normalize_newlines(value)
             }
             Statement::SetAlias { name, value } => {
-                format!("alias {} = {}", name, self.quote(value))
+                // A Nushell alias maps a name to an expression (a command line), not
+                // to a string. Quoting the value (e.g. `alias ll = 'ls -la'`) would
+                // alias to the string literal instead of running the command.
+                format!("alias {name} = {value}")
             }
             Statement::SetEnv { key, value } => {
                 if value.starts_with("$HOME/") {
@@ -378,7 +381,7 @@ mod tests {
 
     #[test]
     fn formats_alias_set() {
-        assert_eq!(Nu.format_alias_set("ll", "ls -la"), "alias ll = 'ls -la'");
+        assert_eq!(Nu.format_alias_set("ll", "ls -la"), "alias ll = ls -la");
     }
 
     #[test]
