@@ -10,8 +10,7 @@ Formats and compression codecs are separate layers that compose over read/write 
 
 - A **codec** (`Gz`, `Bz2`, `Xz`, `Zstd`) transforms bytes and wraps any `Read` or `Write` stream.
   The first read commits it to decompressing, the first write to compressing.
-- A **format** (`TarPacker`/`TarUnpacker`, `ZipPacker`/`ZipUnpacker`, `FilePacker`/`FileUnpacker`)
-  structures files and consumes or produces a stream.
+- A **format** (`Tar`, `Zip`) structures files and consumes or produces a stream.
 
 ```rust
 use starbase_archive::Archiver;
@@ -50,6 +49,6 @@ archiver.pack(|file| {
 })?;
 ```
 
-When packing, writers must implement the `Finish` trait, which cascades trailing bytes
-(compression epilogues, format footers) through the entire stream chain. It's implemented for
-`File`, `Vec<u8>`, `Cursor`, `BufWriter`, and all codecs.
+When packing, writers must implement the `Finish` trait, which cascades trailing bytes (compression
+epilogues, format footers) through the entire stream chain. It's implemented for `File`, `Vec<u8>`,
+`Cursor`, `BufWriter`, and all codecs.

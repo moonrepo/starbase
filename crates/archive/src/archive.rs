@@ -1,7 +1,7 @@
 use crate::archive_error::ArchiveError;
 use crate::{get_full_file_extension, join_file_name};
 use rustc_hash::FxHashMap;
-use starbase_utils::glob;
+use starbase_utils::{fs, glob};
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 
@@ -180,51 +180,47 @@ impl<'owner> Archiver<'owner> {
         let out = match ext.as_deref() {
             Some("gz" | "gzip") => pack!("gz", feature = "gz", |file| {
                 Ok(crate::file::FilePacker::new(crate::codecs::Gz::new(
-                    starbase_utils::fs::create_file(file)?,
+                    fs::create_file(file)?,
                 )))
             }),
             Some("tar") => pack!("tar", feature = "tar", |file| {
-                Ok(crate::tar::TarPacker::new(starbase_utils::fs::create_file(
-                    file,
-                )?))
+                Ok(crate::tar::TarPacker::new(fs::create_file(file)?))
             }),
             Some("tar.bz2" | "tbz" | "tbz2" | "tz2") => {
                 pack!("tar-bz2", all(feature = "tar", feature = "bz2"), |file| {
                     Ok(crate::tar::TarPacker::new(crate::codecs::Bz2::new(
-                        starbase_utils::fs::create_file(file)?,
+                        fs::create_file(file)?,
                     )))
                 })
             }
             Some("tar.gz" | "tgz") => {
                 pack!("tar-gz", all(feature = "tar", feature = "gz"), |file| {
                     Ok(crate::tar::TarPacker::new(crate::codecs::Gz::new(
-                        starbase_utils::fs::create_file(file)?,
+                        fs::create_file(file)?,
                     )))
                 })
             }
             Some("tar.xz" | "txz") => {
                 pack!("tar-xz", all(feature = "tar", feature = "xz"), |file| {
                     Ok(crate::tar::TarPacker::new(crate::codecs::Xz::new(
-                        starbase_utils::fs::create_file(file)?,
+                        fs::create_file(file)?,
                     )))
                 })
             }
             Some("tar.zstd" | "tar.zst" | "tzst" | "tzs") => {
                 pack!("tar-zstd", all(feature = "tar", feature = "zstd"), |file| {
                     Ok(crate::tar::TarPacker::new(crate::codecs::Zstd::new(
-                        starbase_utils::fs::create_file(file)?,
+                        fs::create_file(file)?,
                     )))
                 })
             }
             Some("zst" | "zstd") => pack!("zstd", feature = "zstd", |file| {
                 Ok(crate::file::FilePacker::new(crate::codecs::Zstd::new(
-                    starbase_utils::fs::create_file(file)?,
+                    fs::create_file(file)?,
                 )))
             }),
             Some("zip") => pack!("zip", feature = "zip", |file| {
-                Ok(crate::zip::ZipPacker::new(starbase_utils::fs::create_file(
-                    file,
-                )?))
+                Ok(crate::zip::ZipPacker::new(fs::create_file(file)?))
             }),
             Some(ext) => Err(ArchiveError::UnsupportedFormat {
                 format: ext.into(),
@@ -254,9 +250,7 @@ impl<'owner> Archiver<'owner> {
             "Unpacking archive",
         );
 
-        let archive = unpacker(self.source_root, self.archive_file)?;
-
-        archive.unpack(self.prefix)
+        unpacker(self.source_root, self.archive_file)?.unpack(self.prefix)
     }
 
     /// Determine the unpacker to use based on the archive file extension,
@@ -285,17 +279,12 @@ impl<'owner> Archiver<'owner> {
         let out = match ext.as_deref() {
             Some("gz" | "gzip") => unpack!("gz", feature = "gz", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
-                    dir.join(crate::strip_compression_suffix(
-                        &starbase_utils::fs::file_name(file),
-                    )),
-                    crate::codecs::Gz::new(starbase_utils::fs::open_file(file)?),
+                    dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
+                    crate::codecs::Gz::new(fs::open_file(file)?),
                 ))
             }),
             Some("tar") => unpack!("tar", feature = "tar", |dir, file| {
-                Ok(crate::tar::TarUnpacker::new(
-                    dir,
-                    starbase_utils::fs::open_file(file)?,
-                ))
+                Ok(crate::tar::TarUnpacker::new(dir, fs::open_file(file)?))
             }),
             Some("tar.bz2" | "tbz" | "tbz2" | "tz2") => unpack!(
                 "tar-bz2",
@@ -303,7 +292,7 @@ impl<'owner> Archiver<'owner> {
                 |dir, file| {
                     Ok(crate::tar::TarUnpacker::new(
                         dir,
-                        crate::codecs::Bz2::new(starbase_utils::fs::open_file(file)?),
+                        crate::codecs::Bz2::new(fs::open_file(file)?),
                     ))
                 }
             ),
@@ -313,7 +302,7 @@ impl<'owner> Archiver<'owner> {
                 |dir, file| {
                     Ok(crate::tar::TarUnpacker::new(
                         dir,
-                        crate::codecs::Gz::new(starbase_utils::fs::open_file(file)?),
+                        crate::codecs::Gz::new(fs::open_file(file)?),
                     ))
                 }
             ),
@@ -323,7 +312,7 @@ impl<'owner> Archiver<'owner> {
                 |dir, file| {
                     Ok(crate::tar::TarUnpacker::new(
                         dir,
-                        crate::codecs::Xz::new(starbase_utils::fs::open_file(file)?),
+                        crate::codecs::Xz::new(fs::open_file(file)?),
                     ))
                 }
             ),
@@ -333,20 +322,18 @@ impl<'owner> Archiver<'owner> {
                 |dir, file| {
                     Ok(crate::tar::TarUnpacker::new(
                         dir,
-                        crate::codecs::Zstd::new(starbase_utils::fs::open_file(file)?),
+                        crate::codecs::Zstd::new(fs::open_file(file)?),
                     ))
                 }
             ),
             Some("zst" | "zstd") => unpack!("zstd", feature = "zstd", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
-                    dir.join(crate::strip_compression_suffix(
-                        &starbase_utils::fs::file_name(file),
-                    )),
-                    crate::codecs::Zstd::new(starbase_utils::fs::open_file(file)?),
+                    dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
+                    crate::codecs::Zstd::new(fs::open_file(file)?),
                 ))
             }),
             Some("zip") => unpack!("zip", feature = "zip", |dir, file| {
-                crate::zip::ZipUnpacker::new(dir, starbase_utils::fs::open_file(file)?)
+                crate::zip::ZipUnpacker::new(dir, fs::open_file(file)?)
             }),
             Some(ext) => Err(ArchiveError::UnsupportedFormat {
                 format: ext.into(),

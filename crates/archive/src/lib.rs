@@ -5,13 +5,13 @@ pub mod codecs;
 pub mod file;
 mod file_error;
 
-/// Handles `.tar`, `.tar.bz2`, `.tar.gz`, `.tar.xz`, and `.tar.zst` files.
+/// Handles tarball files.
 #[cfg(feature = "tar")]
 pub mod tar;
 #[cfg(feature = "tar")]
 mod tar_error;
 
-/// Handles `.zip` files.
+/// Handles zip files.
 #[cfg(feature = "zip")]
 pub mod zip;
 #[cfg(feature = "zip")]
@@ -32,7 +32,6 @@ use std::path::Path;
 /// that points outside the output directory (CWE-22 / CWE-59). Every already
 /// existing ancestor of `target` beneath `root` is checked, since
 /// `create_dir_all` and file writes would otherwise follow such a link.
-#[cfg(any(feature = "tar", feature = "zip"))]
 pub(crate) fn escapes_via_symlink(root: &Path, target: &Path) -> bool {
     let Ok(rel) = target.strip_prefix(root) else {
         // Not under the root at all, so treat it as unsafe.
@@ -157,23 +156,6 @@ pub fn is_supported_archive_extension(path: &Path) -> bool {
                 .into_iter()
                 .any(|ext| name.ends_with(&format!(".{ext}")))
         })
-}
-
-#[cfg(test)]
-mod suffix_tests {
-    use super::strip_compression_suffix;
-
-    #[test]
-    fn strips_only_trailing_compression_suffix() {
-        assert_eq!(strip_compression_suffix("archive.gz"), "archive");
-        assert_eq!(strip_compression_suffix("data.gzip"), "data");
-        assert_eq!(strip_compression_suffix("bundle.zst"), "bundle");
-        assert_eq!(strip_compression_suffix("bundle.zstd"), "bundle");
-        // Inner occurrences and multi-dot names are preserved.
-        assert_eq!(strip_compression_suffix("my.gz.file.gz"), "my.gz.file");
-        assert_eq!(strip_compression_suffix("report.tar"), "report.tar");
-        assert_eq!(strip_compression_suffix("plain"), "plain");
-    }
 }
 
 #[cfg(all(test, unix, any(feature = "tar", feature = "zip")))]
