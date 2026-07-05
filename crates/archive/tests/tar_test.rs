@@ -1,8 +1,10 @@
 mod utils;
 
 use starbase_archive::Archiver;
+use starbase_archive::codecs::*;
 use starbase_archive::tar::*;
 use starbase_sandbox::{create_empty_sandbox, create_sandbox};
+use starbase_utils::fs;
 use std::fs::File;
 use std::path::Path;
 
@@ -39,7 +41,11 @@ fn create_malicious_tar_common<W: std::io::Write>(
 mod tar {
     use super::*;
 
-    generate_tests!("out.tar", TarPacker::new, TarUnpacker::new);
+    generate_tests!(
+        "out.tar",
+        |file| Ok(TarPacker::new(fs::create_file(file)?)),
+        |dir, file| Ok(TarUnpacker::new(dir, fs::open_file(file)?))
+    );
 
     fn create_malicious_tar_plain(archive_path: &Path, entry_path: &Path, entry_content: &[u8]) {
         let file = File::create(archive_path).unwrap();
@@ -52,7 +58,11 @@ mod tar {
 mod tar_gz {
     use super::*;
 
-    generate_tests!("out.tar.gz", TarPacker::new_gz, TarUnpacker::new_gz);
+    generate_tests!(
+        "out.tar.gz",
+        |file| Ok(TarPacker::new(Gz::new(fs::create_file(file)?))),
+        |dir, file| Ok(TarUnpacker::new(dir, Gz::new(fs::open_file(file)?)))
+    );
 
     fn create_malicious_tar_gz(archive_path: &Path, entry_path: &Path, entry_content: &[u8]) {
         let file = File::create(archive_path).unwrap();
@@ -66,7 +76,11 @@ mod tar_gz {
 mod tar_xz {
     use super::*;
 
-    generate_tests!("out.tar.xz", TarPacker::new_xz, TarUnpacker::new_xz);
+    generate_tests!(
+        "out.tar.xz",
+        |file| Ok(TarPacker::new(Xz::new(fs::create_file(file)?))),
+        |dir, file| Ok(TarUnpacker::new(dir, Xz::new(fs::open_file(file)?)))
+    );
 
     fn create_malicious_tar_xz(archive_path: &Path, entry_path: &Path, entry_content: &[u8]) {
         let file = File::create(archive_path).unwrap();
@@ -84,7 +98,11 @@ mod tar_xz {
 mod tar_zstd {
     use super::*;
 
-    generate_tests!("out.tar.zst", TarPacker::new_zstd, TarUnpacker::new_zstd);
+    generate_tests!(
+        "out.tar.zst",
+        |file| Ok(TarPacker::new(Zstd::new(fs::create_file(file)?))),
+        |dir, file| Ok(TarUnpacker::new(dir, Zstd::new(fs::open_file(file)?)))
+    );
 
     fn create_malicious_tar_zstd(archive_path: &Path, entry_path: &Path, entry_content: &[u8]) {
         let file = File::create(archive_path).unwrap();
@@ -103,7 +121,11 @@ mod tar_zstd {
 mod tar_bz2 {
     use super::*;
 
-    generate_tests!("out.tar.bz2", TarPacker::new_bz2, TarUnpacker::new_bz2);
+    generate_tests!(
+        "out.tar.bz2",
+        |file| Ok(TarPacker::new(Bz2::new(fs::create_file(file)?))),
+        |dir, file| Ok(TarUnpacker::new(dir, Bz2::new(fs::open_file(file)?)))
+    );
 
     fn create_malicious_tar_bz2(archive_path: &Path, entry_path: &Path, entry_content: &[u8]) {
         let file = File::create(archive_path).unwrap();
