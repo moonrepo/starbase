@@ -21,6 +21,7 @@ impl Shell for Sh {
         Quoter::new(
             data,
             QuoterOptions {
+                replacements_expansion: posix_expansion_escape_chars(),
                 on_quote: Some(Arc::new(|data| {
                     String::from_utf8_lossy(&ShQuoter::quote_vec(data)).into()
                 })),

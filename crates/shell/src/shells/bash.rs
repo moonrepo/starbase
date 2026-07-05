@@ -37,6 +37,7 @@ impl Shell for Bash {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
         let mut options = QuoterOptions::default();
         options.quote_pairs.push(("$'".into(), "'".into(), false));
+        options.replacements_expansion = posix_expansion_escape_chars();
         options.on_quote = Some(Arc::new(|data| data.quoted(BashQuoter)));
 
         Quoter::new(data, options)
@@ -84,6 +85,7 @@ export __ORIG_PATH="$PATH"
 
 {function}() {{
   local previous_exit_status=$?;
+  local output;
   trap '' SIGINT;
   output=$({command})
   if [ -n "$output" ]; then
@@ -217,9 +219,9 @@ mod tests {
         ); // Double quotes with escaping
         assert_eq!(
             shell.quote("value\nwith\nnewlines"),
-            "\"value\\nwith\\nnewlines\""
-        ); // Double quotes with escaped newlines
-        assert_eq!(shell.quote("value\twith\ttabs"), "\"value\\twith\\ttabs\""); // Double quotes with escaped tabs
+            "$'value\\nwith\\nnewlines'"
+        ); // ANSI-C quotes so newlines round-trip (double quotes would emit literal \n)
+        assert_eq!(shell.quote("value\twith\ttabs"), "$'value\\twith\\ttabs'"); // ANSI-C quotes so tabs round-trip
         assert_eq!(
             shell.quote("value\\with\\backslashes"),
             "\"value\\\\with\\\\backslashes\""
@@ -230,5 +232,7 @@ mod tests {
             shell.quote("value with \"quotes\" and $VAR"),
             "\"value with \\\"quotes\\\" and $VAR\""
         ); // Double quotes
+        assert_eq!(shell.quote("$HOME`whoami`"), "\"$HOME\\`whoami\\`\"");
+        // Backtick command substitution is neutralized; $VAR expansion is preserved
     }
 }

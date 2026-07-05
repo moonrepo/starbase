@@ -5,6 +5,7 @@ use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
 use std::env;
+use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -29,8 +30,8 @@ impl Shell for Pwsh {
         self.inner.create_quoter(data)
     }
 
-    fn create_wrapped_command(&self, script: &str) -> Command {
-        self.inner.create_wrapped_command(script)
+    fn create_wrapped_command_with(&self, script: OsString) -> Command {
+        super::powershell::build_encoded_command(self.to_string(), script)
     }
 
     fn format(&self, statement: Statement<'_>) -> String {
@@ -199,6 +200,23 @@ mod tests {
         };
 
         assert_snapshot!(Pwsh::new().format_hook(hook).unwrap());
+    }
+
+    #[test]
+    fn wraps_command_with_pwsh_binary_and_encoding() {
+        let shell = Pwsh::new();
+
+        // Both entry points must invoke `pwsh` (not `powershell`) and use the
+        // `-EncodedCommand` path, regardless of which method is called.
+        for command in [
+            shell.create_wrapped_command("echo hello"),
+            shell.create_wrapped_command_with("echo hello".into()),
+        ] {
+            assert_eq!(command.get_program(), "pwsh");
+
+            let args: Vec<_> = command.get_args().collect();
+            assert_eq!(&args[..3], &["-NoLogo", "-NoProfile", "-EncodedCommand"]);
+        }
     }
 
     #[test]

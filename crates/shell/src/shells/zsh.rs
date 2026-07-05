@@ -41,6 +41,7 @@ impl Shell for Zsh {
 export __ORIG_PATH="$PATH"
 
 {function}() {{
+  local output
   trap '' SIGINT
   output=$({command})
   if [ -n "$output" ]; then

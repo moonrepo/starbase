@@ -1,10 +1,11 @@
 ---
 source: crates/shell/src/shells/zsh.rs
-expression: "Zsh::default().format_hook(hook).unwrap()"
+expression: "Zsh::new().format_hook(hook).unwrap()"
 ---
 export __ORIG_PATH="$PATH"
 
 _starbase_hook() {
+  local output
   trap '' SIGINT
   output=$(starbase hook zsh)
   if [ -n "$output" ]; then
