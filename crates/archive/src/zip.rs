@@ -1,72 +1,45 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
 use crate::join_file_name;
-use crate::tree_differ::TreeDiffer;
 pub use crate::zip_error::ZipError;
 use starbase_utils::fs::{self, FsError};
-use std::fs::File;
-use std::io;
+use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
-/// Creates zip archives.
-pub struct ZipPacker {
-    archive: ZipWriter<File>,
+/// Creates zip archives by writing to the provided stream.
+///
+/// Unlike tar, zip does not compose with codecs: compression is part of
+/// the zip format itself and is applied per entry, so it's configured
+/// with [`ZipPacker::with_compression`] instead. The stream must also be
+/// seekable, since the format ends with a central directory.
+pub struct ZipPacker<W: Write + Seek> {
+    archive: ZipWriter<W>,
     compression: CompressionMethod,
 }
 
-impl ZipPacker {
-    /// Create a new packer with a custom compression level.
-    pub fn create(
-        output_file: &Path,
-        compression: CompressionMethod,
-    ) -> Result<Self, ArchiveError> {
-        Ok(ZipPacker {
-            archive: ZipWriter::new(fs::create_file(output_file)?),
+impl<W: Write + Seek> ZipPacker<W> {
+    /// Create a new zip packer with no compression (entries are stored).
+    pub fn new(writer: W) -> Self {
+        Self::with_compression(writer, CompressionMethod::Stored)
+    }
+
+    /// Create a new zip packer with a custom compression method. The
+    /// matching `zip-*` Cargo feature must be enabled for the method.
+    pub fn with_compression(writer: W, compression: CompressionMethod) -> Self {
+        ZipPacker {
+            archive: ZipWriter::new(writer),
             compression,
-        })
-    }
-
-    /// Create a new `.zip` packer.
-    pub fn new(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::create(output_file, CompressionMethod::Stored)
-    }
-
-    /// Create a new compressed `.zip` packer using `bzip2`.
-    #[cfg(feature = "zip-bz2")]
-    pub fn new_bz2(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::create(output_file, CompressionMethod::Bzip2)
-    }
-
-    /// Create a new compressed `.zip` packer using `deflate`.
-    #[cfg(feature = "zip-deflate")]
-    pub fn new_deflate(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::create(output_file, CompressionMethod::Deflated)
-    }
-
-    /// Create a new compressed `.zip` packer using `gz`.
-    #[cfg(feature = "zip-gz")]
-    pub fn new_gz(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::create(output_file, CompressionMethod::Deflated)
-    }
-
-    /// Create a new compressed `.zip` packer using `xz`.
-    #[cfg(feature = "zip-xz")]
-    pub fn new_xz(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::create(output_file, CompressionMethod::Lzma)
-    }
-
-    /// Create a new compressed `.zip` packer using `zstd`.
-    #[cfg(feature = "zip-zstd")]
-    pub fn new_zstd(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::create(output_file, CompressionMethod::Zstd)
+        }
     }
 }
 
-impl ArchivePacker for ZipPacker {
+impl<W: Write + Seek> ArchivePacker for ZipPacker<W> {
     fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
+        trace!(source = name, input = ?file, "Packing file");
+
         #[allow(unused_mut)] // windows
         let mut options = SimpleFileOptions::default().compression_method(self.compression);
 
@@ -131,77 +104,50 @@ impl ArchivePacker for ZipPacker {
     }
 
     #[instrument(name = "pack_zip", skip_all)]
-    fn pack(&mut self) -> Result<(), ArchiveError> {
+    fn pack(self) -> Result<(), ArchiveError> {
         trace!("Creating zip");
 
-        // Upstream API changed where finish consumes self.
-        // Commented this out for now, but it's ok since it also runs on drop.
+        // Writes the central directory and returns the stream.
+        let mut writer = self
+            .archive
+            .finish()
+            .map_err(|error| ZipError::PackFailure {
+                error: Box::new(error),
+            })?;
 
-        // self.archive
-        //     .finish()
-        //     .map_err(|error| ZipError::PackFailure {
-        //         error: Box::new(error),
-        //     })?;
+        writer.flush().map_err(|error| ZipError::PackFailure {
+            error: Box::new(error.into()),
+        })?;
 
         Ok(())
     }
 }
 
-/// Opens zip archives.
-pub struct ZipUnpacker {
-    archive: ZipArchive<File>,
+/// Opens zip archives by reading from the provided stream. The stream
+/// must be seekable, since the format ends with a central directory.
+pub struct ZipUnpacker<R: Read + Seek> {
+    archive: ZipArchive<R>,
     output_dir: PathBuf,
 }
 
-impl ZipUnpacker {
-    /// Create a new `.zip` unpacker.
-    pub fn new(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        fs::create_dir_all(output_dir)?;
-
+impl<R: Read + Seek> ZipUnpacker<R> {
+    /// Create a new zip unpacker that reads from the provided stream and
+    /// extracts to the output directory.
+    pub fn new(output_dir: &Path, reader: R) -> Result<Self, ArchiveError> {
         Ok(ZipUnpacker {
-            archive: ZipArchive::new(fs::open_file(input_file)?).map_err(|error| {
-                ZipError::UnpackFailure {
-                    error: Box::new(error),
-                }
+            archive: ZipArchive::new(reader).map_err(|error| ZipError::UnpackFailure {
+                error: Box::new(error),
             })?,
             output_dir: output_dir.to_path_buf(),
         })
     }
-
-    /// Create a new `.zip` unpacker for `bzip2`.
-    #[cfg(feature = "zip-bz2")]
-    pub fn new_bz2(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new(output_dir, input_file)
-    }
-
-    /// Create a new `.zip` unpacker for `deflate`.
-    #[cfg(feature = "zip-deflate")]
-    pub fn new_deflate(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new(output_dir, input_file)
-    }
-
-    /// Create a new `.zip` unpacker for `gz`.
-    #[cfg(feature = "zip-gz")]
-    pub fn new_gz(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new(output_dir, input_file)
-    }
-
-    /// Create a new `.zip` unpacker for `xz`.
-    #[cfg(feature = "zip-xz")]
-    pub fn new_xz(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new(output_dir, input_file)
-    }
-
-    /// Create a new `.zip` unpacker for `zstd`.
-    #[cfg(feature = "zip-zstd")]
-    pub fn new_zstd(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new(output_dir, input_file)
-    }
 }
 
-impl ArchiveUnpacker for ZipUnpacker {
+impl<R: Read + Seek> ArchiveUnpacker for ZipUnpacker<R> {
     #[instrument(name = "unpack_zip", skip_all)]
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<PathBuf, ArchiveError> {
+    fn unpack(mut self, prefix: &str) -> Result<PathBuf, ArchiveError> {
+        fs::create_dir_all(&self.output_dir)?;
+
         trace!(output_dir = ?self.output_dir, "Opening zip");
 
         let mut count = 0;
@@ -241,7 +187,6 @@ impl ArchiveUnpacker for ZipUnpacker {
             }
 
             // If a file, copy it to the output dir
-            // if file.is_file() && differ.should_write_source(file.size(), &mut file, &output_path)? {
             if file.is_file() {
                 let mut out = fs::create_file(&output_path)?;
 
@@ -258,12 +203,11 @@ impl ArchiveUnpacker for ZipUnpacker {
                 }
             }
 
-            differ.untrack_file(&output_path);
             count += 1;
         }
 
         trace!("Unpacked {} files", count);
 
-        Ok(self.output_dir.clone())
+        Ok(self.output_dir)
     }
 }

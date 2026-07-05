@@ -5,7 +5,7 @@ use thiserror::Error;
 
 #[cfg(not(feature = "miette"))]
 #[derive(Error, Debug)]
-pub enum GzError {
+pub enum FileError {
     #[error(transparent)]
     Fs(#[from] Box<FsError>),
 
@@ -16,17 +16,10 @@ pub enum GzError {
         error: Box<std::io::Error>,
     },
 
-    #[error("Failed to extract {} from archive.\n{error}", .source.style(Style::Path))]
-    ExtractFailure {
-        source: PathBuf,
-        #[source]
-        error: Box<std::io::Error>,
-    },
-
-    #[error("Directories cannot be gzipped. Use {} instead.", "tar".style(Style::Symbol))]
+    #[error("Directories cannot be packed into a single-file archive. Use {} instead.", "tar".style(Style::Symbol))]
     NoDirs,
 
-    #[error("Only 1 file can be gzipped, received more than 1.")]
+    #[error("Only 1 file can be packed into a single-file archive, received more than 1.")]
     OneFile,
 
     #[error("Failed to pack archive.\n{error}")]
@@ -44,11 +37,11 @@ pub enum GzError {
 
 #[cfg(feature = "miette")]
 #[derive(Error, Debug, miette::Diagnostic)]
-pub enum GzError {
+pub enum FileError {
     #[error(transparent)]
     Fs(#[from] Box<FsError>),
 
-    #[diagnostic(code(gz::pack::add))]
+    #[diagnostic(code(file::pack::add))]
     #[error("Failed to add source {} to archive.", .source.style(Style::Path))]
     AddFailure {
         source: PathBuf,
@@ -56,30 +49,22 @@ pub enum GzError {
         error: Box<std::io::Error>,
     },
 
-    #[diagnostic(code(gz::unpack::extract))]
-    #[error("Failed to extract {} from archive.", .source.style(Style::Path))]
-    ExtractFailure {
-        source: PathBuf,
-        #[source]
-        error: Box<std::io::Error>,
-    },
-
-    #[diagnostic(code(gz::pack::no_dirs))]
-    #[error("Directories cannot be gzipped. Use {} instead.", "tar".style(Style::Symbol))]
+    #[diagnostic(code(file::pack::no_dirs))]
+    #[error("Directories cannot be packed into a single-file archive. Use {} instead.", "tar".style(Style::Symbol))]
     NoDirs,
 
-    #[diagnostic(code(gz::pack::one_file))]
-    #[error("Only 1 file can be gzipped, received more than 1.")]
+    #[diagnostic(code(file::pack::one_file))]
+    #[error("Only 1 file can be packed into a single-file archive, received more than 1.")]
     OneFile,
 
-    #[diagnostic(code(gz::pack::finish))]
+    #[diagnostic(code(file::pack))]
     #[error("Failed to pack archive.")]
     PackFailure {
         #[source]
         error: Box<std::io::Error>,
     },
 
-    #[diagnostic(code(gz::unpack::finish))]
+    #[diagnostic(code(file::unpack))]
     #[error("Failed to unpack archive.")]
     UnpackFailure {
         #[source]
@@ -87,8 +72,8 @@ pub enum GzError {
     },
 }
 
-impl From<FsError> for GzError {
-    fn from(e: FsError) -> GzError {
-        GzError::Fs(Box::new(e))
+impl From<FsError> for FileError {
+    fn from(e: FsError) -> FileError {
+        FileError::Fs(Box::new(e))
     }
 }

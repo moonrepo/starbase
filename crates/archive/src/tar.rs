@@ -1,95 +1,35 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
+use crate::codecs::Finish;
 pub use crate::tar_error::TarError;
-use crate::tree_differ::TreeDiffer;
 use binstall_tar::{Archive as TarArchive, Builder as TarBuilder, Entry as TarEntry};
 use starbase_utils::fs;
-use std::io::{Write, prelude::*};
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use tracing::{instrument, trace};
 
-/// Creates tar archives.
-pub struct TarPacker {
-    archive: TarBuilder<Box<dyn Write>>,
+/// Creates tar archives by writing to the provided stream. Compose the
+/// stream with a codec to create compressed tarballs.
+///
+/// ```ignore
+/// TarPacker::new(fs::create_file(path)?);              // .tar
+/// TarPacker::new(Gz::new(fs::create_file(path)?));     // .tar.gz
+/// TarPacker::new(Zstd::new(fs::create_file(path)?));   // .tar.zst
+/// ```
+pub struct TarPacker<W: Write> {
+    archive: TarBuilder<W>,
 }
 
-impl TarPacker {
-    /// Create a new packer with a custom writer.
-    pub fn create(writer: Box<dyn Write>) -> Result<Self, ArchiveError> {
-        Ok(TarPacker {
+impl<W: Write> TarPacker<W> {
+    /// Create a new tar packer that writes to the provided stream.
+    pub fn new(writer: W) -> Self {
+        TarPacker {
             archive: TarBuilder::new(writer),
-        })
-    }
-
-    /// Create a new `.tar` packer.
-    pub fn new(output_file: &Path) -> Result<Self, ArchiveError> {
-        TarPacker::create(Box::new(fs::create_file(output_file)?))
-    }
-
-    /// Create a new `.tar.bz2` packer.
-    #[cfg(feature = "tar-bz2")]
-    pub fn new_bz2(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new_bz2_with_level(output_file, 6) // Default in lib
-    }
-
-    /// Create a new `.tar.bz2` packer with a custom compression level.
-    #[cfg(feature = "tar-bz2")]
-    pub fn new_bz2_with_level(output_file: &Path, level: u32) -> Result<Self, ArchiveError> {
-        TarPacker::create(Box::new(bzip2::write::BzEncoder::new(
-            fs::create_file(output_file)?,
-            bzip2::Compression::new(level),
-        )))
-    }
-
-    /// Create a new `.tar.gz` packer.
-    #[cfg(feature = "tar-gz")]
-    pub fn new_gz(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new_gz_with_level(output_file, 4)
-    }
-
-    /// Create a new `.tar.gz` packer with a custom compression level.
-    #[cfg(feature = "tar-gz")]
-    pub fn new_gz_with_level(output_file: &Path, level: u32) -> Result<Self, ArchiveError> {
-        TarPacker::create(Box::new(flate2::write::GzEncoder::new(
-            fs::create_file(output_file)?,
-            flate2::Compression::new(level),
-        )))
-    }
-
-    /// Create a new `.tar.xz` packer.
-    #[cfg(feature = "tar-xz")]
-    pub fn new_xz(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new_xz_with_level(output_file, 4)
-    }
-
-    /// Create a new `.tar.xz` packer with a custom compression level.
-    #[cfg(feature = "tar-xz")]
-    pub fn new_xz_with_level(output_file: &Path, level: u32) -> Result<Self, ArchiveError> {
-        TarPacker::create(Box::new(liblzma::write::XzEncoder::new(
-            fs::create_file(output_file)?,
-            level,
-        )))
-    }
-
-    /// Create a new `.tar.zst` packer.
-    #[cfg(feature = "tar-zstd")]
-    pub fn new_zstd(output_file: &Path) -> Result<Self, ArchiveError> {
-        Self::new_zstd_with_level(output_file, 3) // Default in lib
-    }
-
-    /// Create a new `.tar.zst` packer with a custom compression level.
-    #[cfg(feature = "tar-zstd")]
-    pub fn new_zstd_with_level(output_file: &Path, level: u32) -> Result<Self, ArchiveError> {
-        let encoder = zstd::stream::Encoder::new(fs::create_file(output_file)?, level as i32)
-            .map_err(|error| TarError::ZstdDictionary {
-                error: Box::new(error),
-            })?;
-
-        TarPacker::create(Box::new(encoder.auto_finish()))
+        }
     }
 }
 
-impl ArchivePacker for TarPacker {
+impl<W: Write + Finish> ArchivePacker for TarPacker<W> {
     fn add_file(&mut self, name: &str, file: &Path) -> Result<(), ArchiveError> {
         trace!(source = name, input = ?file, "Packing file");
 
@@ -117,124 +57,95 @@ impl ArchivePacker for TarPacker {
     }
 
     #[instrument(name = "pack_tar", skip_all)]
-    fn pack(&mut self) -> Result<(), ArchiveError> {
+    fn pack(self) -> Result<(), ArchiveError> {
         trace!("Creating tarball");
 
-        self.archive
-            .finish()
+        // Writes the tar footer and returns the stream.
+        let mut writer = self
+            .archive
+            .into_inner()
             .map_err(|error| TarError::PackFailure {
                 error: Box::new(error),
             })?;
+
+        // Writes codec epilogues through the entire stream chain.
+        writer.finish().map_err(|error| TarError::PackFailure {
+            error: Box::new(error),
+        })?;
 
         Ok(())
     }
 }
 
-/// Opens tar archives.
-pub struct TarUnpacker {
-    archive: TarArchive<Box<dyn Read>>,
+/// Opens tar archives by reading from the provided stream. Compose the
+/// stream with a codec to open compressed tarballs.
+///
+/// ```ignore
+/// TarUnpacker::new(dir, fs::open_file(path)?);            // .tar
+/// TarUnpacker::new(dir, Gz::new(fs::open_file(path)?));   // .tar.gz
+/// TarUnpacker::new(dir, Zstd::new(fs::open_file(path)?)); // .tar.zst
+/// ```
+pub struct TarUnpacker<R: Read> {
+    archive: TarArchive<R>,
     output_dir: PathBuf,
 }
 
-impl TarUnpacker {
-    /// Create a new unpacker with a custom reader.
-    pub fn create(output_dir: &Path, reader: Box<dyn Read>) -> Result<Self, ArchiveError> {
-        fs::create_dir_all(output_dir)?;
-
-        Ok(TarUnpacker {
+impl<R: Read> TarUnpacker<R> {
+    /// Create a new tar unpacker that reads from the provided stream and
+    /// extracts to the output directory.
+    pub fn new(output_dir: &Path, reader: R) -> Self {
+        TarUnpacker {
             archive: TarArchive::new(reader),
             output_dir: output_dir.to_path_buf(),
-        })
-    }
-
-    /// Create a new `.tar` unpacker.
-    pub fn new(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        TarUnpacker::create(output_dir, Box::new(fs::open_file(input_file)?))
-    }
-
-    /// Create a new `.tar.bz2` unpacker.
-    #[cfg(feature = "tar-bz2")]
-    pub fn new_bz2(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        TarUnpacker::create(
-            output_dir,
-            Box::new(bzip2::read::BzDecoder::new(fs::open_file(input_file)?)),
-        )
-    }
-
-    /// Create a new `.tar.gz` unpacker.
-    #[cfg(feature = "tar-gz")]
-    pub fn new_gz(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        TarUnpacker::create(
-            output_dir,
-            Box::new(flate2::read::GzDecoder::new(fs::open_file(input_file)?)),
-        )
-    }
-
-    /// Create a new `.tar.xz` unpacker.
-    #[cfg(feature = "tar-xz")]
-    pub fn new_xz(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        TarUnpacker::create(
-            output_dir,
-            Box::new(liblzma::read::XzDecoder::new(fs::open_file(input_file)?)),
-        )
-    }
-
-    /// Create a new `.tar.zst` unpacker.
-    #[cfg(feature = "tar-zstd")]
-    pub fn new_zstd(output_dir: &Path, input_file: &Path) -> Result<Self, ArchiveError> {
-        let decoder = zstd::stream::Decoder::new(fs::open_file(input_file)?).map_err(|error| {
-            TarError::ZstdDictionary {
-                error: Box::new(error),
-            }
-        })?;
-
-        TarUnpacker::create(output_dir, Box::new(decoder))
-    }
-
-    // Validations inspired from binstall_tar::Entry::unpack_in().
-    //
-    // Didn't use unpack_in() directly for safety as it cannot handle
-    // our prefix (stripping) related requirement since it considers
-    // the entry as read-only.
-    fn safe_entry_path(entry: &TarEntry<Box<dyn Read>>) -> Option<PathBuf> {
-        let path = entry.path().ok()?;
-        let mut clean_path = PathBuf::new();
-        let mut normal_parts = 0;
-
-        for part in path.components() {
-            match part {
-                Component::Prefix(..) | Component::RootDir | Component::CurDir => continue,
-
-                Component::ParentDir => {
-                    // Avoid zip slip vulnerability (CWE-23: Relative Path Traversal)
-                    if normal_parts == 0 {
-                        return None;
-                    }
-
-                    clean_path.pop();
-                    normal_parts -= 1;
-                }
-
-                Component::Normal(part) => {
-                    clean_path.push(part);
-                    normal_parts += 1;
-                }
-            }
         }
-
-        // Original path consisted of only prefix, rootdir, or curdir
-        // components (could be a valid directory, but not a valid file path)
-        if clean_path.as_os_str().is_empty() {
-            return None;
-        }
-
-        Some(clean_path)
     }
 }
 
-impl ArchiveUnpacker for TarUnpacker {
+// Validations inspired from binstall_tar::Entry::unpack_in().
+//
+// Didn't use unpack_in() directly for safety as it cannot handle
+// our prefix (stripping) related requirement since it considers
+// the entry as read-only.
+fn safe_entry_path<R: Read>(entry: &TarEntry<R>) -> Option<PathBuf> {
+    let path = entry.path().ok()?;
+    let mut clean_path = PathBuf::new();
+    let mut normal_parts = 0;
+
+    for part in path.components() {
+        match part {
+            Component::Prefix(..) | Component::RootDir | Component::CurDir => continue,
+
+            Component::ParentDir => {
+                // Avoid zip slip vulnerability (CWE-23: Relative Path Traversal)
+                if normal_parts == 0 {
+                    return None;
+                }
+
+                clean_path.pop();
+                normal_parts -= 1;
+            }
+
+            Component::Normal(part) => {
+                clean_path.push(part);
+                normal_parts += 1;
+            }
+        }
+    }
+
+    // Original path consisted of only prefix, rootdir, or curdir
+    // components (could be a valid directory, but not a valid file path)
+    if clean_path.as_os_str().is_empty() {
+        return None;
+    }
+
+    Some(clean_path)
+}
+
+impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
     #[instrument(name = "unpack_tar", skip_all)]
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<PathBuf, ArchiveError> {
+    fn unpack(mut self, prefix: &str) -> Result<PathBuf, ArchiveError> {
+        fs::create_dir_all(&self.output_dir)?;
+
         self.archive.set_overwrite(true);
 
         trace!(output_dir = ?self.output_dir, "Opening tarball");
@@ -253,7 +164,7 @@ impl ArchiveUnpacker for TarUnpacker {
             })?;
 
             // Skip unpacking if the entry is unsafe (avoid zip slips!)
-            let mut path = match Self::safe_entry_path(&entry) {
+            let mut path = match safe_entry_path(&entry) {
                 Some(path) => path,
                 None => continue,
             };
@@ -265,7 +176,6 @@ impl ArchiveUnpacker for TarUnpacker {
                 path = suffix.to_owned();
             }
 
-            // Unpack the file if different than destination
             let output_path = self.output_dir.join(&path);
 
             // Refuse to write through a symlink planted by an earlier entry,
@@ -279,24 +189,18 @@ impl ArchiveUnpacker for TarUnpacker {
                 fs::create_dir_all(parent_dir)?;
             }
 
-            // trace!(source = ?path, "Unpacking file");
-
-            // NOTE: gzip doesn't support seeking, so we can't use the following util then!
-            // if differ.should_write_source(entry.size(), &mut entry, &output_path)? {
             entry
                 .unpack(&output_path)
                 .map_err(|error| TarError::ExtractFailure {
                     source: output_path.clone(),
                     error: Box::new(error),
                 })?;
-            // }
 
-            differ.untrack_file(&output_path);
             count += 1;
         }
 
         trace!("Unpacked {} files", count);
 
-        Ok(self.output_dir.clone())
+        Ok(self.output_dir)
     }
 }

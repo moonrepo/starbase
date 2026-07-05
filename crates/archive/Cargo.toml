@@ -41,21 +41,29 @@ starbase_archive = { path = ".", features = [
 	"zip-all",
 ] }
 starbase_sandbox = { path = "../sandbox" }
+starbase_utils = { path = "../utils", default-features = false }
 
 [features]
 default = ["tar-gz"]
-gz = ["dep:flate2"]
 miette = ["dep:miette"]
+
+# Compression codecs
+bz2 = ["dep:bzip2"]
+gz = ["dep:flate2"]
+xz = ["dep:liblzma"]
+zstd = ["dep:zstd"]
+
+# Formats and codec convenience aliases
 tar = ["dep:binstall-tar"]
 tar-all = ["tar", "tar-bz2", "tar-gz", "tar-xz", "tar-zstd"]
-tar-bz2 = ["dep:bzip2", "tar"]
-tar-gz = ["dep:flate2", "tar"]
-tar-xz = ["dep:liblzma", "tar"]
-tar-zstd = ["dep:zstd", "tar"]
+tar-bz2 = ["tar", "bz2"]
+tar-gz = ["tar", "gz"]
+tar-xz = ["tar", "xz"]
+tar-zstd = ["tar", "zstd"]
 zip = ["dep:zip"]
 zip-all = ["zip", "zip-bz2", "zip-deflate", "zip-gz", "zip-xz", "zip-zstd"]
-zip-bz2 = ["dep:bzip2", "zip", "zip/bzip2"]
-zip-deflate = ["dep:flate2", "zip", "zip/deflate"]
+zip-bz2 = ["zip", "zip/bzip2"]
+zip-deflate = ["zip", "zip/deflate"]
 zip-gz = ["zip-deflate"]
-zip-xz = ["dep:liblzma", "zip", "zip/lzma"]
-zip-zstd = ["dep:zstd", "zip", "zip/zstd"]
+zip-xz = ["zip", "zip/lzma"]
+zip-zstd = ["zip", "zip/zstd"]

@@ -1,8 +1,9 @@
-/// Handles standard `.gz` files.
-#[cfg(feature = "gz")]
-pub mod gz;
-#[cfg(feature = "gz")]
-mod gz_error;
+/// Compression codecs (`gz`, `bz2`, `xz`, `zstd`) that wrap read/write streams.
+pub mod codecs;
+
+/// Handles single files passed through a codec, like `.gz` or `.zst`.
+pub mod file;
+mod file_error;
 
 /// Handles `.tar`, `.tar.bz2`, `.tar.gz`, `.tar.xz`, and `.tar.zst` files.
 #[cfg(feature = "tar")]
@@ -18,11 +19,10 @@ mod zip_error;
 
 mod archive;
 mod archive_error;
-mod tree_differ;
 
 pub use archive::*;
 pub use archive_error::*;
-pub use tree_differ::*;
+pub use codecs::Finish;
 
 use starbase_utils::fs;
 use std::path::Path;
@@ -135,6 +135,18 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
     ]
 }
 
+/// Remove a trailing compression extension (`.gz`, `.gzip`, `.zst`, `.zstd`)
+/// from the file name, returning the inner file name.
+pub fn strip_compression_suffix(name: &str) -> &str {
+    for ext in [".gz", ".gzip", ".zst", ".zstd"] {
+        if let Some(stripped) = name.strip_suffix(ext) {
+            return stripped;
+        }
+    }
+
+    name
+}
+
 /// Return true if the file path has a supported archive extension.
 /// This does not check against feature flags!
 pub fn is_supported_archive_extension(path: &Path) -> bool {
@@ -145,6 +157,23 @@ pub fn is_supported_archive_extension(path: &Path) -> bool {
                 .into_iter()
                 .any(|ext| name.ends_with(&format!(".{ext}")))
         })
+}
+
+#[cfg(test)]
+mod suffix_tests {
+    use super::strip_compression_suffix;
+
+    #[test]
+    fn strips_only_trailing_compression_suffix() {
+        assert_eq!(strip_compression_suffix("archive.gz"), "archive");
+        assert_eq!(strip_compression_suffix("data.gzip"), "data");
+        assert_eq!(strip_compression_suffix("bundle.zst"), "bundle");
+        assert_eq!(strip_compression_suffix("bundle.zstd"), "bundle");
+        // Inner occurrences and multi-dot names are preserved.
+        assert_eq!(strip_compression_suffix("my.gz.file.gz"), "my.gz.file");
+        assert_eq!(strip_compression_suffix("report.tar"), "report.tar");
+        assert_eq!(strip_compression_suffix("plain"), "plain");
+    }
 }
 
 #[cfg(all(test, unix, any(feature = "tar", feature = "zip")))]

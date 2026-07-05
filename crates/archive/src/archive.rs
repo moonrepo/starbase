@@ -1,7 +1,6 @@
 use crate::archive_error::ArchiveError;
-use crate::tree_differ::TreeDiffer;
 use crate::{get_full_file_extension, join_file_name};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use starbase_utils::glob;
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
@@ -14,21 +13,25 @@ pub trait ArchivePacker {
     /// Add the source directory to the archive.
     fn add_dir(&mut self, name: &str, dir: &Path) -> Result<(), ArchiveError>;
 
-    /// Create the archive and write all contents to disk.
-    fn pack(&mut self) -> Result<(), ArchiveError>;
+    /// Finalize the archive, writing any trailing data (compression
+    /// epilogues, format footers) through the entire stream chain.
+    fn pack(self) -> Result<(), ArchiveError>
+    where
+        Self: Sized;
 }
 
 /// Abstraction for unpacking archives.
 pub trait ArchiveUnpacker {
     /// Unpack the archive to the destination directory. If a prefix is provided,
     /// remove it from the start of all file paths within the archive.
-    fn unpack(&mut self, prefix: &str, differ: &mut TreeDiffer) -> Result<PathBuf, ArchiveError>;
+    fn unpack(self, prefix: &str) -> Result<PathBuf, ArchiveError>
+    where
+        Self: Sized;
 }
 
-/// An `Archiver` is an abstraction for packing and unpacking archives,
-/// that utilizes the same set of sources for both operations. For packing,
-/// the sources are the files that will be included in the archive. For unpacking,
-/// the sources are used for file tree diffing when extracting the archive.
+/// An `Archiver` is an abstraction for packing and unpacking archives.
+/// When packing, the added source files and globs are included in the
+/// archive, relative from the source root.
 #[derive(Debug)]
 pub struct Archiver<'owner> {
     /// The archive file itself (`.zip`, etc).
@@ -40,8 +43,8 @@ pub struct Archiver<'owner> {
     /// Absolute file path to source, to relative file path in archive.
     source_files: FxHashMap<PathBuf, String>,
 
-    /// Glob to finds files with.
-    source_globs: FxHashSet<String>,
+    /// Globs to find files with.
+    source_globs: Vec<String>,
 
     /// For packing, the root to join source files with.
     /// For unpacking, the root to extract files relative to.
@@ -55,18 +58,15 @@ impl<'owner> Archiver<'owner> {
             archive_file,
             prefix: "",
             source_files: FxHashMap::default(),
-            source_globs: FxHashSet::default(),
+            source_globs: vec![],
             source_root,
         }
     }
 
-    /// Add a source file to be used in the archiving process. The file path
-    /// can be relative from the source root, or absolute. A custom file path
-    /// can be used within the archive, otherwise the file will be placed
-    /// relative from the source root.
-    ///
-    /// For packing, this includes the file in the archive.
-    /// For unpacking, this diffs the file when extracting.
+    /// Add a source file to be included in the archive when packing.
+    /// The file path can be relative from the source root, or absolute.
+    /// A custom file path can be used within the archive, otherwise the
+    /// file will be placed relative from the source root.
     pub fn add_source_file<F: AsRef<Path>>(
         &mut self,
         source: F,
@@ -85,17 +85,19 @@ impl<'owner> Archiver<'owner> {
         self
     }
 
-    /// Add a glob that'll find files, relative from the source root, to be
-    /// used in the archiving process.
-    ///
-    /// For packing, this finds files to include in the archive.
-    /// For unpacking, this finds files to diff against when extracting.
+    /// Add a glob that'll find files, relative from the source root,
+    /// to be included in the archive when packing.
     pub fn add_source_glob<G: AsRef<str>>(&mut self, glob: G) -> &mut Self {
-        self.source_globs.insert(glob.as_ref().to_owned());
+        let glob = glob.as_ref().to_owned();
+
+        if !self.source_globs.contains(&glob) {
+            self.source_globs.push(glob);
+        }
+
         self
     }
 
-    /// Set the prefix to prepend to files wth when packing,
+    /// Set the prefix to prepend to files with when packing,
     /// and to remove when unpacking.
     pub fn set_prefix(&mut self, prefix: &'owner str) -> &mut Self {
         self.prefix = prefix;
@@ -159,101 +161,79 @@ impl<'owner> Archiver<'owner> {
     /// then pack the archive using [`Archiver#pack`].
     pub fn pack_from_ext(&self) -> Result<(String, PathBuf), ArchiveError> {
         let ext = get_full_file_extension(self.archive_file);
-        let out = self.archive_file.to_path_buf();
 
-        match ext.as_deref() {
-            Some("gz" | "gzip") => {
-                #[cfg(feature = "gz")]
-                self.pack(crate::gz::GzPacker::new)?;
+        macro_rules! pack {
+            ($feature:literal, $enabled:meta, $factory:expr) => {{
+                #[cfg($enabled)]
+                {
+                    self.pack($factory)
+                }
 
-                #[cfg(not(feature = "gz"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "gz".into(),
+                #[cfg(not($enabled))]
+                Err(ArchiveError::FeatureNotEnabled {
+                    feature: $feature.into(),
                     path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("tar") => {
-                #[cfg(feature = "tar")]
-                self.pack(crate::tar::TarPacker::new)?;
+                })
+            }};
+        }
 
-                #[cfg(not(feature = "tar"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
+        let out = match ext.as_deref() {
+            Some("gz" | "gzip") => pack!("gz", feature = "gz", |file| {
+                Ok(crate::file::FilePacker::new(crate::codecs::Gz::new(
+                    starbase_utils::fs::create_file(file)?,
+                )))
+            }),
+            Some("tar") => pack!("tar", feature = "tar", |file| {
+                Ok(crate::tar::TarPacker::new(starbase_utils::fs::create_file(
+                    file,
+                )?))
+            }),
             Some("tar.bz2" | "tbz" | "tbz2" | "tz2") => {
-                #[cfg(feature = "tar-bz2")]
-                self.pack(crate::tar::TarPacker::new_bz2)?;
-
-                #[cfg(not(feature = "tar-bz2"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-bz2".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
+                pack!("tar-bz2", all(feature = "tar", feature = "bz2"), |file| {
+                    Ok(crate::tar::TarPacker::new(crate::codecs::Bz2::new(
+                        starbase_utils::fs::create_file(file)?,
+                    )))
+                })
             }
             Some("tar.gz" | "tgz") => {
-                #[cfg(feature = "tar-gz")]
-                self.pack(crate::tar::TarPacker::new_gz)?;
-
-                #[cfg(not(feature = "tar-gz"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-gz".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
+                pack!("tar-gz", all(feature = "tar", feature = "gz"), |file| {
+                    Ok(crate::tar::TarPacker::new(crate::codecs::Gz::new(
+                        starbase_utils::fs::create_file(file)?,
+                    )))
+                })
             }
             Some("tar.xz" | "txz") => {
-                #[cfg(feature = "tar-xz")]
-                self.pack(crate::tar::TarPacker::new_xz)?;
-
-                #[cfg(not(feature = "tar-xz"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-xz".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
+                pack!("tar-xz", all(feature = "tar", feature = "xz"), |file| {
+                    Ok(crate::tar::TarPacker::new(crate::codecs::Xz::new(
+                        starbase_utils::fs::create_file(file)?,
+                    )))
+                })
             }
             Some("tar.zstd" | "tar.zst" | "tzst" | "tzs") => {
-                #[cfg(feature = "tar-zstd")]
-                self.pack(crate::tar::TarPacker::new_zstd)?;
-
-                #[cfg(not(feature = "tar-zstd"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-zstd".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
+                pack!("tar-zstd", all(feature = "tar", feature = "zstd"), |file| {
+                    Ok(crate::tar::TarPacker::new(crate::codecs::Zstd::new(
+                        starbase_utils::fs::create_file(file)?,
+                    )))
+                })
             }
-            Some("zst" | "zstd") => {
-                #[cfg(feature = "tar-zstd")]
-                self.pack(crate::tar::TarPacker::new_zstd)?;
-
-                #[cfg(not(feature = "tar-zstd"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-zstd".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("zip") => {
-                #[cfg(feature = "zip")]
-                self.pack(crate::zip::ZipPacker::new)?;
-
-                #[cfg(not(feature = "zip"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "zip".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some(ext) => {
-                return Err(ArchiveError::UnsupportedFormat {
-                    format: ext.into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            None => {
-                return Err(ArchiveError::UnknownFormat {
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-        };
+            Some("zst" | "zstd") => pack!("zstd", feature = "zstd", |file| {
+                Ok(crate::file::FilePacker::new(crate::codecs::Zstd::new(
+                    starbase_utils::fs::create_file(file)?,
+                )))
+            }),
+            Some("zip") => pack!("zip", feature = "zip", |file| {
+                Ok(crate::zip::ZipPacker::new(starbase_utils::fs::create_file(
+                    file,
+                )?))
+            }),
+            Some(ext) => Err(ArchiveError::UnsupportedFormat {
+                format: ext.into(),
+                path: self.archive_file.to_path_buf(),
+            }),
+            None => Err(ArchiveError::UnknownFormat {
+                path: self.archive_file.to_path_buf(),
+            }),
+        }?;
 
         Ok((ext.unwrap(), out))
     }
@@ -262,11 +242,6 @@ impl<'owner> Archiver<'owner> {
     /// unpacker factory. The factory is passed an absolute path
     /// to the output directory, and the input archive file. The unpacked
     /// directory or file is returned from this method.
-    ///
-    /// When unpacking, we compare files at the destination to those
-    /// in the archive, and only unpack the files if they differ.
-    /// Furthermore, files at the destination that are not in the
-    /// archive are removed entirely.
     #[instrument(skip_all)]
     pub fn unpack<F, P>(&self, unpacker: F) -> Result<PathBuf, ArchiveError>
     where
@@ -279,17 +254,9 @@ impl<'owner> Archiver<'owner> {
             "Unpacking archive",
         );
 
-        let mut lookup_paths = vec![];
-        lookup_paths.extend(self.source_files.values());
-        lookup_paths.extend(&self.source_globs);
+        let archive = unpacker(self.source_root, self.archive_file)?;
 
-        let mut differ = TreeDiffer::load(self.source_root, lookup_paths)?;
-        let mut archive = unpacker(self.source_root, self.archive_file)?;
-
-        let out = archive.unpack(self.prefix, &mut differ)?;
-        differ.remove_stale_tracked_files();
-
-        Ok(out)
+        archive.unpack(self.prefix)
     }
 
     /// Determine the unpacker to use based on the archive file extension,
@@ -299,117 +266,96 @@ impl<'owner> Archiver<'owner> {
     /// and the extension that was extracted from the input archive file.
     pub fn unpack_from_ext(&self) -> Result<(String, PathBuf), ArchiveError> {
         let ext = get_full_file_extension(self.archive_file);
-        let out;
 
-        match ext.as_deref() {
-            Some("gz" | "gzip") => {
-                #[cfg(feature = "gz")]
+        macro_rules! unpack {
+            ($feature:literal, $enabled:meta, $factory:expr) => {{
+                #[cfg($enabled)]
                 {
-                    out = self.unpack(crate::gz::GzUnpacker::new)?;
+                    self.unpack($factory)
                 }
 
-                #[cfg(not(feature = "gz"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "gz".into(),
+                #[cfg(not($enabled))]
+                Err(ArchiveError::FeatureNotEnabled {
+                    feature: $feature.into(),
                     path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("tar") => {
-                #[cfg(feature = "tar")]
-                {
-                    out = self.unpack(crate::tar::TarUnpacker::new)?;
-                }
+                })
+            }};
+        }
 
-                #[cfg(not(feature = "tar"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("tar.bz2" | "tz2" | "tbz" | "tbz2") => {
-                #[cfg(feature = "tar-bz2")]
-                {
-                    out = self.unpack(crate::tar::TarUnpacker::new_bz2)?;
+        let out = match ext.as_deref() {
+            Some("gz" | "gzip") => unpack!("gz", feature = "gz", |dir, file| {
+                Ok(crate::file::FileUnpacker::new(
+                    dir.join(crate::strip_compression_suffix(
+                        &starbase_utils::fs::file_name(file),
+                    )),
+                    crate::codecs::Gz::new(starbase_utils::fs::open_file(file)?),
+                ))
+            }),
+            Some("tar") => unpack!("tar", feature = "tar", |dir, file| {
+                Ok(crate::tar::TarUnpacker::new(
+                    dir,
+                    starbase_utils::fs::open_file(file)?,
+                ))
+            }),
+            Some("tar.bz2" | "tbz" | "tbz2" | "tz2") => unpack!(
+                "tar-bz2",
+                all(feature = "tar", feature = "bz2"),
+                |dir, file| {
+                    Ok(crate::tar::TarUnpacker::new(
+                        dir,
+                        crate::codecs::Bz2::new(starbase_utils::fs::open_file(file)?),
+                    ))
                 }
-
-                #[cfg(not(feature = "tar-bz2"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-bz2".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("tar.gz" | "tgz") => {
-                #[cfg(feature = "tar-gz")]
-                {
-                    out = self.unpack(crate::tar::TarUnpacker::new_gz)?;
+            ),
+            Some("tar.gz" | "tgz") => unpack!(
+                "tar-gz",
+                all(feature = "tar", feature = "gz"),
+                |dir, file| {
+                    Ok(crate::tar::TarUnpacker::new(
+                        dir,
+                        crate::codecs::Gz::new(starbase_utils::fs::open_file(file)?),
+                    ))
                 }
-
-                #[cfg(not(feature = "tar-gz"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-gz".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("tar.xz" | "txz") => {
-                #[cfg(feature = "tar-xz")]
-                {
-                    out = self.unpack(crate::tar::TarUnpacker::new_xz)?;
+            ),
+            Some("tar.xz" | "txz") => unpack!(
+                "tar-xz",
+                all(feature = "tar", feature = "xz"),
+                |dir, file| {
+                    Ok(crate::tar::TarUnpacker::new(
+                        dir,
+                        crate::codecs::Xz::new(starbase_utils::fs::open_file(file)?),
+                    ))
                 }
-
-                #[cfg(not(feature = "tar-xz"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-xz".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("tar.zstd" | "tar.zst" | "tzst" | "tzs") => {
-                #[cfg(feature = "tar-zstd")]
-                {
-                    out = self.unpack(crate::tar::TarUnpacker::new_zstd)?;
+            ),
+            Some("tar.zstd" | "tar.zst" | "tzst" | "tzs") => unpack!(
+                "tar-zstd",
+                all(feature = "tar", feature = "zstd"),
+                |dir, file| {
+                    Ok(crate::tar::TarUnpacker::new(
+                        dir,
+                        crate::codecs::Zstd::new(starbase_utils::fs::open_file(file)?),
+                    ))
                 }
-
-                #[cfg(not(feature = "tar-zstd"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-zstd".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("zst" | "zstd") => {
-                #[cfg(feature = "tar-zstd")]
-                {
-                    out = self.unpack(crate::tar::TarUnpacker::new_zstd)?;
-                }
-
-                #[cfg(not(feature = "tar-zstd"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "tar-zstd".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some("zip") => {
-                #[cfg(feature = "zip")]
-                {
-                    out = self.unpack(crate::zip::ZipUnpacker::new)?;
-                }
-
-                #[cfg(not(feature = "zip"))]
-                return Err(ArchiveError::FeatureNotEnabled {
-                    feature: "zip".into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            Some(ext) => {
-                return Err(ArchiveError::UnsupportedFormat {
-                    format: ext.into(),
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-            None => {
-                return Err(ArchiveError::UnknownFormat {
-                    path: self.archive_file.to_path_buf(),
-                });
-            }
-        };
+            ),
+            Some("zst" | "zstd") => unpack!("zstd", feature = "zstd", |dir, file| {
+                Ok(crate::file::FileUnpacker::new(
+                    dir.join(crate::strip_compression_suffix(
+                        &starbase_utils::fs::file_name(file),
+                    )),
+                    crate::codecs::Zstd::new(starbase_utils::fs::open_file(file)?),
+                ))
+            }),
+            Some("zip") => unpack!("zip", feature = "zip", |dir, file| {
+                crate::zip::ZipUnpacker::new(dir, starbase_utils::fs::open_file(file)?)
+            }),
+            Some(ext) => Err(ArchiveError::UnsupportedFormat {
+                format: ext.into(),
+                path: self.archive_file.to_path_buf(),
+            }),
+            None => Err(ArchiveError::UnknownFormat {
+                path: self.archive_file.to_path_buf(),
+            }),
+        }?;
 
         Ok((ext.unwrap(), out))
     }

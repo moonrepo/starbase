@@ -34,12 +34,6 @@ pub enum TarError {
         #[source]
         error: Box<std::io::Error>,
     },
-
-    #[error("Failed to load zstd dictionary.\n{error}")]
-    ZstdDictionary {
-        #[source]
-        error: Box<std::io::Error>,
-    },
 }
 
 #[cfg(feature = "miette")]
@@ -74,13 +68,6 @@ pub enum TarError {
     #[diagnostic(code(tar::unpack))]
     #[error("Failed to unpack archive.")]
     UnpackFailure {
-        #[source]
-        error: Box<std::io::Error>,
-    },
-
-    #[diagnostic(code(tar::zstd::dictionary))]
-    #[error("Failed to load zstd dictionary.")]
-    ZstdDictionary {
         #[source]
         error: Box<std::io::Error>,
     },

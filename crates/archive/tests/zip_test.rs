@@ -5,6 +5,7 @@ use ::zip::{CompressionMethod, ZipWriter};
 use starbase_archive::Archiver;
 use starbase_archive::zip::*;
 use starbase_sandbox::{create_empty_sandbox, create_sandbox};
+use starbase_utils::fs;
 use std::io::Write;
 use std::path::Path;
 
@@ -31,7 +32,11 @@ fn create_malicious_zip_common(
 mod zip {
     use super::*;
 
-    generate_tests!("out.zip", ZipPacker::new, ZipUnpacker::new);
+    generate_tests!(
+        "out.zip",
+        |file| Ok(ZipPacker::new(fs::create_file(file)?)),
+        |dir, file| ZipUnpacker::new(dir, fs::open_file(file)?)
+    );
 
     fn create_malicious_zip_plain(archive_path: &Path, entry_path: &Path, entry_content: &[u8]) {
         create_malicious_zip_common(
@@ -48,7 +53,14 @@ mod zip {
 mod zip_deflate {
     use super::*;
 
-    generate_tests!("out.zip", ZipPacker::new_deflate, ZipUnpacker::new_deflate);
+    generate_tests!(
+        "out.zip",
+        |file| Ok(ZipPacker::with_compression(
+            fs::create_file(file)?,
+            CompressionMethod::Deflated
+        )),
+        |dir, file| ZipUnpacker::new(dir, fs::open_file(file)?)
+    );
 
     fn create_malicious_zip_deflated(archive_path: &Path, entry_path: &Path, entry_content: &[u8]) {
         create_malicious_zip_common(

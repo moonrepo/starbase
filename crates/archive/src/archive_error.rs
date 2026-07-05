@@ -11,11 +11,10 @@ pub enum ArchiveError {
     Fs(#[from] Box<FsError>),
 
     #[error(transparent)]
-    Glob(#[from] Box<GlobError>),
+    File(#[from] Box<crate::file::FileError>),
 
-    #[cfg(feature = "gz")]
     #[error(transparent)]
-    Gz(#[from] Box<crate::gz::GzError>),
+    Glob(#[from] Box<GlobError>),
 
     #[error(transparent)]
     Io(#[from] Box<std::io::Error>),
@@ -58,16 +57,15 @@ impl From<FsError> for ArchiveError {
     }
 }
 
-impl From<GlobError> for ArchiveError {
-    fn from(e: GlobError) -> ArchiveError {
-        ArchiveError::Glob(Box::new(e))
+impl From<crate::file::FileError> for ArchiveError {
+    fn from(e: crate::file::FileError) -> ArchiveError {
+        ArchiveError::File(Box::new(e))
     }
 }
 
-#[cfg(feature = "gz")]
-impl From<crate::gz::GzError> for ArchiveError {
-    fn from(e: crate::gz::GzError) -> ArchiveError {
-        ArchiveError::Gz(Box::new(e))
+impl From<GlobError> for ArchiveError {
+    fn from(e: GlobError) -> ArchiveError {
+        ArchiveError::Glob(Box::new(e))
     }
 }
 
