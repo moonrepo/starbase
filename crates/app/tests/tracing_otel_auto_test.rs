@@ -15,9 +15,12 @@ use tokio::sync::{Mutex, oneshot};
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 
+// `OtelProtocol::Auto` should defer to the standard OTLP protocol environment
+// variable. Here the generic `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` selects the gRPC
+// transport, so telemetry must reach the tonic collector.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
-async fn exports_spans_over_otlp() {
+async fn auto_selects_grpc_from_env() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let log_requests = Arc::new(Mutex::new(Vec::new()));
@@ -48,25 +51,15 @@ async fn exports_spans_over_otlp() {
             .unwrap();
     });
 
-    let _endpoint = EnvVarGuard::set(
-        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-        format!("http://{addr}"),
-    );
-    let _protocol = EnvVarGuard::set("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc".into());
-    let _metrics_endpoint = EnvVarGuard::set(
-        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
-        format!("http://{addr}"),
-    );
-    let _metrics_protocol = EnvVarGuard::set("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "grpc".into());
-    let _logs_endpoint =
-        EnvVarGuard::set("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", format!("http://{addr}"));
-    let _logs_protocol = EnvVarGuard::set("OTEL_EXPORTER_OTLP_LOGS_PROTOCOL", "grpc".into());
+    // Only the generic endpoint and protocol are set; `Auto` must honor them.
+    let _endpoint = EnvVarGuard::set("OTEL_EXPORTER_OTLP_ENDPOINT", format!("http://{addr}"));
+    let _protocol = EnvVarGuard::set("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc".into());
 
     let guard = setup_tracing(TracingOptions {
         otel: OtelOptions {
             enabled: true,
             logs_enabled: true,
-            protocol: OtelProtocol::Grpc,
+            protocol: OtelProtocol::Auto,
             service_name: Some("starbase-test".into()),
         },
         ..TracingOptions::default()
@@ -109,7 +102,7 @@ async fn exports_spans_over_otlp() {
         let log_count = log_requests.lock().await.len();
 
         panic!(
-            "timed out waiting for starbase OTLP export (traces={trace_count}, metrics={metric_count}, logs={log_count})"
+            "timed out waiting for starbase OTLP auto/grpc export (traces={trace_count}, metrics={metric_count}, logs={log_count})"
         );
     }
 

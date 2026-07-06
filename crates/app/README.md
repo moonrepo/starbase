@@ -141,8 +141,9 @@ let _guard = app.setup_tracing(TracingOptions {
         enabled: true,
         logs_enabled: false,
         // `OtelProtocol::Grpc` (default) exports over gRPC; `OtelProtocol::Http`
-        // exports over HTTP with binary protobuf payloads (`http/protobuf`).
-        protocol: OtelProtocol::Http,
+        // exports over HTTP with binary protobuf payloads (`http/protobuf`);
+        // `OtelProtocol::Auto` picks the transport from the environment.
+        protocol: OtelProtocol::Auto,
         service_name: Some("my-app".into()),
     },
     ..TracingOptions::default()
@@ -151,7 +152,9 @@ let _guard = app.setup_tracing(TracingOptions {
 
 This wires the OTLP tracing and metrics bridge. The `protocol` field selects the transport; the
 endpoint, headers, and other exporter behavior should still be configured through the standard
-OpenTelemetry environment variables.
+OpenTelemetry environment variables. With `OtelProtocol::Auto`, the transport itself is also taken
+from the environment — the per-signal `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL` variables,
+then `OTEL_EXPORTER_OTLP_PROTOCOL`, defaulting to `http/protobuf` when neither is set.
 
 ## Custom error types
 

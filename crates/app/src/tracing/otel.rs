@@ -25,6 +25,11 @@ pub enum OtelProtocol {
     /// OTLP over HTTP with binary protobuf payloads (the `http/protobuf` protocol),
     /// POSTed to the collector's HTTP `/v1/{signal}` endpoints.
     Http,
+    /// Defer to the standard OpenTelemetry environment variables to choose the
+    /// transport per signal: `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL`,
+    /// then `OTEL_EXPORTER_OTLP_PROTOCOL`, falling back to `http/protobuf` when
+    /// neither is set. Recognized values are `grpc` and `http/protobuf`.
+    Auto,
 }
 
 /// OpenTelemetry configuration for exporting traces, metrics, and logs over OTLP.
@@ -34,8 +39,9 @@ pub struct OtelOptions {
     pub enabled: bool,
     /// Whether to export tracing events as OTLP logs.
     pub logs_enabled: bool,
-    /// Transport used to reach the OTLP collector. The endpoint is still read from
-    /// the standard `OTEL_EXPORTER_OTLP_*` environment variables.
+    /// Transport used to reach the OTLP collector, or [`OtelProtocol::Auto`] to
+    /// select it from the environment. The endpoint is always read from the
+    /// standard `OTEL_EXPORTER_OTLP_*` environment variables.
     pub protocol: OtelProtocol,
     /// Service name recorded in the emitted telemetry resource.
     pub service_name: Option<String>,
@@ -50,6 +56,9 @@ macro_rules! build_otlp_exporter {
         match $protocol {
             OtelProtocol::Grpc => $builder.with_tonic().build(),
             OtelProtocol::Http => $builder.with_http().build(),
+            // The bare `.build()` resolves the transport from the standard OTLP
+            // protocol environment variables (or the feature default).
+            OtelProtocol::Auto => $builder.build(),
         }
     };
 }

@@ -4,12 +4,73 @@
 #![cfg(feature = "otel")]
 #![allow(dead_code)]
 
-use opentelemetry_proto::tonic::collector::logs::v1::ExportLogsServiceRequest;
-use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest;
-use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
+use opentelemetry_proto::tonic::collector::logs::v1::{
+    ExportLogsServiceRequest, ExportLogsServiceResponse, logs_service_server::LogsService,
+};
+use opentelemetry_proto::tonic::collector::metrics::v1::{
+    ExportMetricsServiceRequest, ExportMetricsServiceResponse,
+    metrics_service_server::MetricsService,
+};
+use opentelemetry_proto::tonic::collector::trace::v1::{
+    ExportTraceServiceRequest, ExportTraceServiceResponse, trace_service_server::TraceService,
+};
 use std::env;
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::net::TcpStream;
+use tokio::sync::Mutex;
+use tonic::{Request, Response, Status};
+
+/// A gRPC OTLP collector that records every export request it receives, shared
+/// by the transport tests that exercise the tonic path.
+#[derive(Clone, Default)]
+pub struct Collector {
+    pub log_requests: Arc<Mutex<Vec<ExportLogsServiceRequest>>>,
+    pub metric_requests: Arc<Mutex<Vec<ExportMetricsServiceRequest>>>,
+    pub trace_requests: Arc<Mutex<Vec<ExportTraceServiceRequest>>>,
+}
+
+#[tonic::async_trait]
+impl LogsService for Collector {
+    async fn export(
+        &self,
+        request: Request<ExportLogsServiceRequest>,
+    ) -> Result<Response<ExportLogsServiceResponse>, Status> {
+        self.log_requests.lock().await.push(request.into_inner());
+
+        Ok(Response::new(ExportLogsServiceResponse {
+            partial_success: None,
+        }))
+    }
+}
+
+#[tonic::async_trait]
+impl MetricsService for Collector {
+    async fn export(
+        &self,
+        request: Request<ExportMetricsServiceRequest>,
+    ) -> Result<Response<ExportMetricsServiceResponse>, Status> {
+        self.metric_requests.lock().await.push(request.into_inner());
+
+        Ok(Response::new(ExportMetricsServiceResponse {
+            partial_success: None,
+        }))
+    }
+}
+
+#[tonic::async_trait]
+impl TraceService for Collector {
+    async fn export(
+        &self,
+        request: Request<ExportTraceServiceRequest>,
+    ) -> Result<Response<ExportTraceServiceResponse>, Status> {
+        self.trace_requests.lock().await.push(request.into_inner());
+
+        Ok(Response::new(ExportTraceServiceResponse {
+            partial_success: None,
+        }))
+    }
+}
 
 /// Sets an environment variable for the duration of a test, restoring the
 /// previous value (or absence) on drop.
