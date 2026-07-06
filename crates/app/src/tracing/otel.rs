@@ -16,6 +16,17 @@ use tracing_subscriber::{Layer, layer::SubscriberExt, registry::LookupSpan};
 
 const OTEL_INSTRUMENTATION_SCOPE: &str = env!("CARGO_PKG_NAME");
 
+/// Transport used to deliver OTLP traces, metrics, and logs to the collector.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum OtelProtocol {
+    /// OTLP over gRPC (the `grpc` protocol), served on the collector's gRPC port.
+    #[default]
+    Grpc,
+    /// OTLP over HTTP with binary protobuf payloads (the `http/protobuf` protocol),
+    /// POSTed to the collector's HTTP `/v1/{signal}` endpoints.
+    Http,
+}
+
 /// OpenTelemetry configuration for exporting traces, metrics, and logs over OTLP.
 #[derive(Debug, Default)]
 pub struct OtelOptions {
@@ -23,8 +34,24 @@ pub struct OtelOptions {
     pub enabled: bool,
     /// Whether to export tracing events as OTLP logs.
     pub logs_enabled: bool,
+    /// Transport used to reach the OTLP collector. The endpoint is still read from
+    /// the standard `OTEL_EXPORTER_OTLP_*` environment variables.
+    pub protocol: OtelProtocol,
     /// Service name recorded in the emitted telemetry resource.
     pub service_name: Option<String>,
+}
+
+// The gRPC and HTTP transports are selected by different builder methods that
+// return distinct types, so this can't collapse into a plain function. Each arm
+// still terminates in `.build()`, which yields the same exporter type, letting
+// call sites stay transport-agnostic.
+macro_rules! build_otlp_exporter {
+    ($builder:expr, $protocol:expr) => {
+        match $protocol {
+            OtelProtocol::Grpc => $builder.with_tonic().build(),
+            OtelProtocol::Http => $builder.with_http().build(),
+        }
+    };
 }
 
 // OTEL providers do shut down on drop, but only when the last cloned handle is
@@ -92,13 +119,12 @@ fn setup_otel_tracing(
         return Ok(None);
     }
 
-    let exporter = SpanExporter::builder()
-        .with_tonic()
-        .build()
-        .map_err(|error| TracingError::OtlpExporterFailed {
+    let exporter = build_otlp_exporter!(SpanExporter::builder(), options.protocol).map_err(
+        |error| TracingError::OtlpExporterFailed {
             signal: "traces".into(),
             error,
-        })?;
+        },
+    )?;
 
     Ok(Some(
         SdkTracerProvider::builder()
@@ -116,13 +142,12 @@ fn setup_otel_metrics(
         return Ok(None);
     }
 
-    let exporter = MetricExporter::builder()
-        .with_tonic()
-        .build()
-        .map_err(|error| TracingError::OtlpExporterFailed {
+    let exporter = build_otlp_exporter!(MetricExporter::builder(), options.protocol).map_err(
+        |error| TracingError::OtlpExporterFailed {
             signal: "metrics".into(),
             error,
-        })?;
+        },
+    )?;
 
     let reader = PeriodicReader::builder(exporter).build();
 
@@ -144,13 +169,12 @@ fn setup_otel_logs(
 
     // Logs are opt-in separately because exporting every tracing event can be
     // much noisier than exporting spans and product metrics.
-    let exporter = LogExporter::builder()
-        .with_tonic()
-        .build()
-        .map_err(|error| TracingError::OtlpExporterFailed {
+    let exporter = build_otlp_exporter!(LogExporter::builder(), options.protocol).map_err(
+        |error| TracingError::OtlpExporterFailed {
             signal: "logs".into(),
             error,
-        })?;
+        },
+    )?;
 
     Ok(Some(
         SdkLoggerProvider::builder()
@@ -212,6 +236,7 @@ mod tests {
             get_otel_service_name(&OtelOptions {
                 enabled: true,
                 logs_enabled: false,
+                protocol: OtelProtocol::Grpc,
                 service_name: Some("starbase-test".into()),
             }),
             "starbase-test"

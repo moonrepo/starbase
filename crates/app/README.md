@@ -134,20 +134,24 @@ async fn main() -> MainResult {
 When the `otel` feature is enabled, `TracingOptions` can also export traces and metrics over OTLP.
 
 ```rust
-use starbase::tracing::{OtelOptions, TracingOptions};
+use starbase::tracing::{OtelOptions, OtelProtocol, TracingOptions};
 
 let _guard = app.setup_tracing(TracingOptions {
     otel: OtelOptions {
         enabled: true,
         logs_enabled: false,
+        // `OtelProtocol::Grpc` (default) exports over gRPC; `OtelProtocol::Http`
+        // exports over HTTP with binary protobuf payloads (`http/protobuf`).
+        protocol: OtelProtocol::Http,
         service_name: Some("my-app".into()),
     },
     ..TracingOptions::default()
 })?;
 ```
 
-This wires the OTLP tracing and metrics bridge. Endpoint, protocol, headers, and other exporter
-behavior should still be configured through the standard OpenTelemetry environment variables.
+This wires the OTLP tracing and metrics bridge. The `protocol` field selects the transport; the
+endpoint, headers, and other exporter behavior should still be configured through the standard
+OpenTelemetry environment variables.
 
 ## Custom error types
 

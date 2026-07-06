@@ -1,5 +1,8 @@
 #![cfg(feature = "otel")]
 
+mod common;
+
+use common::{EnvVarGuard, assert_exported_telemetry};
 use opentelemetry::{KeyValue, global};
 use opentelemetry_proto::tonic::collector::logs::v1::{
     ExportLogsServiceRequest, ExportLogsServiceResponse,
@@ -14,8 +17,7 @@ use opentelemetry_proto::tonic::collector::trace::v1::{
     trace_service_server::{TraceService, TraceServiceServer},
 };
 use serial_test::serial;
-use starbase::tracing::{OtelOptions, TracingOptions, info, info_span, setup_tracing};
-use std::env;
+use starbase::tracing::{OtelOptions, OtelProtocol, TracingOptions, info, info_span, setup_tracing};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, oneshot};
@@ -71,37 +73,6 @@ impl TraceService for Collector {
     }
 }
 
-struct EnvVarGuard {
-    key: &'static str,
-    old_value: Option<String>,
-}
-
-impl EnvVarGuard {
-    fn set(key: &'static str, value: String) -> Self {
-        let old_value = env::var(key).ok();
-
-        unsafe {
-            env::set_var(key, value);
-        }
-
-        Self { key, old_value }
-    }
-}
-
-impl Drop for EnvVarGuard {
-    fn drop(&mut self) {
-        if let Some(value) = &self.old_value {
-            unsafe {
-                env::set_var(self.key, value);
-            }
-        } else {
-            unsafe {
-                env::remove_var(self.key);
-            }
-        }
-    }
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[serial]
 async fn exports_spans_over_otlp() {
@@ -153,6 +124,7 @@ async fn exports_spans_over_otlp() {
         otel: OtelOptions {
             enabled: true,
             logs_enabled: true,
+            protocol: OtelProtocol::Grpc,
             service_name: Some("starbase-test".into()),
         },
         ..TracingOptions::default()
@@ -202,116 +174,8 @@ async fn exports_spans_over_otlp() {
     let log_requests = log_requests.lock().await.clone();
     let trace_requests = trace_requests.lock().await.clone();
     let metric_requests = metric_requests.lock().await.clone();
-    let service_names = trace_requests
-        .iter()
-        .flat_map(|request| request.resource_spans.iter())
-        .flat_map(|resource| resource.resource.as_ref())
-        .flat_map(|resource| resource.attributes.iter())
-        .filter(|attribute| attribute.key == "service.name")
-        .filter_map(|attribute| attribute.value.as_ref())
-        .filter_map(|value| value.value.as_ref())
-        .filter_map(|value| match value {
-            opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(value) => {
-                Some(value.as_str())
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let metric_service_names = metric_requests
-        .iter()
-        .flat_map(|request| request.resource_metrics.iter())
-        .flat_map(|resource| resource.resource.as_ref())
-        .flat_map(|resource| resource.attributes.iter())
-        .filter(|attribute| attribute.key == "service.name")
-        .filter_map(|attribute| attribute.value.as_ref())
-        .filter_map(|value| value.value.as_ref())
-        .filter_map(|value| match value {
-            opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(value) => {
-                Some(value.as_str())
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let scope_names = trace_requests
-        .iter()
-        .flat_map(|request| request.resource_spans.iter())
-        .flat_map(|resource| resource.scope_spans.iter())
-        .map(|scope| scope.scope.as_ref().map(|scope| scope.name.as_str()))
-        .collect::<Vec<_>>();
-    let spans = trace_requests
-        .iter()
-        .flat_map(|request| request.resource_spans.iter())
-        .flat_map(|resource| resource.scope_spans.iter())
-        .flat_map(|scope| scope.spans.iter())
-        .collect::<Vec<_>>();
-    let metric_names = metric_requests
-        .iter()
-        .flat_map(|request| request.resource_metrics.iter())
-        .flat_map(|resource| resource.scope_metrics.iter())
-        .flat_map(|scope| scope.metrics.iter())
-        .map(|metric| metric.name.as_str())
-        .collect::<Vec<_>>();
-    let log_bodies = log_requests
-        .iter()
-        .flat_map(|request| request.resource_logs.iter())
-        .flat_map(|resource| resource.scope_logs.iter())
-        .flat_map(|scope| scope.log_records.iter())
-        .filter_map(|record| record.body.as_ref())
-        .filter_map(|body| body.value.as_ref())
-        .filter_map(|value| match value {
-            opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(value) => {
-                Some(value.as_str())
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    let log_service_names = log_requests
-        .iter()
-        .flat_map(|request| request.resource_logs.iter())
-        .flat_map(|resource| resource.resource.as_ref())
-        .flat_map(|resource| resource.attributes.iter())
-        .filter(|attribute| attribute.key == "service.name")
-        .filter_map(|attribute| attribute.value.as_ref())
-        .filter_map(|value| value.value.as_ref())
-        .filter_map(|value| match value {
-            opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(value) => {
-                Some(value.as_str())
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
 
-    assert!(
-        spans.iter().any(|span| span.name == "otlp-test-span"),
-        "expected exported spans to include otlp-test-span"
-    );
-    assert!(
-        service_names.contains(&"starbase-test"),
-        "expected exported spans to include the configured service.name resource"
-    );
-    assert!(
-        metric_service_names.contains(&"starbase-test"),
-        "expected exported metrics to include the configured service.name resource"
-    );
-    assert!(
-        log_service_names.contains(&"starbase-test"),
-        "expected exported logs to include the configured service.name resource"
-    );
-    assert!(
-        scope_names.contains(&Some("starbase")),
-        "expected exported spans to use the starbase instrumentation scope"
-    );
-    assert!(
-        metric_names.contains(&"starbase.test.counter")
-            && metric_names.contains(&"starbase.test.duration"),
-        "expected exported metrics to include the test counter and histogram"
-    );
-    assert!(
-        log_bodies
-            .iter()
-            .any(|body| body.contains("hello from starbase")),
-        "expected exported OTLP logs to include the tracing event body"
-    );
+    assert_exported_telemetry(&trace_requests, &metric_requests, &log_requests);
 
     let _ = shutdown_tx.send(());
     server.await.unwrap();
