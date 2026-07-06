@@ -10,6 +10,7 @@ use opentelemetry_sdk::{
     metrics::{PeriodicReader, SdkMeterProvider},
     trace::SdkTracerProvider,
 };
+use std::env;
 use tracing::Subscriber;
 use tracing_subscriber::{Layer, layer::SubscriberExt, registry::LookupSpan};
 
@@ -36,9 +37,13 @@ pub enum OtelProtocol {
 /// OpenTelemetry configuration for exporting traces, metrics, and logs over OTLP.
 #[derive(Debug, Default)]
 pub struct OtelOptions {
-    /// Whether to export traces and metrics over OTLP.
+    /// Whether to export traces and metrics over OTLP. The environment can still
+    /// force this off (see [`OtelOptions::logs_enabled`]) but cannot turn it on.
     pub enabled: bool,
-    /// Whether to export tracing events as OTLP logs.
+    /// Whether to export tracing events as OTLP logs. Enabling a signal is always
+    /// an explicit choice here, but the standard environment variables can force
+    /// a signal off: `OTEL_SDK_DISABLED=true` disables every signal, and
+    /// `OTEL_{TRACES,METRICS,LOGS}_EXPORTER=none` disables an individual one.
     pub logs_enabled: bool,
     /// Transport used to reach the OTLP collector, or [`OtelProtocol::Auto`] to
     /// select it from the environment. The endpoint is always read from the
@@ -76,6 +81,22 @@ pub struct OtelGuard {
     logger_provider: Option<SdkLoggerProvider>,
     meter_provider: Option<SdkMeterProvider>,
     tracer_provider: Option<SdkTracerProvider>,
+}
+
+/// Whether a signal should be exported, combining the caller's opt-in with the
+/// standard OpenTelemetry environment variables. The environment can only turn a
+/// signal off, never on: `OTEL_SDK_DISABLED=true` disables all signals, and the
+/// per-signal `OTEL_{TRACES,METRICS,LOGS}_EXPORTER=none` disables just that one.
+fn is_signal_enabled(enabled: bool, exporter_env: &str) -> bool {
+    enabled && !is_sdk_disabled() && !is_exporter_none(exporter_env)
+}
+
+fn is_sdk_disabled() -> bool {
+    env::var("OTEL_SDK_DISABLED").is_ok_and(|value| value.trim().eq_ignore_ascii_case("true"))
+}
+
+fn is_exporter_none(exporter_env: &str) -> bool {
+    env::var(exporter_env).is_ok_and(|value| value.trim().eq_ignore_ascii_case("none"))
 }
 
 fn get_otel_resource(options: &OtelOptions) -> Resource {
@@ -121,7 +142,7 @@ fn setup_otel_tracing(
     options: &OtelOptions,
     resource: Resource,
 ) -> TracingResult<Option<SdkTracerProvider>> {
-    if !options.enabled {
+    if !is_signal_enabled(options.enabled, "OTEL_TRACES_EXPORTER") {
         return Ok(None);
     }
 
@@ -144,7 +165,7 @@ fn setup_otel_metrics(
     options: &OtelOptions,
     resource: Resource,
 ) -> TracingResult<Option<SdkMeterProvider>> {
-    if !options.enabled {
+    if !is_signal_enabled(options.enabled, "OTEL_METRICS_EXPORTER") {
         return Ok(None);
     }
 
@@ -169,7 +190,7 @@ fn setup_otel_logs(
     options: &OtelOptions,
     resource: Resource,
 ) -> TracingResult<Option<SdkLoggerProvider>> {
-    if !options.logs_enabled {
+    if !is_signal_enabled(options.logs_enabled, "OTEL_LOGS_EXPORTER") {
         return Ok(None);
     }
 
@@ -235,6 +256,62 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+
+    struct EnvGuard {
+        key: &'static str,
+        prev: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let prev = env::var(key).ok();
+
+            unsafe {
+                env::set_var(key, value);
+            }
+
+            Self { key, prev }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.prev {
+                Some(value) => unsafe { env::set_var(self.key, value) },
+                None => unsafe { env::remove_var(self.key) },
+            }
+        }
+    }
+
+    #[test]
+    fn env_never_enables_a_disabled_signal() {
+        // No environment variable can turn a signal on.
+        assert!(!is_signal_enabled(false, "OTEL_TRACES_EXPORTER"));
+    }
+
+    #[test]
+    #[serial]
+    fn exporter_none_forces_a_signal_off() {
+        let _sdk = EnvGuard::set("OTEL_SDK_DISABLED", "false");
+        let _traces = EnvGuard::set("OTEL_TRACES_EXPORTER", "none");
+        let _metrics = EnvGuard::set("OTEL_METRICS_EXPORTER", "otlp");
+
+        assert!(!is_signal_enabled(true, "OTEL_TRACES_EXPORTER"));
+        assert!(is_signal_enabled(true, "OTEL_METRICS_EXPORTER"));
+    }
+
+    #[test]
+    #[serial]
+    fn sdk_disabled_forces_all_signals_off() {
+        // Case-insensitive, and overrides an explicit `otlp` exporter selection.
+        let _sdk = EnvGuard::set("OTEL_SDK_DISABLED", "TRUE");
+        let _traces = EnvGuard::set("OTEL_TRACES_EXPORTER", "otlp");
+
+        assert!(!is_signal_enabled(true, "OTEL_TRACES_EXPORTER"));
+        assert!(!is_signal_enabled(true, "OTEL_METRICS_EXPORTER"));
+        assert!(!is_signal_enabled(true, "OTEL_LOGS_EXPORTER"));
+    }
 
     #[test]
     fn explicit_service_name_overrides_resource() {

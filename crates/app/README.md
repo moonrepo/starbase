@@ -162,6 +162,11 @@ needed:
   `service.name` in `OTEL_RESOURCE_ATTRIBUTES`, then the spec `unknown_service:<exe>` fallback). Set
   it to `Some(...)` to override.
 
+Enabling a signal is always an explicit choice (`enabled` / `logs_enabled`) — there is no autoconfigure
+layer in the Rust SDK, so no environment variable can turn an exporter on. The environment can only
+turn signals **off**: `OTEL_SDK_DISABLED=true` disables every signal, and the per-signal
+`OTEL_{TRACES,METRICS,LOGS}_EXPORTER=none` disables an individual one.
+
 ## Custom error types
 
 To make the most out of errors, and in turn diagnostics, it's best (also suggested) to use the
