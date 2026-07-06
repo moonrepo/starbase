@@ -167,6 +167,14 @@ layer in the Rust SDK, so no environment variable can turn an exporter on. The e
 turn signals **off**: `OTEL_SDK_DISABLED=true` disables every signal, and the per-signal
 `OTEL_{TRACES,METRICS,LOGS}_EXPORTER=none` disables an individual one.
 
+### TLS
+
+`https://` endpoints are supported for both transports and require no extra configuration — point the
+`OTEL_EXPORTER_OTLP_*_ENDPOINT` variables at an `https` URL. The HTTP transport verifies the collector
+via the platform certificate verifier; the gRPC transport verifies against the operating system's
+certificate store. Plaintext `http://` endpoints continue to connect without TLS. Trusting a private
+or corporate CA that isn't in the OS store is not yet supported through `OtelOptions`.
+
 ## Custom error types
 
 To make the most out of errors, and in turn diagnostics, it's best (also suggested) to use the

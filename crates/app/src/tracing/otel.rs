@@ -3,7 +3,8 @@ use opentelemetry::global;
 use opentelemetry::metrics::MeterProvider as _;
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
-use opentelemetry_otlp::{LogExporter, MetricExporter, SpanExporter};
+use opentelemetry_otlp::tonic_types::transport::ClientTlsConfig;
+use opentelemetry_otlp::{LogExporter, MetricExporter, SpanExporter, WithTonicConfig};
 use opentelemetry_sdk::{
     Resource,
     logs::SdkLoggerProvider,
@@ -59,17 +60,65 @@ pub struct OtelOptions {
 // The gRPC and HTTP transports are selected by different builder methods that
 // return distinct types, so this can't collapse into a plain function. Each arm
 // still terminates in `.build()`, which yields the same exporter type, letting
-// call sites stay transport-agnostic.
+// call sites stay transport-agnostic. Resolving the protocol ourselves (rather
+// than deferring to the crate's bare `.build()`) lets the gRPC path attach a
+// rooted TLS config, which the crate's automatic `https` handling omits.
 macro_rules! build_otlp_exporter {
-    ($builder:expr, $protocol:expr) => {
-        match $protocol {
-            OtelProtocol::Grpc => $builder.with_tonic().build(),
-            OtelProtocol::Http => $builder.with_http().build(),
-            // The bare `.build()` resolves the transport from the standard OTLP
-            // protocol environment variables (or the feature default).
-            OtelProtocol::Auto => $builder.build(),
+    ($builder:expr, $protocol:expr, $protocol_env:expr, $endpoint_env:expr) => {
+        match resolve_signal_protocol($protocol, $protocol_env) {
+            OtelProtocol::Grpc => {
+                let builder = $builder.with_tonic();
+
+                // TLS only applies to `https` endpoints; tonic ignores the config
+                // for plaintext ones but still loads the OS trust store eagerly,
+                // which is wasteful and can fail where none exists — so gate it.
+                if is_https_endpoint($endpoint_env) {
+                    builder.with_tls_config(otel_tls_config()).build()
+                } else {
+                    builder.build()
+                }
+            }
+            // `resolve_signal_protocol` only ever yields `Grpc` or `Http`.
+            _ => $builder.with_http().build(),
         }
     };
+}
+
+/// Resolves the transport for a signal, expanding [`OtelProtocol::Auto`] using the
+/// standard OTLP protocol environment variables.
+fn resolve_signal_protocol(protocol: OtelProtocol, protocol_env: &str) -> OtelProtocol {
+    match protocol {
+        OtelProtocol::Auto => protocol_from_env(protocol_env),
+        explicit => explicit,
+    }
+}
+
+fn protocol_from_env(protocol_env: &str) -> OtelProtocol {
+    // The per-signal variable wins over the generic one; anything that isn't
+    // `grpc` (including unset) resolves to HTTP, matching the crate's feature
+    // default for the transports we enable.
+    let value = env::var(protocol_env)
+        .or_else(|_| env::var("OTEL_EXPORTER_OTLP_PROTOCOL"))
+        .unwrap_or_default();
+
+    if value.trim().eq_ignore_ascii_case("grpc") {
+        OtelProtocol::Grpc
+    } else {
+        OtelProtocol::Http
+    }
+}
+
+fn is_https_endpoint(endpoint_env: &str) -> bool {
+    // The per-signal endpoint wins over the generic one; the OTLP default
+    // endpoint is plaintext, so an unset endpoint is treated as non-TLS.
+    env::var(endpoint_env)
+        .or_else(|_| env::var("OTEL_EXPORTER_OTLP_ENDPOINT"))
+        .is_ok_and(|endpoint| endpoint.trim().to_ascii_lowercase().starts_with("https://"))
+}
+
+fn otel_tls_config() -> ClientTlsConfig {
+    // Verify the collector against the operating system's certificate store.
+    ClientTlsConfig::new().with_native_roots()
 }
 
 // OTEL providers do shut down on drop, but only when the last cloned handle is
@@ -146,12 +195,16 @@ fn setup_otel_tracing(
         return Ok(None);
     }
 
-    let exporter = build_otlp_exporter!(SpanExporter::builder(), options.protocol).map_err(
-        |error| TracingError::OtlpExporterFailed {
-            signal: "traces".into(),
-            error,
-        },
-    )?;
+    let exporter = build_otlp_exporter!(
+        SpanExporter::builder(),
+        options.protocol,
+        "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+        "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
+    )
+    .map_err(|error| TracingError::OtlpExporterFailed {
+        signal: "traces".into(),
+        error,
+    })?;
 
     Ok(Some(
         SdkTracerProvider::builder()
@@ -169,12 +222,16 @@ fn setup_otel_metrics(
         return Ok(None);
     }
 
-    let exporter = build_otlp_exporter!(MetricExporter::builder(), options.protocol).map_err(
-        |error| TracingError::OtlpExporterFailed {
-            signal: "metrics".into(),
-            error,
-        },
-    )?;
+    let exporter = build_otlp_exporter!(
+        MetricExporter::builder(),
+        options.protocol,
+        "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+        "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"
+    )
+    .map_err(|error| TracingError::OtlpExporterFailed {
+        signal: "metrics".into(),
+        error,
+    })?;
 
     let reader = PeriodicReader::builder(exporter).build();
 
@@ -196,12 +253,16 @@ fn setup_otel_logs(
 
     // Logs are opt-in separately because exporting every tracing event can be
     // much noisier than exporting spans and product metrics.
-    let exporter = build_otlp_exporter!(LogExporter::builder(), options.protocol).map_err(
-        |error| TracingError::OtlpExporterFailed {
-            signal: "logs".into(),
-            error,
-        },
-    )?;
+    let exporter = build_otlp_exporter!(
+        LogExporter::builder(),
+        options.protocol,
+        "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL",
+        "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"
+    )
+    .map_err(|error| TracingError::OtlpExporterFailed {
+        signal: "logs".into(),
+        error,
+    })?;
 
     Ok(Some(
         SdkLoggerProvider::builder()
@@ -273,6 +334,16 @@ mod tests {
 
             Self { key, prev }
         }
+
+        fn unset(key: &'static str) -> Self {
+            let prev = env::var(key).ok();
+
+            unsafe {
+                env::remove_var(key);
+            }
+
+            Self { key, prev }
+        }
     }
 
     impl Drop for EnvGuard {
@@ -311,6 +382,111 @@ mod tests {
         assert!(!is_signal_enabled(true, "OTEL_TRACES_EXPORTER"));
         assert!(!is_signal_enabled(true, "OTEL_METRICS_EXPORTER"));
         assert!(!is_signal_enabled(true, "OTEL_LOGS_EXPORTER"));
+    }
+
+    #[test]
+    fn explicit_protocol_ignores_env() {
+        assert_eq!(
+            resolve_signal_protocol(OtelProtocol::Grpc, "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"),
+            OtelProtocol::Grpc
+        );
+        assert_eq!(
+            resolve_signal_protocol(OtelProtocol::Http, "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"),
+            OtelProtocol::Http
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn auto_protocol_reads_env_with_per_signal_precedence() {
+        let resolve =
+            || resolve_signal_protocol(OtelProtocol::Auto, "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL");
+
+        // Per-signal wins over the generic variable.
+        {
+            let _generic = EnvGuard::set("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf");
+            let _signal = EnvGuard::set("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+            assert_eq!(resolve(), OtelProtocol::Grpc);
+        }
+
+        // Falls back to the generic variable when the per-signal one is absent.
+        {
+            let _signal = EnvGuard::unset("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL");
+            let _generic = EnvGuard::set("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc");
+            assert_eq!(resolve(), OtelProtocol::Grpc);
+        }
+
+        // Defaults to HTTP when neither is set.
+        {
+            let _signal = EnvGuard::unset("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL");
+            let _generic = EnvGuard::unset("OTEL_EXPORTER_OTLP_PROTOCOL");
+            assert_eq!(resolve(), OtelProtocol::Http);
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn detects_https_endpoints_with_per_signal_precedence() {
+        // Per-signal endpoint wins over the generic one.
+        {
+            let _generic = EnvGuard::set("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4317");
+            let _signal = EnvGuard::set(
+                "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+                "https://collector:4317",
+            );
+            assert!(is_https_endpoint("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"));
+        }
+
+        // Falls back to the generic endpoint.
+        {
+            let _signal = EnvGuard::unset("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT");
+            let _generic = EnvGuard::set("OTEL_EXPORTER_OTLP_ENDPOINT", "https://collector:4317");
+            assert!(is_https_endpoint("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"));
+        }
+
+        // Plaintext and unset endpoints are not TLS.
+        {
+            let _signal = EnvGuard::set(
+                "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+                "http://collector:4317",
+            );
+            let _generic = EnvGuard::unset("OTEL_EXPORTER_OTLP_ENDPOINT");
+            assert!(!is_https_endpoint("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"));
+        }
+        {
+            let _signal = EnvGuard::unset("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT");
+            let _generic = EnvGuard::unset("OTEL_EXPORTER_OTLP_ENDPOINT");
+            assert!(!is_https_endpoint("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"));
+        }
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn builds_grpc_exporter_for_https_endpoint() {
+        // Regression: an `https` gRPC endpoint used to fail to build with
+        // "uses HTTPS but no TLS feature is enabled". It now builds with the
+        // native-roots TLS config attached (the connection itself is lazy).
+        let _endpoint = EnvGuard::set(
+            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+            "https://localhost:4317",
+        );
+        let _protocol = EnvGuard::set("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "grpc");
+
+        let options = OtelOptions {
+            enabled: true,
+            protocol: OtelProtocol::Auto,
+            ..OtelOptions::default()
+        };
+        let resource = get_otel_resource(&options);
+
+        let provider = setup_otel_tracing(&options, resource)
+            .expect("https gRPC exporter should build with TLS enabled");
+
+        assert!(provider.is_some());
+
+        if let Some(provider) = provider {
+            let _ = provider.shutdown();
+        }
     }
 
     #[test]

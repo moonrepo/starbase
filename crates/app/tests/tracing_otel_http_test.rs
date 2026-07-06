@@ -15,7 +15,9 @@ use opentelemetry_proto::tonic::collector::trace::v1::{
 };
 use prost::Message as _;
 use serial_test::serial;
-use starbase::tracing::{OtelOptions, OtelProtocol, TracingOptions, info, info_span, setup_tracing};
+use starbase::tracing::{
+    OtelOptions, OtelProtocol, TracingOptions, info, info_span, setup_tracing,
+};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Mutex, oneshot};
@@ -51,7 +53,8 @@ async fn exports_spans_over_otlp_http() {
                 tokio::spawn(async move {
                     while let Some((path, body)) = read_http_request(&mut stream).await {
                         let response = if path.ends_with("/v1/traces") {
-                            if let Ok(request) = ExportTraceServiceRequest::decode(body.as_slice()) {
+                            if let Ok(request) = ExportTraceServiceRequest::decode(body.as_slice())
+                            {
                                 trace_requests.lock().await.push(request);
                             }
                             ExportTraceServiceResponse {
@@ -59,7 +62,8 @@ async fn exports_spans_over_otlp_http() {
                             }
                             .encode_to_vec()
                         } else if path.ends_with("/v1/metrics") {
-                            if let Ok(request) = ExportMetricsServiceRequest::decode(body.as_slice())
+                            if let Ok(request) =
+                                ExportMetricsServiceRequest::decode(body.as_slice())
                             {
                                 metric_requests.lock().await.push(request);
                             }
