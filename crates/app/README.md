@@ -132,29 +132,35 @@ async fn main() -> MainResult {
 ## OpenTelemetry tracing
 
 When the `otel` feature is enabled, `TracingOptions` can also export traces and metrics over OTLP.
+It leans on the standard `OTEL_EXPORTER_OTLP_*` environment variables for as much configuration as
+possible — endpoint, headers, timeouts, compression, batching, and (by default) the transport and
+service name are all taken from the environment.
 
 ```rust
-use starbase::tracing::{OtelOptions, OtelProtocol, TracingOptions};
+use starbase::tracing::{OtelOptions, TracingOptions};
 
 let _guard = app.setup_tracing(TracingOptions {
     otel: OtelOptions {
         enabled: true,
         logs_enabled: false,
-        // `OtelProtocol::Grpc` (default) exports over gRPC; `OtelProtocol::Http`
-        // exports over HTTP with binary protobuf payloads (`http/protobuf`);
-        // `OtelProtocol::Auto` picks the transport from the environment.
-        protocol: OtelProtocol::Auto,
-        service_name: Some("my-app".into()),
+        // `protocol` and `service_name` default to reading the environment;
+        // set them here only to override that.
+        ..OtelOptions::default()
     },
     ..TracingOptions::default()
 })?;
 ```
 
-This wires the OTLP tracing and metrics bridge. The `protocol` field selects the transport; the
-endpoint, headers, and other exporter behavior should still be configured through the standard
-OpenTelemetry environment variables. With `OtelProtocol::Auto`, the transport itself is also taken
-from the environment — the per-signal `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL` variables,
-then `OTEL_EXPORTER_OTLP_PROTOCOL`, defaulting to `http/protobuf` when neither is set.
+This wires the OTLP tracing and metrics bridge. Two fields let you override the environment when
+needed:
+
+- **`protocol`** defaults to `OtelProtocol::Auto`, which selects the transport from the per-signal
+  `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL` variables, then `OTEL_EXPORTER_OTLP_PROTOCOL`,
+  defaulting to `http/protobuf` when neither is set. Use `OtelProtocol::Grpc` or `OtelProtocol::Http`
+  to force a transport regardless of the environment.
+- **`service_name`** defaults to `None`, which resolves the name from `OTEL_SERVICE_NAME` (then the
+  `service.name` in `OTEL_RESOURCE_ATTRIBUTES`, then the spec `unknown_service:<exe>` fallback). Set
+  it to `Some(...)` to override.
 
 ## Custom error types
 

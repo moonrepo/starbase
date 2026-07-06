@@ -10,7 +10,6 @@ use opentelemetry_sdk::{
     metrics::{PeriodicReader, SdkMeterProvider},
     trace::SdkTracerProvider,
 };
-use std::env;
 use tracing::Subscriber;
 use tracing_subscriber::{Layer, layer::SubscriberExt, registry::LookupSpan};
 
@@ -19,17 +18,19 @@ const OTEL_INSTRUMENTATION_SCOPE: &str = env!("CARGO_PKG_NAME");
 /// Transport used to deliver OTLP traces, metrics, and logs to the collector.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum OtelProtocol {
-    /// OTLP over gRPC (the `grpc` protocol), served on the collector's gRPC port.
-    #[default]
-    Grpc,
-    /// OTLP over HTTP with binary protobuf payloads (the `http/protobuf` protocol),
-    /// POSTed to the collector's HTTP `/v1/{signal}` endpoints.
-    Http,
     /// Defer to the standard OpenTelemetry environment variables to choose the
     /// transport per signal: `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL`,
     /// then `OTEL_EXPORTER_OTLP_PROTOCOL`, falling back to `http/protobuf` when
     /// neither is set. Recognized values are `grpc` and `http/protobuf`.
+    #[default]
     Auto,
+    /// Force OTLP over gRPC (the `grpc` protocol), served on the collector's gRPC
+    /// port, ignoring the protocol environment variables.
+    Grpc,
+    /// Force OTLP over HTTP with binary protobuf payloads (the `http/protobuf`
+    /// protocol), POSTed to the collector's HTTP `/v1/{signal}` endpoints,
+    /// ignoring the protocol environment variables.
+    Http,
 }
 
 /// OpenTelemetry configuration for exporting traces, metrics, and logs over OTLP.
@@ -43,7 +44,10 @@ pub struct OtelOptions {
     /// select it from the environment. The endpoint is always read from the
     /// standard `OTEL_EXPORTER_OTLP_*` environment variables.
     pub protocol: OtelProtocol,
-    /// Service name recorded in the emitted telemetry resource.
+    /// Service name recorded in the emitted telemetry resource. When `None`, the
+    /// name is resolved from the standard environment (`OTEL_SERVICE_NAME`, then
+    /// `service.name` in `OTEL_RESOURCE_ATTRIBUTES`), falling back to the spec
+    /// `unknown_service:<exe>` value.
     pub service_name: Option<String>,
 }
 
@@ -74,24 +78,17 @@ pub struct OtelGuard {
     tracer_provider: Option<SdkTracerProvider>,
 }
 
-fn get_otel_service_name(options: &OtelOptions) -> String {
-    options
-        .service_name
-        .clone()
-        .or_else(|| {
-            env::current_exe().ok().and_then(|path| {
-                path.file_stem()
-                    .and_then(|stem| stem.to_str())
-                    .map(ToOwned::to_owned)
-            })
-        })
-        .unwrap_or_else(|| "starbase-app".into())
-}
-
 fn get_otel_resource(options: &OtelOptions) -> Resource {
-    Resource::builder()
-        .with_service_name(get_otel_service_name(options))
-        .build()
+    // `Resource::builder()` runs the standard detectors, so `OTEL_SERVICE_NAME`
+    // and `OTEL_RESOURCE_ATTRIBUTES` flow through and the spec `unknown_service:<exe>`
+    // fallback applies. Only override the service name when the caller set one
+    // explicitly, so ambient environment configuration isn't clobbered.
+    let builder = Resource::builder();
+
+    match &options.service_name {
+        Some(service_name) => builder.with_service_name(service_name.clone()).build(),
+        None => builder.build(),
+    }
 }
 
 fn report_otel_shutdown_error(signal: &str, error: impl std::fmt::Display) {
@@ -240,15 +237,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn prefers_explicit_service_name() {
+    fn explicit_service_name_overrides_resource() {
+        let resource = get_otel_resource(&OtelOptions {
+            enabled: true,
+            service_name: Some("starbase-test".into()),
+            ..OtelOptions::default()
+        });
+
         assert_eq!(
-            get_otel_service_name(&OtelOptions {
-                enabled: true,
-                logs_enabled: false,
-                protocol: OtelProtocol::Grpc,
-                service_name: Some("starbase-test".into()),
-            }),
-            "starbase-test"
+            resource.get(&opentelemetry::Key::from_static_str("service.name")),
+            Some(opentelemetry::Value::from("starbase-test"))
         );
     }
 
