@@ -50,9 +50,9 @@ opentelemetry-otlp = { version = "0.32.0", optional = true, default-features = f
 	"logs",
 	"metrics",
 	"trace",
+	"tokio",
 	# http
 	"http-proto",
-	"reqwest-client",
 	"reqwest-blocking-client",
 	"reqwest-rustls",
 	# grpc
