@@ -132,6 +132,9 @@ async fn main() -> MainResult {
 ## OpenTelemetry tracing
 
 When the `otel` feature is enabled, `TracingOptions` can also export traces and metrics over OTLP.
+It leans on the standard `OTEL_EXPORTER_OTLP_*` environment variables for as much configuration as
+possible — endpoint, headers, timeouts, compression, batching, and (by default) the transport and
+service name are all taken from the environment.
 
 ```rust
 use starbase::tracing::{OtelOptions, TracingOptions};
@@ -140,14 +143,37 @@ let _guard = app.setup_tracing(TracingOptions {
     otel: OtelOptions {
         enabled: true,
         logs_enabled: false,
-        service_name: Some("my-app".into()),
+        // `protocol` and `service_name` default to reading the environment;
+        // set them here only to override that.
+        ..OtelOptions::default()
     },
     ..TracingOptions::default()
 })?;
 ```
 
-This wires the OTLP tracing and metrics bridge. Endpoint, protocol, headers, and other exporter
-behavior should still be configured through the standard OpenTelemetry environment variables.
+This wires the OTLP tracing and metrics bridge. Two fields let you override the environment when
+needed:
+
+- **`protocol`** defaults to `OtelProtocol::Auto`, which selects the transport from the per-signal
+  `OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_PROTOCOL` variables, then `OTEL_EXPORTER_OTLP_PROTOCOL`,
+  defaulting to `http/protobuf` when neither is set. Use `OtelProtocol::Grpc` or `OtelProtocol::Http`
+  to force a transport regardless of the environment.
+- **`service_name`** defaults to `None`, which resolves the name from `OTEL_SERVICE_NAME` (then the
+  `service.name` in `OTEL_RESOURCE_ATTRIBUTES`, then the spec `unknown_service:<exe>` fallback). Set
+  it to `Some(...)` to override.
+
+Enabling a signal is always an explicit choice (`enabled` / `logs_enabled`) — there is no autoconfigure
+layer in the Rust SDK, so no environment variable can turn an exporter on. The environment can only
+turn signals **off**: `OTEL_SDK_DISABLED=true` disables every signal, and the per-signal
+`OTEL_{TRACES,METRICS,LOGS}_EXPORTER=none` disables an individual one.
+
+### TLS
+
+`https://` endpoints are supported for both transports and require no extra configuration — point the
+`OTEL_EXPORTER_OTLP_*_ENDPOINT` variables at an `https` URL. The HTTP transport verifies the collector
+via the platform certificate verifier; the gRPC transport verifies against the operating system's
+certificate store. Plaintext `http://` endpoints continue to connect without TLS. Trusting a private
+or corporate CA that isn't in the OS store is not yet supported through `OtelOptions`.
 
 ## Custom error types
 

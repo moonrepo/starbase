@@ -20,7 +20,7 @@ use tracing_subscriber::{EnvFilter, prelude::*};
 
 pub use crate::tracing::level::LogLevel;
 #[cfg(feature = "otel")]
-pub use crate::tracing::otel::OtelOptions;
+pub use crate::tracing::otel::{OtelOptions, OtelProtocol};
 pub use crate::tracing::rotation::LogFileRotation;
 pub use tracing::{
     debug, debug_span, enabled, error, error_span, event, event_enabled, info, info_span,
