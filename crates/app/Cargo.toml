@@ -40,25 +40,31 @@ tracing-subscriber = { version = "0.3.23", optional = true, default-features = f
 ] }
 
 # opentelemetry
-opentelemetry = { version = "0.32.0", optional = true, features = [
-	"logs",
-	"metrics",
-] }
-opentelemetry-appender-tracing = { version = "0.32.0", optional = true }
-opentelemetry-otlp = { version = "0.32.0", optional = true, default-features = false, features = [
-	"grpc-tonic",
-	"http-proto",
-	"reqwest-blocking-client",
-	"reqwest-rustls",
-	"tls-aws-lc",
-	"tls-roots",
+opentelemetry = { version = "0.32.0", optional = true, default-features = false, features = [
 	"logs",
 	"metrics",
 	"trace",
 ] }
-opentelemetry_sdk = { version = "0.32.1", optional = true, features = [
+opentelemetry-appender-tracing = { version = "0.32.0", optional = true }
+opentelemetry-otlp = { version = "0.32.0", optional = true, default-features = false, features = [
 	"logs",
 	"metrics",
+	"trace",
+	# http
+	"http-proto",
+	"reqwest-client",
+	"reqwest-blocking-client",
+	"reqwest-rustls",
+	# grpc
+	"grpc-tonic",
+	"tls-aws-lc",
+	"tls-roots",
+] }
+opentelemetry_sdk = { version = "0.32.1", optional = true, default-features = false, features = [
+	"logs",
+	"metrics",
+	"trace",
+	"tokio",
 	"rt-tokio",
 ] }
 tracing-opentelemetry = { version = "0.33.0", optional = true }
