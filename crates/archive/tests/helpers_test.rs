@@ -197,23 +197,41 @@ mod strip_compression_suffix_tests {
 
     #[test]
     fn strips_known_suffixes() {
-        assert_eq!(strip_compression_suffix("data.json.bz2"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.bzip2"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.gz"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.gzip"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.xz"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.zst"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.zstd"), "data.json");
+        assert_eq!(
+            strip_compression_suffix("data.json.bz2".into()),
+            "data.json"
+        );
+        assert_eq!(
+            strip_compression_suffix("data.json.bzip2".into()),
+            "data.json"
+        );
+        assert_eq!(strip_compression_suffix("data.json.gz".into()), "data.json");
+        assert_eq!(
+            strip_compression_suffix("data.json.gzip".into()),
+            "data.json"
+        );
+        assert_eq!(strip_compression_suffix("data.json.xz".into()), "data.json");
+        assert_eq!(
+            strip_compression_suffix("data.json.zst".into()),
+            "data.json"
+        );
+        assert_eq!(
+            strip_compression_suffix("data.json.zstd".into()),
+            "data.json"
+        );
     }
 
     #[test]
     fn leaves_name_without_compression_suffix_untouched() {
-        assert_eq!(strip_compression_suffix("data.json"), "data.json");
-        assert_eq!(strip_compression_suffix("archive.tar"), "archive.tar");
+        assert_eq!(strip_compression_suffix("data.json".into()), "data.json");
+        assert_eq!(
+            strip_compression_suffix("archive.tar".into()),
+            "archive.tar"
+        );
     }
 
     #[test]
     fn strips_only_a_single_suffix() {
-        assert_eq!(strip_compression_suffix("data.gz.zst"), "data.gz");
+        assert_eq!(strip_compression_suffix("data.gz.zst".into()), "data.gz");
     }
 }

@@ -39,7 +39,7 @@ macro_rules! generate_file_tests {
                 archiver
                     .unpack(|dir, file| {
                         Ok(FileUnpacker::new(
-                            dir.join(strip_compression_suffix(&fs::file_name(file))),
+                            dir.join(strip_compression_suffix(fs::file_name(file))),
                             $codec::new(fs::open_file(file)?),
                         ))
                     })
@@ -120,7 +120,7 @@ macro_rules! generate_file_tests {
                 archiver
                     .unpack(|dir, file| {
                         Ok(FileUnpacker::new(
-                            dir.join(strip_compression_suffix(&fs::file_name(file))),
+                            dir.join(strip_compression_suffix(fs::file_name(file))),
                             $codec::new(fs::open_file(file)?),
                         ))
                     })

@@ -204,14 +204,14 @@ impl<'owner> Archiver<'owner> {
             Some("tar") => pack!("tar", feature = "tar", |file| {
                 Ok(crate::tar::TarPacker::new(fs::create_file(file)?))
             }),
-            Some("tar.bz2" | "tbz" | "tbz2" | "tz2") => {
+            Some("tar.bzip2" | "tar.bz2" | "tbz" | "tbz2" | "tz2") => {
                 pack!("tar-bz2", all(feature = "tar", feature = "bz2"), |file| {
                     Ok(crate::tar::TarPacker::new(crate::codecs::Bz2::new(
                         fs::create_file(file)?,
                     )))
                 })
             }
-            Some("tar.gz" | "tgz") => {
+            Some("tar.gzip" | "tar.gz" | "tgz") => {
                 pack!("tar-gz", all(feature = "tar", feature = "gz"), |file| {
                     Ok(crate::tar::TarPacker::new(crate::codecs::Gz::new(
                         fs::create_file(file)?,
@@ -302,20 +302,20 @@ impl<'owner> Archiver<'owner> {
         let out = match ext.as_deref() {
             Some("bz2" | "bzip2") => unpack!("bz2", feature = "bz2", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
-                    dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
+                    dir.join(crate::strip_compression_suffix(fs::file_name(file))),
                     crate::codecs::Bz2::new(fs::open_file(file)?),
                 ))
             }),
             Some("gz" | "gzip") => unpack!("gz", feature = "gz", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
-                    dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
+                    dir.join(crate::strip_compression_suffix(fs::file_name(file))),
                     crate::codecs::Gz::new(fs::open_file(file)?),
                 ))
             }),
             Some("tar") => unpack!("tar", feature = "tar", |dir, file| {
                 Ok(crate::tar::TarUnpacker::new(dir, fs::open_file(file)?))
             }),
-            Some("tar.bz2" | "tbz" | "tbz2" | "tz2") => unpack!(
+            Some("tar.bzip2" | "tar.bz2" | "tbz" | "tbz2" | "tz2") => unpack!(
                 "tar-bz2",
                 all(feature = "tar", feature = "bz2"),
                 |dir, file| {
@@ -325,7 +325,7 @@ impl<'owner> Archiver<'owner> {
                     ))
                 }
             ),
-            Some("tar.gz" | "tgz") => unpack!(
+            Some("tar.gzip" | "tar.gz" | "tgz") => unpack!(
                 "tar-gz",
                 all(feature = "tar", feature = "gz"),
                 |dir, file| {
@@ -357,13 +357,13 @@ impl<'owner> Archiver<'owner> {
             ),
             Some("xz") => unpack!("xz", feature = "xz", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
-                    dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
+                    dir.join(crate::strip_compression_suffix(fs::file_name(file))),
                     crate::codecs::Xz::new(fs::open_file(file)?),
                 ))
             }),
             Some("zst" | "zstd") => unpack!("zstd", feature = "zstd", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
-                    dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
+                    dir.join(crate::strip_compression_suffix(fs::file_name(file))),
                     crate::codecs::Zstd::new(fs::open_file(file)?),
                 ))
             }),
