@@ -7,13 +7,14 @@ use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::sync::Arc;
 
 /// A compact string identifier for use within records, key lookups, and more.
 /// Supports unicode alphanumeric characters, forward slash `/`, period `.`,
 /// underscore `_`, and dash `-`. A leading `@` is supported to support npm package names.
 #[derive(Clone, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(into = "String", try_from = "String")]
-pub struct Id(CompactString);
+pub struct Id(Arc<CompactString>);
 
 impl Id {
     /// Create a new identifier with the provided string and validate
@@ -41,7 +42,7 @@ impl Id {
 
     /// Create a new identifier with the provided string as-is.
     pub fn raw<S: AsRef<str>>(id: S) -> Id {
-        Id(CompactString::new(id))
+        Id(Arc::new(CompactString::new(id)))
     }
 
     /// Convert the identifier into an environment variable name,
@@ -92,7 +93,7 @@ impl Id {
 
     /// Return the identifier as an [`OsStr`] reference.
     pub fn as_os_str(&self) -> &OsStr {
-        OsStr::new(&self.0)
+        OsStr::new(self.0.as_str())
     }
 
     /// Return the identifier as a [`str`] reference.
@@ -135,19 +136,19 @@ impl AsRef<str> for Id {
 
 impl AsRef<OsStr> for Id {
     fn as_ref(&self) -> &OsStr {
-        OsStr::new(&self.0)
+        OsStr::new(self.0.as_str())
     }
 }
 
 impl Borrow<str> for Id {
     fn borrow(&self) -> &str {
-        &self.0
+        self.0.as_str()
     }
 }
 
 impl Borrow<OsStr> for Id {
     fn borrow(&self) -> &OsStr {
-        OsStr::new(&self.0)
+        OsStr::new(self.0.as_str())
     }
 }
 
@@ -162,7 +163,7 @@ macro_rules! gen_partial_eq {
     ($ty:ty) => {
         impl PartialEq<$ty> for Id {
             fn eq(&self, other: &$ty) -> bool {
-                self.0 == other
+                *self.0 == other
             }
         }
     };
