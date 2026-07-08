@@ -4,7 +4,7 @@
 ![Crates.io](https://img.shields.io/crates/d/starbase_archive)
 
 Abstractions and utilities for working with multiple archive formats. Currently supports `.tar`
-(with gz, bz2, xz, zstd), `.zip`, and single-file codecs (`.gz`, `.zst`).
+(with gz, bz2, xz, zstd), `.zip`, and single-file codecs (`.bz2`, `.gz`, `.xz`, `.zst`).
 
 Formats and compression codecs are separate layers that compose over read/write streams:
 

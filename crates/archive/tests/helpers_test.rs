@@ -139,7 +139,9 @@ mod get_supported_archive_extensions_tests {
     fn includes_common_extensions() {
         let exts = get_supported_archive_extensions();
 
-        for ext in ["tar", "zip", "tar.gz", "tgz", "tar.zst", "gz", "zst"] {
+        for ext in [
+            "tar", "zip", "tar.bz2", "tar.gz", "tgz", "tar.xz", "tar.zst", "bz2", "gz", "xz", "zst",
+        ] {
             assert!(exts.contains(&ext.to_owned()), "missing {ext}");
         }
     }
@@ -159,7 +161,9 @@ mod get_supported_archive_extensions_tests {
 
         let index_of = |needle: &str| exts.iter().position(|e| e == needle).unwrap();
 
+        assert!(index_of("tar.bz2") < index_of("bz2"));
         assert!(index_of("tar.gz") < index_of("gz"));
+        assert!(index_of("tar.xz") < index_of("xz"));
         assert!(index_of("tar.zst") < index_of("zst"));
         assert!(index_of("tar.zstd") < index_of("zstd"));
     }
@@ -193,20 +197,41 @@ mod strip_compression_suffix_tests {
 
     #[test]
     fn strips_known_suffixes() {
-        assert_eq!(strip_compression_suffix("data.json.gz"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.gzip"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.zst"), "data.json");
-        assert_eq!(strip_compression_suffix("data.json.zstd"), "data.json");
+        assert_eq!(
+            strip_compression_suffix("data.json.bz2".into()),
+            "data.json"
+        );
+        assert_eq!(
+            strip_compression_suffix("data.json.bzip2".into()),
+            "data.json"
+        );
+        assert_eq!(strip_compression_suffix("data.json.gz".into()), "data.json");
+        assert_eq!(
+            strip_compression_suffix("data.json.gzip".into()),
+            "data.json"
+        );
+        assert_eq!(strip_compression_suffix("data.json.xz".into()), "data.json");
+        assert_eq!(
+            strip_compression_suffix("data.json.zst".into()),
+            "data.json"
+        );
+        assert_eq!(
+            strip_compression_suffix("data.json.zstd".into()),
+            "data.json"
+        );
     }
 
     #[test]
     fn leaves_name_without_compression_suffix_untouched() {
-        assert_eq!(strip_compression_suffix("data.json"), "data.json");
-        assert_eq!(strip_compression_suffix("archive.tar"), "archive.tar");
+        assert_eq!(strip_compression_suffix("data.json".into()), "data.json");
+        assert_eq!(
+            strip_compression_suffix("archive.tar".into()),
+            "archive.tar"
+        );
     }
 
     #[test]
     fn strips_only_a_single_suffix() {
-        assert_eq!(strip_compression_suffix("data.gz.zst"), "data.gz");
+        assert_eq!(strip_compression_suffix("data.gz.zst".into()), "data.gz");
     }
 }
