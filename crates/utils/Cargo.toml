@@ -15,7 +15,7 @@ name = "glob"
 harness = false
 
 [dependencies]
-starbase_styles = { version = "0.6.8", path = "../styles" }
+starbase_styles = { version = "0.6.9", path = "../styles" }
 dirs = { workspace = true }
 miette = { workspace = true, optional = true }
 reflink-copy = "0.1.30"
