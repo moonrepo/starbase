@@ -1,6 +1,8 @@
 use starbase_utils::fs;
 use std::path::Path;
 
+use crate::ArchiveError;
+
 /// Returns `true` if writing to `target` would escape `root` by traversing a
 /// symlink -- for example a symlink entry planted earlier in the same archive
 /// that points outside the output directory (CWE-22 / CWE-59). Every already
@@ -136,4 +138,30 @@ pub fn strip_compression_suffix(name: String) -> String {
     }
 
     name
+}
+
+pub fn copy_extracted_contents(
+    format: &str,
+    source_dir: &Path,
+    target_dir: &Path,
+    prefix: Option<&str>,
+) -> Result<(), ArchiveError> {
+    let source = match prefix {
+        Some(prefix) => source_dir.join(prefix),
+        None => source_dir.to_path_buf(),
+    };
+
+    if !source.exists() {
+        return Err(ArchiveError::MissingArchiveContents {
+            format: format.into(),
+            path: source_dir.to_path_buf(),
+            prefix: prefix.unwrap_or("N/A").into(),
+        });
+    } else if source.is_file() {
+        fs::copy_file(&source, target_dir.join(fs::file_name(&source)))?;
+    } else {
+        fs::copy_dir_all(&source, target_dir)?;
+    }
+
+    Ok(())
 }

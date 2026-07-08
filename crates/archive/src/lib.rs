@@ -5,6 +5,12 @@ pub mod codecs;
 pub mod file;
 mod file_error;
 
+/// Handles macOS dmg files.
+#[cfg(feature = "dmg")]
+pub mod dmg;
+#[cfg(feature = "dmg")]
+mod dmg_error;
+
 /// Handles tarball files.
 #[cfg(feature = "tar")]
 pub mod tar;
