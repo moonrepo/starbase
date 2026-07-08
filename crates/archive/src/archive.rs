@@ -191,6 +191,11 @@ impl<'owner> Archiver<'owner> {
         }
 
         let out = match ext.as_deref() {
+            Some("bz2" | "bzip2") => pack!("bz2", feature = "bz2", |file| {
+                Ok(crate::file::FilePacker::new(crate::codecs::Bz2::new(
+                    fs::create_file(file)?,
+                )))
+            }),
             Some("gz" | "gzip") => pack!("gz", feature = "gz", |file| {
                 Ok(crate::file::FilePacker::new(crate::codecs::Gz::new(
                     fs::create_file(file)?,
@@ -227,6 +232,11 @@ impl<'owner> Archiver<'owner> {
                     )))
                 })
             }
+            Some("xz") => pack!("xz", feature = "xz", |file| {
+                Ok(crate::file::FilePacker::new(crate::codecs::Xz::new(
+                    fs::create_file(file)?,
+                )))
+            }),
             Some("zst" | "zstd") => pack!("zstd", feature = "zstd", |file| {
                 Ok(crate::file::FilePacker::new(crate::codecs::Zstd::new(
                     fs::create_file(file)?,
@@ -290,6 +300,12 @@ impl<'owner> Archiver<'owner> {
         }
 
         let out = match ext.as_deref() {
+            Some("bz2" | "bzip2") => unpack!("bz2", feature = "bz2", |dir, file| {
+                Ok(crate::file::FileUnpacker::new(
+                    dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
+                    crate::codecs::Bz2::new(fs::open_file(file)?),
+                ))
+            }),
             Some("gz" | "gzip") => unpack!("gz", feature = "gz", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
                     dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
@@ -339,6 +355,12 @@ impl<'owner> Archiver<'owner> {
                     ))
                 }
             ),
+            Some("xz") => unpack!("xz", feature = "xz", |dir, file| {
+                Ok(crate::file::FileUnpacker::new(
+                    dir.join(crate::strip_compression_suffix(&fs::file_name(file))),
+                    crate::codecs::Xz::new(fs::open_file(file)?),
+                ))
+            }),
             Some("zst" | "zstd") => unpack!("zstd", feature = "zstd", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
                     dir.join(crate::strip_compression_suffix(&fs::file_name(file))),

@@ -139,7 +139,9 @@ mod get_supported_archive_extensions_tests {
     fn includes_common_extensions() {
         let exts = get_supported_archive_extensions();
 
-        for ext in ["tar", "zip", "tar.gz", "tgz", "tar.zst", "gz", "zst"] {
+        for ext in [
+            "tar", "zip", "tar.bz2", "tar.gz", "tgz", "tar.xz", "tar.zst", "bz2", "gz", "xz", "zst",
+        ] {
             assert!(exts.contains(&ext.to_owned()), "missing {ext}");
         }
     }
@@ -159,7 +161,9 @@ mod get_supported_archive_extensions_tests {
 
         let index_of = |needle: &str| exts.iter().position(|e| e == needle).unwrap();
 
+        assert!(index_of("tar.bz2") < index_of("bz2"));
         assert!(index_of("tar.gz") < index_of("gz"));
+        assert!(index_of("tar.xz") < index_of("xz"));
         assert!(index_of("tar.zst") < index_of("zst"));
         assert!(index_of("tar.zstd") < index_of("zstd"));
     }
@@ -193,8 +197,11 @@ mod strip_compression_suffix_tests {
 
     #[test]
     fn strips_known_suffixes() {
+        assert_eq!(strip_compression_suffix("data.json.bz2"), "data.json");
+        assert_eq!(strip_compression_suffix("data.json.bzip2"), "data.json");
         assert_eq!(strip_compression_suffix("data.json.gz"), "data.json");
         assert_eq!(strip_compression_suffix("data.json.gzip"), "data.json");
+        assert_eq!(strip_compression_suffix("data.json.xz"), "data.json");
         assert_eq!(strip_compression_suffix("data.json.zst"), "data.json");
         assert_eq!(strip_compression_suffix("data.json.zstd"), "data.json");
     }

@@ -98,12 +98,17 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
         "tar".into(),
         // zip
         "zip".into(),
-        // zstd
-        "zstd".into(),
-        "zst".into(),
+        // bzip2
+        "bzip2".into(),
+        "bz2".into(),
         // gzip
         "gzip".into(),
         "gz".into(),
+        // xz
+        "xz".into(),
+        // zstd
+        "zstd".into(),
+        "zst".into(),
     ]
 }
 
@@ -119,10 +124,10 @@ pub fn is_supported_archive_extension(path: &Path) -> bool {
         })
 }
 
-/// Remove a trailing compression extension (`.gz`, `.gzip`, `.zst`, `.zstd`)
+/// Remove a trailing compression extension (`.bz2`, `.gz`, `.xz`, `.zst`, etc.)
 /// from the file name, returning the inner file name.
 pub fn strip_compression_suffix(name: &str) -> &str {
-    for ext in [".gz", ".gzip", ".zst", ".zstd"] {
+    for ext in [".bz2", ".bzip2", ".gz", ".gzip", ".xz", ".zst", ".zstd"] {
         if let Some(stripped) = name.strip_suffix(ext) {
             return stripped;
         }
