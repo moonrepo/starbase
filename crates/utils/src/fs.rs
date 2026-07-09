@@ -265,10 +265,8 @@ where
             return None;
         }
 
-        match dir.parent() {
-            Some(parent_dir) => dir = parent_dir,
-            None => return None,
-        }
+        let parent_dir = dir.parent()?;
+        dir = parent_dir;
     }
 }
 
