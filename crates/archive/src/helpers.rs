@@ -1,8 +1,23 @@
+use crate::archive_error::ArchiveError;
 use starbase_utils::fs;
-use std::path::Path;
+use std::env;
+use std::path::{Path, PathBuf};
+use std::process;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::trace;
 
-use crate::ArchiveError;
+// Each image must be mounted to its own unique mount point, otherwise
+// unpacks running in parallel would mount over and detach each other,
+// so namespace by process and an incrementing counter.
+pub fn next_mount_dir() -> PathBuf {
+    static MOUNT_ID: AtomicUsize = AtomicUsize::new(0);
+
+    env::temp_dir().join(format!(
+        "starbase-archive-{}-{}",
+        process::id(),
+        MOUNT_ID.fetch_add(1, Ordering::Relaxed)
+    ))
+}
 
 /// Returns `true` if writing to `target` would escape `root` by traversing a
 /// symlink -- for example a symlink entry planted earlier in the same archive

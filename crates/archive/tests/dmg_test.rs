@@ -129,10 +129,7 @@ mod dmg {
             .unpack(|dir, file| Ok(DmgUnpacker::new(dir, file)))
             .unwrap_err();
 
-        assert!(matches!(
-            error,
-            ArchiveError::MissingArchiveContents { .. }
-        ));
+        assert!(matches!(error, ArchiveError::MissingArchiveContents { .. }));
     }
 
     #[test]
@@ -197,7 +194,10 @@ mod dmg {
         let apps = output.join("Applications");
 
         assert!(apps.symlink_metadata().unwrap().is_symlink());
-        assert_eq!(std::fs::read_link(&apps).unwrap(), Path::new("/Applications"));
+        assert_eq!(
+            std::fs::read_link(&apps).unwrap(),
+            Path::new("/Applications")
+        );
 
         // Executable bits are preserved
         {

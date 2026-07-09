@@ -38,6 +38,7 @@ starbase_archive = { path = ".", features = [
 	"gz",
 	"miette",
 	"dmg",
+	"pkg",
 	"tar-all",
 	"zip-all",
 ] }
@@ -56,6 +57,7 @@ zstd = ["dep:zstd"]
 
 # Formats and codec convenience aliases
 dmg = []
+pkg = []
 tar = ["dep:binstall-tar"]
 tar-all = ["tar", "tar-bz2", "tar-gz", "tar-xz", "tar-zstd"]
 tar-bz2 = ["tar", "bz2"]

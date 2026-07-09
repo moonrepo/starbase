@@ -20,6 +20,10 @@ pub enum ArchiveError {
     #[error(transparent)]
     Glob(#[from] Box<GlobError>),
 
+    #[cfg(feature = "pkg")]
+    #[error(transparent)]
+    Pkg(#[from] Box<crate::pkg::PkgError>),
+
     #[error(transparent)]
     Io(#[from] Box<std::io::Error>),
 

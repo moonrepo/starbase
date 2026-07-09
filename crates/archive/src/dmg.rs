@@ -1,11 +1,10 @@
 use crate::archive::ArchiveUnpacker;
 use crate::archive_error::ArchiveError;
-use crate::helpers::copy_extracted_contents;
+use crate::helpers::{copy_extracted_contents, next_mount_dir};
 use starbase_utils::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{self, Command, Output, Stdio};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::process::{Command, Output, Stdio};
 use std::thread::sleep;
 use std::time::Duration;
 use tracing::{instrument, trace};
@@ -86,19 +85,6 @@ impl ArchiveUnpacker for DmgUnpacker {
     }
 }
 
-// Each image must be mounted to its own unique mount point, otherwise
-// unpacks running in parallel would mount over and detach each other,
-// so namespace by process and an incrementing counter.
-fn next_mount_dir() -> PathBuf {
-    static MOUNT_ID: AtomicUsize = AtomicUsize::new(0);
-
-    std::env::temp_dir().join(format!(
-        "dmg-{}-{}",
-        process::id(),
-        MOUNT_ID.fetch_add(1, Ordering::Relaxed)
-    ))
-}
-
 // Convert a failed `hdiutil` execution into an error, preferring the
 // stderr output, which contains messages like
 // "hdiutil: attach failed - image not recognized".
@@ -172,9 +158,9 @@ fn detach_dmg(mount_dir: &Path) -> Result<(), io::Error> {
         .stdout(Stdio::piped())
         .output()?;
 
-    if !output.status.success() {
-        return Err(command_error("detach", &output));
+    if output.status.success() {
+        return Ok(());
     }
 
-    Ok(())
+    Err(command_error("detach", &output))
 }
