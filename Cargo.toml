@@ -16,7 +16,7 @@ hex = "0.4.3"
 iocraft = "0.8.3"
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
 miette = "7.6.0"
-regex = { version = "1.12.4", default-features = false }
+regex = { version = "1.13.0", default-features = false }
 relative-path = "2.0.1"
 reqwest = { version = "0.13.4", default-features = false }
 rustc-hash = "2.1.3"

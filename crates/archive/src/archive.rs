@@ -306,11 +306,17 @@ impl<'owner> Archiver<'owner> {
                     crate::codecs::Bz2::new(fs::open_file(file)?),
                 ))
             }),
+            Some("dmg") => unpack!("dmg", feature = "dmg", |dir, file| {
+                Ok(crate::dmg::DmgUnpacker::new(dir, file))
+            }),
             Some("gz" | "gzip") => unpack!("gz", feature = "gz", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
                     dir.join(crate::strip_compression_suffix(fs::file_name(file))),
                     crate::codecs::Gz::new(fs::open_file(file)?),
                 ))
+            }),
+            Some("pkg") => unpack!("pkg", feature = "pkg", |dir, file| {
+                Ok(crate::pkg::PkgUnpacker::new(dir, file))
             }),
             Some("tar") => unpack!("tar", feature = "tar", |dir, file| {
                 Ok(crate::tar::TarUnpacker::new(dir, fs::open_file(file)?))

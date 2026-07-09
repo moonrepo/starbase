@@ -5,6 +5,18 @@ pub mod codecs;
 pub mod file;
 mod file_error;
 
+/// Handles macOS dmg disk images (unpack only).
+#[cfg(feature = "dmg")]
+pub mod dmg;
+#[cfg(feature = "dmg")]
+mod dmg_error;
+
+/// Handles macOS pkg installer packages (unpack only).
+#[cfg(feature = "pkg")]
+pub mod pkg;
+#[cfg(feature = "pkg")]
+mod pkg_error;
+
 /// Handles tarball files.
 #[cfg(feature = "tar")]
 pub mod tar;

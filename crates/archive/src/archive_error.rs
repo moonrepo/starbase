@@ -7,6 +7,10 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 #[cfg_attr(feature = "miette", derive(miette::Diagnostic))]
 pub enum ArchiveError {
+    #[cfg(feature = "dmg")]
+    #[error(transparent)]
+    Dmg(#[from] Box<crate::dmg::DmgError>),
+
     #[error(transparent)]
     Fs(#[from] Box<FsError>),
 
@@ -15,6 +19,10 @@ pub enum ArchiveError {
 
     #[error(transparent)]
     Glob(#[from] Box<GlobError>),
+
+    #[cfg(feature = "pkg")]
+    #[error(transparent)]
+    Pkg(#[from] Box<crate::pkg::PkgError>),
 
     #[error(transparent)]
     Io(#[from] Box<std::io::Error>),
@@ -49,6 +57,18 @@ pub enum ArchiveError {
         .path.style(Style::Path),
     )]
     UnknownFormat { path: PathBuf },
+
+    #[cfg_attr(feature = "miette", diagnostic(code(archive::missing_contents)))]
+    #[error(
+        "Unable to extract contents from {format} {}, using directory prefix {}.",
+        .path.style(Style::Path),
+        .prefix.style(Style::Label)
+    )]
+    MissingArchiveContents {
+        format: String,
+        path: PathBuf,
+        prefix: String,
+    },
 }
 
 impl From<FsError> for ArchiveError {
@@ -66,6 +86,20 @@ impl From<crate::file::FileError> for ArchiveError {
 impl From<GlobError> for ArchiveError {
     fn from(e: GlobError) -> ArchiveError {
         ArchiveError::Glob(Box::new(e))
+    }
+}
+
+#[cfg(feature = "dmg")]
+impl From<crate::dmg::DmgError> for ArchiveError {
+    fn from(e: crate::dmg::DmgError) -> ArchiveError {
+        ArchiveError::Dmg(Box::new(e))
+    }
+}
+
+#[cfg(feature = "pkg")]
+impl From<crate::pkg::PkgError> for ArchiveError {
+    fn from(e: crate::pkg::PkgError) -> ArchiveError {
+        ArchiveError::Pkg(Box::new(e))
     }
 }
 

@@ -4,13 +4,14 @@
 ![Crates.io](https://img.shields.io/crates/d/starbase_archive)
 
 Abstractions and utilities for working with multiple archive formats. Currently supports `.tar`
-(with gz, bz2, xz, zstd), `.zip`, and single-file codecs (`.bz2`, `.gz`, `.xz`, `.zst`).
+(with gz, bz2, xz, zstd), `.zip`, `.dmg`/`.pkg` (macOS, unpack only), and single-file codecs
+(`.bz2`, `.gz`, `.xz`, `.zst`).
 
 Formats and compression codecs are separate layers that compose over read/write streams:
 
 - A **codec** (`Gz`, `Bz2`, `Xz`, `Zstd`) transforms bytes and wraps any `Read` or `Write` stream.
   The first read commits it to decompressing, the first write to compressing.
-- A **format** (`Tar`, `Zip`) structures files and consumes or produces a stream.
+- A **format** (`Tar`, `Zip`, `Dmg`, `Pkg`) structures files and consumes or produces a stream.
 
 ```rust
 use starbase_archive::Archiver;
@@ -36,6 +37,11 @@ archiver.unpack(|dir, file| Ok(TarUnpacker::new(dir, Gz::new(fs::open_file(file)
 
 Zip is the exception: compression is part of the zip format itself and applied per entry, so it's
 configured as an option instead of a codec.
+
+Dmg and pkg are also exceptions, as neither is read as a stream: disk images are mounted with the
+system `hdiutil` command and the volume contents copied out, while installer packages are expanded
+with the system `pkgutil` command and the payload contents of each component copied out. Both can
+only be unpacked, and only on macOS.
 
 ```rust
 use starbase_archive::zip::ZipPacker;

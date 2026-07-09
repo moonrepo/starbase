@@ -1,5 +1,39 @@
+use crate::archive_error::ArchiveError;
 use starbase_utils::fs;
-use std::path::Path;
+use std::env;
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use tracing::trace;
+
+/// Return a unique temporary directory to mount or expand an archive
+/// into. Each unpack requires its own directory, otherwise unpacks
+/// running in parallel would collide with each other (mounts would
+/// detach each other, and `pkgutil` refuses to expand into an existing
+/// directory), so namespace by process and an incrementing counter.
+pub fn next_temp_dir() -> PathBuf {
+    static TEMP_ID: AtomicUsize = AtomicUsize::new(0);
+
+    env::temp_dir().join(format!(
+        "starbase-archive-{}-{}",
+        process::id(),
+        TEMP_ID.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
+// Convert a failed command execution into an error, preferring the
+// stderr output, which contains messages like
+// "hdiutil: attach failed - image not recognized".
+pub fn convert_command_error(command: &str, output: &process::Output) -> io::Error {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+    io::Error::other(if stderr.is_empty() {
+        format!("`{command}` failed ({})", output.status)
+    } else {
+        stderr
+    })
+}
 
 /// Returns `true` if writing to `target` would escape `root` by traversing a
 /// symlink -- for example a symlink entry planted earlier in the same archive
@@ -98,6 +132,10 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
         "tzs".into(),
         // tar
         "tar".into(),
+        // dmg
+        "dmg".into(),
+        // pkg
+        "pkg".into(),
         // zip
         "zip".into(),
         // bzip2
@@ -136,4 +174,147 @@ pub fn strip_compression_suffix(name: String) -> String {
     }
 
     name
+}
+
+/// Files that macOS creates on volumes to track volume metadata (Finder
+/// info, Spotlight indexes, trash). They aren't part of the actual
+/// contents, and some (like `.Trashes`) aren't readable without elevated
+/// permissions, which would fail the extraction entirely.
+const VOLUME_METADATA_FILES: &[&str] = &[
+    ".DS_Store",
+    ".DocumentRevisions-V100",
+    ".Spotlight-V100",
+    ".TemporaryItems",
+    ".Trashes",
+    ".fseventsd",
+];
+
+/// Copy contents that were extracted (or mounted) into the source directory
+/// over to the target directory. If a prefix is provided, copy the contents
+/// of that sub-directory instead. Used by formats (like dmg) that can't
+/// unpack entries from a stream.
+///
+/// Symlinks are recreated verbatim, and macOS volume metadata files
+/// (`.DS_Store`, `.Trashes`, etc) are skipped.
+pub fn copy_extracted_contents(
+    format: &str,
+    source_dir: &Path,
+    target_dir: &Path,
+    prefix: Option<&str>,
+) -> Result<(), ArchiveError> {
+    let source = match prefix {
+        Some(prefix) => source_dir.join(prefix),
+        None => source_dir.to_path_buf(),
+    };
+
+    let missing_contents = || ArchiveError::MissingArchiveContents {
+        format: format.into(),
+        path: source_dir.to_path_buf(),
+        prefix: prefix.unwrap_or("N/A").into(),
+    };
+
+    if !source.exists() {
+        return Err(missing_contents());
+    }
+
+    // The prefix may traverse a symlink pointing outside the source
+    // directory (like an `Applications -> /Applications` shortcut in a
+    // dmg), which would copy unrelated system contents (CWE-22).
+    if prefix.is_some() {
+        let escapes = match (source_dir.canonicalize(), source.canonicalize()) {
+            (Ok(root), Ok(source)) => !source.starts_with(root),
+            _ => true,
+        };
+
+        if escapes {
+            return Err(missing_contents());
+        }
+    }
+
+    if source.is_file() {
+        fs::copy_file(&source, target_dir.join(fs::file_name(&source)))?;
+    } else {
+        copy_contents(&source, target_dir, target_dir)?;
+    }
+
+    Ok(())
+}
+
+fn copy_contents(
+    source_dir: &Path,
+    target_dir: &Path,
+    target_root: &Path,
+) -> Result<(), ArchiveError> {
+    fs::create_dir_all(target_dir)?;
+
+    for entry in fs::read_dir(source_dir)? {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+
+        let name = entry.file_name();
+
+        if name
+            .to_str()
+            .is_some_and(|name| VOLUME_METADATA_FILES.contains(&name))
+        {
+            continue;
+        }
+
+        let source_path = entry.path();
+        let target_path = target_dir.join(&name);
+
+        // Refuse to write through a symlink already existing in the target,
+        // which could redirect the write outside the target directory.
+        if escapes_via_symlink(target_root, &target_path) {
+            trace!(source = ?source_path, "Skipping entry that would escape via a symlink");
+            continue;
+        }
+
+        if file_type.is_dir() {
+            copy_contents(&source_path, &target_path, target_root)?;
+        } else if file_type.is_file() {
+            fs::copy_file(&source_path, &target_path)?;
+        } else if file_type.is_symlink() {
+            // Recreate the symlink instead of following it, both to mirror
+            // the source contents exactly (app bundles rely on internal
+            // symlinks), and to avoid copying entire external directories
+            // through shortcuts like `Applications -> /Applications`.
+            copy_symlink(&source_path, &target_path)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn copy_symlink(source_path: &Path, target_path: &Path) -> Result<(), fs::FsError> {
+    use fs::FsError;
+
+    let map_error = |error| FsError::Create {
+        path: target_path.to_path_buf(),
+        error: Box::new(error),
+    };
+
+    let link_target = std::fs::read_link(source_path).map_err(|error| FsError::Read {
+        path: source_path.to_path_buf(),
+        error: Box::new(error),
+    })?;
+
+    // Overwrite anything already at the path, matching other unpackers
+    fs::remove_link(target_path)?;
+    fs::remove_file(target_path)?;
+
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&link_target, target_path).map_err(map_error)?;
+
+    #[cfg(windows)]
+    {
+        if link_target.is_dir() {
+            std::os::windows::fs::symlink_dir(&link_target, target_path).map_err(map_error)?;
+        } else {
+            std::os::windows::fs::symlink_file(&link_target, target_path).map_err(map_error)?;
+        }
+    }
+
+    Ok(())
 }

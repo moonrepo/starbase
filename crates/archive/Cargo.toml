@@ -3,7 +3,7 @@ name = "starbase_archive"
 version = "0.14.0"
 edition = "2024"
 license = "MIT"
-description = "Utilities for packing and unpacking archives. Supports tar and zip."
+description = "Utilities for packing and unpacking archives. Supports tar, zip, dmg, and pkg."
 repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.89.0"
 
@@ -37,6 +37,8 @@ zip = { version = "8.6.0", default-features = false, optional = true }
 starbase_archive = { path = ".", features = [
 	"gz",
 	"miette",
+	"dmg",
+	"pkg",
 	"tar-all",
 	"zip-all",
 ] }
@@ -54,6 +56,8 @@ xz = ["dep:liblzma"]
 zstd = ["dep:zstd"]
 
 # Formats and codec convenience aliases
+dmg = []
+pkg = []
 tar = ["dep:binstall-tar"]
 tar-all = ["tar", "tar-bz2", "tar-gz", "tar-xz", "tar-zstd"]
 tar-bz2 = ["tar", "bz2"]
