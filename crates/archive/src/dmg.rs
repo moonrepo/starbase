@@ -63,7 +63,7 @@ impl ArchiveUnpacker for DmgUnpacker {
             )
         } else {
             Err(DmgError::MissingVolume {
-                path: mount_dir.to_path_buf(),
+                path: self.archive_file.to_path_buf(),
             }
             .into())
         };
