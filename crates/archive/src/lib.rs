@@ -5,7 +5,7 @@ pub mod codecs;
 pub mod file;
 mod file_error;
 
-/// Handles macOS dmg files.
+/// Handles macOS dmg disk images (unpack only).
 #[cfg(feature = "dmg")]
 pub mod dmg;
 #[cfg(feature = "dmg")]

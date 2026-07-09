@@ -2,25 +2,35 @@ use crate::archive::ArchiveUnpacker;
 use crate::archive_error::ArchiveError;
 use crate::helpers::copy_extracted_contents;
 use starbase_utils::fs;
-use std::env;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{self, Command, Output, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread::sleep;
 use std::time::Duration;
 use tracing::{instrument, trace};
 
 pub use crate::dmg_error::DmgError;
 
+/// Opens macOS disk images (`.dmg`) using the system `hdiutil` command.
+/// Unlike tar and zip, a disk image is not read as a stream: the image
+/// is attached (mounted) as a read-only volume, the volume's contents
+/// are copied to the output directory, and the volume is detached.
+///
+/// Only supported on macOS, and only supports unpacking. To create disk
+/// images, use `hdiutil create` directly.
 pub struct DmgUnpacker {
     archive_file: PathBuf,
     output_dir: PathBuf,
 }
 
 impl DmgUnpacker {
-    pub fn new(output_dir: impl AsRef<Path>, archive_file: impl AsRef<Path>) -> Self {
+    /// Create a new dmg unpacker that mounts the archive file and copies
+    /// the volume's contents to the output directory.
+    pub fn new(output_dir: &Path, archive_file: &Path) -> Self {
         DmgUnpacker {
-            archive_file: archive_file.as_ref().to_path_buf(),
-            output_dir: output_dir.as_ref().to_path_buf(),
+            archive_file: archive_file.to_path_buf(),
+            output_dir: output_dir.to_path_buf(),
         }
     }
 }
@@ -28,28 +38,20 @@ impl DmgUnpacker {
 impl ArchiveUnpacker for DmgUnpacker {
     #[instrument(name = "unpack_dmg", skip_all)]
     fn unpack(self, prefix: &str) -> Result<PathBuf, ArchiveError> {
-        trace!(output_dir = ?self.output_dir, "Unpacking dmg archive");
+        fs::create_dir_all(&self.output_dir)?;
 
-        let temp_dir = env::temp_dir();
-        let mount_dir = temp_dir.join("dmg");
+        trace!(output_dir = ?self.output_dir, "Unpacking dmg");
 
-        fs::create_dir_all(temp_dir)?;
+        let mount_dir = next_mount_dir();
+
+        // Remove any stale mount point left behind by a crashed process
         fs::remove_dir_all(&mount_dir)?;
 
-        let result = {
-            attach_dmg(&self.archive_file, &mount_dir).map_err(|error| {
-                DmgError::UnpackFailure {
-                    error: Box::new(error),
-                }
-            })?;
+        attach_dmg(&self.archive_file, &mount_dir).map_err(|error| DmgError::UnpackFailure {
+            error: Box::new(error),
+        })?;
 
-            if !mount_dir.exists() {
-                return Err(DmgError::MissingVolume {
-                    path: mount_dir.to_path_buf(),
-                }
-                .into());
-            }
-
+        let result = if mount_dir.exists() {
             copy_extracted_contents(
                 "macOS disk image",
                 &mount_dir,
@@ -60,10 +62,22 @@ impl ArchiveUnpacker for DmgUnpacker {
                     Some(prefix)
                 },
             )
+        } else {
+            Err(DmgError::MissingVolume {
+                path: mount_dir.to_path_buf(),
+            }
+            .into())
         };
 
         // Always detach the volume, even if extracting the contents failed
-        let _ = detach_dmg(&mount_dir);
+        if let Err(error) = detach_dmg(&mount_dir) {
+            trace!(
+                mount_dir = ?mount_dir,
+                error = error.to_string(),
+                "Failed to detach macOS disk image",
+            );
+        }
+
         let _ = fs::remove_dir_all(&mount_dir);
 
         result?;
@@ -72,16 +86,43 @@ impl ArchiveUnpacker for DmgUnpacker {
     }
 }
 
-fn attach_dmg(archive_file: &Path, mount_dir: &Path) -> Result<(), std::io::Error> {
-    // macOS DiskArbitration only permits a limited number of concurrent attach
-    // operations. When proto installs multiple tools in parallel, `hdiutil attach`
-    // can transiently fail with "Resource temporarily unavailable", so retry a
-    // handful of times with a backoff before giving up.
+// Each image must be mounted to its own unique mount point, otherwise
+// unpacks running in parallel would mount over and detach each other,
+// so namespace by process and an incrementing counter.
+fn next_mount_dir() -> PathBuf {
+    static MOUNT_ID: AtomicUsize = AtomicUsize::new(0);
+
+    std::env::temp_dir().join(format!(
+        "dmg-{}-{}",
+        process::id(),
+        MOUNT_ID.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
+// Convert a failed `hdiutil` execution into an error, preferring the
+// stderr output, which contains messages like
+// "hdiutil: attach failed - image not recognized".
+fn command_error(command: &str, output: &Output) -> io::Error {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+    io::Error::other(if stderr.is_empty() {
+        format!("hdiutil {command} failed ({})", output.status)
+    } else {
+        stderr
+    })
+}
+
+fn attach_dmg(archive_file: &Path, mount_dir: &Path) -> Result<(), io::Error> {
+    // macOS DiskArbitration only permits a limited number of concurrent
+    // attach operations. When multiple images are unpacked in parallel,
+    // `hdiutil attach` can transiently fail with "Resource temporarily
+    // unavailable", so retry a handful of times with a backoff.
     let max_attempts = 5;
     let mut attempt = 1;
 
     loop {
-        let result = Command::new("hdiutil")
+        // The mount point does not need to exist, `hdiutil` creates it
+        let output = Command::new("hdiutil")
             .arg("attach")
             .arg(archive_file)
             .arg("-nobrowse")
@@ -91,37 +132,49 @@ fn attach_dmg(archive_file: &Path, mount_dir: &Path) -> Result<(), std::io::Erro
             .arg(mount_dir)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
-            .output();
+            .output()?;
 
-        match result {
-            Ok(_) => return Ok(()),
-            Err(error) => {
-                if attempt >= max_attempts {
-                    return Err(error.into());
-                }
-
-                trace!(
-                    archive = ?archive_file,
-                    attempt,
-                    error = error.to_string(),
-                    "Failed to attach macOS disk image, retrying",
-                );
-
-                sleep(Duration::from_millis(250 * attempt));
-                attempt += 1;
-            }
+        if output.status.success() {
+            return Ok(());
         }
+
+        let error = command_error("attach", &output);
+
+        // Only transient failures are worth retrying, anything else,
+        // like an invalid or corrupt image, will never succeed
+        if attempt >= max_attempts
+            || !error
+                .to_string()
+                .to_lowercase()
+                .contains("temporarily unavailable")
+        {
+            return Err(error);
+        }
+
+        trace!(
+            archive = ?archive_file,
+            attempt,
+            error = error.to_string(),
+            "Failed to attach macOS disk image, retrying",
+        );
+
+        sleep(Duration::from_millis(250 * attempt));
+        attempt += 1;
     }
 }
 
-fn detach_dmg(mount_dir: &Path) -> Result<(), std::io::Error> {
-    Command::new("hdiutil")
+fn detach_dmg(mount_dir: &Path) -> Result<(), io::Error> {
+    let output = Command::new("hdiutil")
         .arg("detach")
         .arg(mount_dir)
         .arg("-force")
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .output()?;
+
+    if !output.status.success() {
+        return Err(command_error("detach", &output));
+    }
 
     Ok(())
 }

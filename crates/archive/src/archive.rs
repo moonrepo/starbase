@@ -306,6 +306,9 @@ impl<'owner> Archiver<'owner> {
                     crate::codecs::Bz2::new(fs::open_file(file)?),
                 ))
             }),
+            Some("dmg") => unpack!("dmg", feature = "dmg", |dir, file| {
+                Ok(crate::dmg::DmgUnpacker::new(dir, file))
+            }),
             Some("gz" | "gzip") => unpack!("gz", feature = "gz", |dir, file| {
                 Ok(crate::file::FileUnpacker::new(
                     dir.join(crate::strip_compression_suffix(fs::file_name(file))),
