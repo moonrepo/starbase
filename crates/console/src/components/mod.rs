@@ -28,6 +28,7 @@ pub use styled_text::*;
 pub use table::*;
 
 // Re-export iocraft components
+#[allow(unused_imports)]
 pub use iocraft::prelude::{Button, Text, View};
 
 use std::ops::Deref;
