@@ -2975,7 +2975,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -3003,7 +3003,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_console"
-version = "0.6.32"
+version = "0.6.33"
 dependencies = [
  "crossterm",
  "iocraft",
@@ -3093,7 +3093,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "async-trait",
  "base64",
