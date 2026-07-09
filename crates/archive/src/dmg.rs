@@ -1,10 +1,10 @@
 use crate::archive::ArchiveUnpacker;
 use crate::archive_error::ArchiveError;
-use crate::helpers::{copy_extracted_contents, next_mount_dir};
+use crate::helpers::{convert_command_error, copy_extracted_contents, next_temp_dir};
 use starbase_utils::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Stdio};
 use std::thread::sleep;
 use std::time::Duration;
 use tracing::{instrument, trace};
@@ -41,7 +41,7 @@ impl ArchiveUnpacker for DmgUnpacker {
 
         trace!(output_dir = ?self.output_dir, "Unpacking dmg");
 
-        let mount_dir = next_mount_dir();
+        let mount_dir = next_temp_dir();
 
         // Remove any stale mount point left behind by a crashed process
         fs::remove_dir_all(&mount_dir)?;
@@ -85,19 +85,6 @@ impl ArchiveUnpacker for DmgUnpacker {
     }
 }
 
-// Convert a failed `hdiutil` execution into an error, preferring the
-// stderr output, which contains messages like
-// "hdiutil: attach failed - image not recognized".
-fn command_error(command: &str, output: &Output) -> io::Error {
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-
-    io::Error::other(if stderr.is_empty() {
-        format!("hdiutil {command} failed ({})", output.status)
-    } else {
-        stderr
-    })
-}
-
 fn attach_dmg(archive_file: &Path, mount_dir: &Path) -> Result<(), io::Error> {
     // macOS DiskArbitration only permits a limited number of concurrent
     // attach operations. When multiple images are unpacked in parallel,
@@ -124,7 +111,7 @@ fn attach_dmg(archive_file: &Path, mount_dir: &Path) -> Result<(), io::Error> {
             return Ok(());
         }
 
-        let error = command_error("attach", &output);
+        let error = convert_command_error("hdiutil attach", &output);
 
         // Only transient failures are worth retrying, anything else,
         // like an invalid or corrupt image, will never succeed
@@ -162,5 +149,5 @@ fn detach_dmg(mount_dir: &Path) -> Result<(), io::Error> {
         return Ok(());
     }
 
-    Err(command_error("detach", &output))
+    Err(convert_command_error("hdiutil detach", &output))
 }

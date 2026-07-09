@@ -1,22 +1,38 @@
 use crate::archive_error::ArchiveError;
 use starbase_utils::fs;
 use std::env;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::trace;
 
-// Each image must be mounted to its own unique mount point, otherwise
-// unpacks running in parallel would mount over and detach each other,
-// so namespace by process and an incrementing counter.
-pub fn next_mount_dir() -> PathBuf {
-    static MOUNT_ID: AtomicUsize = AtomicUsize::new(0);
+/// Return a unique temporary directory to mount or expand an archive
+/// into. Each unpack requires its own directory, otherwise unpacks
+/// running in parallel would collide with each other (mounts would
+/// detach each other, and `pkgutil` refuses to expand into an existing
+/// directory), so namespace by process and an incrementing counter.
+pub fn next_temp_dir() -> PathBuf {
+    static TEMP_ID: AtomicUsize = AtomicUsize::new(0);
 
     env::temp_dir().join(format!(
         "starbase-archive-{}-{}",
         process::id(),
-        MOUNT_ID.fetch_add(1, Ordering::Relaxed)
+        TEMP_ID.fetch_add(1, Ordering::Relaxed)
     ))
+}
+
+// Convert a failed command execution into an error, preferring the
+// stderr output, which contains messages like
+// "hdiutil: attach failed - image not recognized".
+pub fn convert_command_error(command: &str, output: &process::Output) -> io::Error {
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+
+    io::Error::other(if stderr.is_empty() {
+        format!("`{command}` failed ({})", output.status)
+    } else {
+        stderr
+    })
 }
 
 /// Returns `true` if writing to `target` would escape `root` by traversing a
@@ -118,6 +134,8 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
         "tar".into(),
         // dmg
         "dmg".into(),
+        // pkg
+        "pkg".into(),
         // zip
         "zip".into(),
         // bzip2

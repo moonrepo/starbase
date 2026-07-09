@@ -11,7 +11,7 @@ pub mod dmg;
 #[cfg(feature = "dmg")]
 mod dmg_error;
 
-/// Handles macOS packages (unpack only).
+/// Handles macOS pkg installer packages (unpack only).
 #[cfg(feature = "pkg")]
 pub mod pkg;
 #[cfg(feature = "pkg")]

@@ -315,6 +315,9 @@ impl<'owner> Archiver<'owner> {
                     crate::codecs::Gz::new(fs::open_file(file)?),
                 ))
             }),
+            Some("pkg") => unpack!("pkg", feature = "pkg", |dir, file| {
+                Ok(crate::pkg::PkgUnpacker::new(dir, file))
+            }),
             Some("tar") => unpack!("tar", feature = "tar", |dir, file| {
                 Ok(crate::tar::TarUnpacker::new(dir, fs::open_file(file)?))
             }),

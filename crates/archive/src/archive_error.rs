@@ -96,6 +96,13 @@ impl From<crate::dmg::DmgError> for ArchiveError {
     }
 }
 
+#[cfg(feature = "pkg")]
+impl From<crate::pkg::PkgError> for ArchiveError {
+    fn from(e: crate::pkg::PkgError) -> ArchiveError {
+        ArchiveError::Pkg(Box::new(e))
+    }
+}
+
 #[cfg(feature = "tar")]
 impl From<crate::tar::TarError> for ArchiveError {
     fn from(e: crate::tar::TarError) -> ArchiveError {
