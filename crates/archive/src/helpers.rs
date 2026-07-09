@@ -104,6 +104,25 @@ pub fn get_full_file_extension(path: &Path) -> Option<String> {
     None
 }
 
+/// Return a list of all supported compression/codec file extensions,
+/// without the format-specific extensions like `tar` or `zip`,
+/// regardless of which Cargo features are enabled.
+pub fn get_compression_extensions() -> Vec<String> {
+    vec![
+        // bzip2
+        "bzip2".into(),
+        "bz2".into(),
+        // gzip
+        "gzip".into(),
+        "gz".into(),
+        // xz
+        "xz".into(),
+        // zstd
+        "zstd".into(),
+        "zst".into(),
+    ]
+}
+
 /// Return a list of all supported archive file extensions,
 /// regardless of which Cargo features are enabled.
 /// Extensions are returned *without* a leading dot.
@@ -111,7 +130,7 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
     // Order is important here! Must be from most
     // specific to least specific (any entry whose suffix is
     // another entry in this list MUST come before that entry).
-    vec![
+    let mut list = vec![
         // tar + bzip2 (must precede `bz`/`bzip2`)
         "tar.bzip2".into(),
         "tar.bz2".into(),
@@ -138,18 +157,9 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
         "pkg".into(),
         // zip
         "zip".into(),
-        // bzip2
-        "bzip2".into(),
-        "bz2".into(),
-        // gzip
-        "gzip".into(),
-        "gz".into(),
-        // xz
-        "xz".into(),
-        // zstd
-        "zstd".into(),
-        "zst".into(),
-    ]
+    ];
+    list.extend(get_compression_extensions());
+    list
 }
 
 /// Return true if the file path has a supported archive extension.
@@ -167,8 +177,8 @@ pub fn is_supported_archive_extension(path: &Path) -> bool {
 /// Remove a trailing compression extension (`.bz2`, `.gz`, `.xz`, `.zst`, etc.)
 /// from the file name, returning the inner file name.
 pub fn strip_compression_suffix(name: String) -> String {
-    for ext in [".bz2", ".bzip2", ".gz", ".gzip", ".xz", ".zst", ".zstd"] {
-        if let Some(stripped) = name.strip_suffix(ext) {
+    for ext in get_compression_extensions() {
+        if let Some(stripped) = name.strip_suffix(&format!(".{ext}")) {
             return stripped.into();
         }
     }
