@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use async_trait::async_trait;
-use starbase::{App, AppPhase, AppResult, AppSession};
+use starbase::{App, AppExitCode, AppPhase, AppResult, AppSession};
 use std::fmt;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -24,7 +24,9 @@ struct TestSession {
     pub contexts: Arc<RwLock<Vec<String>>>,
     pub order: Arc<RwLock<Vec<String>>>,
     pub error_in_phase: Option<AppPhase>,
+    pub exit_code: Option<AppExitCode>,
     pub exit_in_phase: Option<AppPhase>,
+    pub set_code_in_phase: Option<(AppPhase, u8)>,
 }
 
 impl TestSession {
@@ -37,16 +39,32 @@ impl TestSession {
         let lock = Arc::into_inner(self.order).unwrap();
         lock.into_inner()
     }
+
+    fn maybe_set_code(&self, phase: AppPhase) {
+        if let Some((set_phase, code)) = self.set_code_in_phase
+            && set_phase == phase
+        {
+            self.exit_code
+                .as_ref()
+                .expect("bootstrap was not called")
+                .set(code);
+        }
+    }
 }
 
 #[async_trait]
 impl AppSession for TestSession {
     type Error = TestError;
 
+    async fn initialize(&mut self, exit_code: AppExitCode) {
+        self.exit_code = Some(exit_code);
+    }
+
     async fn startup(&mut self) -> AppResult<Self::Error> {
         dbg!(1);
 
         self.order.write().await.push("startup".into());
+        self.maybe_set_code(AppPhase::Startup);
 
         if self.error_in_phase == Some(AppPhase::Startup) {
             return Err(TestError("error in startup".into()));
@@ -63,6 +81,7 @@ impl AppSession for TestSession {
         dbg!(2);
 
         self.order.write().await.push("analyze".into());
+        self.maybe_set_code(AppPhase::Analyze);
 
         if self.error_in_phase == Some(AppPhase::Analyze) {
             return Err(TestError("error in analyze".into()));
@@ -79,6 +98,7 @@ impl AppSession for TestSession {
         dbg!(3);
 
         self.order.write().await.push("execute".into());
+        self.maybe_set_code(AppPhase::Execute);
 
         if self.error_in_phase == Some(AppPhase::Execute) {
             return Err(TestError("error in execute".into()));
@@ -105,6 +125,7 @@ impl AppSession for TestSession {
         dbg!(4);
 
         self.order.write().await.push("shutdown".into());
+        self.maybe_set_code(AppPhase::Shutdown);
 
         if self.error_in_phase == Some(AppPhase::Shutdown) {
             return Err(TestError("error in shutdown".into()));
@@ -284,6 +305,175 @@ mod execute {
             .unwrap();
 
         assert_eq!(code, 5);
+    }
+}
+
+mod shared_exit_code {
+    use super::*;
+
+    #[tokio::test]
+    async fn defaults_to_zero_when_unset() {
+        let mut session = TestSession::default();
+
+        let outcome = App::default().run_with_session(&mut session, noop).await;
+
+        assert!(outcome.error.is_none());
+        assert_eq!(outcome.exit_code, 0);
+    }
+
+    #[tokio::test]
+    async fn preserves_max_code_255() {
+        let mut session = TestSession {
+            set_code_in_phase: Some((AppPhase::Analyze, 255)),
+            ..Default::default()
+        };
+
+        let outcome = App::default().run_with_session(&mut session, noop).await;
+
+        assert!(outcome.error.is_none());
+        assert_eq!(outcome.exit_code, 255);
+    }
+
+    #[tokio::test]
+    async fn shares_code_set_inside_the_execute_op() {
+        let mut session = TestSession::default();
+
+        let outcome = App::default()
+            .run_with_session(&mut session, |session: TestSession| async move {
+                session.exit_code.as_ref().unwrap().set(42);
+
+                Ok(None)
+            })
+            .await;
+
+        assert!(outcome.error.is_none());
+        assert_eq!(outcome.exit_code, 42);
+    }
+
+    #[tokio::test]
+    async fn shares_code_set_inside_the_background_execute() {
+        let mut session = TestSession {
+            set_code_in_phase: Some((AppPhase::Execute, 7)),
+            ..Default::default()
+        };
+
+        let outcome = App::default().run_with_session(&mut session, noop).await;
+
+        assert!(outcome.error.is_none());
+        assert_eq!(outcome.exit_code, 7);
+    }
+
+    #[tokio::test]
+    async fn keeps_explicit_code_when_a_phase_errors() {
+        let mut session = TestSession {
+            set_code_in_phase: Some((AppPhase::Startup, 42)),
+            error_in_phase: Some(AppPhase::Execute),
+            ..Default::default()
+        };
+
+        let outcome = App::default().run_with_session(&mut session, noop).await;
+
+        assert!(outcome.error.is_some());
+        assert_eq!(outcome.exit_code, 42);
+    }
+
+    #[tokio::test]
+    async fn forces_one_when_code_is_zero_and_a_phase_errors() {
+        let mut session = TestSession {
+            set_code_in_phase: Some((AppPhase::Startup, 0)),
+            error_in_phase: Some(AppPhase::Execute),
+            ..Default::default()
+        };
+
+        let outcome = App::default().run_with_session(&mut session, noop).await;
+
+        assert!(outcome.error.is_some());
+        assert_eq!(outcome.exit_code, 1);
+    }
+
+    #[tokio::test]
+    async fn forces_one_when_code_is_zero_and_shutdown_errors() {
+        let mut session = TestSession {
+            set_code_in_phase: Some((AppPhase::Startup, 0)),
+            error_in_phase: Some(AppPhase::Shutdown),
+            ..Default::default()
+        };
+
+        let outcome = App::default().run_with_session(&mut session, noop).await;
+
+        assert!(outcome.error.is_some());
+        assert_eq!(outcome.exit_code, 1);
+    }
+
+    #[tokio::test]
+    async fn overwrites_phase_returned_code_with_later_set() {
+        let mut session = TestSession {
+            // Startup returns `Ok(Some(1))`, then shutdown sets 9 directly
+            exit_in_phase: Some(AppPhase::Startup),
+            set_code_in_phase: Some((AppPhase::Shutdown, 9)),
+            ..Default::default()
+        };
+
+        let outcome = App::default().run_with_session(&mut session, noop).await;
+
+        assert!(outcome.error.is_none());
+        assert_eq!(outcome.exit_code, 9);
+    }
+
+    #[tokio::test]
+    async fn overwrites_earlier_set_with_phase_returned_code() {
+        let mut session = TestSession {
+            // Startup sets 9 directly, then shutdown returns `Ok(Some(4))`
+            set_code_in_phase: Some((AppPhase::Startup, 9)),
+            exit_in_phase: Some(AppPhase::Shutdown),
+            ..Default::default()
+        };
+
+        let outcome = App::default().run_with_session(&mut session, noop).await;
+
+        assert!(outcome.error.is_none());
+        assert_eq!(outcome.exit_code, 4);
+    }
+}
+
+mod miette_result {
+    use super::*;
+    use starbase::AppRunOutcome;
+    use std::process::ExitCode;
+
+    fn create_outcome(error: Option<TestError>, exit_code: u8) -> AppRunOutcome<TestError> {
+        AppRunOutcome {
+            last_phase: AppPhase::Shutdown,
+            error,
+            exit_code,
+        }
+    }
+
+    #[test]
+    fn preserves_codes_above_one_by_rendering_manually() {
+        let result = create_outcome(Some(TestError("fail".into())), 8).into_miette_result();
+
+        assert_eq!(
+            format!("{:?}", result.unwrap()),
+            format!("{:?}", ExitCode::from(8))
+        );
+    }
+
+    #[test]
+    fn returns_error_for_code_one() {
+        let result = create_outcome(Some(TestError("fail".into())), 1).into_miette_result();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn passes_through_success_codes() {
+        let result = create_outcome(None, 0).into_miette_result();
+
+        assert_eq!(
+            format!("{:?}", result.unwrap()),
+            format!("{:?}", ExitCode::from(0))
+        );
     }
 }
 
