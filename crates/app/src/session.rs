@@ -10,7 +10,7 @@ pub trait AppSession: Clone + Send + Sync {
     type Error: Debug + Display + Send + 'static;
 
     /// Run operations to setup the initial state of the session.
-    async fn bootstrap(&mut self, _exit_code: AppExitCode) {}
+    async fn initialize(&mut self, _exit_code: AppExitCode) {}
 
     /// Run operations at the start of the application process to setup
     /// the initial state of the session.

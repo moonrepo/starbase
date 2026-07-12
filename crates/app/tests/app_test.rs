@@ -56,7 +56,7 @@ impl TestSession {
 impl AppSession for TestSession {
     type Error = TestError;
 
-    async fn bootstrap(&mut self, exit_code: AppExitCode) {
+    async fn initialize(&mut self, exit_code: AppExitCode) {
         self.exit_code = Some(exit_code);
     }
 

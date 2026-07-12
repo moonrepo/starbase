@@ -137,7 +137,7 @@ impl App {
         F: FnOnce(S) -> Fut + Send + 'static,
         Fut: Future<Output = AppResult<S::Error>> + Send + 'static,
     {
-        session.bootstrap(self.exit_code.clone()).await;
+        session.initialize(self.exit_code.clone()).await;
 
         // Startup
         if let Err(error) = self.run_startup(session).await {
