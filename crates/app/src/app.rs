@@ -1,3 +1,4 @@
+use crate::exit_code::AppExitCode;
 use crate::session::{AppResult, AppSession};
 #[cfg(feature = "tracing")]
 use crate::tracing::TracingOptions;
@@ -52,13 +53,37 @@ impl<E> AppRunOutcome<E> {
     pub fn into_exit_result(self) -> Result<ExitCode, E> {
         self.into_result().map(ExitCode::from)
     }
+
+    /// Convert the outcome into a standard [`Result`] with an [`ExitCode`] on
+    /// both success and failure, but with pretty error output if the `miette`
+    /// feature is enabled. This will preserve the exit code, unlike `miette`'s
+    /// default `main` behavior of always returning 1 on error.
+    #[cfg(feature = "miette")]
+    pub fn into_miette_result(self) -> Result<ExitCode, E>
+    where
+        E: std::fmt::Debug,
+    {
+        // If we received a custom exit code that is neither 0 or 1,
+        // then we need to manually render the miette pretty output and
+        // exit with that code. This is because miette always renders errors
+        // with exit code 1, but we want to preserve the actual exit code.
+        if self.exit_code > 1 {
+            if let Some(error) = self.error {
+                eprintln!("{error:?}");
+            }
+
+            return Ok(ExitCode::from(self.exit_code));
+        }
+
+        self.into_exit_result()
+    }
 }
 
 /// An application that runs through lifecycles using a session instance.
 #[derive(Debug, Default)]
 pub struct App {
     phase: AppPhase,
-    exit_code: Option<u8>,
+    exit_code: AppExitCode,
 }
 
 impl App {
@@ -112,6 +137,8 @@ impl App {
         F: FnOnce(S) -> Fut + Send + 'static,
         Fut: Future<Output = AppResult<S::Error>> + Send + 'static,
     {
+        session.bootstrap(self.exit_code.clone()).await;
+
         // Startup
         if let Err(error) = self.run_startup(session).await {
             return self.run_shutdown(session, Some(error)).await;
@@ -235,20 +262,16 @@ impl App {
 
                 return AppRunOutcome {
                     last_phase: self.phase,
+                    exit_code: self.get_exit_code(Some(&error)),
                     error: Some(error),
-                    exit_code: self.exit_code.unwrap_or(1),
                 };
             }
         };
 
-        if error.is_some() && self.exit_code.is_none() {
-            self.handle_exit_code(Some(1));
-        }
-
         AppRunOutcome {
             last_phase,
+            exit_code: self.get_exit_code(error.as_ref()),
             error,
-            exit_code: self.exit_code.unwrap_or(0),
         }
     }
 
@@ -256,7 +279,17 @@ impl App {
         if let Some(code) = code {
             trace!(code, "Setting exit code");
 
-            self.exit_code = Some(code);
+            self.exit_code.set(code);
         }
+    }
+
+    fn get_exit_code<E>(&self, error: Option<E>) -> u8 {
+        let mut exit_code = self.exit_code.get();
+
+        if error.is_some() && exit_code.is_none_or(|code| code == 0) {
+            exit_code = Some(1);
+        }
+
+        exit_code.unwrap_or_default()
     }
 }
