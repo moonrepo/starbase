@@ -2975,7 +2975,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.14.2"
+version = "0.14.3"
 dependencies = [
  "binstall-tar",
  "bzip2",
