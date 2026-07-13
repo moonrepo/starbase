@@ -165,6 +165,39 @@ macro_rules! generate_tests {
         }
 
         #[test]
+        fn file_with_star_prefix_thats_removed_when_unpacked() {
+            let sandbox = create_sandbox("archives");
+
+            // Pack
+            let input = sandbox.path();
+            let archive = sandbox.path().join($filename);
+
+            let mut archiver = Archiver::new(input, &archive);
+            archiver.add_source_file("file.txt", None);
+            archiver.set_prefix("tool-v1.2.3");
+            archiver.pack($packer).unwrap();
+
+            assert!(archive.exists());
+            assert_ne!(archive.metadata().unwrap().len(), 0);
+
+            // Unpack, stripping the wrapper folder without knowing its name
+            let output = sandbox.path().join("out");
+
+            let mut archiver = Archiver::new(&output, &archive);
+            archiver.set_prefix("*");
+            archiver.unpack($unpacker).unwrap();
+
+            assert!(output.exists());
+            assert!(output.join("file.txt").exists());
+
+            // Compare
+            assert!(file_contents_match(
+                &input.join("file.txt"),
+                &output.join("file.txt")
+            ));
+        }
+
+        #[test]
         fn nested_file_and_preserves_path() {
             let sandbox = create_sandbox("archives");
 
@@ -400,6 +433,44 @@ macro_rules! generate_tests {
 
             let mut archiver = Archiver::new(&output, &archive);
             archiver.set_prefix("some/prefix");
+            archiver.unpack($unpacker).unwrap();
+
+            assert!(output.exists());
+            assert!(output.join("folder/nested.txt").exists());
+            assert!(output.join("folder/nested/other.txt").exists());
+
+            // Compare
+            assert!(file_contents_match(
+                &input.join("folder/nested.txt"),
+                &output.join("folder/nested.txt")
+            ));
+            assert!(file_contents_match(
+                &input.join("folder/nested/other.txt"),
+                &output.join("folder/nested/other.txt")
+            ));
+        }
+
+        #[test]
+        fn dir_with_star_prefix_thats_removed_when_unpacked() {
+            let sandbox = create_sandbox("archives");
+
+            // Pack
+            let input = sandbox.path();
+            let archive = sandbox.path().join($filename);
+
+            let mut archiver = Archiver::new(input, &archive);
+            archiver.add_source_file("folder", None);
+            archiver.set_prefix("some/prefix");
+            archiver.pack($packer).unwrap();
+
+            assert!(archive.exists());
+            assert_ne!(archive.metadata().unwrap().len(), 0);
+
+            // Unpack, stripping the wrapper folders without knowing their names
+            let output = sandbox.path().join("out");
+
+            let mut archiver = Archiver::new(&output, &archive);
+            archiver.set_prefix("*/*");
             archiver.unpack($unpacker).unwrap();
 
             assert!(output.exists());

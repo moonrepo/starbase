@@ -1,6 +1,7 @@
 use crate::archive_error::ArchiveError;
 use starbase_utils::fs;
 use std::env;
+use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -327,4 +328,31 @@ fn copy_symlink(source_path: &Path, target_path: &Path) -> Result<(), fs::FsErro
     }
 
     Ok(())
+}
+
+/// Strip the prefix from a path, supporting wildcards in the prefix.
+/// A `*` component in the prefix matches any single component in the
+/// path. The wildcard must be the entire component, so partial
+/// patterns like `name-*` are compared literally.
+pub fn strip_path_prefix<'a>(path: &'a Path, prefix: &str) -> Option<&'a Path> {
+    if !prefix.contains('*') {
+        return path.strip_prefix(prefix).ok();
+    }
+
+    let mut p1 = path.components();
+    let mut p2 = Path::new(prefix).components();
+    let star = OsStr::new("*");
+
+    loop {
+        // Exhaust the prefix before pulling from the path, otherwise the
+        // first component of the remainder would be consumed and lost.
+        let Some(expected) = p2.next() else {
+            return Some(p1.as_path());
+        };
+
+        match p1.next() {
+            Some(part) if part == expected || expected.as_os_str() == star => (),
+            _ => return None,
+        }
+    }
 }
