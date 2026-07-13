@@ -320,10 +320,67 @@ mod strip_path_prefix_tests {
     }
 
     #[test]
-    fn star_must_be_a_whole_component() {
-        // Partial patterns are compared literally, not expanded
+    fn partial_star_matches_within_component() {
         assert_eq!(
             strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "tool-*"),
+            Some(Path::new("file.txt"))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/bin/tool"), "*-v1.2.3"),
+            Some(Path::new("bin/tool"))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "tool-*.3"),
+            Some(Path::new("file.txt"))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("some/tool-v1.2.3/bin"), "some/tool-*"),
+            Some(Path::new("bin"))
+        );
+    }
+
+    #[test]
+    fn partial_star_matches_zero_characters() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-/file.txt"), "tool-*"),
+            Some(Path::new("file.txt"))
+        );
+    }
+
+    #[test]
+    fn multiple_partial_stars_match_in_order() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3-x64/file.txt"), "tool-*.*-x64"),
+            Some(Path::new("file.txt"))
+        );
+    }
+
+    #[test]
+    fn returns_none_when_partial_star_doesnt_match() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "node-*"),
+            None
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "*-x64"),
+            None
+        );
+        // Partial patterns anchor to the start of the component
+        assert_eq!(
+            strip_path_prefix(Path::new("mytool-v1.2.3/file.txt"), "tool-*"),
+            None
+        );
+        // And to the end
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3-x64/file.txt"), "*-v1.2.3"),
+            None
+        );
+    }
+
+    #[test]
+    fn partial_star_never_matches_across_separators() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-abc/v1.2.3/file.txt"), "tool-*3"),
             None
         );
     }

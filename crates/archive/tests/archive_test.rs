@@ -25,6 +25,18 @@ fn errors_no_ext() {
 }
 
 #[test]
+#[should_panic(expected = "PackWithWildcardPrefix")]
+fn errors_packing_with_wildcard_prefix() {
+    let sandbox = create_sandbox("archives");
+    let tarball = sandbox.path().join("out.tar");
+
+    let mut archiver = Archiver::new(sandbox.path(), &tarball);
+    archiver.set_prefix("tool-*");
+    archiver.add_source_file("file.txt", None);
+    archiver.pack_from_ext().unwrap();
+}
+
+#[test]
 fn can_add_files() {
     let sandbox = create_sandbox("archives");
     let tarball = sandbox.path().join("out.zip");

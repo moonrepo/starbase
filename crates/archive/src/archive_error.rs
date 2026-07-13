@@ -69,6 +69,14 @@ pub enum ArchiveError {
         path: PathBuf,
         prefix: String,
     },
+
+    #[cfg_attr(feature = "miette", diagnostic(code(archive::wildcard_prefix)))]
+    #[error(
+        "Unable to pack archive {}, as the prefix {} contains a `*` wildcard, which is only supported when unpacking.",
+        .path.style(Style::Path),
+        .prefix.style(Style::Label)
+    )]
+    PackWithWildcardPrefix { prefix: String, path: PathBuf },
 }
 
 impl From<FsError> for ArchiveError {

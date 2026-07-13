@@ -198,6 +198,39 @@ macro_rules! generate_tests {
         }
 
         #[test]
+        fn file_with_partial_star_prefix_thats_removed_when_unpacked() {
+            let sandbox = create_sandbox("archives");
+
+            // Pack
+            let input = sandbox.path();
+            let archive = sandbox.path().join($filename);
+
+            let mut archiver = Archiver::new(input, &archive);
+            archiver.add_source_file("file.txt", None);
+            archiver.set_prefix("tool-v1.2.3");
+            archiver.pack($packer).unwrap();
+
+            assert!(archive.exists());
+            assert_ne!(archive.metadata().unwrap().len(), 0);
+
+            // Unpack, stripping the wrapper folder knowing only its shape
+            let output = sandbox.path().join("out");
+
+            let mut archiver = Archiver::new(&output, &archive);
+            archiver.set_prefix("tool-*");
+            archiver.unpack($unpacker).unwrap();
+
+            assert!(output.exists());
+            assert!(output.join("file.txt").exists());
+
+            // Compare
+            assert!(file_contents_match(
+                &input.join("file.txt"),
+                &output.join("file.txt")
+            ));
+        }
+
+        #[test]
         fn nested_file_and_preserves_path() {
             let sandbox = create_sandbox("archives");
 

@@ -330,10 +330,11 @@ fn copy_symlink(source_path: &Path, target_path: &Path) -> Result<(), fs::FsErro
     Ok(())
 }
 
-/// Strip the prefix from a path, supporting wildcards in the prefix.
-/// A `*` component in the prefix matches any single component in the
-/// path. The wildcard must be the entire component, so partial
-/// patterns like `name-*` are compared literally.
+/// Strip the prefix from a path, supporting `*` wildcards in the prefix.
+/// A `*` matches any number of characters within a single component, so
+/// `*` matches a whole component, while partial patterns like `name-*`
+/// match components starting with `name-`. Wildcards never match across
+/// component separators.
 pub fn strip_path_prefix<'a>(path: &'a Path, prefix: &str) -> Option<&'a Path> {
     if !prefix.contains('*') {
         return path.strip_prefix(prefix).ok();
@@ -341,7 +342,6 @@ pub fn strip_path_prefix<'a>(path: &'a Path, prefix: &str) -> Option<&'a Path> {
 
     let mut p1 = path.components();
     let mut p2 = Path::new(prefix).components();
-    let star = OsStr::new("*");
 
     loop {
         // Exhaust the prefix before pulling from the path, otherwise the
@@ -351,8 +351,48 @@ pub fn strip_path_prefix<'a>(path: &'a Path, prefix: &str) -> Option<&'a Path> {
         };
 
         match p1.next() {
-            Some(part) if part == expected || expected.as_os_str() == star => (),
+            Some(part) if matches_component(part.as_os_str(), expected.as_os_str()) => (),
             _ => return None,
         }
     }
+}
+
+// Return true if a single path component matches a single prefix
+// component, where `*` matches any number of characters.
+fn matches_component(part: &OsStr, pattern: &OsStr) -> bool {
+    if pattern == "*" {
+        return true;
+    }
+
+    // Prefixes are `&str`, so the pattern is always valid UTF-8
+    let Some(pattern) = pattern.to_str() else {
+        return false;
+    };
+
+    if !pattern.contains('*') {
+        return part == pattern;
+    }
+
+    // Wildcards only match within valid UTF-8 components
+    let Some(part) = part.to_str() else {
+        return false;
+    };
+
+    // The first segment anchors to the start and the last segment to
+    // the end, while middle segments match anywhere in order.
+    let segments = pattern.split('*').collect::<Vec<_>>();
+    let last_index = segments.len() - 1;
+
+    let Some(mut rest) = part.strip_prefix(segments[0]) else {
+        return false;
+    };
+
+    for segment in &segments[1..last_index] {
+        match rest.find(segment) {
+            Some(index) => rest = &rest[index + segment.len()..],
+            None => return false,
+        }
+    }
+
+    segments[last_index].is_empty() || rest.ends_with(segments[last_index])
 }
