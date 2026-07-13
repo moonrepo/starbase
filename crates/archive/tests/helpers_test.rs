@@ -1,6 +1,6 @@
 use starbase_archive::{
     escapes_via_symlink, get_full_file_extension, get_supported_archive_extensions,
-    is_supported_archive_extension, join_file_name, strip_compression_suffix,
+    is_supported_archive_extension, join_file_name, strip_compression_suffix, strip_path_prefix,
 };
 use std::fs;
 use std::path::Path;
@@ -233,5 +233,163 @@ mod strip_compression_suffix_tests {
     #[test]
     fn strips_only_a_single_suffix() {
         assert_eq!(strip_compression_suffix("data.gz.zst".into()), "data.gz");
+    }
+}
+
+mod strip_path_prefix_tests {
+    use super::*;
+
+    #[test]
+    fn strips_literal_prefix() {
+        assert_eq!(
+            strip_path_prefix(Path::new("some/prefix/file.txt"), "some/prefix"),
+            Some(Path::new("file.txt"))
+        );
+    }
+
+    #[test]
+    fn returns_none_when_literal_prefix_doesnt_match() {
+        assert_eq!(strip_path_prefix(Path::new("other/file.txt"), "some"), None);
+    }
+
+    #[test]
+    fn returns_empty_path_when_path_equals_prefix() {
+        assert_eq!(
+            strip_path_prefix(Path::new("some/prefix"), "some/prefix"),
+            Some(Path::new(""))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3"), "*"),
+            Some(Path::new(""))
+        );
+    }
+
+    #[test]
+    fn star_matches_any_single_component() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "*"),
+            Some(Path::new("file.txt"))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/bin/tool"), "*"),
+            Some(Path::new("bin/tool"))
+        );
+    }
+
+    #[test]
+    fn star_strips_only_one_component() {
+        assert_eq!(
+            strip_path_prefix(Path::new("a/b/c/d"), "*"),
+            Some(Path::new("b/c/d"))
+        );
+    }
+
+    #[test]
+    fn star_mixes_with_literal_components() {
+        assert_eq!(
+            strip_path_prefix(Path::new("some/tool-v1.2.3/bin/tool"), "some/*/bin"),
+            Some(Path::new("tool"))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/lib/file.js"), "*/lib"),
+            Some(Path::new("file.js"))
+        );
+    }
+
+    #[test]
+    fn multiple_stars_strip_multiple_components() {
+        assert_eq!(
+            strip_path_prefix(Path::new("a/b/c/d"), "*/*"),
+            Some(Path::new("c/d"))
+        );
+    }
+
+    #[test]
+    fn returns_none_when_literal_component_around_star_doesnt_match() {
+        assert_eq!(
+            strip_path_prefix(Path::new("foo/x/baz/y"), "foo/*/bar"),
+            None
+        );
+        assert_eq!(strip_path_prefix(Path::new("other/x/y"), "some/*"), None);
+    }
+
+    #[test]
+    fn returns_none_when_prefix_is_longer_than_path() {
+        assert_eq!(strip_path_prefix(Path::new("only"), "*/*"), None);
+        assert_eq!(strip_path_prefix(Path::new("a/b"), "a/b/*"), None);
+    }
+
+    #[test]
+    fn partial_star_matches_within_component() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "tool-*"),
+            Some(Path::new("file.txt"))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/bin/tool"), "*-v1.2.3"),
+            Some(Path::new("bin/tool"))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "tool-*.3"),
+            Some(Path::new("file.txt"))
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("some/tool-v1.2.3/bin"), "some/tool-*"),
+            Some(Path::new("bin"))
+        );
+    }
+
+    #[test]
+    fn partial_star_matches_zero_characters() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-/file.txt"), "tool-*"),
+            Some(Path::new("file.txt"))
+        );
+    }
+
+    #[test]
+    fn multiple_partial_stars_match_in_order() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3-x64/file.txt"), "tool-*.*-x64"),
+            Some(Path::new("file.txt"))
+        );
+    }
+
+    #[test]
+    fn returns_none_when_partial_star_doesnt_match() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "node-*"),
+            None
+        );
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3/file.txt"), "*-x64"),
+            None
+        );
+        // Partial patterns anchor to the start of the component
+        assert_eq!(
+            strip_path_prefix(Path::new("mytool-v1.2.3/file.txt"), "tool-*"),
+            None
+        );
+        // And to the end
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-v1.2.3-x64/file.txt"), "*-v1.2.3"),
+            None
+        );
+    }
+
+    #[test]
+    fn partial_star_never_matches_across_separators() {
+        assert_eq!(
+            strip_path_prefix(Path::new("tool-abc/v1.2.3/file.txt"), "tool-*3"),
+            None
+        );
+    }
+
+    #[test]
+    fn handles_trailing_separator_in_prefix() {
+        assert_eq!(
+            strip_path_prefix(Path::new("some/file.txt"), "some/"),
+            Some(Path::new("file.txt"))
+        );
     }
 }

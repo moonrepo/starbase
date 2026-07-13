@@ -111,7 +111,9 @@ impl<'owner> Archiver<'owner> {
     }
 
     /// Set the prefix to prepend to files with when packing,
-    /// and to remove when unpacking.
+    /// and to remove when unpacking. When unpacking, the prefix
+    /// supports `*` wildcards, which match any number of characters
+    /// within a single path component.
     pub fn set_prefix(&mut self, prefix: &'owner str) -> &mut Self {
         self.prefix = Cow::Borrowed(prefix);
         self
@@ -127,6 +129,15 @@ impl<'owner> Archiver<'owner> {
         F: FnOnce(&Path) -> Result<P, ArchiveError>,
         P: ArchivePacker,
     {
+        // A prefix is prepended verbatim when packing, so a wildcard
+        // would write literal `*` components into entry names.
+        if self.prefix.contains('*') {
+            return Err(ArchiveError::PackWithWildcardPrefix {
+                prefix: self.prefix.to_string(),
+                path: self.archive_file.to_path_buf(),
+            });
+        }
+
         trace!(
             input_dir = ?self.source_root,
             output_file = ?self.archive_file,

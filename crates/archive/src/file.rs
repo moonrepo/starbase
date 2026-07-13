@@ -1,11 +1,12 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
 use crate::codecs::Finish;
-pub use crate::file_error::FileError;
 use starbase_utils::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{instrument, trace};
+
+pub use crate::file_error::FileError;
 
 /// Packs a single file, verbatim, into the provided stream. Compose the
 /// stream with a codec to create compressed single-file archives, since

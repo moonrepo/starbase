@@ -1,6 +1,6 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
-use crate::helpers::{escapes_via_symlink, join_file_name};
+use crate::helpers::{escapes_via_symlink, join_file_name, strip_path_prefix};
 use starbase_utils::fs::{self, FsError};
 use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
@@ -168,7 +168,7 @@ impl<R: Read + Seek> ArchiveUnpacker for ZipUnpacker<R> {
 
             // Remove the prefix
             if !prefix.is_empty()
-                && let Ok(suffix) = path.strip_prefix(prefix)
+                && let Some(suffix) = strip_path_prefix(&path, prefix)
             {
                 path = suffix.to_owned();
             }

@@ -1,6 +1,7 @@
 use crate::archive_error::ArchiveError;
 use starbase_utils::fs;
 use std::env;
+use std::ffi::OsStr;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process;
@@ -327,4 +328,71 @@ fn copy_symlink(source_path: &Path, target_path: &Path) -> Result<(), fs::FsErro
     }
 
     Ok(())
+}
+
+/// Strip the prefix from a path, supporting `*` wildcards in the prefix.
+/// A `*` matches any number of characters within a single component, so
+/// `*` matches a whole component, while partial patterns like `name-*`
+/// match components starting with `name-`. Wildcards never match across
+/// component separators.
+pub fn strip_path_prefix<'a>(path: &'a Path, prefix: &str) -> Option<&'a Path> {
+    if !prefix.contains('*') {
+        return path.strip_prefix(prefix).ok();
+    }
+
+    let mut p1 = path.components();
+    let mut p2 = Path::new(prefix).components();
+
+    loop {
+        // Exhaust the prefix before pulling from the path, otherwise the
+        // first component of the remainder would be consumed and lost.
+        let Some(expected) = p2.next() else {
+            return Some(p1.as_path());
+        };
+
+        match p1.next() {
+            Some(part) if matches_component(part.as_os_str(), expected.as_os_str()) => (),
+            _ => return None,
+        }
+    }
+}
+
+// Return true if a single path component matches a single prefix
+// component, where `*` matches any number of characters.
+fn matches_component(part: &OsStr, pattern: &OsStr) -> bool {
+    if pattern == "*" {
+        return true;
+    }
+
+    // Prefixes are `&str`, so the pattern is always valid UTF-8
+    let Some(pattern) = pattern.to_str() else {
+        return false;
+    };
+
+    if !pattern.contains('*') {
+        return part == pattern;
+    }
+
+    // Wildcards only match within valid UTF-8 components
+    let Some(part) = part.to_str() else {
+        return false;
+    };
+
+    // The first segment anchors to the start and the last segment to
+    // the end, while middle segments match anywhere in order.
+    let segments = pattern.split('*').collect::<Vec<_>>();
+    let last_index = segments.len() - 1;
+
+    let Some(mut rest) = part.strip_prefix(segments[0]) else {
+        return false;
+    };
+
+    for segment in &segments[1..last_index] {
+        match rest.find(segment) {
+            Some(index) => rest = &rest[index + segment.len()..],
+            None => return false,
+        }
+    }
+
+    segments[last_index].is_empty() || rest.ends_with(segments[last_index])
 }

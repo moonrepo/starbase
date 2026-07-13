@@ -1,7 +1,7 @@
 use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
 use crate::codecs::Finish;
-use crate::helpers::escapes_via_symlink;
+use crate::helpers::{escapes_via_symlink, strip_path_prefix};
 use binstall_tar::{Archive as TarArchive, Builder as TarBuilder, Entry as TarEntry};
 use starbase_utils::fs;
 use std::io::{Read, Write};
@@ -173,7 +173,7 @@ impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
 
             // Remove the prefix
             if !prefix.is_empty()
-                && let Ok(suffix) = path.strip_prefix(prefix)
+                && let Some(suffix) = strip_path_prefix(&path, prefix)
             {
                 path = suffix.to_owned();
             }
