@@ -1,0 +1,3 @@
+# Reference archives must reach the tests byte-for-byte, so never
+# apply line-ending conversion to them
+*.Z binary

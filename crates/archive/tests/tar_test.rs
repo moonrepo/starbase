@@ -170,9 +170,12 @@ mod tar_z {
         assert!(output.join("folder/nested.txt").exists());
         assert!(output.join("folder/nested/other.txt").exists());
 
+        // Compare against a literal: the fixture tarball holds the
+        // original LF content, while git checks `file.txt` out with
+        // CRLF line endings on Windows
         assert_eq!(
             std::fs::read(output.join("file.txt")).unwrap(),
-            include_bytes!("__fixtures__/archives/file.txt"),
+            b"file\n"
         );
     }
 

@@ -212,7 +212,10 @@ mod z_reference {
 
     #[test]
     fn matches_system_compress_output() {
-        let data = include_bytes!("__fixtures__/archives/file.txt");
+        // The content of `__fixtures__/archives/file.txt`, from which
+        // the fixture was generated. A literal, since git checks the
+        // text file out with CRLF line endings on Windows
+        let data = b"file\n";
         let expected = include_bytes!("__fixtures__/compress/file.txt.Z");
 
         let mut encoder = Z::new(Vec::new());
