@@ -4,13 +4,14 @@
 ![Crates.io](https://img.shields.io/crates/d/starbase_archive)
 
 Abstractions and utilities for working with multiple archive formats. Currently supports `.tar`
-(with gz, bz2, xz, zstd), `.zip`, `.dmg`/`.pkg` (macOS, unpack only), and single-file codecs
-(`.bz2`, `.gz`, `.xz`, `.zst`).
+(with gz, bz2, xz, zstd, Z), `.zip`, `.dmg`/`.pkg` (macOS, unpack only), and single-file codecs
+(`.bz2`, `.gz`, `.xz`, `.zst`, `.Z`).
 
 Formats and compression codecs are separate layers that compose over read/write streams:
 
-- A **codec** (`Gz`, `Bz2`, `Xz`, `Zstd`) transforms bytes and wraps any `Read` or `Write` stream.
-  The first read commits it to decompressing, the first write to compressing.
+- A **codec** (`Gz`, `Bz2`, `Xz`, `Zstd`, `Z`) transforms bytes and wraps any `Read` or `Write`
+  stream. The first read commits it to decompressing, the first write to compressing. The `Z`
+  codec (Unix `compress` LZW) is implemented natively and needs no external dependency.
 - A **format** (`Tar`, `Zip`, `Dmg`, `Pkg`) structures files and consumes or produces a stream.
 
 ```rust

@@ -1,4 +1,4 @@
-/// Compression codecs (`gz`, `bz2`, `xz`, `zstd`) that wrap read/write streams.
+/// Compression codecs (`gz`, `bz2`, `xz`, `zstd`, `Z`) that wrap read/write streams.
 pub mod codecs;
 
 /// Handles single files passed through a codec, like `.gz` or `.zst`.

@@ -20,6 +20,8 @@ mod gz;
 mod state;
 #[cfg(feature = "xz")]
 mod xz;
+#[cfg(feature = "z")]
+mod z;
 #[cfg(feature = "zstd")]
 mod zstd;
 
@@ -30,6 +32,8 @@ pub use gz::Gz;
 pub use state::*;
 #[cfg(feature = "xz")]
 pub use xz::Xz;
+#[cfg(feature = "z")]
+pub use z::Z;
 #[cfg(feature = "zstd")]
 pub use zstd::Zstd;
 

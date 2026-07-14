@@ -121,6 +121,9 @@ pub fn get_compression_extensions() -> Vec<String> {
         // zstd
         "zstd".into(),
         "zst".into(),
+        // compress (LZW)
+        "Z".into(),
+        "z".into(),
     ]
 }
 
@@ -150,6 +153,12 @@ pub fn get_supported_archive_extensions() -> Vec<String> {
         "tar.zst".into(),
         "tzst".into(),
         "tzs".into(),
+        // tar + compress (must precede `Z`/`z`)
+        // `taz` is intentionally absent, since GNU tar maps it to gzip instead
+        "tar.Z".into(),
+        "tar.z".into(),
+        "taZ".into(),
+        "tZ".into(),
         // tar
         "tar".into(),
         // dmg
