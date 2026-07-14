@@ -136,3 +136,66 @@ mod tar_bz2 {
 
     generate_relative_path_traversal_tests!("malicious.tar.bz2", create_malicious_tar_bz2);
 }
+
+mod tar_z {
+    use super::*;
+
+    generate_tests!(
+        "out.tar.Z",
+        |file| Ok(TarPacker::new(Z::new(fs::create_file(file)?))),
+        |dir, file| Ok(TarUnpacker::new(dir, Z::new(fs::open_file(file)?)))
+    );
+
+    fn create_malicious_tar_z(archive_path: &Path, entry_path: &Path, entry_content: &[u8]) {
+        let file = File::create(archive_path).unwrap();
+
+        // The encoder writes the final code and buffered bytes on drop
+        create_malicious_tar_common(Z::new(file), entry_path, entry_content);
+    }
+
+    generate_relative_path_traversal_tests!("malicious.tar.Z", create_malicious_tar_z);
+
+    #[test]
+    fn unpacks_archive_created_by_system_compress() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/__fixtures__/compress/contents.tar.Z");
+        let sandbox = create_empty_sandbox();
+        let output = sandbox.path().join("out");
+
+        let archiver = Archiver::new(&output, &fixture);
+        let (ext, _) = archiver.unpack_from_ext().unwrap();
+
+        assert_eq!(ext, "tar.Z");
+        assert!(output.join("file.txt").exists());
+        assert!(output.join("folder/nested.txt").exists());
+        assert!(output.join("folder/nested/other.txt").exists());
+
+        assert_eq!(
+            std::fs::read(output.join("file.txt")).unwrap(),
+            include_bytes!("__fixtures__/archives/file.txt"),
+        );
+    }
+
+    #[test]
+    fn unpacks_via_aliased_extensions() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/__fixtures__/compress/contents.tar.Z");
+
+        for alias in ["tar.z", "taZ", "tZ"] {
+            let sandbox = create_empty_sandbox();
+            let archive = sandbox.path().join(format!("bundle.{alias}"));
+            let output = sandbox.path().join("out");
+
+            std::fs::copy(&fixture, &archive).unwrap();
+
+            let archiver = Archiver::new(&output, &archive);
+            let (ext, _) = archiver.unpack_from_ext().unwrap();
+
+            assert_eq!(ext, alias);
+            assert!(
+                output.join("file.txt").exists(),
+                "expected file.txt when unpacking .{alias}"
+            );
+        }
+    }
+}

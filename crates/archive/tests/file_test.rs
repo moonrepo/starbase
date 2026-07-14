@@ -142,4 +142,5 @@ macro_rules! generate_file_tests {
 generate_file_tests!(bz2, Bz2, ["bz2", "bzip2"]);
 generate_file_tests!(gz, Gz, ["gz", "gzip"]);
 generate_file_tests!(xz, Xz, ["xz"]);
+generate_file_tests!(z, Z, ["Z", "z"]);
 generate_file_tests!(zstd, Zstd, ["zst", "zstd"]);

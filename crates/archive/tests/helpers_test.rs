@@ -99,6 +99,10 @@ mod get_full_file_extension_tests {
             get_full_file_extension(Path::new("bundle.tar.zst")),
             Some("tar.zst".to_owned())
         );
+        assert_eq!(
+            get_full_file_extension(Path::new("bundle.tar.Z")),
+            Some("tar.Z".to_owned())
+        );
     }
 
     #[test]
@@ -140,7 +144,8 @@ mod get_supported_archive_extensions_tests {
         let exts = get_supported_archive_extensions();
 
         for ext in [
-            "tar", "zip", "tar.bz2", "tar.gz", "tgz", "tar.xz", "tar.zst", "bz2", "gz", "xz", "zst",
+            "tar", "zip", "tar.bz2", "tar.gz", "tgz", "tar.xz", "tar.zst", "tar.Z", "taZ", "bz2",
+            "gz", "xz", "zst", "Z", "z",
         ] {
             assert!(exts.contains(&ext.to_owned()), "missing {ext}");
         }
@@ -166,6 +171,8 @@ mod get_supported_archive_extensions_tests {
         assert!(index_of("tar.xz") < index_of("xz"));
         assert!(index_of("tar.zst") < index_of("zst"));
         assert!(index_of("tar.zstd") < index_of("zstd"));
+        assert!(index_of("tar.Z") < index_of("Z"));
+        assert!(index_of("tar.z") < index_of("z"));
     }
 }
 
@@ -219,6 +226,8 @@ mod strip_compression_suffix_tests {
             strip_compression_suffix("data.json.zstd".into()),
             "data.json"
         );
+        assert_eq!(strip_compression_suffix("data.json.Z".into()), "data.json");
+        assert_eq!(strip_compression_suffix("data.json.z".into()), "data.json");
     }
 
     #[test]
