@@ -173,10 +173,7 @@ mod tar_z {
         // Compare against a literal: the fixture tarball holds the
         // original LF content, while git checks `file.txt` out with
         // CRLF line endings on Windows
-        assert_eq!(
-            std::fs::read(output.join("file.txt")).unwrap(),
-            b"file\n"
-        );
+        assert_eq!(std::fs::read(output.join("file.txt")).unwrap(), b"file\n");
     }
 
     #[test]
