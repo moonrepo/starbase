@@ -75,7 +75,7 @@ opentelemetry-proto = "0.32.0"
 prost = "0.14.4"
 serial_test = { workspace = true }
 tokio = { workspace = true, features = ["net", "rt-multi-thread", "time"] }
-tokio-stream = { version = "0.1.18", features = ["net"] }
+tokio-stream = { version = "0.1.19", features = ["net"] }
 tonic = "0.14.6"
 
 [features]

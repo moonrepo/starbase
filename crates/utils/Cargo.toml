@@ -40,11 +40,11 @@ hex = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
 # json
-json-strip-comments = { version = "3.1.1", optional = true }
+json-strip-comments = { version = "3.1.2", optional = true }
 serde_json = { workspace = true, optional = true }
 
 # toml
-toml = { version = "1.1.2", optional = true }
+toml = { version = "1.1.4", optional = true }
 
 # yaml
 serde_norway = { workspace = true, optional = true }
@@ -70,7 +70,7 @@ toml = ["dep:toml", "dep:serde"]
 yaml = ["dep:serde", "dep:serde_norway"]
 
 [dev-dependencies]
-criterion2 = { version = "3.0.3", default-features = false }
+criterion2 = { version = "3.0.4", default-features = false }
 reqwest = { workspace = true, features = ["rustls"] }
 starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [
