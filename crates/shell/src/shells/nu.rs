@@ -133,7 +133,7 @@ impl Shell for Nu {
 export def {function} [] {{
     let data = {command} | from json
 
-    $data | get -i env | items {{ |k, v|
+    $data | get --optional env | items {{ |k, v|
         if $v == null {{
             if $k in $env {{
                 hide-env $k
@@ -143,8 +143,8 @@ export def {function} [] {{
         }}
     }}
 
-    let path_list = $data | get -i paths | default []
-    let path_string = $data | get -i path | default ''
+    let path_list = $data | get --optional paths | default []
+    let path_string = $data | get --optional path | default ''
 
     if ($path_list | is-not-empty) {{
         $env.{path_key} = $path_list
@@ -159,7 +159,7 @@ export-env {{
     $env.__ORIG_PATH = $env.{path_key}
 
     $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
-        let list = ($config | get -i hooks.env_change.PWD) | default []
+        let list = ($config | get --optional hooks.env_change.PWD) | default []
 
         $list | append {{ |before, after|
             {function}
