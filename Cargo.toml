@@ -15,6 +15,7 @@ dirs = "6.0.0"
 hex = "0.4.3"
 iocraft = "0.8.4"
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
+libc = "0.2.189"
 miette = "7.6.0"
 regex = { version = "1.13.1", default-features = false }
 relative-path = "2.0.1"
@@ -35,3 +36,4 @@ tokio = { version = "1.53.1", default-features = false, features = [
     "sync",
 ] }
 tracing = { version = "0.1.44" }
+windows-sys = { version = "0.61.2", default-features = false }
