@@ -22,5 +22,7 @@ A starbase is built with the following modules:
   [`starbase_styles`](https://crates.io/crates/starbase_styles).
 - **Operations drive** - Shell detection and profile management with
   [`starbase_shell`](https://crates.io/crates/starbase_shell).
+- **Thruster control** - Bounded child process execution with
+  [`starbase_process`](https://crates.io/crates/starbase_process).
 - **Cargo hold** - Archive packing and unpacking with
   [`starbase_archive`](https://crates.io/crates/starbase_archive).

@@ -1,0 +1,22 @@
+[package]
+name = "starbase_process"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Utilities for executing and managing child processes."
+repository = "https://github.com/moonrepo/starbase"
+rust-version = "1.89.0"
+
+[dependencies]
+thiserror = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+	"Win32_Foundation",
+	"Win32_Security",
+	"Win32_System_JobObjects",
+	"Win32_System_Threading",
+] }
