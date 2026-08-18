@@ -10,9 +10,30 @@ use tokio::sync::Mutex;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChildExit {
     Completed(ExitStatus),
+
+    /// Signalled with `SIGINT`
     Interrupted,
+
+    /// Signalled with `SIGKILL`
     Killed,
-    Terminated,
+
+    /// Signalled with anything else, carrying that signal. On Windows,
+    /// where there are no signals, this is the code of the [`SignalType`]
+    /// we asked for.
+    Terminated(i32),
+}
+
+impl ChildExit {
+    /// Return the signal that terminated the child, or `None` if it ran
+    /// to completion.
+    pub fn signal(&self) -> Option<i32> {
+        match self {
+            Self::Completed(_) => None,
+            Self::Interrupted => Some(SignalType::Interrupt.get_code()),
+            Self::Killed => Some(SignalType::Kill.get_code()),
+            Self::Terminated(signal) => Some(*signal),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -48,14 +69,28 @@ impl SharedChild {
         self.pid
     }
 
+    /// Take the child's stdin pipe, if it was piped and not already taken.
+    ///
+    /// Dropping the returned handle closes the pipe, which the child sees
+    /// as end of input. That is usually what you want once all input has
+    /// been written.
     pub async fn take_stdin(&self) -> Option<ChildStdin> {
         self.inner.lock().await.stdin.take()
     }
 
+    /// Take the child's stdout pipe, if it was piped and not already taken.
+    ///
+    /// Keep the returned handle alive for as long as the child may write.
+    /// Dropping it closes our end of the pipe, and the child is killed by
+    /// `SIGPIPE` on its next write, truncating its output partway through.
+    /// [`Self::wait_with_output`] returns empty bytes for a pipe taken here.
     pub async fn take_stdout(&self) -> Option<ChildStdout> {
         self.inner.lock().await.stdout.take()
     }
 
+    /// Take the child's stderr pipe, if it was piped and not already taken.
+    ///
+    /// The same `SIGPIPE` caveat as [`Self::take_stdout`] applies.
     pub async fn take_stderr(&self) -> Option<ChildStderr> {
         self.inner.lock().await.stderr.take()
     }
@@ -87,6 +122,12 @@ impl SharedChild {
         self.wait().await
     }
 
+    /// Wait for the child to exit, mapping a terminating signal onto the
+    /// matching [`ChildExit`] variant.
+    ///
+    /// This returns as soon as the child exits, and does not wait on any
+    /// process it may have spawned. Unlike [`Self::wait_with_output`], no
+    /// pipes are read, so a child writing to a full pipe will block forever.
     pub async fn wait(&self) -> io::Result<ChildExit> {
         let mut child = self.inner.lock().await;
         let status = child.wait().await?;
@@ -94,6 +135,18 @@ impl SharedChild {
         Ok(convert_exit_status(status, self.signal.get().copied()))
     }
 
+    /// Wait for the child to exit and drain its piped output.
+    ///
+    /// This returns once the pipes reach end of file, which is not always
+    /// when the child exits. Any process that inherited the pipes holds
+    /// them open, so a shell wrapper that backgrounds work keeps us here
+    /// until that work finishes, and its output is captured too. To bound
+    /// the wait, make the process being signalled the one holding the
+    /// pipes (`exec` in a shell wrapper), as signalling a shell does not
+    /// reach the processes it spawned.
+    ///
+    /// Pipes that were not requested, or that [`Self::take_stdout`] and
+    /// friends already took, come back as empty bytes.
     // This method re-implements the tokio `wait_with_output` method
     // but does not take ownership of self. This is required to be able
     // to call `kill`, otherwise the child does not exist.
@@ -139,7 +192,7 @@ fn convert_exit_status(status: ExitStatus, raw_signal: Option<SignalType>) -> Ch
             return match signal {
                 libc::SIGINT => ChildExit::Interrupted,
                 libc::SIGKILL => ChildExit::Killed,
-                _ => ChildExit::Terminated,
+                other => ChildExit::Terminated(other),
             };
         }
     }
@@ -151,7 +204,7 @@ fn convert_exit_status(status: ExitStatus, raw_signal: Option<SignalType>) -> Ch
         return match signal {
             SignalType::Interrupt => ChildExit::Interrupted,
             SignalType::Kill => ChildExit::Killed,
-            _ => ChildExit::Terminated,
+            other => ChildExit::Terminated(other.get_code()),
         };
     }
 

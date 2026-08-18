@@ -94,19 +94,20 @@ mod shared_child {
                 .kill_with_signal(SignalType::Terminate)
                 .await
                 .unwrap(),
-            ChildExit::Terminated
+            ChildExit::Terminated(15)
         );
     }
 
     #[tokio::test]
-    async fn quit_signal_reports_terminated() {
-        // Only interrupt and kill have dedicated variants
+    async fn quit_signal_carries_its_own_number() {
+        // Only interrupt and kill have dedicated variants, everything
+        // else carries the signal that actually landed
         assert_eq!(
             spawn_sleep()
                 .kill_with_signal(SignalType::Quit)
                 .await
                 .unwrap(),
-            ChildExit::Terminated
+            ChildExit::Terminated(3)
         );
     }
 
@@ -174,9 +175,11 @@ mod wait {
         for (signal, expected) in [
             ("INT", ChildExit::Interrupted),
             ("KILL", ChildExit::Killed),
-            ("TERM", ChildExit::Terminated),
-            // Anything that isn't an interrupt or kill is a termination
-            ("QUIT", ChildExit::Terminated),
+            ("TERM", ChildExit::Terminated(15)),
+            // Anything that isn't an interrupt or kill keeps its number
+            ("QUIT", ChildExit::Terminated(3)),
+            ("PIPE", ChildExit::Terminated(13)),
+            ("SEGV", ChildExit::Terminated(11)),
         ] {
             // The child signals itself, so no signal is recorded on the
             // shared child and the wait status is the only source
@@ -305,6 +308,19 @@ mod wait_with_output {
     }
 
     #[tokio::test]
+    async fn waits_for_the_pipes_to_close_not_the_child_to_exit() {
+        // The shell exits immediately, but its backgrounded descendant
+        // inherited the pipe, so we keep reading until that one is done.
+        // Capturing the late write is the point: bounding this wait with
+        // a timeout would silently truncate output instead
+        let child = spawn_printing("printf 'out'; { sleep 1; printf 'late'; } & exit 0");
+
+        let output = child.wait_with_output().await.unwrap();
+
+        assert_eq!(output.stdout.as_ref(), b"outlate");
+    }
+
+    #[tokio::test]
     async fn a_clone_can_be_killed_while_waiting() {
         // This is why the method borrows instead of taking ownership:
         // the signal is sent before the child lock is acquired, so a
@@ -341,14 +357,48 @@ mod wait_with_output {
 
         assert_eq!(
             child.kill_with_signal(SignalType::Terminate).await.unwrap(),
-            ChildExit::Terminated
+            ChildExit::Terminated(15)
         );
 
         let output = handle.await.unwrap().unwrap();
 
-        assert_eq!(output.exit, ChildExit::Terminated);
+        assert_eq!(output.exit, ChildExit::Terminated(15));
         assert_eq!(output.stdout.as_ref(), b"out");
 
         let _ = std::fs::remove_file(&marker);
+    }
+}
+
+mod child_exit {
+    use super::*;
+
+    #[test]
+    fn signal_returns_none_when_completed() {
+        use std::os::unix::process::ExitStatusExt;
+        use std::process::ExitStatus;
+
+        let exit = ChildExit::Completed(ExitStatus::from_raw(0));
+
+        assert_eq!(exit.signal(), None);
+    }
+
+    #[test]
+    fn signal_returns_the_matching_code() {
+        assert_eq!(
+            ChildExit::Interrupted.signal(),
+            Some(SignalType::Interrupt.get_code())
+        );
+        assert_eq!(
+            ChildExit::Killed.signal(),
+            Some(SignalType::Kill.get_code())
+        );
+    }
+
+    #[test]
+    fn signal_returns_the_carried_number_for_terminated() {
+        // Not just SignalType::Terminate's code, whatever actually landed
+        assert_eq!(ChildExit::Terminated(15).signal(), Some(15));
+        assert_eq!(ChildExit::Terminated(3).signal(), Some(3));
+        assert_eq!(ChildExit::Terminated(11).signal(), Some(11));
     }
 }

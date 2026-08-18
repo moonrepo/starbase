@@ -58,7 +58,7 @@ mod statuses {
         for exit in [
             ChildExit::Interrupted,
             ChildExit::Killed,
-            ChildExit::Terminated,
+            ChildExit::Terminated(15),
         ] {
             let output = create_output(exit);
 
@@ -99,7 +99,8 @@ mod errors {
         for (exit, label) in [
             (ChildExit::Interrupted, "interrupted"),
             (ChildExit::Killed, "killed"),
-            (ChildExit::Terminated, "terminated"),
+            (ChildExit::Terminated(15), "terminated by signal 15"),
+            (ChildExit::Terminated(3), "terminated by signal 3"),
         ] {
             let ProcessError::ExitNonZero { status, code, .. } =
                 create_output(exit).to_error("git", false)
@@ -174,7 +175,7 @@ mod errors {
     fn get_exit_code_returns_none_otherwise() {
         // Signals carry no code
         assert_eq!(
-            create_output(ChildExit::Terminated)
+            create_output(ChildExit::Terminated(15))
                 .to_error("git", false)
                 .get_exit_code(),
             None
@@ -216,7 +217,10 @@ mod info {
         for (exit, signal) in [
             (ChildExit::Interrupted, 2),
             (ChildExit::Killed, 9),
-            (ChildExit::Terminated, 15),
+            (ChildExit::Terminated(15), 15),
+            // Terminated carries whatever signal actually landed, so this
+            // must reflect it rather than a hardcoded SIGTERM
+            (ChildExit::Terminated(3), 3),
         ] {
             let info = create_output(exit).to_info();
 
@@ -257,7 +261,7 @@ mod info {
 
     #[test]
     fn round_trips_through_serde() {
-        let mut output = create_output(ChildExit::Terminated);
+        let mut output = create_output(ChildExit::Terminated(15));
         output.stdout = Bytes::from_static(b"out");
         output.stderr = Bytes::from_static(b"err");
 

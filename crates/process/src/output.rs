@@ -47,12 +47,10 @@ impl Output {
     pub fn to_info(&self) -> OutputInfo {
         OutputInfo {
             exit_code: self.code(),
-            signal: match self.exit {
-                ChildExit::Completed(_) => None,
-                ChildExit::Interrupted => Some(2),
-                ChildExit::Killed => Some(9),
-                ChildExit::Terminated => Some(15),
-            },
+            signal: self
+                .exit
+                .signal()
+                .and_then(|signal| u8::try_from(signal).ok()),
             stderr: if self.stderr.is_empty() {
                 None
             } else {
@@ -77,7 +75,7 @@ impl Output {
             },
             ChildExit::Interrupted => "interrupted".into(),
             ChildExit::Killed => "killed".into(),
-            ChildExit::Terminated => "terminated".into(),
+            ChildExit::Terminated(signal) => format!("terminated by signal {signal}"),
         };
 
         if !with_message {
