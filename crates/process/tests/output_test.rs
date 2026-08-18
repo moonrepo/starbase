@@ -1,0 +1,273 @@
+#[cfg(unix)]
+fn create_output(exit: starbase_process::ChildExit) -> starbase_process::Output {
+    use bytes::Bytes;
+
+    starbase_process::Output {
+        exit,
+        stdout: Bytes::new(),
+        stderr: Bytes::new(),
+    }
+}
+
+mod conversions {
+    use starbase_process::{output_to_string, output_to_trimmed_string};
+
+    #[test]
+    fn converts_bytes_to_string() {
+        assert_eq!(output_to_string(b"hello"), "hello");
+        assert_eq!(output_to_string(b""), "");
+    }
+
+    #[test]
+    fn preserves_output_around_invalid_utf8() {
+        assert_eq!(output_to_string(b"a\xffb"), "a\u{fffd}b");
+    }
+
+    #[test]
+    fn trims_whitespace() {
+        assert_eq!(output_to_trimmed_string(b"  hello\n"), "hello");
+    }
+}
+
+#[cfg(unix)]
+mod statuses {
+    use super::*;
+    use starbase_process::ChildExit;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
+    #[test]
+    fn completed_zero_is_success() {
+        let output = create_output(ChildExit::Completed(ExitStatus::from_raw(0)));
+
+        assert!(output.success());
+        assert_eq!(output.code(), Some(0));
+    }
+
+    #[test]
+    fn completed_nonzero_is_failure() {
+        // Wait statuses encode the exit code in the upper byte
+        let output = create_output(ChildExit::Completed(ExitStatus::from_raw(2 << 8)));
+
+        assert!(!output.success());
+        assert_eq!(output.code(), Some(2));
+    }
+
+    #[test]
+    fn signal_exits_are_failures_without_codes() {
+        for exit in [
+            ChildExit::Interrupted,
+            ChildExit::Killed,
+            ChildExit::Terminated(15),
+        ] {
+            let output = create_output(exit);
+
+            assert!(!output.success());
+            assert_eq!(output.code(), None);
+            assert_eq!(output.status(), None);
+        }
+    }
+}
+
+#[cfg(unix)]
+mod errors {
+    use super::*;
+    use bytes::Bytes;
+    use starbase_process::{ChildExit, ProcessError};
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
+    fn create_failed_output() -> starbase_process::Output {
+        create_output(ChildExit::Completed(ExitStatus::from_raw(1 << 8)))
+    }
+
+    #[test]
+    fn formats_exit_code_without_message() {
+        let ProcessError::ExitNonZero { bin, status, code } =
+            create_failed_output().to_error("git", false)
+        else {
+            panic!("expected ExitNonZero");
+        };
+
+        assert_eq!(bin, "git");
+        assert_eq!(status, "exit code 1");
+        assert_eq!(code, Some(1));
+    }
+
+    #[test]
+    fn formats_signal_statuses() {
+        for (exit, label) in [
+            (ChildExit::Interrupted, "interrupted"),
+            (ChildExit::Killed, "killed"),
+            (ChildExit::Terminated(15), "terminated by signal 15"),
+            (ChildExit::Terminated(3), "terminated by signal 3"),
+        ] {
+            let ProcessError::ExitNonZero { status, code, .. } =
+                create_output(exit).to_error("git", false)
+            else {
+                panic!("expected ExitNonZero");
+            };
+
+            assert_eq!(status, label);
+            // Signals have no exit code, so we can't propagate one
+            assert_eq!(code, None);
+        }
+    }
+
+    #[test]
+    fn prefers_stderr_for_message() {
+        let mut output = create_failed_output();
+        output.stdout = Bytes::from_static(b"from stdout");
+        output.stderr = Bytes::from_static(b"from stderr\n");
+
+        let ProcessError::ExitNonZeroWithOutput {
+            output: message, ..
+        } = output.to_error("git", true)
+        else {
+            panic!("expected ExitNonZeroWithOutput");
+        };
+
+        assert_eq!(message, "\n\nfrom stderr");
+    }
+
+    #[test]
+    fn falls_back_to_stdout_for_message() {
+        let mut output = create_failed_output();
+        output.stdout = Bytes::from_static(b"from stdout");
+
+        let ProcessError::ExitNonZeroWithOutput {
+            output: message, ..
+        } = output.to_error("git", true)
+        else {
+            panic!("expected ExitNonZeroWithOutput");
+        };
+
+        assert_eq!(message, "\n\nfrom stdout");
+    }
+
+    #[test]
+    fn empty_output_has_empty_message() {
+        let ProcessError::ExitNonZeroWithOutput {
+            output: message, ..
+        } = create_failed_output().to_error("git", true)
+        else {
+            panic!("expected ExitNonZeroWithOutput");
+        };
+
+        assert_eq!(message, "");
+    }
+
+    #[test]
+    fn get_exit_code_returns_code_for_exit_errors() {
+        assert_eq!(
+            create_failed_output()
+                .to_error("git", false)
+                .get_exit_code(),
+            Some(1)
+        );
+        assert_eq!(
+            create_failed_output().to_error("git", true).get_exit_code(),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn get_exit_code_returns_none_otherwise() {
+        // Signals carry no code
+        assert_eq!(
+            create_output(ChildExit::Terminated(15))
+                .to_error("git", false)
+                .get_exit_code(),
+            None
+        );
+
+        // Non-exit process errors have no code at all
+        let error = ProcessError::Capture {
+            bin: "git".into(),
+            error: Box::new(std::io::Error::other("boom")),
+        };
+
+        assert_eq!(error.get_exit_code(), None);
+    }
+}
+
+#[cfg(unix)]
+mod info {
+    use super::*;
+    use bytes::Bytes;
+    use starbase_process::{ChildExit, OutputInfo};
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
+    #[test]
+    fn captures_the_exit_code() {
+        let info = create_output(ChildExit::Completed(ExitStatus::from_raw(0))).to_info();
+
+        assert_eq!(info.exit_code, Some(0));
+        assert_eq!(info.signal, None);
+
+        let info = create_output(ChildExit::Completed(ExitStatus::from_raw(3 << 8))).to_info();
+
+        assert_eq!(info.exit_code, Some(3));
+        assert_eq!(info.signal, None);
+    }
+
+    #[test]
+    fn maps_signals_to_their_codes() {
+        for (exit, signal) in [
+            (ChildExit::Interrupted, 2),
+            (ChildExit::Killed, 9),
+            (ChildExit::Terminated(15), 15),
+            // Terminated carries whatever signal actually landed, so this
+            // must reflect it rather than a hardcoded SIGTERM
+            (ChildExit::Terminated(3), 3),
+        ] {
+            let info = create_output(exit).to_info();
+
+            assert_eq!(info.exit_code, None);
+            assert_eq!(info.signal, Some(signal));
+        }
+    }
+
+    #[test]
+    fn trims_and_omits_empty_streams() {
+        let mut output = create_output(ChildExit::Completed(ExitStatus::from_raw(0)));
+
+        assert_eq!(output.to_info().stdout, None);
+        assert_eq!(output.to_info().stderr, None);
+
+        output.stdout = Bytes::from_static(b"  out\n");
+        output.stderr = Bytes::from_static(b"\nerr  ");
+
+        assert_eq!(output.to_info().stdout, Some("out".into()));
+        assert_eq!(output.to_info().stderr, Some("err".into()));
+    }
+
+    #[test]
+    fn whitespace_only_streams_are_kept_as_empty_strings() {
+        let mut output = create_output(ChildExit::Completed(ExitStatus::from_raw(0)));
+        output.stdout = Bytes::from_static(b"   ");
+
+        // The bytes aren't empty, so the field is present but trimmed away
+        assert_eq!(output.to_info().stdout, Some(String::new()));
+    }
+
+    #[test]
+    fn serializes_without_empty_fields() {
+        let info = create_output(ChildExit::Completed(ExitStatus::from_raw(0))).to_info();
+
+        assert_eq!(serde_json::to_string(&info).unwrap(), r#"{"exit_code":0}"#);
+    }
+
+    #[test]
+    fn round_trips_through_serde() {
+        let mut output = create_output(ChildExit::Terminated(15));
+        output.stdout = Bytes::from_static(b"out");
+        output.stderr = Bytes::from_static(b"err");
+
+        let info = output.to_info();
+        let json = serde_json::to_string(&info).unwrap();
+
+        assert_eq!(serde_json::from_str::<OutputInfo>(&json).unwrap(), info);
+    }
+}

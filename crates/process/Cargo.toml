@@ -1,0 +1,44 @@
+[package]
+name = "starbase_process"
+version = "0.0.1"
+edition = "2024"
+license = "MIT"
+description = "Process utilities."
+repository = "https://github.com/moonrepo/starbase"
+rust-version = "1.89.0"
+
+[dependencies]
+starbase_console = { path = "../console" }
+starbase_shell = { path = "../shell" }
+starbase_styles = { path = "../styles" }
+bytes = { workspace = true }
+miette = { workspace = true }
+rustc-hash = { workspace = true }
+scc = { workspace = true }
+serde = { workspace = true }
+system_env = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true, features = [
+	"io-util",
+	"macros",
+	"process",
+	"rt",
+	"signal",
+	"sync",
+	"time",
+] }
+
+[dev-dependencies]
+starbase_console = { path = "../console" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+	# "Win32_System_Console",
+	"Win32_System_Threading",
+] }
