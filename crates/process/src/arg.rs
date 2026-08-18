@@ -1,16 +1,19 @@
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
+/// A single command line argument, in both its shell-quoted and raw forms.
 #[derive(Debug)]
 pub struct Arg {
-    // In shells: "value"
+    /// The value as it should appear within a shell, e.g. `"value"`.
+    /// Falls back to `value` when quoting isn't required.
     pub quoted_value: Option<OsString>,
 
-    // Not in shells: value
+    /// The raw, unquoted value, e.g. `value`.
     pub value: OsString,
 }
 
 impl Arg {
+    /// Return the quoted value if present, otherwise the raw value.
     pub fn as_os_str(&self) -> &OsStr {
         self.quoted_value.as_ref().unwrap_or(&self.value)
     }

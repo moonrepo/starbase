@@ -1,6 +1,8 @@
 use crate::arg::Arg;
 use std::ffi::{OsStr, OsString};
 
+/// What a [`Command`](crate::Command) runs: a single binary, or a full
+/// shell script.
 #[derive(Debug)]
 pub enum Executable {
     /// Single file name: git
@@ -11,6 +13,7 @@ pub enum Executable {
 }
 
 impl Executable {
+    /// Return the raw binary name or script contents.
     pub fn as_os_str(&self) -> &OsStr {
         match self {
             Self::Binary(inner) => &inner.value,
@@ -18,6 +21,7 @@ impl Executable {
         }
     }
 
+    /// Return true if this executable must be run inside a shell.
     pub fn requires_shell(&self) -> bool {
         match self {
             Self::Binary(_) => false,

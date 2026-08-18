@@ -7,8 +7,10 @@ use std::sync::{Arc, OnceLock};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::Mutex;
 
+/// How a child process ended.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ChildExit {
+    /// The process ran to completion with the given exit status.
     Completed(ExitStatus),
 
     /// Signalled with `SIGINT`
@@ -36,6 +38,9 @@ impl ChildExit {
     }
 }
 
+/// A cheaply cloneable handle to a running child process. Every clone
+/// shares the same underlying process, so signalling or waiting on one
+/// clone is visible to all others.
 #[derive(Clone)]
 pub struct SharedChild {
     inner: Arc<Mutex<Child>>,
@@ -46,6 +51,7 @@ pub struct SharedChild {
 }
 
 impl SharedChild {
+    /// Wrap a spawned child so it can be shared across tasks.
     #[cfg(unix)]
     pub fn new(child: Child) -> Self {
         Self {
@@ -55,6 +61,7 @@ impl SharedChild {
         }
     }
 
+    /// Wrap a spawned child so it can be shared across tasks.
     #[cfg(windows)]
     pub fn new(child: Child) -> Self {
         Self {
@@ -65,6 +72,7 @@ impl SharedChild {
         }
     }
 
+    /// Return the child's process id.
     pub fn id(&self) -> u32 {
         self.pid
     }
@@ -95,6 +103,8 @@ impl SharedChild {
         self.inner.lock().await.stderr.take()
     }
 
+    /// Force kill the child immediately (`SIGKILL` on Unix, terminate on
+    /// Windows), and wait for it to exit.
     pub async fn kill(&self) -> io::Result<ChildExit> {
         let mut child = self.inner.lock().await;
 
@@ -103,6 +113,9 @@ impl SharedChild {
         Ok(ChildExit::Killed)
     }
 
+    /// Send `signal` to the child and wait for it to exit. The signal is
+    /// remembered, so the resulting [`ChildExit`] reflects it even if the
+    /// child's own exit status doesn't carry it (e.g. on Windows).
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
         self.signal.get_or_init(|| signal);
 

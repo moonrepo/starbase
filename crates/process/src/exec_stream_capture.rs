@@ -93,6 +93,14 @@ impl<R: Reporter> Command<R> {
         Ok(output)
     }
 
+    /// Spawn the process, streaming stdout and stderr to the console as
+    /// they arrive while also capturing them byte-exact, and wait for it
+    /// to exit. Partial lines and carriage-return redraws (progress bars,
+    /// spinners) stream live, non-UTF-8 output is preserved, and redraw
+    /// frames are collapsed in the captured bytes so a cached replay only
+    /// renders the final frame. If [`Self::cache`] is enabled, a prior
+    /// identical run's output is returned instead of spawning again, in
+    /// which case nothing is streamed to the console.
     pub async fn exec_stream_and_capture_output(&mut self) -> miette::Result<Output> {
         let registry = ProcessRegistry::instance();
 

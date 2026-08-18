@@ -67,6 +67,10 @@ impl<R: Reporter> Command<R> {
         Ok(output)
     }
 
+    /// Spawn the process, write any buffered input, and wait for it to
+    /// exit, capturing stdout and stderr. Nothing is streamed to the
+    /// console. If [`Self::cache`] is enabled, a prior identical run's
+    /// output is reused instead of spawning again.
     pub async fn exec_capture_output(&mut self) -> miette::Result<Output> {
         if self.continuous_pipe {
             return self.exec_capture_continuous_output().await;
@@ -90,6 +94,10 @@ impl<R: Reporter> Command<R> {
         }
     }
 
+    /// A variant of [`Self::exec_capture_output`] that streams buffered
+    /// input to the child's stdin as it runs, rather than writing it all
+    /// upfront, and reads stdout/stderr line by line rather than to
+    /// completion. Used when [`Self::continuous_pipe`] is enabled.
     pub async fn exec_capture_continuous_output(&mut self) -> miette::Result<Output> {
         let registry = ProcessRegistry::instance();
         let instant = Instant::now();

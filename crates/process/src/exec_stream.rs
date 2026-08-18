@@ -8,6 +8,9 @@ use std::process::Stdio;
 use std::time::Instant;
 
 impl<R: Reporter> Command<R> {
+    /// Spawn the process, inheriting stdout and stderr so its output
+    /// streams directly to the terminal, and wait for it to exit. Nothing
+    /// is captured; the returned [`Output`] always has empty streams.
     pub async fn exec_stream_output(&mut self) -> miette::Result<Output> {
         let registry = ProcessRegistry::instance();
         let instant = Instant::now();

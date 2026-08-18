@@ -1,3 +1,8 @@
+//! Utilities for building, executing, and managing child processes:
+//! shell-aware command construction, buffered and streamed execution
+//! with optional output caching, signal handling, and a registry for
+//! tracking and shutting down running processes as a group.
+
 mod arg;
 mod command;
 mod env;

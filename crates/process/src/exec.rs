@@ -21,6 +21,8 @@ use tokio::process::{Child, Command as TokioCommand};
 use tracing::{debug, enabled};
 
 impl<R: Reporter> Command<R> {
+    /// Build the equivalent [`std::process::Command`], with the shell
+    /// wrapping, environment, working directory, and lookup paths applied.
     pub fn create_sync_command(&self) -> miette::Result<StdCommand> {
         // When the command is wrapped in a shell, we need to create a single
         // string of the full command line with args quoted correctly, as
@@ -100,6 +102,8 @@ impl<R: Reporter> Command<R> {
         Ok(command)
     }
 
+    /// Build the equivalent [`tokio::process::Command`]. See
+    /// [`Self::create_sync_command`] for details.
     pub fn create_async_command(&self) -> miette::Result<TokioCommand> {
         Ok(TokioCommand::from(self.create_sync_command()?))
     }

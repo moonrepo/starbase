@@ -13,8 +13,16 @@ use tracing::{debug, warn};
 
 static INSTANCE: OnceLock<Arc<ProcessRegistry>> = OnceLock::new();
 
+/// Tracks running child processes so they can be looked up, shut down as
+/// a group on a termination signal, and have their output cached across
+/// runs. A process-wide singleton is available via [`Self::instance`].
 pub struct ProcessRegistry {
+    /// The output cache, keyed by [`Command::get_cache_key`](crate::Command::get_cache_key).
     pub cache: Arc<scc::HashCache<String, Output>>,
+
+    /// Milliseconds to wait for running processes to shut down gracefully
+    /// after a termination signal, before force killing them. `0` waits
+    /// on them indefinitely instead of force killing.
     pub threshold: u32,
 
     running: Arc<RwLock<FxHashMap<u32, SharedChild>>>,
@@ -30,6 +38,10 @@ impl Default for ProcessRegistry {
 }
 
 impl ProcessRegistry {
+    /// Create a new registry, listening for termination signals in the
+    /// background. `threshold` is the grace period, in milliseconds,
+    /// given to running processes to shut down before they're force
+    /// killed; `0` waits on them indefinitely instead.
     pub fn new(threshold: u32) -> Self {
         let processes = Arc::new(RwLock::new(FxHashMap::default()));
         let processes_bg = Arc::clone(&processes);
@@ -55,14 +67,22 @@ impl ProcessRegistry {
         }
     }
 
+    /// Initialize the process-wide singleton returned by [`Self::instance`]
+    /// with a custom shutdown threshold. Has no effect if the singleton
+    /// has already been initialized, whether by this or a prior call to
+    /// [`Self::instance`].
     pub fn register(threshold: u32) {
         let _ = INSTANCE.set(Arc::new(ProcessRegistry::new(threshold)));
     }
 
+    /// Return the process-wide singleton, creating it with the default
+    /// threshold if it doesn't exist yet.
     pub fn instance() -> Arc<ProcessRegistry> {
         Arc::clone(INSTANCE.get_or_init(|| Arc::new(ProcessRegistry::default())))
     }
 
+    /// Wrap a spawned child and register it as running, so it's tracked
+    /// for lookup and shutdown.
     pub async fn add_running(&self, child: Child) -> SharedChild {
         let shared = SharedChild::new(child);
 
@@ -74,26 +94,36 @@ impl ProcessRegistry {
         shared
     }
 
+    /// Look up a running child by pid.
     pub async fn get_running_by_pid(&self, id: u32) -> Option<SharedChild> {
         self.running.read().await.get(&id).cloned()
     }
 
+    /// Stop tracking a child as running. Does not kill or signal it.
     pub async fn remove_running(&self, child: SharedChild) {
         self.remove_running_by_pid(child.id()).await
     }
 
+    /// Stop tracking a child by pid as running. Does not kill or signal it.
     pub async fn remove_running_by_pid(&self, id: u32) {
         self.running.write().await.remove(&id);
     }
 
+    /// Subscribe to termination signals received by this registry,
+    /// whether from the OS or from [`Self::terminate_running`].
     pub fn receive_signal(&self) -> Receiver<SignalType> {
         self.signal_sender.subscribe()
     }
 
+    /// Broadcast a termination signal to all running children, shutting
+    /// them down the same way an OS-delivered signal would.
     pub fn terminate_running(&self) {
         let _ = self.signal_sender.send(SignalType::Terminate);
     }
 
+    /// Wait until no processes are tracked as running, polling every 50
+    /// milliseconds. Returns immediately if none are running, and after
+    /// [`Self::threshold`] milliseconds regardless, unless it's `0`.
     pub async fn wait_for_running_to_shutdown(&self) {
         let mut count = 0;
 
