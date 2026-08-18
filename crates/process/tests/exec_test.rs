@@ -66,7 +66,19 @@ mod create_sync_command {
         let sync = command.create_sync_command().unwrap();
 
         // Scripts require a shell, so the default one is used
-        assert_eq!(get_args(&sync), ["-c", "git status && git log"]);
+        assert_eq!(
+            get_args(&sync),
+            if cfg!(windows) {
+                vec![
+                    "-NoLogo",
+                    "-NoProfile",
+                    "-EncodedCommand",
+                    "ZwBpAHQAIABzAHQAYQB0AHUAcwAgACYAJgAgAGcAaQB0ACAAbABvAGcA",
+                ]
+            } else {
+                vec!["-c", "git status && git log"]
+            }
+        );
     }
 
     #[test]
