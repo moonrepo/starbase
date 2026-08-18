@@ -8,15 +8,14 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.89.0"
 
 [dependencies]
-moon_common = { path = "../common" }
-moon_console = { path = "../console" }
-moon_env_var = { path = "../env-var" }
+starbase_console = { path = "../console" }
+starbase_shell = { path = "../shell" }
+starbase_styles = { path = "../styles" }
 bytes = { workspace = true }
 miette = { workspace = true }
 rustc-hash = { workspace = true }
 scc = { workspace = true }
 serde = { workspace = true }
-starbase_shell = { workspace = true }
 system_env = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -38,6 +37,3 @@ windows-sys = { workspace = true, features = [
 	# "Win32_System_Console",
 	"Win32_System_Threading",
 ] }
-
-[lints]
-workspace = true

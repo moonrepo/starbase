@@ -1,5 +1,5 @@
-use moon_common::color;
 use starbase_shell::ShellType;
+use starbase_styles::color;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 

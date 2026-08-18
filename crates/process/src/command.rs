@@ -1,143 +1,28 @@
+use crate::arg::*;
+use crate::env::*;
+use crate::exe::*;
 use crate::helpers::get_default_shell;
-use moon_common::{color, is_daemon_env, is_test_env};
-use moon_console::Console;
-use moon_env_var::GlobalEnvBag;
 use rustc_hash::{FxHashMap, FxHasher};
+use starbase_console::Console;
+use starbase_console::Reporter;
 use starbase_shell::{ShellType, join_exe_args};
+use starbase_styles::color;
 use std::collections::VecDeque;
+use std::env;
 use std::ffi::{OsStr, OsString};
 use std::hash::Hasher;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-#[derive(Debug, PartialEq)]
-pub enum Env {
-    /// Always set and overwrite system var
-    Set(OsString),
-
-    /// Only set if system var is not set
-    SetIfMissing(OsString),
-
-    /// Unset system var and don't inherit
-    Unset,
-}
-
-impl Env {
-    pub fn get_value(&self) -> Option<&OsString> {
-        match self {
-            Env::Set(value) => Some(value),
-            Env::SetIfMissing(value) => Some(value),
-            Env::Unset => None,
-        }
-    }
+#[derive(Debug, Default)]
+pub struct CommandDebug {
+    pub is_daemon_env: bool,
+    pub is_test_env: bool,
+    pub print_input: bool,
 }
 
 #[derive(Debug)]
-pub struct CommandArg {
-    // In shells: "value"
-    pub quoted_value: Option<OsString>,
-
-    // Not in shells: value
-    pub value: OsString,
-}
-
-impl CommandArg {
-    pub fn as_os_str(&self) -> &OsStr {
-        self.quoted_value.as_ref().unwrap_or(&self.value)
-    }
-}
-
-impl AsRef<OsStr> for CommandArg {
-    fn as_ref(&self) -> &OsStr {
-        self.as_os_str()
-    }
-}
-
-impl From<&str> for CommandArg {
-    fn from(value: &str) -> Self {
-        Self::from(OsString::from(value))
-    }
-}
-
-impl From<&String> for CommandArg {
-    fn from(value: &String) -> Self {
-        Self::from(OsString::from(value))
-    }
-}
-
-impl From<String> for CommandArg {
-    fn from(value: String) -> Self {
-        Self::from(OsString::from(value))
-    }
-}
-
-impl From<&OsStr> for CommandArg {
-    fn from(value: &OsStr) -> Self {
-        Self::from(value.to_os_string())
-    }
-}
-
-impl From<&OsString> for CommandArg {
-    fn from(value: &OsString) -> Self {
-        Self::from(value.to_os_string())
-    }
-}
-
-impl From<OsString> for CommandArg {
-    fn from(value: OsString) -> Self {
-        Self {
-            quoted_value: None,
-            value,
-        }
-    }
-}
-
-impl From<&Path> for CommandArg {
-    fn from(value: &Path) -> Self {
-        Self::from(value.as_os_str())
-    }
-}
-
-impl From<&PathBuf> for CommandArg {
-    fn from(value: &PathBuf) -> Self {
-        Self::from(value.as_os_str())
-    }
-}
-
-impl From<PathBuf> for CommandArg {
-    fn from(value: PathBuf) -> Self {
-        Self::from(value.into_os_string())
-    }
-}
-
-#[derive(Debug)]
-pub enum CommandExecutable {
-    /// Single file name: git
-    Binary(CommandArg),
-
-    /// Full script: git commit --allow-empty
-    Script(OsString),
-}
-
-impl CommandExecutable {
-    pub fn as_os_str(&self) -> &OsStr {
-        match self {
-            Self::Binary(inner) => &inner.value,
-            Self::Script(inner) => inner,
-        }
-    }
-
-    pub fn requires_shell(&self) -> bool {
-        match self {
-            Self::Binary(_) => false,
-            Self::Script(_) => true,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Command {
-    pub args: VecDeque<CommandArg>,
+pub struct Command<R: Reporter> {
+    pub args: VecDeque<Arg>,
 
     pub cache: bool,
 
@@ -146,9 +31,11 @@ pub struct Command {
 
     pub cwd: Option<OsString>,
 
+    pub debug: CommandDebug,
+
     pub env: FxHashMap<OsString, Env>,
 
-    pub exe: CommandExecutable,
+    pub exe: Executable,
 
     /// Convert non-zero exits to errors
     pub error_on_nonzero: bool,
@@ -169,18 +56,19 @@ pub struct Command {
     pub shell: Option<ShellType>,
 
     /// Console to write output to
-    pub console: Option<Arc<Console>>,
+    pub console: Option<Arc<Console<R>>>,
 }
 
-impl Command {
+impl<R: Reporter> Command<R> {
     pub fn new<T: AsRef<OsStr>>(bin: T) -> Self {
         Command {
             args: VecDeque::new(),
             cache: false,
             continuous_pipe: false,
             cwd: None,
+            debug: CommandDebug::default(),
             env: FxHashMap::default(),
-            exe: CommandExecutable::Binary(CommandArg {
+            exe: Executable::Binary(Arg {
                 quoted_value: None,
                 value: bin.as_ref().to_os_string(),
             }),
@@ -194,24 +82,24 @@ impl Command {
         }
     }
 
-    pub fn new_bin<T: Into<CommandArg>>(bin: T) -> Self {
+    pub fn new_bin<T: Into<Arg>>(bin: T) -> Self {
         let mut command = Self::new("");
-        command.exe = CommandExecutable::Binary(bin.into());
+        command.exe = Executable::Binary(bin.into());
         command
     }
 
     pub fn new_script<T: AsRef<OsStr>>(script: T) -> Self {
         let mut command = Self::new("");
-        command.exe = CommandExecutable::Script(script.as_ref().to_os_string());
+        command.exe = Executable::Script(script.as_ref().to_os_string());
         command
     }
 
-    pub fn arg<A: Into<CommandArg>>(&mut self, arg: A) -> &mut Self {
+    pub fn arg<A: Into<Arg>>(&mut self, arg: A) -> &mut Self {
         self.args.push_back(arg.into());
         self
     }
 
-    pub fn arg_if_missing<A: Into<CommandArg>>(&mut self, arg: A) -> &mut Self {
+    pub fn arg_if_missing<A: Into<Arg>>(&mut self, arg: A) -> &mut Self {
         let arg = arg.into();
 
         if !self.contains_arg(&arg.value) {
@@ -224,7 +112,7 @@ impl Command {
     pub fn args<I, A>(&mut self, args: I) -> &mut Self
     where
         I: IntoIterator<Item = A>,
-        A: Into<CommandArg>,
+        A: Into<Arg>,
     {
         for arg in args {
             self.arg(arg);
@@ -331,16 +219,14 @@ impl Command {
     }
 
     pub fn inherit_colors(&mut self) -> &mut Self {
-        let bag = GlobalEnvBag::instance();
-
         // Don't show colors in our own tests, as it disrupts snapshots,
         // and only inherit colors if the current command hasn't
         // explicitly configured these variables
-        if !is_test_env()
+        if !self.debug.is_test_env
             && !self.contains_env("NO_COLOR")
             && !self.contains_env("FORCE_COLOR")
-            && !bag.has("NO_COLOR")
-            && !bag.has("FORCE_COLOR")
+            && env::var_os("NO_COLOR").is_none()
+            && env::var_os("FORCE_COLOR").is_none()
         {
             let level = color::supports_color().to_string();
 
@@ -409,8 +295,8 @@ impl Command {
 
     pub fn get_bin_name(&self) -> String {
         match &self.exe {
-            CommandExecutable::Binary(bin) => bin.value.to_string_lossy().to_string(),
-            CommandExecutable::Script(script) => {
+            Executable::Binary(bin) => bin.value.to_string_lossy().to_string(),
+            Executable::Script(script) => {
                 let script = script.to_string_lossy();
 
                 match script.find(' ') {
@@ -456,10 +342,10 @@ impl Command {
         }
 
         match &self.exe {
-            CommandExecutable::Binary(exe) => {
+            Executable::Binary(exe) => {
                 write(&mut hasher, &exe.value);
             }
-            CommandExecutable::Script(exe) => {
+            Executable::Script(exe) => {
                 write(&mut hasher, exe);
             }
         };
@@ -493,10 +379,10 @@ impl Command {
         }
 
         match &self.exe {
-            CommandExecutable::Binary(bin) => {
+            Executable::Binary(bin) => {
                 line.push(join_exe_args(&shell, bin, &self.args, false));
             }
-            CommandExecutable::Script(script) => {
+            Executable::Script(script) => {
                 line.push(script);
             }
         };
@@ -506,12 +392,11 @@ impl Command {
         }
 
         if with_input && !self.input.is_empty() {
-            let debug_input = GlobalEnvBag::instance().should_debug_process_input();
             let input = self.input.join(OsStr::new(" "));
 
             line.push(" - ");
 
-            if input.len() > 200 && !debug_input {
+            if input.len() > 200 && !self.debug.print_input {
                 line.push(format!(
                     "(truncated input, {} total bytes)",
                     self.get_input_size()
@@ -534,8 +419,8 @@ impl Command {
 
     pub fn get_script(&self) -> String {
         match &self.exe {
-            CommandExecutable::Binary(bin) => bin.value.to_string_lossy().to_string(),
-            CommandExecutable::Script(script) => script.to_string_lossy().to_string(),
+            Executable::Binary(bin) => bin.value.to_string_lossy().to_string(),
+            Executable::Script(script) => script.to_string_lossy().to_string(),
         }
     }
 
@@ -544,8 +429,8 @@ impl Command {
         self
     }
 
-    pub fn set_bin<T: Into<CommandArg>>(&mut self, bin: T) -> &mut Self {
-        self.exe = CommandExecutable::Binary(bin.into());
+    pub fn set_bin<T: Into<Arg>>(&mut self, bin: T) -> &mut Self {
+        self.exe = Executable::Binary(bin.into());
         self
     }
 
@@ -554,7 +439,7 @@ impl Command {
         self
     }
 
-    pub fn set_console(&mut self, console: Arc<Console>) -> &mut Self {
+    pub fn set_console(&mut self, console: Arc<Console<R>>) -> &mut Self {
         self.console = Some(console);
         self
     }
@@ -584,7 +469,7 @@ impl Command {
             self.shell = Some(get_default_shell());
         }
 
-        self.exe = CommandExecutable::Script(script.as_ref().to_os_string());
+        self.exe = Executable::Script(script.as_ref().to_os_string());
         self
     }
 
@@ -594,7 +479,7 @@ impl Command {
     }
 
     pub fn should_cache_output(&self) -> bool {
-        self.cache && !is_test_env() && !is_daemon_env()
+        self.cache && !self.debug.is_test_env && !self.debug.is_daemon_env
     }
 
     pub fn should_error_nonzero(&self) -> bool {
@@ -603,5 +488,24 @@ impl Command {
 
     pub fn should_pass_stdin(&self) -> bool {
         !self.input.is_empty()
+    }
+
+    pub fn with_console<T: Reporter>(self, console: Arc<Console<T>>) -> Command<T> {
+        Command {
+            args: self.args,
+            cache: self.cache,
+            continuous_pipe: self.continuous_pipe,
+            cwd: self.cwd,
+            debug: self.debug,
+            env: self.env,
+            exe: self.exe,
+            error_on_nonzero: self.error_on_nonzero,
+            input: self.input,
+            paths: self.paths,
+            prefix: self.prefix,
+            print_command: self.print_command,
+            shell: self.shell,
+            console: Some(console),
+        }
     }
 }

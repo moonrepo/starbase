@@ -6,12 +6,11 @@ use crate::process_registry::ProcessRegistry;
 use crate::shared_child::SharedChild;
 use bytes::Bytes;
 use miette::IntoDiagnostic;
-use moon_common::color;
-use moon_console::ConsoleStream;
-use moon_env_var::GlobalEnvBag;
 use rustc_hash::FxHashMap;
 use scc::hash_cache::Entry;
+use starbase_console::ConsoleStream;
 use starbase_shell::join_exe_args;
+use starbase_styles::color;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::io;
@@ -473,17 +472,6 @@ impl Command {
             command
         };
 
-        // Inherit added/removed vars first
-        let bag = GlobalEnvBag::instance();
-
-        bag.list_added(|key, value| {
-            command.env(key, value);
-        });
-
-        bag.list_removed(|key| {
-            command.env_remove(key);
-        });
-
         // Then set explicit vars
         for (key, value) in &self.env {
             match value {
@@ -491,7 +479,7 @@ impl Command {
                     command.env(key, value);
                 }
                 Env::SetIfMissing(value) => {
-                    if !bag.has(key) {
+                    if env::var_os(key).is_none() {
                         command.env(key, value);
                     }
                 }
@@ -535,14 +523,13 @@ impl Command {
     }
 
     fn pre_log_command(&self, child: &SharedChild) {
-        let bag = GlobalEnvBag::instance();
         let key = OsString::from("MOON_WORKSPACE_ROOT");
 
         // Determine workspace root and working dir
         let workspace_root = if let Some(root) = self.env.get(&key).and_then(|var| var.get_value())
         {
             PathBuf::from(root)
-        } else if let Some(root) = bag.get(&key) {
+        } else if let Some(root) = env::var_os(&key) {
             PathBuf::from(root)
         } else {
             env::current_dir().unwrap_or_default()

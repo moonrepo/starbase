@@ -2849,6 +2849,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6250294ab161cc8ed5d110114cec70d4cec4e0135edc58e7362d094244edf54a"
 
 [[package]]
+name = "shell-words"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
+
+[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3059,6 +3065,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "starbase_process"
+version = "0.0.1"
+dependencies = [
+ "bytes",
+ "libc",
+ "miette",
+ "rustc-hash",
+ "scc",
+ "serde",
+ "starbase_console",
+ "starbase_shell",
+ "starbase_styles",
+ "system_env",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "starbase_sandbox"
 version = "0.12.0"
 dependencies = [
@@ -3220,6 +3246,19 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-io-kit",
  "windows",
+]
+
+[[package]]
+name = "system_env"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "325a3f70fd3a025f4b583cd8eaa90fbabf61493f690815d7148df778bb4839ac"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "shell-words",
+ "thiserror",
 ]
 
 [[package]]

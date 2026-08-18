@@ -1,5 +1,8 @@
+mod arg;
 mod command;
-mod exec_command;
+mod exe;
+// mod exec_command;
+mod env;
 mod helpers;
 mod output;
 mod process_error;
@@ -7,7 +10,10 @@ mod process_registry;
 mod shared_child;
 mod signal;
 
+pub use arg::*;
 pub use command::*;
+pub use env::*;
+pub use exe::*;
 pub use helpers::*;
 pub use output::*;
 pub use process_error::*;

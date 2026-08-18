@@ -1,5 +1,5 @@
 use miette::Diagnostic;
-use moon_common::{Style, Stylize};
+use starbase_styles::{Style, Stylize};
 use thiserror::Error;
 
 impl ProcessError {
