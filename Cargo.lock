@@ -3074,6 +3074,7 @@ dependencies = [
  "rustc-hash",
  "scc",
  "serde",
+ "serde_json",
  "starbase_console",
  "starbase_shell",
  "starbase_styles",

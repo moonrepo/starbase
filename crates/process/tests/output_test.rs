@@ -1,8 +1,8 @@
 #[cfg(unix)]
-fn create_output(exit: moon_process::ChildExit) -> moon_process::Output {
+fn create_output(exit: starbase_process::ChildExit) -> starbase_process::Output {
     use bytes::Bytes;
 
-    moon_process::Output {
+    starbase_process::Output {
         exit,
         stdout: Bytes::new(),
         stderr: Bytes::new(),
@@ -10,7 +10,7 @@ fn create_output(exit: moon_process::ChildExit) -> moon_process::Output {
 }
 
 mod conversions {
-    use moon_process::{output_to_string, output_to_trimmed_string};
+    use starbase_process::{output_to_string, output_to_trimmed_string};
 
     #[test]
     fn converts_bytes_to_string() {
@@ -32,7 +32,7 @@ mod conversions {
 #[cfg(unix)]
 mod statuses {
     use super::*;
-    use moon_process::ChildExit;
+    use starbase_process::ChildExit;
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
 
@@ -73,11 +73,11 @@ mod statuses {
 mod errors {
     use super::*;
     use bytes::Bytes;
-    use moon_process::{ChildExit, ProcessError};
+    use starbase_process::{ChildExit, ProcessError};
     use std::os::unix::process::ExitStatusExt;
     use std::process::ExitStatus;
 
-    fn create_failed_output() -> moon_process::Output {
+    fn create_failed_output() -> starbase_process::Output {
         create_output(ChildExit::Completed(ExitStatus::from_raw(1 << 8)))
     }
 
@@ -187,5 +187,83 @@ mod errors {
         };
 
         assert_eq!(error.get_exit_code(), None);
+    }
+}
+
+#[cfg(unix)]
+mod info {
+    use super::*;
+    use bytes::Bytes;
+    use starbase_process::{ChildExit, OutputInfo};
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+
+    #[test]
+    fn captures_the_exit_code() {
+        let info = create_output(ChildExit::Completed(ExitStatus::from_raw(0))).to_info();
+
+        assert_eq!(info.exit_code, Some(0));
+        assert_eq!(info.signal, None);
+
+        let info = create_output(ChildExit::Completed(ExitStatus::from_raw(3 << 8))).to_info();
+
+        assert_eq!(info.exit_code, Some(3));
+        assert_eq!(info.signal, None);
+    }
+
+    #[test]
+    fn maps_signals_to_their_codes() {
+        for (exit, signal) in [
+            (ChildExit::Interrupted, 2),
+            (ChildExit::Killed, 9),
+            (ChildExit::Terminated, 15),
+        ] {
+            let info = create_output(exit).to_info();
+
+            assert_eq!(info.exit_code, None);
+            assert_eq!(info.signal, Some(signal));
+        }
+    }
+
+    #[test]
+    fn trims_and_omits_empty_streams() {
+        let mut output = create_output(ChildExit::Completed(ExitStatus::from_raw(0)));
+
+        assert_eq!(output.to_info().stdout, None);
+        assert_eq!(output.to_info().stderr, None);
+
+        output.stdout = Bytes::from_static(b"  out\n");
+        output.stderr = Bytes::from_static(b"\nerr  ");
+
+        assert_eq!(output.to_info().stdout, Some("out".into()));
+        assert_eq!(output.to_info().stderr, Some("err".into()));
+    }
+
+    #[test]
+    fn whitespace_only_streams_are_kept_as_empty_strings() {
+        let mut output = create_output(ChildExit::Completed(ExitStatus::from_raw(0)));
+        output.stdout = Bytes::from_static(b"   ");
+
+        // The bytes aren't empty, so the field is present but trimmed away
+        assert_eq!(output.to_info().stdout, Some(String::new()));
+    }
+
+    #[test]
+    fn serializes_without_empty_fields() {
+        let info = create_output(ChildExit::Completed(ExitStatus::from_raw(0))).to_info();
+
+        assert_eq!(serde_json::to_string(&info).unwrap(), r#"{"exit_code":0}"#);
+    }
+
+    #[test]
+    fn round_trips_through_serde() {
+        let mut output = create_output(ChildExit::Terminated);
+        output.stdout = Bytes::from_static(b"out");
+        output.stderr = Bytes::from_static(b"err");
+
+        let info = output.to_info();
+        let json = serde_json::to_string(&info).unwrap();
+
+        assert_eq!(serde_json::from_str::<OutputInfo>(&json).unwrap(), info);
     }
 }

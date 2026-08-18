@@ -1,4 +1,4 @@
-use moon_process::format_command_line;
+use starbase_process::format_command_line;
 use std::path::Path;
 
 mod format_command_line {
@@ -46,11 +46,25 @@ mod format_command_line {
 
 #[cfg(unix)]
 mod find_command {
-    use moon_process::find_command_on_path;
+    use starbase_process::find_command_on_path;
 
     #[test]
     fn finds_common_binaries() {
         assert!(find_command_on_path("sh").is_some());
         assert!(find_command_on_path("nonexistent_binary_zzz").is_none());
+    }
+}
+
+mod default_shell {
+    use starbase_process::{ShellType, get_default_shell};
+
+    #[test]
+    fn is_cached_across_calls() {
+        assert_eq!(get_default_shell(), get_default_shell());
+    }
+
+    #[test]
+    fn is_a_known_shell() {
+        assert!(ShellType::os_variants().contains(&get_default_shell()));
     }
 }

@@ -29,6 +29,11 @@ tokio = { workspace = true, features = [
 	"time",
 ] }
 
+[dev-dependencies]
+starbase_console = { path = "../console" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
 
