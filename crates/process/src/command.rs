@@ -17,6 +17,7 @@ use std::sync::Arc;
 pub struct CommandDebug {
     pub is_daemon_env: bool,
     pub is_test_env: bool,
+    pub print_env: bool,
     pub print_input: bool,
 }
 

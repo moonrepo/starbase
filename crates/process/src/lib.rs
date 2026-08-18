@@ -1,8 +1,11 @@
 mod arg;
 mod command;
-mod exe;
-// mod exec_command;
 mod env;
+mod exe;
+mod exec;
+mod exec_capture;
+mod exec_stream;
+mod exec_stream_capture;
 mod helpers;
 mod output;
 mod process_error;
