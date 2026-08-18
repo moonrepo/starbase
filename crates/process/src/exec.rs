@@ -117,19 +117,26 @@ impl<R: Reporter> Command<R> {
     }
 
     pub(crate) fn pre_log_command(&self, child: &SharedChild) {
-        let key = OsString::from("MOON_WORKSPACE_ROOT");
+        let root_dir = match &self.debug.root_dir_env_key {
+            Some(base_key) => {
+                let key = OsString::from(base_key);
 
-        // Determine workspace root and working dir
-        let workspace_root = if let Some(root) = self.env.get(&key).and_then(|var| var.get_value())
-        {
-            PathBuf::from(root)
-        } else if let Some(root) = env::var_os(&key) {
-            PathBuf::from(root)
-        } else {
-            env::current_dir().unwrap_or_default()
+                match self.env.get(&key).and_then(|var| var.get_value()) {
+                    Some(value) => value.to_os_string(),
+                    None => env::var_os(&key).unwrap_or_default(),
+                }
+            }
+            None => OsString::new(),
         };
 
-        let working_dir = PathBuf::from(self.cwd.as_deref().unwrap_or(workspace_root.as_os_str()));
+        // Determine root dir and working dir
+        let root_dir = if root_dir.is_empty() {
+            env::current_dir().unwrap_or_default()
+        } else {
+            PathBuf::from(root_dir)
+        };
+
+        let working_dir = PathBuf::from(self.cwd.as_deref().unwrap_or(root_dir.as_os_str()));
 
         // Print the command line to the console
         if let Some(console) = self.console.as_ref()
@@ -138,11 +145,10 @@ impl<R: Reporter> Command<R> {
         {
             let command_line = self.get_command_line(false, false);
 
-            let _ = console.out.write_line(format_command_line(
-                &command_line,
-                &workspace_root,
-                &working_dir,
-            ));
+            let _ =
+                console
+                    .out
+                    .write_line(format_command_line(&command_line, &root_dir, &working_dir));
         }
 
         // Avoid all this overhead if we're not logging
@@ -157,7 +163,12 @@ impl<R: Reporter> Command<R> {
                 if value == &Env::Unset {
                     None
                 } else if self.debug.print_env
-                    || key.to_str().is_some_and(|k| k.starts_with("MOON_"))
+                    || key.to_str().is_some_and(|k| {
+                        self.debug
+                            .env_key_prefixes
+                            .iter()
+                            .any(|prefix| k.starts_with(prefix))
+                    })
                 {
                     Some((key, value.get_value().unwrap()))
                 } else {

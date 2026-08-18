@@ -15,10 +15,12 @@ use std::sync::Arc;
 
 #[derive(Debug, Default)]
 pub struct CommandDebug {
+    pub env_key_prefixes: Vec<String>,
     pub is_daemon_env: bool,
     pub is_test_env: bool,
     pub print_env: bool,
     pub print_input: bool,
+    pub root_dir_env_key: Option<String>,
 }
 
 #[derive(Debug)]

@@ -2,17 +2,6 @@ use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
 use thiserror::Error;
 
-impl ProcessError {
-    /// Return the underlying process exit code, if this error represents a
-    /// process that exited with a non-zero status (and not a signal).
-    pub fn get_exit_code(&self) -> Option<i32> {
-        match self {
-            Self::ExitNonZero { code, .. } | Self::ExitNonZeroWithOutput { code, .. } => *code,
-            _ => None,
-        }
-    }
-}
-
 #[derive(Error, Debug, Diagnostic)]
 pub enum ProcessError {
     #[diagnostic(code(process::capture::failed))]
@@ -86,4 +75,15 @@ pub enum ProcessError {
         #[source]
         error: Box<std::io::Error>,
     },
+}
+
+impl ProcessError {
+    /// Return the underlying process exit code, if this error represents a
+    /// process that exited with a non-zero status (and not a signal).
+    pub fn get_exit_code(&self) -> Option<i32> {
+        match self {
+            Self::ExitNonZero { code, .. } | Self::ExitNonZeroWithOutput { code, .. } => *code,
+            _ => None,
+        }
+    }
 }

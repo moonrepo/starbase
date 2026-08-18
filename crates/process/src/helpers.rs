@@ -18,10 +18,10 @@ pub fn get_default_shell() -> ShellType {
     *SHELL_CACHE.get_or_init(ShellType::detect_with_fallback)
 }
 
-pub fn format_command_line(command: &str, root: &Path, working_dir: &Path) -> String {
-    let dir = if working_dir == root {
+pub fn format_command_line(command: &str, root_dir: &Path, working_dir: &Path) -> String {
+    let dir = if working_dir == root_dir {
         "workspace".into()
-    } else if let Ok(dir) = working_dir.strip_prefix(root) {
+    } else if let Ok(dir) = working_dir.strip_prefix(root_dir) {
         format!(".{}{}", std::path::MAIN_SEPARATOR, dir.to_string_lossy())
     } else {
         ".".into()
