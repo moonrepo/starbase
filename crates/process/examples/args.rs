@@ -7,7 +7,7 @@ fn main() {
     } else {
         ("bash", "sh")
     };
-    let script = format!("./crates/process/args.{ext}");
+    let script = format!("./crates/process/examples/args.{ext}");
 
     let mut paths = env::split_paths(&env::var_os("PATH").unwrap()).collect::<Vec<_>>();
     paths.push(env::current_dir().unwrap());

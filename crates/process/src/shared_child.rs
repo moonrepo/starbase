@@ -87,7 +87,7 @@ impl SharedChild {
         self.wait().await
     }
 
-    pub(crate) async fn wait(&self) -> io::Result<ChildExit> {
+    pub async fn wait(&self) -> io::Result<ChildExit> {
         let mut child = self.inner.lock().await;
         let status = child.wait().await?;
 
@@ -97,7 +97,7 @@ impl SharedChild {
     // This method re-implements the tokio `wait_with_output` method
     // but does not take ownership of self. This is required to be able
     // to call `kill`, otherwise the child does not exist.
-    pub(crate) async fn wait_with_output(&self) -> io::Result<Output> {
+    pub async fn wait_with_output(&self) -> io::Result<Output> {
         use tokio::{io::AsyncReadExt, try_join};
 
         async fn read_to_end<A: AsyncReadExt + Unpin>(data: &mut Option<A>) -> io::Result<Vec<u8>> {
