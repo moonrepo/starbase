@@ -21,103 +21,52 @@ pub struct FileLock {
 
 impl FileLock {
     pub fn new(path: PathBuf) -> Result<Self, FsError> {
-        let file: File;
+        loop {
+            let file = create_lock_file(&path)?;
 
-        #[cfg(unix)]
-        {
-            file = fs::create_file_if_missing(&path)?;
-        }
+            acquire_exclusive_lock(&path, &file)?;
 
-        // Attempt to create/access the file in a loop
-        // because this can error with "permission denied"
-        // when another process has exclusive access
-        #[cfg(windows)]
-        {
-            use std::thread::sleep;
-            use std::time::Duration;
-
-            let mut elapsed = 0;
-
-            loop {
-                match fs::create_file_if_missing(&path) {
-                    Ok(inner) => {
-                        file = inner;
-                        break;
-                    }
-                    Err(error) => {
-                        if let FsError::Create {
-                            error: io_error, ..
-                        } = &error
-                        {
-                            // Access denied
-                            if io_error.raw_os_error().is_some_and(|code| code == 5) {
-                                sleep(Duration::from_millis(100));
-                                elapsed += 100;
-
-                                // Abort after 60 seconds
-                                if elapsed <= 60000 {
-                                    continue;
-                                }
-                            }
-                        }
-
-                        return Err(error);
-                    }
-                }
+            // The lock file may have been removed (and possibly recreated) by
+            // another process between our opening it and acquiring the lock. On
+            // Unix the lock is bound to the inode rather than the path, so we
+            // could now be holding a lock on an orphaned file that grants no
+            // mutual exclusion. Verify the path still resolves to the inode we
+            // locked; if not, release and re-acquire against the current file.
+            if is_lock_current(&path, &file)? {
+                return Ok(Self {
+                    path,
+                    file,
+                    remove: false,
+                    unlocked: false,
+                });
             }
-        }
 
-        Self::with_file(path, file)
+            release_lock(&path, &file)?;
+
+            trace!(file = ?path, "Lock file was replaced while locking, retrying");
+        }
     }
 
     pub async fn new_async(path: PathBuf) -> Result<Self, FsError> {
-        let file: File;
+        loop {
+            let file = create_lock_file_async(&path).await?;
 
-        #[cfg(unix)]
-        {
-            file = fs::create_file_if_missing(&path)?;
-        }
+            acquire_exclusive_lock(&path, &file)?;
 
-        // Attempt to create/access the file in a loop
-        // because this can error with "permission denied"
-        // when another process has exclusive access
-        #[cfg(windows)]
-        {
-            use std::time::Duration;
-            use tokio::time::sleep;
-
-            let mut elapsed = 0;
-
-            loop {
-                match fs::create_file_if_missing(&path) {
-                    Ok(inner) => {
-                        file = inner;
-                        break;
-                    }
-                    Err(error) => {
-                        if let FsError::Create {
-                            error: io_error, ..
-                        } = &error
-                        {
-                            // Access denied
-                            if io_error.raw_os_error().is_some_and(|code| code == 5) {
-                                sleep(Duration::from_millis(100)).await;
-                                elapsed += 100;
-
-                                // Abort after 60 seconds
-                                if elapsed <= 60000 {
-                                    continue;
-                                }
-                            }
-                        }
-
-                        return Err(error);
-                    }
-                }
+            // See `new` for why re-validating the locked inode is necessary.
+            if is_lock_current(&path, &file)? {
+                return Ok(Self {
+                    path,
+                    file,
+                    remove: false,
+                    unlocked: false,
+                });
             }
-        }
 
-        Self::with_file(path, file)
+            release_lock(&path, &file)?;
+
+            trace!(file = ?path, "Lock file was replaced while locking, retrying");
+        }
     }
 
     pub fn with_file(path: PathBuf, file: File) -> Result<Self, FsError> {
@@ -187,6 +136,136 @@ impl Drop for FileLock {
             }
         }
     }
+}
+
+/// Create or open the lock file at the provided path, without truncating it.
+///
+/// On Windows the create may fail with "access denied" while another process
+/// holds the file exclusively, so we retry in a loop for up to 60 seconds.
+fn create_lock_file(path: &Path) -> Result<File, FsError> {
+    let file: File;
+
+    #[cfg(unix)]
+    {
+        file = fs::create_file_if_missing(path)?;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::thread::sleep;
+        use std::time::Duration;
+
+        let mut elapsed = 0;
+
+        loop {
+            match fs::create_file_if_missing(path) {
+                Ok(inner) => {
+                    file = inner;
+                    break;
+                }
+                Err(error) => {
+                    if let FsError::Create {
+                        error: io_error, ..
+                    } = &error
+                    {
+                        // Access denied
+                        if io_error.raw_os_error().is_some_and(|code| code == 5) {
+                            sleep(Duration::from_millis(100));
+                            elapsed += 100;
+
+                            // Abort after 60 seconds
+                            if elapsed <= 60000 {
+                                continue;
+                            }
+                        }
+                    }
+
+                    return Err(error);
+                }
+            }
+        }
+    }
+
+    Ok(file)
+}
+
+/// Async variant of [`create_lock_file`].
+async fn create_lock_file_async(path: &Path) -> Result<File, FsError> {
+    let file: File;
+
+    #[cfg(unix)]
+    {
+        file = fs::create_file_if_missing(path)?;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::time::Duration;
+        use tokio::time::sleep;
+
+        let mut elapsed = 0;
+
+        loop {
+            match fs::create_file_if_missing(path) {
+                Ok(inner) => {
+                    file = inner;
+                    break;
+                }
+                Err(error) => {
+                    if let FsError::Create {
+                        error: io_error, ..
+                    } = &error
+                    {
+                        // Access denied
+                        if io_error.raw_os_error().is_some_and(|code| code == 5) {
+                            sleep(Duration::from_millis(100)).await;
+                            elapsed += 100;
+
+                            // Abort after 60 seconds
+                            if elapsed <= 60000 {
+                                continue;
+                            }
+                        }
+                    }
+
+                    return Err(error);
+                }
+            }
+        }
+    }
+
+    Ok(file)
+}
+
+/// Return true if `path` still resolves to the same inode as the locked `file`
+/// handle. Because Unix locks are bound to the open file description (inode)
+/// and not the path, a lock file that was unlinked — and possibly recreated by
+/// another process — leaves us holding a lock on an orphaned inode that grants
+/// no mutual exclusion. Comparing the handle's `(dev, ino)` against the path's
+/// detects that so the caller can re-acquire.
+#[cfg(unix)]
+fn is_lock_current(path: &Path, file: &File) -> Result<bool, FsError> {
+    use std::os::unix::fs::MetadataExt;
+
+    let locked = file.metadata().map_err(|error| FsError::Read {
+        path: path.to_path_buf(),
+        error: Box::new(error),
+    })?;
+
+    // A missing (or otherwise unreadable) path means the file we locked is no
+    // longer reachable there, so treat the handle as stale.
+    let Ok(current) = std::fs::metadata(path) else {
+        return Ok(false);
+    };
+
+    Ok(locked.dev() == current.dev() && locked.ino() == current.ino())
+}
+
+/// On non-Unix platforms an open, locked file cannot be swapped out from under
+/// us this way, so the locked handle is always current.
+#[cfg(not(unix))]
+fn is_lock_current(_path: &Path, _file: &File) -> Result<bool, FsError> {
+    Ok(true)
 }
 
 /// Instance representing a directory lock.
