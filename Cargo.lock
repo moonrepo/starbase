@@ -3152,6 +3152,7 @@ dependencies = [
  "tracing",
  "url",
  "wax",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
