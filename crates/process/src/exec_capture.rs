@@ -120,7 +120,7 @@ impl<R: Reporter> Command<R> {
 
         self.pre_log_command(&shared_child);
 
-        let items = self.input.drain(..).collect::<Vec<_>>();
+        let items = std::mem::take(&mut self.input);
         let bin_name = self.get_bin_name();
 
         let stdin_handle: JoinHandle<miette::Result<()>> = task::spawn(async move {
