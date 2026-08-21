@@ -121,6 +121,10 @@ impl<R: Reporter> Command<R> {
     }
 
     pub(crate) fn pre_log_command(&self, child: &SharedChild) {
+        self.pre_log_command_pid(child.id());
+    }
+
+    pub(crate) fn pre_log_command_pid(&self, pid: u32) {
         let root_dir = match &self.debug.root_dir_env_key {
             Some(base_key) => {
                 let key = OsString::from(base_key);
@@ -186,7 +190,7 @@ impl<R: Reporter> Command<R> {
         let command_line = self.get_command_line(true, true);
 
         debug!(
-            pid = child.id(),
+            pid,
             shell,
             env = ?env_vars,
             cwd = ?working_dir,
