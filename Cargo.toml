@@ -23,7 +23,7 @@ relative-path = "2.0.1"
 reqwest = { version = "0.13.4", default-features = false }
 rustc-hash = "2.1.3"
 scc = "3.8.6"
-schematic = { version = "0.19.6", default-features = false }
+schematic = { version = "0.20.0", default-features = false }
 serial_test = "4.0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
