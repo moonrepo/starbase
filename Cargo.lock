@@ -1441,9 +1441,9 @@ dependencies = [
 
 [[package]]
 name = "iocraft"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aba598b3bb6724ec114b885638d12105223c44d7cf19e5eb38b12baa9a28a29d"
+checksum = "cb262aea62c3194bb2ef998f58f278ad6e305adf118f8a098b1bbf61e7b69da1"
 dependencies = [
  "bitflags",
  "crossterm",
@@ -1574,9 +1574,9 @@ dependencies = [
 
 [[package]]
 name = "jwalk"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2735847566356cd2179a2a38264839308f7079fa96e6bd5a42d740460e003c56"
+checksum = "5e610b2b1eaea9e0e062c47e319d20a2e0f929e7aabf24d58514354de967bfbd"
 dependencies = [
  "crossbeam",
  "rayon",
@@ -3152,6 +3152,7 @@ dependencies = [
  "tracing",
  "url",
  "wax",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

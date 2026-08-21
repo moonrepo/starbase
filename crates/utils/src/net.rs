@@ -197,7 +197,9 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
 
     #[cfg(feature = "fs-lock")]
     if lock_file {
-        fs::acquire_exclusive_lock(dest_file, &file)?;
+        // Blocks until acquired (off the async runtime), and may return a
+        // different handle if the file was removed or replaced while waiting
+        file = crate::fs_lock::lock_handle_validated_async(dest_file.to_path_buf(), file).await?;
     }
 
     let write_result = async {
@@ -244,16 +246,19 @@ pub async fn download_from_url_with_options<S: AsRef<str> + Debug, D: AsRef<Path
             Ok(())
         }
         Err(error) => {
-            // Release the lock before removing the file so a concurrent caller
-            // can't slip in between, create a new inode at the same path, and
-            // acquire its own lock while ours is still held on the orphan inode.
+            // Cleanup on failure, otherwise the file may only be partially
+            // written to. Remove while still holding the lock — at this
+            // instant nobody else can own the file, so we can only ever be
+            // deleting our own. If we released first, a concurrent caller
+            // could acquire this same file and start writing, and our late
+            // removal would delete their work out from under them. Waiters
+            // orphaned by this removal re-acquire against the recreated file.
+            let _ = fs::remove_file(dest_file);
+
             #[cfg(feature = "fs-lock")]
             if lock_file {
                 let _ = fs::release_lock(dest_file, &file);
             }
-
-            // Cleanup on failure, otherwise the file may only be partially written to
-            let _ = fs::remove_file(dest_file);
 
             Err(error)
         }

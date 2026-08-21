@@ -345,19 +345,14 @@ fn calculate_indexes(active_index: usize, max_index: usize, limit: usize) -> (us
 
     let before_limit = limit / 2;
     let after_limit = limit / 2 - (if limit % 2 == 0 { 1 } else { 0 });
-    let start_index;
-    let end_index;
 
-    if active_index <= before_limit {
-        start_index = 0;
-        end_index = limit - 1;
+    let (start_index, end_index) = if active_index <= before_limit {
+        (0, limit - 1)
     } else if active_index > max_index - after_limit {
-        start_index = max_index - limit + 1;
-        end_index = max_index;
+        (max_index - limit + 1, max_index)
     } else {
-        start_index = active_index - before_limit;
-        end_index = active_index + after_limit;
-    }
+        (active_index - before_limit, active_index + after_limit)
+    };
 
     (start_index, end_index)
 }
