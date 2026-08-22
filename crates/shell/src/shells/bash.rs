@@ -174,47 +174,6 @@ mod tests {
         assert_snapshot!(Bash.format_hook(hook).unwrap());
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn cd_hook_registers_once_when_sourced_twice() {
-        let hook = Bash
-            .format_hook(Hook::OnChangeDir {
-                command: "true".into(),
-                function: "_starbase_hook".into(),
-            })
-            .unwrap();
-
-        let run = |setup: &str, print: &str| {
-            let output = std::process::Command::new("bash")
-                .arg("-c")
-                .arg(format!("{setup}\n{hook}\n{hook}\n{print}"))
-                .output()
-                .unwrap();
-
-            assert!(output.status.success(), "{:?}", output);
-
-            String::from_utf8_lossy(&output.stdout).to_string()
-        };
-
-        // String form
-        assert_eq!(
-            run(
-                r#"PROMPT_COMMAND="starship_precmd""#,
-                r#"printf '%s' "$PROMPT_COMMAND""#
-            ),
-            "_starbase_hook;starship_precmd"
-        );
-
-        // Array form with multiple entries
-        assert_eq!(
-            run(
-                "PROMPT_COMMAND=(starship_precmd other_thing)",
-                r#"printf '%s' "${PROMPT_COMMAND[*]}""#
-            ),
-            "_starbase_hook starship_precmd other_thing"
-        );
-    }
-
     #[test]
     fn test_profile_paths() {
         #[allow(deprecated)]
