@@ -130,16 +130,19 @@ impl Shell for Nu {
             Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-export def {function} [] {{
+export def --env {function} [] {{
     let data = {command} | from json
 
-    $data | get --optional env | items {{ |k, v|
-        if $v == null {{
-            if $k in $env {{
-                hide-env $k
+    # This must be a `for` loop and not an `each`/`items` closure,
+    # as closures do not propagate environment changes, even when
+    # the command itself is `def --env`.
+    for pair in ($data | get --optional env | default {{}} | transpose key value) {{
+        if $pair.value == null {{
+            if $pair.key in $env {{
+                hide-env $pair.key
             }}
         }} else {{
-            load-env {{ ($k): $v }}
+            load-env {{ ($pair.key): $pair.value }}
         }}
     }}
 
@@ -156,8 +159,6 @@ export def {function} [] {{
 }}
 
 export-env {{
-    $env.__ORIG_PATH = $env.{path_key}
-
     $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
         let list = ($config | get --optional hooks.env_change.PWD) | default []
 

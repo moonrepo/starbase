@@ -42,32 +42,27 @@ impl Shell for Pwsh {
         Ok(normalize_newlines(match hook {
             Hook::OnChangeDir { command, function } => {
                 format!(
-                    r#"using namespace System;
-using namespace System.Management.Automation;
-
-$origPath = [Environment]::GetEnvironmentVariable('PATH')
-[Environment]::SetEnvironmentVariable('__ORIG_PATH', "$origPath");
-
-function {function} {{
+                    r#"function {function} {{
+  $previousExitCode = $global:LASTEXITCODE;
   $exports = {command};
   if ($exports) {{
     $exports | Out-String | Invoke-Expression;
   }}
+  $global:LASTEXITCODE = $previousExitCode;
 }}
 
-$hook = [EventHandler[LocationChangedEventArgs]] {{
-  param([object] $source, [LocationChangedEventArgs] $changedArgs)
-  end {{
-    {function}
-  }}
-}};
+if (-not (Get-Variable -Name '{function}_handler' -Scope Global -ErrorAction Ignore)) {{
+  $global:{function}_handler = [System.EventHandler[System.Management.Automation.LocationChangedEventArgs]] {{
+    param([object] $source, [System.Management.Automation.LocationChangedEventArgs] $changedArgs)
+    end {{
+      {function}
+    }}
+  }};
 
-$currentAction = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction;
-
-if ($currentAction) {{
-  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [Delegate]::Combine($currentAction, $hook);
-}} else {{
-  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $hook;
+  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [System.Delegate]::Combine(
+    $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction,
+    $global:{function}_handler
+  );
 }};
 "#
                 )

@@ -68,8 +68,6 @@ impl Shell for Fish {
             Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-set -gx __ORIG_PATH $PATH
-
 function {function} --on-variable PWD;
   {command} | source
 end;

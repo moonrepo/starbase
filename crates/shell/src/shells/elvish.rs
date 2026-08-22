@@ -102,15 +102,11 @@ impl Shell for Elvish {
             Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-set-env __ORIG_PATH $E:PATH
-
-fn {function} {{
-  eval ({command});
+fn {function} {{|@_|
+  eval ({command} | slurp)
 }}
 
-set @edit:before-readline = $@edit:before-readline {{
-  {function}
-}}
+set @after-chdir = $@after-chdir ${function}~
 "#
                 )
             }

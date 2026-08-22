@@ -2,12 +2,10 @@
 source: crates/shell/src/shells/murex.rs
 expression: Murex.format_hook(hook).unwrap()
 ---
-$ENV.__ORIG_PATH="$ENV.PATH"
-
 function _starbase_hook {
   starbase hook murex -> source
 }
 
-event onPrompt _starbase_hook_hook=before {
+event onPrompt _starbase_hook=before {
   _starbase_hook
 }

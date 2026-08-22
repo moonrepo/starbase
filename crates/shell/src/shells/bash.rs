@@ -81,8 +81,6 @@ impl Shell for Bash {
             Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-export __ORIG_PATH="$PATH"
-
 {function}() {{
   local previous_exit_status=$?;
   local output;
@@ -95,12 +93,12 @@ export __ORIG_PATH="$PATH"
   return $previous_exit_status;
 }};
 
-if [[ ";${{PROMPT_COMMAND[*]:-}};" != *";{function};"* ]]; then
-  if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
+if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
+  if [[ " ${{PROMPT_COMMAND[*]:-}} " != *" {function} "* ]]; then
     PROMPT_COMMAND=({function} "${{PROMPT_COMMAND[@]}}")
-  else
-    PROMPT_COMMAND="{function}${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
   fi
+elif [[ ";${{PROMPT_COMMAND:-}};" != *";{function};"* ]]; then
+  PROMPT_COMMAND="{function}${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
 fi
 "#
                 )
@@ -174,6 +172,47 @@ mod tests {
         };
 
         assert_snapshot!(Bash.format_hook(hook).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cd_hook_registers_once_when_sourced_twice() {
+        let hook = Bash
+            .format_hook(Hook::OnChangeDir {
+                command: "true".into(),
+                function: "_starbase_hook".into(),
+            })
+            .unwrap();
+
+        let run = |setup: &str, print: &str| {
+            let output = std::process::Command::new("bash")
+                .arg("-c")
+                .arg(format!("{setup}\n{hook}\n{hook}\n{print}"))
+                .output()
+                .unwrap();
+
+            assert!(output.status.success(), "{:?}", output);
+
+            String::from_utf8_lossy(&output.stdout).to_string()
+        };
+
+        // String form
+        assert_eq!(
+            run(
+                r#"PROMPT_COMMAND="starship_precmd""#,
+                r#"printf '%s' "$PROMPT_COMMAND""#
+            ),
+            "_starbase_hook;starship_precmd"
+        );
+
+        // Array form with multiple entries
+        assert_eq!(
+            run(
+                "PROMPT_COMMAND=(starship_precmd other_thing)",
+                r#"printf '%s' "${PROMPT_COMMAND[*]}""#
+            ),
+            "_starbase_hook starship_precmd other_thing"
+        );
     }
 
     #[test]

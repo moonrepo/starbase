@@ -2,16 +2,19 @@
 source: crates/shell/src/shells/nu.rs
 expression: Nu.format_hook(hook).unwrap()
 ---
-export def _starbase_hook [] {
+export def --env _starbase_hook [] {
     let data = starbase hook nu | from json
 
-    $data | get --optional env | items { |k, v|
-        if $v == null {
-            if $k in $env {
-                hide-env $k
+    # This must be a `for` loop and not an `each`/`items` closure,
+    # as closures do not propagate environment changes, even when
+    # the command itself is `def --env`.
+    for pair in ($data | get --optional env | default {} | transpose key value) {
+        if $pair.value == null {
+            if $pair.key in $env {
+                hide-env $pair.key
             }
         } else {
-            load-env { ($k): $v }
+            load-env { ($pair.key): $pair.value }
         }
     }
 
@@ -28,8 +31,6 @@ export def _starbase_hook [] {
 }
 
 export-env {
-    $env.__ORIG_PATH = $env.PATH
-
     $env.config = ($env.config | upsert hooks.env_change.PWD { |config|
         let list = ($config | get --optional hooks.env_change.PWD) | default []
 

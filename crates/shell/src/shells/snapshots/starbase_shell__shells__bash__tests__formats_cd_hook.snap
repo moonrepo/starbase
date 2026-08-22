@@ -2,8 +2,6 @@
 source: crates/shell/src/shells/bash.rs
 expression: Bash.format_hook(hook).unwrap()
 ---
-export __ORIG_PATH="$PATH"
-
 _starbase_hook() {
   local previous_exit_status=$?;
   local output;
@@ -16,10 +14,10 @@ _starbase_hook() {
   return $previous_exit_status;
 };
 
-if [[ ";${PROMPT_COMMAND[*]:-};" != *";_starbase_hook;"* ]]; then
-  if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
+if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
+  if [[ " ${PROMPT_COMMAND[*]:-} " != *" _starbase_hook "* ]]; then
     PROMPT_COMMAND=(_starbase_hook "${PROMPT_COMMAND[@]}")
-  else
-    PROMPT_COMMAND="_starbase_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
   fi
+elif [[ ";${PROMPT_COMMAND:-};" != *";_starbase_hook;"* ]]; then
+  PROMPT_COMMAND="_starbase_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 fi

@@ -38,8 +38,6 @@ impl Shell for Zsh {
             Hook::OnChangeDir { command, function } => {
                 format!(
                     r#"
-export __ORIG_PATH="$PATH"
-
 {function}() {{
   local output
   trap '' SIGINT
