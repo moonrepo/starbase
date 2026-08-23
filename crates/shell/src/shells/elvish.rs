@@ -113,9 +113,10 @@ fn {activate_function} {{|@_|
 
 fn {deactivate_function} {{
   eval ({deactivate_command} | slurp)
-  set after-chdir = [(each {{|hook| if (not-eq $hook ${activate_function}~) {{ put $hook }} }} $after-chdir)]
+  set after-chdir = [(each {{|hook| if (not (and (has-key $hook def) (eq $hook[def] ${activate_function}~[def]))) {{ put $hook }} }} $after-chdir)]
 }}
 
+set after-chdir = [(each {{|hook| if (not (and (has-key $hook def) (eq $hook[def] ${activate_function}~[def]))) {{ put $hook }} }} $after-chdir)]
 set @after-chdir = $@after-chdir ${activate_function}~
 "#
                 )

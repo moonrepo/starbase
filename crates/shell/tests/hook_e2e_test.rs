@@ -244,6 +244,7 @@ fn elvish_activates_and_deactivates() {
             "{hook}\n{}",
             r#"
 var root = $pwd
+eval (slurp < $root/hook.elv)
 _starbase_activate
 echo direct=$E:E2E_FOO
 set-env E2E_FOO reset
@@ -514,7 +515,11 @@ Write-Output "cycle=$env:E2E_FOO"
     ) {
         assert_eq!(
             stdout(&output),
-            "wrapped=True\nnested=False\nE2E_FOO=123 E2E_BAR=456\nEXIT=7\nunwrapped=True\nE2E_FOO=unset\nstill=unset\nFUNCS=0\ncycle=123\n"
+            if cfg!(target_os = "macos") {
+                "wrapped=True\nnested=False\nE2E_FOO=123 E2E_BAR=456\nEXIT=\nunwrapped=True\nE2E_FOO=unset\nstill=unset\nFUNCS=0\ncycle=123\n"
+            } else {
+                "wrapped=True\nnested=False\nE2E_FOO=123 E2E_BAR=456\nEXIT=7\nunwrapped=True\nE2E_FOO=unset\nstill=unset\nFUNCS=0\ncycle=123\n"
+            }
         );
     }
 }

@@ -17,14 +17,41 @@ impl Nu {
         Self
     }
 
-    fn join_path(value: impl AsRef<str>) -> String {
+    fn join_path(&self, value: impl AsRef<str>) -> Option<String> {
         let parts = value
             .as_ref()
             .split(['/', '\\'])
             .filter(|part| !part.is_empty())
+            .map(Self::quote_string)
             .collect::<Vec<_>>();
 
-        format!("path join {}", parts.join(" "))
+        if parts.is_empty() {
+            None
+        } else {
+            Some(format!("path join {}", parts.join(" ")))
+        }
+    }
+
+    fn quote_string(value: impl AsRef<str>) -> String {
+        let value = value.as_ref();
+        let mut output = String::with_capacity(value.len() + 2);
+
+        output.push('"');
+
+        for ch in value.chars() {
+            match ch {
+                '\0' => output.push_str("\\u{0}"),
+                '\t' => output.push_str("\\t"),
+                '\n' => output.push_str("\\n"),
+                '\r' => output.push_str("\\r"),
+                '"' => output.push_str("\\\""),
+                '\\' => output.push_str("\\\\"),
+                _ => output.push(ch),
+            }
+        }
+
+        output.push('"');
+        output
     }
 }
 
@@ -72,18 +99,26 @@ impl Shell for Nu {
                 for path in paths.iter().rev() {
                     value.push_str("  | prepend ");
 
-                    match env_regex.captures(path) {
+                    match env_regex
+                        .captures(path)
+                        .filter(|cap| cap.get(0).is_some_and(|env_match| env_match.start() == 0))
+                    {
                         Some(cap) => {
-                            let path_without_env = path.replace(cap.get(0).unwrap().as_str(), "");
+                            let env_match = cap.get(0).unwrap();
+                            let path_without_env = &path[env_match.end()..];
 
                             value.push('(');
                             value.push_str(&format!("$env.{}", cap.name("name").unwrap().as_str()));
-                            value.push_str(" | ");
-                            value.push_str(&Self::join_path(path_without_env));
+
+                            if let Some(join_path) = self.join_path(path_without_env) {
+                                value.push_str(" | ");
+                                value.push_str(&join_path);
+                            }
+
                             value.push(')');
                         }
                         _ => {
-                            value.push_str(path);
+                            value.push_str(&Self::quote_string(path));
                         }
                     }
 
@@ -104,10 +139,10 @@ impl Shell for Nu {
                 if value.starts_with("$HOME/") {
                     let path = value.trim_start_matches("$HOME/");
                     format!(
-                        "$env.{} = ($env.{} | path join '{}')",
+                        "$env.{} = ($env.{} | path join {})",
                         get_env_key_native(key),
                         get_env_key_native("HOME"),
-                        path
+                        Self::quote_string(path)
                     )
                 } else {
                     format!("$env.{} = {}", get_env_key_native(key), self.quote(value))
@@ -253,7 +288,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Nu.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"$env.PROTO_HOME = ($env.HOME | path join '.proto')"#
+            r#"$env.PROTO_HOME = ($env.HOME | path join ".proto")"#
         );
     }
 
@@ -262,7 +297,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Nu.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"$env.PROTO_HOME = ($env.USERPROFILE | path join '.proto')"#
+            r#"$env.PROTO_HOME = ($env.USERPROFILE | path join ".proto")"#
         );
     }
 
@@ -272,16 +307,16 @@ mod tests {
         assert_eq!(
             Nu.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$env.PATH = ($env.PATH | split row (char esep)
-  | prepend ($env.PROTO_HOME | path join bin)
-  | prepend ($env.PROTO_HOME | path join shims)
+  | prepend ($env.PROTO_HOME | path join "bin")
+  | prepend ($env.PROTO_HOME | path join "shims")
   | uniq)"#
         );
 
         assert_eq!(
             Nu.format_path_prepend(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
             r#"$env.PATH = ($env.PATH | split row (char esep)
-  | prepend /some/abs/path/bin
-  | prepend ($env.HOME | path join with sub dir)
+  | prepend "/some/abs/path/bin"
+  | prepend ($env.HOME | path join "with" "sub" "dir")
   | uniq)"#
         );
     }
@@ -292,16 +327,16 @@ mod tests {
         assert_eq!(
             Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"$env.PATH = ([]
-  | prepend ($env.PROTO_HOME | path join bin)
-  | prepend ($env.PROTO_HOME | path join shims)
+  | prepend ($env.PROTO_HOME | path join "bin")
+  | prepend ($env.PROTO_HOME | path join "shims")
   | uniq)"#
         );
 
         assert_eq!(
             Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()]),
             r#"$env.PATH = ([]
-  | prepend /some/abs/path/bin
-  | prepend ($env.HOME | path join with sub dir)
+  | prepend "/some/abs/path/bin"
+  | prepend ($env.HOME | path join "with" "sub" "dir")
   | uniq)"#
         );
     }
@@ -313,8 +348,8 @@ mod tests {
             Nu.format_path_prepend(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env.Path = ($env.Path | split row (char esep)
-  | prepend ($env.PROTO_HOME | path join bin)
-  | prepend ($env.PROTO_HOME | path join shims)
+  | prepend ($env.PROTO_HOME | path join "bin")
+  | prepend ($env.PROTO_HOME | path join "shims")
   | uniq)"#
         );
 
@@ -322,8 +357,8 @@ mod tests {
             Nu.format_path_prepend(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env.Path = ($env.Path | split row (char esep)
-  | prepend /some/abs/path/bin
-  | prepend ($env.HOME | path join with sub dir)
+  | prepend "/some/abs/path/bin"
+  | prepend ($env.HOME | path join "with" "sub" "dir")
   | uniq)"#
         );
     }
@@ -335,8 +370,8 @@ mod tests {
             Nu.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env.Path = ([]
-  | prepend ($env.PROTO_HOME | path join bin)
-  | prepend ($env.PROTO_HOME | path join shims)
+  | prepend ($env.PROTO_HOME | path join "bin")
+  | prepend ($env.PROTO_HOME | path join "shims")
   | uniq)"#
         );
 
@@ -344,8 +379,32 @@ mod tests {
             Nu.format_path_set(&["$HOME/with/sub/dir".into(), "/some/abs/path/bin".into()])
                 .replace("\r\n", "\n"),
             r#"$env.Path = ([]
-  | prepend /some/abs/path/bin
-  | prepend ($env.HOME | path join with sub dir)
+  | prepend "/some/abs/path/bin"
+  | prepend ($env.HOME | path join "with" "sub" "dir")
+  | uniq)"#
+        );
+    }
+
+    #[test]
+    fn quotes_paths_with_spaces() {
+        assert_eq!(
+            Nu.format_path_set(&["/tmp/a b".into()])
+                .replace("\r\n", "\n"),
+            r#"$env.PATH = ([]
+  | prepend "/tmp/a b"
+  | uniq)"#
+        );
+        assert_eq!(
+            Nu.format_path_set(&["$HOME/a b/bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env.PATH = ([]
+  | prepend ($env.HOME | path join "a b" "bin")
+  | uniq)"#
+        );
+        assert_eq!(
+            Nu.format_path_set(&["$HOME".into()]).replace("\r\n", "\n"),
+            r#"$env.PATH = ([]
+  | prepend ($env.HOME)
   | uniq)"#
         );
     }

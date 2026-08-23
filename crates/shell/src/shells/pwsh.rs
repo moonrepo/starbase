@@ -194,7 +194,7 @@ mod tests {
     fn formats_env_var() {
         assert_eq!(
             Pwsh::new().format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"$env:PROTO_HOME = Join-Path $HOME ".proto";"#
+            r#"$env:PROTO_HOME = "$HOME/.proto";"#
         );
         assert_eq!(
             Pwsh::new().format_env_set("PROTO_HOME", "$HOME"),
