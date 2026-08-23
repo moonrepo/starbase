@@ -6,4 +6,9 @@ fn _starbase_hook {|@_|
   eval (starbase hook elvish | slurp)
 }
 
+fn _starbase_deactivate {
+  eval (starbase deactivate elvish | slurp)
+  set after-chdir = [(each {|hook| if (not-eq $hook $_starbase_hook~) { put $hook } } $after-chdir)]
+}
+
 set @after-chdir = $@after-chdir $_starbase_hook~

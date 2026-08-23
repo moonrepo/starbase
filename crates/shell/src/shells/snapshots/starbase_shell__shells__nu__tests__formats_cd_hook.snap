@@ -2,9 +2,7 @@
 source: crates/shell/src/shells/nu.rs
 expression: Nu.format_hook(hook).unwrap()
 ---
-export def --env _starbase_hook [] {
-    let data = starbase hook nu | from json
-
+export def --env _starbase_hook_apply [data] {
     # This must be a `for` loop and not an `each`/`items` closure,
     # as closures do not propagate environment changes, even when
     # the command itself is `def --env`.
@@ -30,12 +28,30 @@ export def --env _starbase_hook [] {
     }
 }
 
+export def --env _starbase_hook [] {
+    _starbase_hook_apply (starbase hook nu | from json)
+}
+
+export def --env _starbase_deactivate [] {
+    _starbase_hook_apply (starbase deactivate nu | from json)
+
+    # Nu cannot undefine commands at runtime, so the functions remain
+    # defined, but the hook itself is unregistered.
+    $env.config = ($env.config | upsert hooks.env_change.PWD (
+        ($env.config | get --optional hooks.env_change.PWD) | default []
+            | where { |hook| $hook != { code: "_starbase_hook" } }
+    ))
+}
+
 export-env {
     $env.config = ($env.config | upsert hooks.env_change.PWD { |config|
         let list = ($config | get --optional hooks.env_change.PWD) | default []
+        let hook = { code: "_starbase_hook" }
 
-        $list | append { |before, after|
-            _starbase_hook
+        if $hook in $list {
+            $list
+        } else {
+            $list | append $hook
         }
     })
 }

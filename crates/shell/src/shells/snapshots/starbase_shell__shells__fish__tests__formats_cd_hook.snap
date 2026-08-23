@@ -5,3 +5,8 @@ expression: Fish.format_hook(hook).unwrap()
 function _starbase_hook --on-variable PWD;
   starbase hook fish | source
 end;
+
+function _starbase_deactivate;
+  starbase deactivate fish | source
+  functions --erase _starbase_hook _starbase_deactivate
+end;

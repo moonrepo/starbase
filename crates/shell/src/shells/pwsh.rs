@@ -40,28 +40,51 @@ impl Shell for Pwsh {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
-                    r#"function {function} {{
+                    r#"function {activate_function} {{
   $previousExitCode = $global:LASTEXITCODE;
-  $exports = {command};
+  $exports = {activate_command};
   if ($exports) {{
     $exports | Out-String | Invoke-Expression;
   }}
   $global:LASTEXITCODE = $previousExitCode;
 }}
 
-if (-not (Get-Variable -Name '{function}_handler' -Scope Global -ErrorAction Ignore)) {{
-  $global:{function}_handler = [System.EventHandler[System.Management.Automation.LocationChangedEventArgs]] {{
+function {deactivate_function} {{
+  $exports = {deactivate_command};
+  if ($exports) {{
+    $exports | Out-String | Invoke-Expression;
+  }}
+
+  if (Get-Variable -Name '{activate_function}_handler' -Scope Global -ErrorAction Ignore) {{
+    $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [System.Delegate]::Remove(
+      $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction,
+      $global:{activate_function}_handler
+    );
+    Remove-Variable -Name '{activate_function}_handler' -Scope Global;
+  }}
+
+  Remove-Item -LiteralPath 'function:{activate_function}' -ErrorAction Ignore;
+  Remove-Item -LiteralPath 'function:{deactivate_function}' -ErrorAction Ignore;
+}}
+
+if (-not (Get-Variable -Name '{activate_function}_handler' -Scope Global -ErrorAction Ignore)) {{
+  $global:{activate_function}_handler = [System.EventHandler[System.Management.Automation.LocationChangedEventArgs]] {{
     param([object] $source, [System.Management.Automation.LocationChangedEventArgs] $changedArgs)
     end {{
-      {function}
+      {activate_function}
     }}
   }};
 
   $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [System.Delegate]::Combine(
     $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction,
-    $global:{function}_handler
+    $global:{activate_function}_handler
   );
 }};
 "#
@@ -190,8 +213,10 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            command: "starbase hook pwsh".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook pwsh".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate pwsh".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Pwsh::new().format_hook(hook).unwrap());

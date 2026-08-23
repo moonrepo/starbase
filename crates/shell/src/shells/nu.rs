@@ -127,12 +127,15 @@ impl Shell for Nu {
 
         // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
                     r#"
-export def --env {function} [] {{
-    let data = {command} | from json
-
+export def --env {activate_function}_apply [data] {{
     # This must be a `for` loop and not an `each`/`items` closure,
     # as closures do not propagate environment changes, even when
     # the command itself is `def --env`.
@@ -158,12 +161,30 @@ export def --env {function} [] {{
     }}
 }}
 
+export def --env {activate_function} [] {{
+    {activate_function}_apply ({activate_command} | from json)
+}}
+
+export def --env {deactivate_function} [] {{
+    {activate_function}_apply ({deactivate_command} | from json)
+
+    # Nu cannot undefine commands at runtime, so the functions remain
+    # defined, but the hook itself is unregistered.
+    $env.config = ($env.config | upsert hooks.env_change.PWD (
+        ($env.config | get --optional hooks.env_change.PWD) | default []
+            | where {{ |hook| $hook != {{ code: "{activate_function}" }} }}
+    ))
+}}
+
 export-env {{
     $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
         let list = ($config | get --optional hooks.env_change.PWD) | default []
+        let hook = {{ code: "{activate_function}" }}
 
-        $list | append {{ |before, after|
-            {function}
+        if $hook in $list {{
+            $list
+        }} else {{
+            $list | append $hook
         }}
     }})
 }}"#
@@ -333,8 +354,10 @@ mod tests {
         use starbase_sandbox::assert_snapshot;
 
         let hook = Hook::OnChangeDir {
-            command: "starbase hook nu".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook nu".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate nu".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Nu.format_hook(hook).unwrap());

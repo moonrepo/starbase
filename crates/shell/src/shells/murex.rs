@@ -70,15 +70,27 @@ impl Shell for Murex {
     // hook referenced from https://github.com/direnv/direnv/blob/ff451a860b31f176d252c410b43d7803ec0f8b23/internal/cmd/shell_murex.go#L12
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
                     r#"
-function {function} {{
-  {command} -> source
+function {activate_function} {{
+  {activate_command} -> source
 }}
 
-event onPrompt {function}=before {{
-  {function}
+function {deactivate_function} {{
+  {deactivate_command} -> source
+  !event onPrompt {activate_function}
+  !function {activate_function}
+  !function {deactivate_function}
+}}
+
+event onPrompt {activate_function}=before {{
+  {activate_function}
 }}
 "#
                 )
@@ -164,8 +176,10 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            command: "starbase hook murex".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook murex".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate murex".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Murex.format_hook(hook).unwrap());

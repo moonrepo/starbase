@@ -99,14 +99,24 @@ impl Shell for Elvish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
                     r#"
-fn {function} {{|@_|
-  eval ({command} | slurp)
+fn {activate_function} {{|@_|
+  eval ({activate_command} | slurp)
 }}
 
-set @after-chdir = $@after-chdir ${function}~
+fn {deactivate_function} {{
+  eval ({deactivate_command} | slurp)
+  set after-chdir = [(each {{|hook| if (not-eq $hook ${activate_function}~) {{ put $hook }} }} $after-chdir)]
+}}
+
+set @after-chdir = $@after-chdir ${activate_function}~
 "#
                 )
             }
@@ -197,8 +207,10 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            command: "starbase hook elvish".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook elvish".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate elvish".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Elvish.format_hook(hook).unwrap());

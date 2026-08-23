@@ -11,6 +11,24 @@ function _starbase_hook {
   $global:LASTEXITCODE = $previousExitCode;
 }
 
+function _starbase_deactivate {
+  $exports = starbase deactivate pwsh;
+  if ($exports) {
+    $exports | Out-String | Invoke-Expression;
+  }
+
+  if (Get-Variable -Name '_starbase_hook_handler' -Scope Global -ErrorAction Ignore) {
+    $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [System.Delegate]::Remove(
+      $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction,
+      $global:_starbase_hook_handler
+    );
+    Remove-Variable -Name '_starbase_hook_handler' -Scope Global;
+  }
+
+  Remove-Item -LiteralPath 'function:_starbase_hook' -ErrorAction Ignore;
+  Remove-Item -LiteralPath 'function:_starbase_deactivate' -ErrorAction Ignore;
+}
+
 if (-not (Get-Variable -Name '_starbase_hook_handler' -Scope Global -ErrorAction Ignore)) {
   $global:_starbase_hook_handler = [System.EventHandler[System.Management.Automation.LocationChangedEventArgs]] {
     param([object] $source, [System.Management.Automation.LocationChangedEventArgs] $changedArgs)
