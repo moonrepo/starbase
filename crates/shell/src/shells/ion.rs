@@ -25,26 +25,26 @@ impl Ion {
 
 impl Shell for Ion {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
-        Quoter::new(
-            data,
-            QuoterOptions {
-                // https://github.com/redox-os/ion/blob/master/src/lib/expansion/methods/strings.rs
-                // https://doc.redox-os.org/ion-manual/expansions/00-expansions.html
-                quoted_syntax: vec![
-                    Syntax::Symbol("$".into()),
-                    Syntax::Pair("${".into(), "}".into()),
-                    Syntax::Pair("$(".into(), ")".into()),
-                    Syntax::Symbol("@".into()),
-                    Syntax::Pair("@{".into(), "}".into()),
-                    Syntax::Pair("@(".into(), ")".into()),
-                ],
-                unquoted_syntax: vec![
-                    // brace
-                    Syntax::Pair("{".into(), "}".into()),
-                ],
-                ..Default::default()
-            },
-        )
+        let mut options = QuoterOptions {
+            // https://github.com/redox-os/ion/blob/master/src/lib/expansion/methods/strings.rs
+            // https://doc.redox-os.org/ion-manual/expansions/00-expansions.html
+            quoted_syntax: vec![
+                Syntax::Symbol("$".into()),
+                Syntax::Pair("${".into(), "}".into()),
+                Syntax::Pair("$(".into(), ")".into()),
+                Syntax::Symbol("@".into()),
+                Syntax::Pair("@{".into(), "}".into()),
+                Syntax::Pair("@(".into(), ")".into()),
+            ],
+            unquoted_syntax: vec![
+                // brace
+                Syntax::Pair("{".into(), "}".into()),
+            ],
+            ..Default::default()
+        };
+        options.quote_pairs.push(("\"".into(), "\"".into(), false));
+
+        Quoter::new(data, options)
     }
 
     // https://doc.redox-os.org/ion-manual/variables/05-exporting.html
@@ -119,6 +119,7 @@ mod tests {
             Ion.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"export PROTO_HOME="${env::HOME}/.proto""#
         );
+        assert_eq!(Ion.format_env_set("FOO", "don't"), r#"export FOO="don't""#);
     }
 
     // Ion has no usable hook mechanism: its only hook point is the user's
@@ -185,7 +186,7 @@ mod tests {
         assert_eq!(Ion.quote("{brace_expansion}"), "{brace_expansion}");
         assert_eq!(
             Ion.quote("value with 'single quotes'"),
-            r#"'value with 'single quotes''"#
+            r#""value with 'single quotes'""#
         );
     }
 }

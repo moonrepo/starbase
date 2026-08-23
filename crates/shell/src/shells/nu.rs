@@ -290,6 +290,7 @@ mod tests {
             Nu.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$env.PROTO_HOME = ($env.HOME | path join ".proto")"#
         );
+        assert_eq!(Nu.format_env_set("FOO", "don't"), r#"$env.FOO = "don't""#);
     }
 
     #[cfg(windows)]
@@ -299,6 +300,7 @@ mod tests {
             Nu.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$env.PROTO_HOME = ($env.USERPROFILE | path join ".proto")"#
         );
+        assert_eq!(Nu.format_env_set("FOO", "don't"), r#"$env.FOO = "don't""#);
     }
 
     #[cfg(unix)]
@@ -385,6 +387,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn quotes_paths_with_spaces() {
         assert_eq!(
@@ -404,6 +407,31 @@ mod tests {
         assert_eq!(
             Nu.format_path_set(&["$HOME".into()]).replace("\r\n", "\n"),
             r#"$env.PATH = ([]
+  | prepend ($env.HOME)
+  | uniq)"#
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn quotes_paths_with_spaces() {
+        assert_eq!(
+            Nu.format_path_set(&["/tmp/a b".into()])
+                .replace("\r\n", "\n"),
+            r#"$env.Path = ([]
+  | prepend "/tmp/a b"
+  | uniq)"#
+        );
+        assert_eq!(
+            Nu.format_path_set(&["$HOME/a b/bin".into()])
+                .replace("\r\n", "\n"),
+            r#"$env.Path = ([]
+  | prepend ($env.HOME | path join "a b" "bin")
+  | uniq)"#
+        );
+        assert_eq!(
+            Nu.format_path_set(&["$HOME".into()]).replace("\r\n", "\n"),
+            r#"$env.Path = ([]
   | prepend ($env.HOME)
   | uniq)"#
         );
@@ -478,7 +506,7 @@ mod tests {
     fn test_nu_quoting() {
         assert_eq!(Nu.quote("hello"), "hello");
         assert_eq!(Nu.quote(""), "''");
-        assert_eq!(Nu.quote("echo 'hello'"), "'echo 'hello''");
+        assert_eq!(Nu.quote("echo 'hello'"), "\"echo 'hello'\"");
         assert_eq!(Nu.quote("echo \"$HOME\""), "$\"echo \\\"$HOME\\\"\"");
         assert_eq!(Nu.quote("\"hello\""), "\"hello\"");
         assert_eq!(Nu.quote("\"hello\nworld\""), "\"hello\nworld\"");

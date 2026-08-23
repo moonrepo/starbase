@@ -57,7 +57,10 @@ impl Xonsh {
 // https://xon.sh/xonshrc.html
 impl Shell for Xonsh {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
-        Quoter::new(data, QuoterOptions::default())
+        let mut options = QuoterOptions::default();
+        options.quote_pairs.push(("\"".into(), "\"".into(), false));
+
+        Quoter::new(data, options)
     }
 
     fn format(&self, statement: Statement<'_>) -> String {
@@ -164,6 +167,7 @@ mod tests {
             r#"$PROTO_HOME = f"{$HOME}/.proto""#
         );
         assert_eq!(Xonsh.format_env_set("BOOL", "true"), r#"$BOOL = f"true""#);
+        assert_eq!(Xonsh.format_env_set("FOO", "don't"), r#"$FOO = f"don't""#);
     }
 
     #[test]
@@ -234,7 +238,7 @@ mod tests {
         let xonsh = Xonsh::new();
         assert_eq!(xonsh.quote(""), "''");
         assert_eq!(xonsh.quote("simple"), "simple");
-        assert_eq!(xonsh.quote("don't"), "'don't'");
+        assert_eq!(xonsh.quote("don't"), "\"don't\"");
         assert_eq!(xonsh.quote("say \"hello\""), "\"say \\\"hello\\\"\"");
         assert_eq!(xonsh.quote("price $5"), "\"price $5\"");
         assert_eq!(

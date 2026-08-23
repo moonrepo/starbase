@@ -28,24 +28,24 @@ impl Elvish {
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
-        Quoter::new(
-            data,
-            QuoterOptions {
-                quoted_syntax: vec![],
-                // https://elv.sh/learn/tour.html#brace-expansion
-                unquoted_syntax: vec![
-                    // brace
-                    Syntax::Pair("{".into(), "}".into()),
-                    // tilde
-                    Syntax::Symbol("{~}".into()),
-                    // file, glob
-                    Syntax::Symbol("**".into()),
-                    Syntax::Symbol("*".into()),
-                    Syntax::Symbol("?".into()),
-                ],
-                ..Default::default()
-            },
-        )
+        let mut options = QuoterOptions {
+            quoted_syntax: vec![],
+            // https://elv.sh/learn/tour.html#brace-expansion
+            unquoted_syntax: vec![
+                // brace
+                Syntax::Pair("{".into(), "}".into()),
+                // tilde
+                Syntax::Symbol("{~}".into()),
+                // file, glob
+                Syntax::Symbol("**".into()),
+                Syntax::Symbol("*".into()),
+                Syntax::Symbol("?".into()),
+            ],
+            ..Default::default()
+        };
+        options.quote_pairs.push(("\"".into(), "\"".into(), false));
+
+        Quoter::new(data, options)
     }
 
     fn format(&self, statement: Statement<'_>) -> String {
@@ -177,6 +177,10 @@ mod tests {
             "set-env PROTO_HOME {~}/.proto;"
         );
         assert_eq!(Elvish.format_env_set("FOO", "bar"), "set-env FOO bar;");
+        assert_eq!(
+            Elvish.format_env_set("FOO", "don't"),
+            "set-env FOO \"don't\";"
+        );
     }
 
     #[cfg(unix)]
@@ -265,8 +269,8 @@ mod tests {
         assert_eq!(Elvish.quote("A"), "A");
 
         // Single quotes
-        assert_eq!(Elvish.quote("it's"), "'it's'");
-        assert_eq!(Elvish.quote("value'with'quotes"), "'value'with'quotes'");
+        assert_eq!(Elvish.quote("it's"), "\"it's\"");
+        assert_eq!(Elvish.quote("value'with'quotes"), "\"value'with'quotes\"");
 
         // Double quotes
         assert_eq!(Elvish.quote("value with spaces"), r#"'value with spaces'"#);

@@ -27,6 +27,7 @@ impl Shell for Murex {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
         let mut options = QuoterOptions::default();
         options.quote_pairs.push(("%(".into(), ")".into(), false));
+        options.quote_pairs.push(("\"".into(), "\"".into(), false));
 
         Quoter::new(data, options)
     }
@@ -135,6 +136,7 @@ mod tests {
             Murex.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$ENV.PROTO_HOME="$ENV.HOME/.proto""#
         );
+        assert_eq!(Murex.format_env_set("FOO", "don't"), "$ENV.FOO=%(don't)");
     }
 
     #[cfg(unix)]
@@ -213,6 +215,8 @@ mod tests {
     fn test_murex_quoting() {
         assert_eq!(Murex.quote("value"), "value");
         assert_eq!(Murex.quote("value with spaces"), "'value with spaces'");
+        assert_eq!(Murex.quote("don't"), "%(don't)");
+        assert_eq!(Murex.quote("don't)"), "\"don't)\"");
         assert_eq!(Murex.quote("$(echo hello)"), "\"$(echo hello)\"");
         assert_eq!(Murex.quote(""), "''");
         assert_eq!(Murex.quote("abc123"), "abc123");
