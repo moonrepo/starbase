@@ -8,7 +8,9 @@
 // - sourcing the hook twice registers it once,
 // - the deactivate function reverts the environment, unregisters the trigger
 //   (a subsequent cd does not re-activate), and removes the functions where
-//   the shell allows it.
+//   the shell allows it,
+// - evaluating the hook again after deactivation re-activates: the trigger
+//   re-registers (exactly once) and fires again.
 //
 // A test is skipped when its shell is not installed, unless the shell is
 // listed in the `STARBASE_REQUIRED_SHELLS` environment variable
@@ -96,13 +98,17 @@ _starbase_deactivate
 printf '%s\n' "$PROMPT_COMMAND"
 printf 'E2E_FOO=%s E2E_BAR=%s\n' "${E2E_FOO:-unset}" "${E2E_BAR:-unset}"
 type -t _starbase_hook >/dev/null 2>&1 || printf 'functions removed\n'
+source ./hook.sh
+_starbase_hook
+printf '%s\n' "$PROMPT_COMMAND"
+printf 'E2E_FOO=%s\n' "$E2E_FOO"
 "#,
     );
 
     if let Some(output) = run_script(&sandbox, "bash", &["./string.sh"]) {
         assert_eq!(
             stdout(&output),
-            "_starbase_hook;starship_precmd\nE2E_FOO=123 E2E_BAR=456\nstarship_precmd\nE2E_FOO=unset E2E_BAR=unset\nfunctions removed\n"
+            "_starbase_hook;starship_precmd\nE2E_FOO=123 E2E_BAR=456\nstarship_precmd\nE2E_FOO=unset E2E_BAR=unset\nfunctions removed\n_starbase_hook;starship_precmd\nE2E_FOO=123\n"
         );
     }
 
@@ -117,13 +123,15 @@ source ./hook.sh
 printf '%s\n' "${PROMPT_COMMAND[*]}"
 _starbase_deactivate
 printf '%s\n' "${PROMPT_COMMAND[*]}"
+source ./hook.sh
+printf '%s\n' "${PROMPT_COMMAND[*]}"
 "#,
     );
 
     if let Some(output) = run_script(&sandbox, "bash", &["./array.sh"]) {
         assert_eq!(
             stdout(&output),
-            "_starbase_hook starship_precmd other_thing\nstarship_precmd other_thing\n"
+            "_starbase_hook starship_precmd other_thing\nstarship_precmd other_thing\n_starbase_hook starship_precmd other_thing\n"
         );
     }
 }
@@ -142,10 +150,11 @@ fn zsh_activates_and_deactivates() {
     sandbox.create_file(
         "test.zsh",
         r#"
-source ./hook.zsh
+root="$(pwd)"
+source "$root/hook.zsh"
 cd /
 print -r -- "E2E_FOO=$E2E_FOO E2E_BAR=$E2E_BAR"
-source ./hook.zsh
+source "$root/hook.zsh"
 print -r -- "HOOKS=${#chpwd_functions[@]}"
 _starbase_deactivate
 print -r -- "HOOKS=${#chpwd_functions[@]}"
@@ -153,6 +162,9 @@ print -r -- "E2E_FOO=${E2E_FOO:-unset} E2E_BAR=${E2E_BAR:-unset}"
 cd /tmp
 print -r -- "after cd E2E_FOO=${E2E_FOO:-unset}"
 whence -w _starbase_hook >/dev/null 2>&1 || print -r -- "functions removed"
+source "$root/hook.zsh"
+cd /usr
+print -r -- "HOOKS=${#chpwd_functions[@]} E2E_FOO=${E2E_FOO:-unset}"
 "#,
     );
 
@@ -160,7 +172,7 @@ whence -w _starbase_hook >/dev/null 2>&1 || print -r -- "functions removed"
     if let Some(output) = run_script(&sandbox, "zsh", &["-f", "./test.zsh"]) {
         assert_eq!(
             stdout(&output),
-            "E2E_FOO=123 E2E_BAR=456\nHOOKS=1\nHOOKS=0\nE2E_FOO=unset E2E_BAR=unset\nafter cd E2E_FOO=unset\nfunctions removed\n"
+            "E2E_FOO=123 E2E_BAR=456\nHOOKS=1\nHOOKS=0\nE2E_FOO=unset E2E_BAR=unset\nafter cd E2E_FOO=unset\nfunctions removed\nHOOKS=1 E2E_FOO=123\n"
         );
     }
 }
@@ -179,7 +191,8 @@ fn fish_activates_and_deactivates() {
     sandbox.create_file(
         "test.fish",
         r#"
-source ./hook.fish
+set root (pwd)
+source $root/hook.fish
 cd /
 printf 'E2E_FOO=%s E2E_BAR=%s\n' $E2E_FOO $E2E_BAR
 _starbase_deactivate
@@ -190,13 +203,16 @@ else
   printf 'E2E_FOO unset\n'
 end
 functions -q _starbase_hook; or printf 'functions removed\n'
+source $root/hook.fish
+cd /usr
+printf 'E2E_FOO=%s\n' $E2E_FOO
 "#,
     );
 
     if let Some(output) = run_script(&sandbox, "fish", &["--no-config", "./test.fish"]) {
         assert_eq!(
             stdout(&output),
-            "E2E_FOO=123 E2E_BAR=456\nE2E_FOO unset\nfunctions removed\n"
+            "E2E_FOO=123 E2E_BAR=456\nE2E_FOO unset\nfunctions removed\nE2E_FOO=123\n"
         );
     }
 }
@@ -213,16 +229,21 @@ fn elvish_activates_and_deactivates() {
     );
 
     let sandbox = create_empty_sandbox();
+    sandbox.create_file("hook.elv", &hook);
 
     // Elvish has no `source`, so concatenate the hook and the assertions.
     // The bare call mirrors the init invocation consumers append (no args),
     // while `cd` invokes it through `$after-chdir` (one arg). Deactivation
-    // unregisters but cannot delete the functions.
+    // unregisters but cannot delete the functions. Re-activation must go
+    // through `eval` (a separate compile unit), since redefining a `fn`
+    // within the same unit is a compile error — this mirrors a session
+    // re-evaluating the activation output.
     sandbox.create_file(
         "test.elv",
         format!(
             "{hook}\n{}",
             r#"
+var root = $pwd
 _starbase_hook
 echo direct=$E:E2E_FOO
 set-env E2E_FOO reset
@@ -235,6 +256,9 @@ echo removed=$E:E2E_FOO
 set-env E2E_FOO reset2
 cd /tmp
 echo after=$E:E2E_FOO
+eval (slurp < $root/hook.elv)
+cd /usr
+echo cycle=$E:E2E_FOO hooks=(count $after-chdir)
 "#
         ),
     );
@@ -242,7 +266,7 @@ echo after=$E:E2E_FOO
     if let Some(output) = run_script(&sandbox, "elvish", &["./test.elv"]) {
         assert_eq!(
             stdout(&output),
-            "direct=123\nchdir=123,456\nhooks=1\nhooks=0\nremoved=\nafter=reset2\n"
+            "direct=123\nchdir=123,456\nhooks=1\nhooks=0\nremoved=\nafter=reset2\ncycle=123 hooks=1\n"
         );
     }
 }
@@ -262,12 +286,18 @@ fn nu_activates_and_deactivates() {
     let path_key = if cfg!(windows) { "Path" } else { "PATH" };
 
     let sandbox = create_empty_sandbox();
+    sandbox.create_file("hook.nu", &hook);
+
+    // Sourcing the same file twice dedupes the `export def`s at parse time,
+    // but re-runs `export-env` — so the second source exercises the
+    // registration dedup guard, and the source after deactivation re-registers.
     sandbox.create_file(
         "test.nu",
         format!(
             r#"$env.E2E_GONE = "preset"
 
-{hook}
+source "./hook.nu"
+source "./hook.nu"
 
 _starbase_hook
 
@@ -281,6 +311,13 @@ _starbase_deactivate
 print $"foo=($env | get --optional E2E_FOO | default REMOVED)"
 print $"path=($env.{path_key})"
 print $"hooks=($env.config.hooks.env_change.PWD | length)"
+
+source "./hook.nu"
+
+_starbase_hook
+
+print $"foo=($env | get --optional E2E_FOO | default MISSING)"
+print $"hooks=($env.config.hooks.env_change.PWD | length)"
 "#
         ),
     );
@@ -288,7 +325,7 @@ print $"hooks=($env.config.hooks.env_change.PWD | length)"
     if let Some(output) = run_script(&sandbox, "nu", &["./test.nu"]) {
         assert_eq!(
             stdout(&output),
-            "foo=123\ngone=REMOVED\npath=/e2e-stub-path\nhooks=1\nfoo=REMOVED\npath=/e2e-restored-path\nhooks=0\n"
+            "foo=123\ngone=REMOVED\npath=/e2e-stub-path\nhooks=1\nfoo=REMOVED\npath=/e2e-restored-path\nhooks=0\nfoo=123\nhooks=1\n"
         );
     }
 }
@@ -306,22 +343,24 @@ fn murex_activates_and_deactivates() {
     );
 
     let sandbox = create_empty_sandbox();
+    sandbox.create_file("hook.mx", &hook);
     sandbox.create_file(
         "test.mx",
-        format!(
-            "{hook}\n{}",
-            r#"
+        r#"
+source ./hook.mx
 _starbase_hook
 out $ENV.E2E_FOO
 _starbase_deactivate
 sh -c 'echo "${E2E_FOO:-removed}"'
+source ./hook.mx
+_starbase_hook
+out $ENV.E2E_FOO
 out done
-"#
-        ),
+"#,
     );
 
     if let Some(output) = run_script(&sandbox, "murex", &["./test.mx"]) {
-        assert_eq!(stdout(&output), "123\nremoved\ndone\n");
+        assert_eq!(stdout(&output), "123\nremoved\n123\ndone\n");
     }
 }
 
@@ -340,8 +379,8 @@ fn pwsh_activates_and_deactivates() {
     sandbox.create_file(
         "test.ps1",
         r#"
-. ./hook.ps1
-. ./hook.ps1
+. $PSScriptRoot/hook.ps1
+. $PSScriptRoot/hook.ps1
 & pwsh -NoProfile -Command 'exit 7'
 Set-Location ([System.IO.Path]::GetTempPath())
 Write-Output "E2E_FOO=$env:E2E_FOO E2E_BAR=$env:E2E_BAR"
@@ -353,13 +392,17 @@ if ($null -eq $action) { Write-Output "HANDLERS=0" } else { Write-Output "HANDLE
 Set-Location /
 Write-Output "E2E_FOO=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
 Write-Output "FUNCS=$((Get-Command _starbase_hook, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
+. $PSScriptRoot/hook.ps1
+Set-Location ([System.IO.Path]::GetTempPath())
+Write-Output "E2E_FOO=$env:E2E_FOO"
+Write-Output "HANDLERS=$($ExecutionContext.SessionState.InvokeCommand.LocationChangedAction.GetInvocationList().Count)"
 "#,
     );
 
     if let Some(output) = run_script(&sandbox, "pwsh", &["-NoProfile", "-File", "./test.ps1"]) {
         assert_eq!(
             stdout(&output),
-            "E2E_FOO=123 E2E_BAR=456\nEXIT=7\nHANDLERS=1\nHANDLERS=0\nE2E_FOO=unset\nFUNCS=0\n"
+            "E2E_FOO=123 E2E_BAR=456\nEXIT=7\nHANDLERS=1\nHANDLERS=0\nE2E_FOO=unset\nFUNCS=0\nE2E_FOO=123\nHANDLERS=1\n"
         );
     }
 }
