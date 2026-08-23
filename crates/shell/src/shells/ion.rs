@@ -121,6 +121,21 @@ mod tests {
         );
     }
 
+    // Ion has no usable hook mechanism: its only hook point is the user's
+    // own `PROMPT` function, and `eval`/`source` are gated behind unsafe
+    // builtins that are not loaded by default.
+    #[test]
+    fn errors_for_cd_hook() {
+        let hook = Hook::OnChangeDir {
+            activate_command: "starbase hook ion".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate ion".into(),
+            deactivate_function: "_starbase_deactivate".into(),
+        };
+
+        assert!(Ion.format_hook(hook).is_err());
+    }
+
     #[test]
     fn formats_path_prepend() {
         assert_eq!(

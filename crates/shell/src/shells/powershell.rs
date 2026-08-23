@@ -211,6 +211,57 @@ impl Shell for PowerShell {
         }
     }
 
+    // Windows PowerShell 5.1 lacks `LocationChangedAction` (added in
+    // PowerShell 6.1), so wrap the global `prompt` function instead — the
+    // same pattern used by starship, zoxide, and posh-git. This fires on
+    // every prompt rather than only on cd, matching bash's `PROMPT_COMMAND`.
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
+                format!(
+                    r#"function {activate_function} {{
+  $previousExitCode = $global:LASTEXITCODE;
+  $exports = {activate_command};
+  if ($exports) {{
+    $exports | Out-String | Invoke-Expression;
+  }}
+  $global:LASTEXITCODE = $previousExitCode;
+}}
+
+function {deactivate_function} {{
+  $exports = {deactivate_command};
+  if ($exports) {{
+    $exports | Out-String | Invoke-Expression;
+  }}
+
+  if (Get-Variable -Name '{activate_function}_prompt' -Scope Global -ErrorAction Ignore) {{
+    Set-Item -Path 'function:global:prompt' -Value $global:{activate_function}_prompt;
+    Remove-Variable -Name '{activate_function}_prompt' -Scope Global;
+  }}
+
+  Remove-Item -LiteralPath 'function:{activate_function}' -ErrorAction Ignore;
+  Remove-Item -LiteralPath 'function:{deactivate_function}' -ErrorAction Ignore;
+}}
+
+if (-not (Get-Variable -Name '{activate_function}_prompt' -Scope Global -ErrorAction Ignore)) {{
+  $global:{activate_function}_prompt = $function:prompt;
+
+  function global:prompt {{
+    {activate_function};
+    & $global:{activate_function}_prompt;
+  }}
+}};
+"#
+                )
+            }
+        }))
+    }
+
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         home_dir
             .join("Documents")
@@ -320,6 +371,20 @@ mod tests {
         assert_eq!(base64_encode("foob"), "ZgBvAG8AYgA=");
         assert_eq!(base64_encode("fooba"), "ZgBvAG8AYgBhAA==");
         assert_eq!(base64_encode("foobar"), "ZgBvAG8AYgBhAHIA");
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        let hook = Hook::OnChangeDir {
+            activate_command: "starbase hook powershell".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate powershell".into(),
+            deactivate_function: "_starbase_deactivate".into(),
+        };
+
+        assert_snapshot!(PowerShell.format_hook(hook).unwrap());
     }
 
     #[test]

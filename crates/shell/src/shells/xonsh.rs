@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir};
+use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -53,6 +53,41 @@ impl Shell for Xonsh {
         }
     }
 
+    // https://xon.sh/events.html
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
+                format!(
+                    r#"
+def {activate_function}(olddir=None, newdir=None, **kwargs):
+    output = $({activate_command})
+    if output:
+        execx(output)
+
+def {deactivate_function}():
+    global {activate_function}, {deactivate_function}
+    output = $({deactivate_command})
+    if output:
+        execx(output)
+    for handler in list(events.on_chdir):
+        if getattr(handler, '__name__', '') == '{activate_function}':
+            events.on_chdir.discard(handler)
+    del {activate_function}, {deactivate_function}
+
+# Re-sourcing creates new function objects, so deduplicate by name
+if not any(getattr(handler, '__name__', '') == '{activate_function}' for handler in events.on_chdir):
+    events.on_chdir({activate_function})
+"#
+                )
+            }
+        }))
+    }
+
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         get_config_dir(home_dir).join("xonsh").join("rc.xsh")
     }
@@ -79,6 +114,7 @@ impl fmt::Display for Xonsh {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -86,6 +122,18 @@ mod tests {
             Xonsh.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$PROTO_HOME = "$HOME/.proto""#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let hook = Hook::OnChangeDir {
+            activate_command: "starbase hook xonsh".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate xonsh".into(),
+            deactivate_function: "_starbase_deactivate".into(),
+        };
+
+        assert_snapshot!(Xonsh.format_hook(hook).unwrap());
     }
 
     #[test]

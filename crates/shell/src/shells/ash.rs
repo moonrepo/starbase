@@ -26,6 +26,10 @@ impl Shell for Ash {
         self.inner.format(statement)
     }
 
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        self.inner.format_hook(hook)
+    }
+
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         home_dir.join(".ashrc")
     }
@@ -48,6 +52,7 @@ impl fmt::Display for Ash {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -55,6 +60,18 @@ mod tests {
             Ash::new().format_env_set("PROTO_HOME", "$HOME/.proto"),
             "export PROTO_HOME=\"$HOME/.proto\";"
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let hook = Hook::OnChangeDir {
+            activate_command: "starbase hook ash".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate ash".into(),
+            deactivate_function: "_starbase_deactivate".into(),
+        };
+
+        assert_snapshot!(Ash::new().format_hook(hook).unwrap());
     }
 
     #[test]

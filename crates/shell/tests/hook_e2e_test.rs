@@ -364,6 +364,161 @@ out done
     }
 }
 
+// POSIX shells have no native hook, so the rendered hook shadows the `cd`
+// builtin. The activate stub increments a counter so the assertions prove
+// the hook fires exactly once per cd (re-sourcing must not stack wrappers).
+// Sh, Dash, and Ash all render the same hook, so one script drives all
+// three binaries.
+#[cfg(unix)]
+#[test]
+fn posix_shells_activate_and_deactivate() {
+    let hook = format_hook(
+        ShellType::Sh,
+        r#"printf 'export E2E_FOO="123";\nexport E2E_COUNT=$((${E2E_COUNT:-0}+1));\n'"#,
+        r#"printf 'unset E2E_FOO;\nunset E2E_COUNT;\n'"#,
+    );
+
+    let sandbox = create_empty_sandbox();
+    sandbox.create_file("hook.sh", &hook);
+    sandbox.create_file(
+        "test.sh",
+        r#"
+root="$(pwd)"
+. "$root/hook.sh"
+cd /
+echo "FOO=$E2E_FOO COUNT=$E2E_COUNT"
+. "$root/hook.sh"
+cd /tmp
+echo "COUNT=$E2E_COUNT"
+_starbase_deactivate
+echo "FOO=${E2E_FOO:-unset}"
+cd /usr
+echo "after COUNT=${E2E_COUNT:-0}"
+. "$root/hook.sh"
+cd /
+echo "cycle FOO=$E2E_FOO COUNT=$E2E_COUNT"
+"#,
+    );
+
+    for bin in ["sh", "dash", "ash"] {
+        if let Some(output) = run_script(&sandbox, bin, &["./test.sh"]) {
+            assert_eq!(
+                stdout(&output),
+                "FOO=123 COUNT=1\nCOUNT=2\nFOO=unset\nafter COUNT=0\ncycle FOO=123 COUNT=1\n",
+                "shell: {bin}"
+            );
+        }
+    }
+}
+
+// Xonsh statements are applied with `execx`, and handlers on the set-like
+// `events.on_chdir` are matched by name. Repeating the hook inline is fine
+// (Python rebinds the defs), so the second copy exercises the dedup guard
+// and the third re-activates after deactivation.
+#[cfg(unix)]
+#[test]
+fn xonsh_activates_and_deactivates() {
+    let sandbox = create_empty_sandbox();
+    sandbox.create_file(
+        "activate.sh",
+        r#"printf '$E2E_FOO = "123"\n$E2E_BAR = "456"\n'"#,
+    );
+    sandbox.create_file("deactivate.sh", r#"printf 'del $E2E_FOO\ndel $E2E_BAR\n'"#);
+
+    let hook = format_hook(
+        ShellType::Xonsh,
+        &format!("sh {}/activate.sh", sandbox.path().display()),
+        &format!("sh {}/deactivate.sh", sandbox.path().display()),
+    );
+
+    sandbox.create_file(
+        "test.xsh",
+        format!(
+            "{hook}\n{hook}\n{}\n{hook}\n{}",
+            r#"
+_starbase_hook()
+print("foo=" + ${...}.get('E2E_FOO', 'unset'))
+print("hooks=" + str(sum(1 for h in events.on_chdir if getattr(h, '__name__', '') == '_starbase_hook')))
+$E2E_FOO = 'reset'
+cd /
+print("chdir foo=" + ${...}.get('E2E_FOO', 'unset'))
+_starbase_deactivate()
+print("hooks=" + str(sum(1 for h in events.on_chdir if getattr(h, '__name__', '') == '_starbase_hook')))
+print("removed foo=" + ${...}.get('E2E_FOO', 'unset'))
+print("funcs=" + str('_starbase_hook' in globals() or '_starbase_deactivate' in globals()))
+cd /tmp
+print("after foo=" + ${...}.get('E2E_FOO', 'unset'))
+"#,
+            r#"
+cd /
+print("cycle foo=" + ${...}.get('E2E_FOO', 'unset'))
+"#
+        ),
+    );
+
+    if let Some(output) = run_script(&sandbox, "xonsh", &["--no-rc", "./test.xsh"]) {
+        assert_eq!(
+            stdout(&output),
+            "foo=123\nhooks=1\nchdir foo=123\nhooks=0\nremoved foo=unset\nfuncs=False\nafter foo=unset\ncycle foo=123\n"
+        );
+    }
+}
+
+// Windows PowerShell 5.1 hooks by wrapping the global `prompt` function.
+// Prompts never render under `-File`, so the trigger is simulated by
+// invoking `prompt` directly. The activation exports run a native command
+// (exit 3) to prove `$LASTEXITCODE` is restored.
+#[test]
+fn powershell_activates_and_deactivates() {
+    let hook = format_hook(
+        ShellType::PowerShell,
+        r#"Write-Output '& cmd /c exit 3; $env:E2E_FOO = "123"; $env:E2E_BAR = "456";'"#,
+        r#"Write-Output 'Remove-Item -LiteralPath "env:E2E_FOO" -ErrorAction Ignore; Remove-Item -LiteralPath "env:E2E_BAR" -ErrorAction Ignore;'"#,
+    );
+
+    let sandbox = create_empty_sandbox();
+    sandbox.create_file("hook.ps1", &hook);
+    sandbox.create_file(
+        "test.ps1",
+        r#"
+. $PSScriptRoot/hook.ps1
+. $PSScriptRoot/hook.ps1
+Write-Output "wrapped=$($function:prompt.ToString().Contains('_starbase_hook'))"
+Write-Output "nested=$($global:_starbase_hook_prompt.ToString().Contains('_starbase_hook'))"
+& cmd /c exit 7
+prompt > $null
+Write-Output "E2E_FOO=$env:E2E_FOO E2E_BAR=$env:E2E_BAR"
+Write-Output "EXIT=$global:LASTEXITCODE"
+_starbase_deactivate
+Write-Output "unwrapped=$(-not $function:prompt.ToString().Contains('_starbase_hook'))"
+Write-Output "E2E_FOO=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
+prompt > $null
+Write-Output "still=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
+Write-Output "FUNCS=$((Get-Command _starbase_hook, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
+. $PSScriptRoot/hook.ps1
+prompt > $null
+Write-Output "cycle=$env:E2E_FOO"
+"#,
+    );
+
+    if let Some(output) = run_script(
+        &sandbox,
+        "powershell",
+        &[
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "./test.ps1",
+        ],
+    ) {
+        assert_eq!(
+            stdout(&output),
+            "wrapped=True\nnested=False\nE2E_FOO=123 E2E_BAR=456\nEXIT=7\nunwrapped=True\nE2E_FOO=unset\nstill=unset\nFUNCS=0\ncycle=123\n"
+        );
+    }
+}
+
 #[test]
 fn pwsh_activates_and_deactivates() {
     // The activation exports run a native command (exit 3) to prove the hook
@@ -399,7 +554,17 @@ Write-Output "HANDLERS=$($ExecutionContext.SessionState.InvokeCommand.LocationCh
 "#,
     );
 
-    if let Some(output) = run_script(&sandbox, "pwsh", &["-NoProfile", "-File", "./test.ps1"]) {
+    if let Some(output) = run_script(
+        &sandbox,
+        "pwsh",
+        &[
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "./test.ps1",
+        ],
+    ) {
         assert_eq!(
             stdout(&output),
             "E2E_FOO=123 E2E_BAR=456\nEXIT=7\nHANDLERS=1\nHANDLERS=0\nE2E_FOO=unset\nFUNCS=0\nE2E_FOO=123\nHANDLERS=1\n"

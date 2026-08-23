@@ -26,6 +26,10 @@ impl Shell for Dash {
         self.inner.format(statement)
     }
 
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        self.inner.format_hook(hook)
+    }
+
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         home_dir.join(".profile")
     }
@@ -48,6 +52,7 @@ impl fmt::Display for Dash {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -55,6 +60,18 @@ mod tests {
             Dash::new().format_env_set("PROTO_HOME", "$HOME/.proto"),
             "export PROTO_HOME=\"$HOME/.proto\";"
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let hook = Hook::OnChangeDir {
+            activate_command: "starbase hook dash".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate dash".into(),
+            deactivate_function: "_starbase_deactivate".into(),
+        };
+
+        assert_snapshot!(Dash::new().format_hook(hook).unwrap());
     }
 
     #[test]
