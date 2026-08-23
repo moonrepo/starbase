@@ -3,7 +3,7 @@ use crate::signal::*;
 use bytes::Bytes;
 use std::io;
 use std::process::ExitStatus;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::Mutex;
 
@@ -43,9 +43,9 @@ impl ChildExit {
 /// clone is visible to all others.
 #[derive(Clone)]
 pub struct SharedChild {
-    control: Arc<ProcessControl>,
+    exit: Arc<OnceLock<ChildExit>>,
     inner: Arc<Mutex<Child>>,
-    signal: Arc<OnceLock<SignalType>>,
+    signal: Arc<StdMutex<Option<SignalType>>>,
     pid: u32,
     #[cfg(windows)]
     handle: RawHandle,
@@ -53,31 +53,17 @@ pub struct SharedChild {
 
 impl SharedChild {
     /// Wrap a spawned child so it can be shared across tasks.
-    #[cfg(unix)]
     pub fn new(child: Child) -> Self {
-        Self {
-            control: Arc::new(ProcessControl::Direct),
-            pid: child.id().unwrap(),
-            inner: Arc::new(Mutex::new(child)),
-            signal: Arc::new(OnceLock::new()),
-        }
-    }
+        let pid = child.id().unwrap();
 
-    /// Wrap a spawned child so it can be shared across tasks.
-    #[cfg(windows)]
-    pub fn new(child: Child) -> Self {
         Self {
-            control: Arc::new(ProcessControl::Direct),
-            pid: child.id().unwrap(),
+            exit: Arc::new(OnceLock::new()),
+            pid,
+            #[cfg(windows)]
             handle: RawHandle(child.raw_handle().unwrap()),
             inner: Arc::new(Mutex::new(child)),
-            signal: Arc::new(OnceLock::new()),
+            signal: Arc::new(StdMutex::new(None)),
         }
-    }
-
-    /// Spawn a child in an owned process group or Job Object.
-    pub(crate) async fn spawn_managed(command: &mut tokio::process::Command) -> io::Result<Self> {
-        spawn_managed(command).await
     }
 
     /// Return the child's process id.
@@ -111,19 +97,129 @@ impl SharedChild {
         self.inner.lock().await.stderr.take()
     }
 
+    /// Observe whether a managed direct child exited without reaping it.
+    #[cfg(unix)]
+    pub(crate) fn managed_has_exited(&self) -> io::Result<bool> {
+        loop {
+            let mut info = std::mem::MaybeUninit::<libc::siginfo_t>::zeroed();
+            let result = unsafe {
+                libc::waitid(
+                    libc::P_PID,
+                    self.pid as libc::id_t,
+                    info.as_mut_ptr(),
+                    libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+                )
+            };
+
+            if result == 0 {
+                return Ok(unsafe { info.assume_init().si_pid() } != 0);
+            }
+
+            let error = io::Error::last_os_error();
+
+            if error.kind() != io::ErrorKind::Interrupted {
+                return Err(error);
+            }
+        }
+    }
+
+    /// Start killing a managed direct child without reaping it.
+    pub(crate) async fn managed_start_kill(&self) -> io::Result<()> {
+        self.inner.lock().await.start_kill()
+    }
+
+    /// Reap a managed direct child with the signal sent by its coordinator.
+    pub(crate) async fn managed_wait(&self, signal: Option<SignalType>) -> io::Result<ChildExit> {
+        self.wait_inner(move || signal).await
+    }
+
+    async fn wait_inner(
+        &self,
+        signal: impl FnOnce() -> Option<SignalType>,
+    ) -> io::Result<ChildExit> {
+        if let Some(exit) = self.exit.get() {
+            return Ok(exit.clone());
+        }
+
+        let mut child = self.inner.lock().await;
+
+        if let Some(exit) = self.exit.get() {
+            return Ok(exit.clone());
+        }
+
+        let status = child.wait().await?;
+        let exit = convert_exit_status(status, signal());
+
+        Ok(self.exit.get_or_init(|| exit).clone())
+    }
+
+    /// Observe whether a managed direct child exited without reaping it.
+    #[cfg(windows)]
+    pub(crate) fn managed_has_exited(&self) -> io::Result<bool> {
+        use windows_sys::Win32::Foundation::{WAIT_FAILED, WAIT_OBJECT_0, WAIT_TIMEOUT};
+        use windows_sys::Win32::System::Threading::WaitForSingleObject;
+
+        match unsafe { WaitForSingleObject(self.handle.0.cast(), 0) } {
+            WAIT_OBJECT_0 => Ok(true),
+            WAIT_TIMEOUT => Ok(false),
+            WAIT_FAILED => Err(io::Error::last_os_error()),
+            result => Err(io::Error::other(format!(
+                "unexpected process wait result {result}"
+            ))),
+        }
+    }
+
     /// Force kill the child immediately (`SIGKILL` on Unix, terminate on
     /// Windows), and wait for it to exit.
     pub async fn kill(&self) -> io::Result<ChildExit> {
-        self.kill_with_signal(SignalType::Kill).await
+        if let Some(exit) = self.exit.get() {
+            return Ok(exit.clone());
+        }
+
+        let mut child = self.inner.lock().await;
+
+        if let Some(exit) = self.exit.get() {
+            return Ok(exit.clone());
+        }
+
+        if let Some(status) = child.try_wait()? {
+            let exit = convert_exit_status(status, None);
+
+            return Ok(self.exit.get_or_init(|| exit).clone());
+        }
+
+        child.start_kill()?;
+        let status = child.wait().await?;
+        let exit = convert_exit_status(status, Some(SignalType::Kill));
+
+        Ok(self.exit.get_or_init(|| exit).clone())
     }
 
     /// Send `signal` to the child and wait for it to exit. The signal is
     /// remembered, so the resulting [`ChildExit`] reflects it even if the
     /// child's own exit status doesn't carry it (e.g. on Windows).
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
-        self.signal.get_or_init(|| signal);
+        if let Some(exit) = self.exit.get() {
+            return Ok(exit.clone());
+        }
 
-        self.control.signal(self, signal)?;
+        let result = {
+            let mut recorded_signal = self.signal.lock().expect("child signal lock poisoned");
+
+            #[cfg(unix)]
+            let result = kill(self.pid, signal);
+
+            #[cfg(windows)]
+            let result = kill(self.pid, self.handle.clone(), signal);
+
+            if result.is_ok() && recorded_signal.is_none() {
+                *recorded_signal = Some(signal);
+            }
+
+            result
+        };
+
+        result?;
 
         // Acquire the child _after_ the kill command, otherwise it waits for
         // the command to finish running before killing, because the lock is
@@ -138,29 +234,7 @@ impl SharedChild {
     /// process it may have spawned. Unlike [`Self::wait_with_output`], no
     /// pipes are read, so a child writing to a full pipe will block forever.
     pub async fn wait(&self) -> io::Result<ChildExit> {
-        let mut child = self.inner.lock().await;
-        let status = child.wait().await?;
-
-        Ok(convert_exit_status(status, self.signal.get().copied()))
-    }
-
-    /// Wait for the direct child and clean up the owned process group or Job Object.
-    pub(crate) async fn wait_managed(&self) -> io::Result<ChildExit> {
-        #[cfg(unix)]
-        if matches!(&*self.control, ProcessControl::ProcessGroup(_)) {
-            let pid = self.pid;
-            tokio::task::spawn_blocking(move || wait_unix_noreap(pid))
-                .await
-                .map_err(|error| io::Error::other(format!("process waiter panicked: {error}")))??;
-            self.control.cleanup_remaining()?;
-
-            return self.wait().await;
-        }
-
-        let exit = self.wait().await?;
-        self.control.cleanup_remaining()?;
-
-        Ok(exit)
+        self.wait_inner(|| self.recorded_signal()).await
     }
 
     /// Wait for the child to exit and drain its piped output.
@@ -203,335 +277,21 @@ impl SharedChild {
         drop(stdout_pipe);
         drop(stderr_pipe);
 
+        let exit = convert_exit_status(status, self.recorded_signal());
+
         Ok(Output {
-            exit: convert_exit_status(status, self.signal.get().copied()),
+            exit: self.exit.get_or_init(|| exit).clone(),
             stdout: Bytes::from(stdout),
             stderr: Bytes::from(stderr),
         })
     }
-}
 
-enum ProcessControl {
-    Direct,
-    #[cfg(unix)]
-    ProcessGroup(i32),
-    #[cfg(windows)]
-    Job(JobObject),
-}
-
-impl ProcessControl {
-    fn signal(&self, child: &SharedChild, signal: SignalType) -> io::Result<()> {
-        match self {
-            Self::Direct => {
-                #[cfg(unix)]
-                return kill(child.pid, signal);
-
-                #[cfg(windows)]
-                return kill(child.pid, child.handle.clone(), signal);
-
-                #[allow(unreachable_code)]
-                Err(io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "process signals are not supported on this platform",
-                ))
-            }
-            #[cfg(unix)]
-            Self::ProcessGroup(pgid) => {
-                let result = unsafe { libc::kill(-pgid, signal.get_code()) };
-
-                if result == 0 {
-                    Ok(())
-                } else {
-                    ignore_finished_group(Err(io::Error::last_os_error()))
-                }
-            }
-            #[cfg(windows)]
-            Self::Job(job) => match signal {
-                SignalType::Interrupt => kill(child.pid, child.handle.clone(), signal),
-                _ => job.terminate(),
-            },
-        }
-    }
-
-    fn cleanup_remaining(&self) -> io::Result<()> {
-        match self {
-            Self::Direct => Ok(()),
-            #[cfg(unix)]
-            Self::ProcessGroup(pgid) => {
-                let result = unsafe { libc::kill(-pgid, libc::SIGKILL) };
-
-                if result == 0 {
-                    Ok(())
-                } else {
-                    ignore_finished_group(Err(io::Error::last_os_error()))
-                }
-            }
-            #[cfg(windows)]
-            Self::Job(job) => job.terminate(),
-        }
+    fn recorded_signal(&self) -> Option<SignalType> {
+        *self.signal.lock().expect("child signal lock poisoned")
     }
 }
 
-#[cfg(unix)]
-async fn spawn_managed(command: &mut tokio::process::Command) -> io::Result<SharedChild> {
-    use std::os::unix::process::CommandExt;
-
-    command.as_std_mut().process_group(0);
-    let child = command.spawn()?;
-    let pid = child.id().expect("spawned child has a process id");
-
-    Ok(SharedChild {
-        control: Arc::new(ProcessControl::ProcessGroup(
-            i32::try_from(pid).map_err(io::Error::other)?,
-        )),
-        inner: Arc::new(Mutex::new(child)),
-        signal: Arc::new(OnceLock::new()),
-        pid,
-    })
-}
-
-#[cfg(unix)]
-fn wait_unix_noreap(pid: u32) -> io::Result<()> {
-    loop {
-        let mut siginfo = std::mem::MaybeUninit::zeroed();
-        let result = unsafe {
-            libc::waitid(
-                libc::P_PID,
-                pid as libc::id_t,
-                siginfo.as_mut_ptr(),
-                libc::WEXITED | libc::WNOWAIT,
-            )
-        };
-
-        if result == 0 {
-            return Ok(());
-        }
-
-        let error = io::Error::last_os_error();
-
-        if error.kind() != io::ErrorKind::Interrupted {
-            return Err(error);
-        }
-    }
-}
-
-#[cfg(unix)]
-fn ignore_finished_group(result: io::Result<()>) -> io::Result<()> {
-    match result {
-        Err(error) if error.raw_os_error() == Some(libc::ESRCH) => Ok(()),
-        #[cfg(target_vendor = "apple")]
-        Err(error) if error.raw_os_error() == Some(libc::EPERM) => Ok(()),
-        result => result,
-    }
-}
-
-#[cfg(windows)]
-async fn spawn_managed(command: &mut tokio::process::Command) -> io::Result<SharedChild> {
-    use std::os::windows::process::CommandExt;
-    use windows_sys::Win32::System::Threading::CREATE_SUSPENDED;
-
-    command.as_std_mut().creation_flags(CREATE_SUSPENDED);
-    let mut child = command.spawn()?;
-    let pid = child.id().expect("spawned child has a process id");
-    let process_handle = match child.raw_handle() {
-        Some(handle) => handle as windows_sys::Win32::Foundation::HANDLE,
-        None => {
-            let error = io::Error::other("spawned child has no process handle");
-            let cleanup = kill_and_wait_raw(&mut child).await.err();
-            return Err(with_cleanup_error(error, cleanup));
-        }
-    };
-    let job = match JobObject::create() {
-        Ok(job) => job,
-        Err(error) => {
-            let cleanup = kill_and_wait_raw(&mut child).await.err();
-            return Err(with_cleanup_error(error, cleanup));
-        }
-    };
-
-    if let Err(error) = job.assign(process_handle) {
-        let cleanup = kill_and_wait_raw(&mut child).await.err();
-        return Err(with_cleanup_error(error, cleanup));
-    }
-
-    if let Err(error) = resume_process_threads(process_handle) {
-        let cleanup = match job.terminate() {
-            Ok(()) => child.wait().await.map(|_| ()),
-            Err(error) => Err(error),
-        }
-        .err();
-        return Err(with_cleanup_error(error, cleanup));
-    }
-
-    Ok(SharedChild {
-        control: Arc::new(ProcessControl::Job(job)),
-        handle: RawHandle(process_handle.cast()),
-        inner: Arc::new(Mutex::new(child)),
-        signal: Arc::new(OnceLock::new()),
-        pid,
-    })
-}
-
-#[cfg(windows)]
-async fn kill_and_wait_raw(child: &mut Child) -> io::Result<()> {
-    child.kill().await?;
-    child.wait().await?;
-    Ok(())
-}
-
-#[cfg(windows)]
-fn with_cleanup_error(primary: io::Error, cleanup: Option<io::Error>) -> io::Error {
-    match cleanup {
-        Some(cleanup) => io::Error::new(
-            primary.kind(),
-            format!("{primary}; process cleanup also failed: {cleanup}"),
-        ),
-        None => primary,
-    }
-}
-
-#[cfg(windows)]
-struct JobObject(windows_sys::Win32::Foundation::HANDLE);
-
-#[cfg(windows)]
-unsafe impl Send for JobObject {}
-
-#[cfg(windows)]
-unsafe impl Sync for JobObject {}
-
-#[cfg(windows)]
-impl JobObject {
-    fn create() -> io::Result<Self> {
-        use windows_sys::Win32::System::JobObjects::{
-            CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
-            SetInformationJobObject,
-        };
-
-        let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
-
-        if handle.is_null() {
-            return Err(io::Error::last_os_error());
-        }
-
-        let job = Self(handle);
-        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        let configured = unsafe {
-            SetInformationJobObject(
-                job.0,
-                JobObjectExtendedLimitInformation,
-                std::ptr::from_ref(&limits).cast(),
-                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-            )
-        };
-
-        if configured == 0 {
-            return Err(io::Error::last_os_error());
-        }
-
-        Ok(job)
-    }
-
-    fn assign(&self, process: windows_sys::Win32::Foundation::HANDLE) -> io::Result<()> {
-        let assigned = unsafe {
-            windows_sys::Win32::System::JobObjects::AssignProcessToJobObject(self.0, process)
-        };
-
-        if assigned == 0 {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(())
-        }
-    }
-
-    fn terminate(&self) -> io::Result<()> {
-        let terminated =
-            unsafe { windows_sys::Win32::System::JobObjects::TerminateJobObject(self.0, 1) };
-
-        if terminated == 0 {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(())
-        }
-    }
-}
-
-#[cfg(windows)]
-impl Drop for JobObject {
-    fn drop(&mut self) {
-        unsafe {
-            windows_sys::Win32::Foundation::CloseHandle(self.0);
-        }
-    }
-}
-
-#[cfg(windows)]
-fn resume_process_threads(process: windows_sys::Win32::Foundation::HANDLE) -> io::Result<()> {
-    use windows_sys::Win32::{
-        Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
-        System::{
-            Diagnostics::ToolHelp::{
-                CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First,
-                Thread32Next,
-            },
-            Threading::{GetProcessId, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME},
-        },
-    };
-
-    let process_id = unsafe { GetProcessId(process) };
-    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
-
-    if snapshot == INVALID_HANDLE_VALUE {
-        return Err(io::Error::last_os_error());
-    }
-
-    let mut entry = THREADENTRY32 {
-        dwSize: std::mem::size_of::<THREADENTRY32>() as u32,
-        ..THREADENTRY32::default()
-    };
-    let mut found = false;
-    let mut has_entry = unsafe { Thread32First(snapshot, &mut entry) } != 0;
-    let mut result = Ok(());
-
-    while has_entry {
-        if entry.th32OwnerProcessID == process_id {
-            let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID) };
-
-            if thread.is_null() {
-                result = Err(io::Error::last_os_error());
-                break;
-            }
-
-            found = true;
-            let resumed = unsafe { ResumeThread(thread) };
-            unsafe {
-                CloseHandle(thread);
-            }
-
-            if resumed == u32::MAX {
-                result = Err(io::Error::last_os_error());
-                break;
-            }
-        }
-
-        has_entry = unsafe { Thread32Next(snapshot, &mut entry) } != 0;
-    }
-
-    unsafe {
-        CloseHandle(snapshot);
-    }
-
-    if result.is_ok() && !found {
-        return Err(io::Error::other(
-            "failed to find the suspended process thread",
-        ));
-    }
-
-    result
-}
-
-fn convert_exit_status(status: ExitStatus, raw_signal: Option<SignalType>) -> ChildExit {
+pub(crate) fn convert_exit_status(status: ExitStatus, raw_signal: Option<SignalType>) -> ChildExit {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;
@@ -545,9 +305,10 @@ fn convert_exit_status(status: ExitStatus, raw_signal: Option<SignalType>) -> Ch
         }
     }
 
-    // The Unix signal above sometimes doesn't capture the correct
-    // wait status, so to support those edges, and Windows in general,
-    // we'll read the raw signal that we explicitly used
+    // Windows exit statuses do not carry terminating signals, so use the
+    // signal that we explicitly sent. Unix must trust the wait status so a
+    // signal racing with a natural exit cannot overwrite that real result.
+    #[cfg(windows)]
     if let Some(signal) = raw_signal {
         return match signal {
             SignalType::Interrupt => ChildExit::Interrupted,
@@ -555,6 +316,9 @@ fn convert_exit_status(status: ExitStatus, raw_signal: Option<SignalType>) -> Ch
             other => ChildExit::Terminated(other.get_code()),
         };
     }
+
+    #[cfg(unix)]
+    let _ = raw_signal;
 
     ChildExit::Completed(status)
 }

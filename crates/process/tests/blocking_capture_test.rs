@@ -38,32 +38,45 @@ fn captures_stdout_and_stderr() {
 }
 
 #[test]
-fn passes_input_to_stdin() {
-    let mut command = create_command("cat");
-    command.input(["hello", "world"]);
+fn rejects_unsupported_options_before_spawning() {
+    for (option, configure) in [
+        ("buffered input", 0_u8),
+        ("output caching", 1),
+        ("continuous pipes", 2),
+    ] {
+        let marker = temp_path(option);
+        let mut command = create_command(&format!("touch '{}'", marker.display()));
 
-    let output = command
-        .exec_capture_output_to_memory_blocking(&CaptureOptions::default())
-        .unwrap();
+        match configure {
+            0 => {
+                command.input(["hello"]);
+            }
+            1 => {
+                command.set_cache(true);
+            }
+            _ => {
+                command.set_continuous_pipe(true);
+            }
+        }
 
-    assert_eq!(output.stdout.as_ref(), b"hello world");
-}
+        let error = command
+            .exec_capture_output_to_memory_blocking(&CaptureOptions::default())
+            .unwrap_err();
 
-#[test]
-fn survives_child_exiting_before_consuming_stdin() {
-    let mut command = create_command("exit 0");
-    command.input(vec!["x".repeat(1024); 2048]);
-
-    let output = command
-        .exec_capture_output_to_memory_blocking(&CaptureOptions::default())
-        .unwrap();
-
-    assert!(output.success());
+        assert!(matches!(
+            error.downcast_ref::<ProcessError>().unwrap(),
+            ProcessError::UnsupportedCaptureOption {
+                option: actual,
+                ..
+            } if *actual == option
+        ));
+        assert!(!marker.exists());
+    }
 }
 
 #[test]
 fn enforces_the_combined_output_limit() {
-    let error = create_command("printf '1234'; printf '5678' 1>&2")
+    let error = create_command("printf '1234'; printf '5678' 1>&2; sleep 5")
         .exec_capture_output_to_memory_blocking(&CaptureOptions {
             output_limit: Some(7),
             ..CaptureOptions::default()
@@ -82,15 +95,50 @@ fn enforces_the_combined_output_limit() {
 }
 
 #[test]
-fn completion_terminates_descendants_holding_output_pipes() {
-    let start = std::time::Instant::now();
-    let output = create_command("sleep 30 & printf 'ready'")
-        .exec_capture_output_to_memory_blocking(&CaptureOptions::default())
-        .unwrap();
+fn output_limit_after_parent_exit_terminates_descendants() {
+    let marker = temp_path("post-exit-output-limit");
+    let script = format!(
+        "(sleep 0.05; printf '12345678'; sleep 0.2; touch '{}') & exit 0",
+        marker.display()
+    );
+    let error = create_command(&script)
+        .exec_capture_output_to_memory_blocking(&CaptureOptions {
+            output_limit: Some(7),
+            ..CaptureOptions::default()
+        })
+        .unwrap_err();
 
-    assert!(output.success());
-    assert_eq!(output.stdout.as_ref(), b"ready");
-    assert!(start.elapsed() < Duration::from_secs(2));
+    assert!(matches!(
+        error.downcast_ref::<ProcessError>().unwrap(),
+        ProcessError::OutputLimitExceeded { .. }
+    ));
+
+    std::thread::sleep(Duration::from_millis(350));
+    assert!(!marker.exists());
+}
+
+#[test]
+fn normal_completion_does_not_kill_a_descendant_holding_a_pipe() {
+    let marker = temp_path("normal-descendant");
+    let script = format!("(sleep 0.2; touch '{}') & printf 'ready'", marker.display());
+    let error = create_command(&script)
+        .exec_capture_output_to_memory_blocking(&CaptureOptions {
+            output_drain_timeout: Some(Duration::from_millis(50)),
+            ..CaptureOptions::default()
+        })
+        .unwrap_err();
+
+    match error.downcast_ref::<ProcessError>().unwrap() {
+        ProcessError::OutputDrainTimeout {
+            output: Some(output),
+            ..
+        } => assert_eq!(output.stdout.as_ref(), b"ready"),
+        error => panic!("unexpected error: {error:?}"),
+    }
+
+    std::thread::sleep(Duration::from_millis(350));
+    assert!(marker.exists());
+    std::fs::remove_file(marker).unwrap();
 }
 
 #[cfg(target_os = "linux")]
@@ -110,6 +158,38 @@ fn reports_output_drain_timeout_for_detached_descendants() {
         } => assert_eq!(output.stdout.as_ref(), b"ready"),
         error => panic!("unexpected error: {error:?}"),
     }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn failure_cleanup_stays_bounded_when_normal_drain_is_unbounded() {
+    let pid_file = temp_path("detached-pid");
+    let script = format!(
+        "setsid sh -c 'echo $$ > \"{0}\"; sleep 30' & while [ ! -s \"{0}\" ]; do sleep 0.001; done; sleep 30",
+        pid_file.display(),
+    );
+    let start = std::time::Instant::now();
+    let error = create_command(&script)
+        .exec_capture_output_to_memory_blocking(&CaptureOptions {
+            timeout: Some(Duration::from_millis(50)),
+            output_drain_timeout: None,
+            ..CaptureOptions::default()
+        })
+        .unwrap_err();
+
+    assert!(matches!(
+        error.downcast_ref::<ProcessError>().unwrap(),
+        ProcessError::Timeout { .. }
+    ));
+    assert!(start.elapsed() < Duration::from_secs(2));
+
+    let pid = std::fs::read_to_string(&pid_file)
+        .unwrap()
+        .trim()
+        .parse::<i32>()
+        .unwrap();
+    unsafe { libc::kill(pid, libc::SIGKILL) };
+    std::fs::remove_file(pid_file).unwrap();
 }
 
 #[test]
