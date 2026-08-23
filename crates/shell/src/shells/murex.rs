@@ -27,6 +27,7 @@ impl Shell for Murex {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
         let mut options = QuoterOptions::default();
         options.quote_pairs.push(("%(".into(), ")".into(), false));
+        options.quote_pairs.push(("\"".into(), "\"".into(), false));
 
         Quoter::new(data, options)
     }
@@ -70,17 +71,27 @@ impl Shell for Murex {
     // hook referenced from https://github.com/direnv/direnv/blob/ff451a860b31f176d252c410b43d7803ec0f8b23/internal/cmd/shell_murex.go#L12
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
                     r#"
-$ENV.__ORIG_PATH="$ENV.PATH"
-
-function {function} {{
-  {command} -> source
+function {activate_function} {{
+  {activate_command} -> source
 }}
 
-event onPrompt {function}_hook=before {{
-  {function}
+function {deactivate_function} {{
+  {deactivate_command} -> source
+  !event onPrompt {activate_function}
+  !function {activate_function}
+  !function {deactivate_function}
+}}
+
+event onPrompt {activate_function}=before {{
+  {activate_function}
 }}
 "#
                 )
@@ -125,6 +136,7 @@ mod tests {
             Murex.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"$ENV.PROTO_HOME="$ENV.HOME/.proto""#
         );
+        assert_eq!(Murex.format_env_set("FOO", "don't"), "$ENV.FOO=%(don't)");
     }
 
     #[cfg(unix)]
@@ -166,8 +178,10 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            command: "starbase hook murex".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook murex".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate murex".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Murex.format_hook(hook).unwrap());
@@ -201,6 +215,8 @@ mod tests {
     fn test_murex_quoting() {
         assert_eq!(Murex.quote("value"), "value");
         assert_eq!(Murex.quote("value with spaces"), "'value with spaces'");
+        assert_eq!(Murex.quote("don't"), "%(don't)");
+        assert_eq!(Murex.quote("don't)"), "\"don't)\"");
         assert_eq!(Murex.quote("$(echo hello)"), "\"$(echo hello)\"");
         assert_eq!(Murex.quote(""), "''");
         assert_eq!(Murex.quote("abc123"), "abc123");

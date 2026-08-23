@@ -28,24 +28,24 @@ impl Elvish {
 // https://elv.sh/ref/command.html#using-elvish-interactivelyn
 impl Shell for Elvish {
     fn create_quoter<'a>(&self, data: Quotable<'a>) -> Quoter<'a> {
-        Quoter::new(
-            data,
-            QuoterOptions {
-                quoted_syntax: vec![],
-                // https://elv.sh/learn/tour.html#brace-expansion
-                unquoted_syntax: vec![
-                    // brace
-                    Syntax::Pair("{".into(), "}".into()),
-                    // tilde
-                    Syntax::Symbol("{~}".into()),
-                    // file, glob
-                    Syntax::Symbol("**".into()),
-                    Syntax::Symbol("*".into()),
-                    Syntax::Symbol("?".into()),
-                ],
-                ..Default::default()
-            },
-        )
+        let mut options = QuoterOptions {
+            quoted_syntax: vec![],
+            // https://elv.sh/learn/tour.html#brace-expansion
+            unquoted_syntax: vec![
+                // brace
+                Syntax::Pair("{".into(), "}".into()),
+                // tilde
+                Syntax::Symbol("{~}".into()),
+                // file, glob
+                Syntax::Symbol("**".into()),
+                Syntax::Symbol("*".into()),
+                Syntax::Symbol("?".into()),
+            ],
+            ..Default::default()
+        };
+        options.quote_pairs.push(("\"".into(), "\"".into(), false));
+
+        Quoter::new(data, options)
     }
 
     fn format(&self, statement: Statement<'_>) -> String {
@@ -99,18 +99,25 @@ impl Shell for Elvish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
                     r#"
-set-env __ORIG_PATH $E:PATH
-
-fn {function} {{
-  eval ({command});
+fn {activate_function} {{|@_|
+  eval ({activate_command} | slurp)
 }}
 
-set @edit:before-readline = $@edit:before-readline {{
-  {function}
+fn {deactivate_function} {{
+  eval ({deactivate_command} | slurp)
+  set after-chdir = [(each {{|hook| if (not (and (has-key $hook def) (eq $hook[def] ${activate_function}~[def]))) {{ put $hook }} }} $after-chdir)]
 }}
+
+set after-chdir = [(each {{|hook| if (not (and (has-key $hook def) (eq $hook[def] ${activate_function}~[def]))) {{ put $hook }} }} $after-chdir)]
+set @after-chdir = $@after-chdir ${activate_function}~
 "#
                 )
             }
@@ -170,6 +177,10 @@ mod tests {
             "set-env PROTO_HOME {~}/.proto;"
         );
         assert_eq!(Elvish.format_env_set("FOO", "bar"), "set-env FOO bar;");
+        assert_eq!(
+            Elvish.format_env_set("FOO", "don't"),
+            "set-env FOO \"don't\";"
+        );
     }
 
     #[cfg(unix)]
@@ -201,8 +212,10 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            command: "starbase hook elvish".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook elvish".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate elvish".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Elvish.format_hook(hook).unwrap());
@@ -256,8 +269,8 @@ mod tests {
         assert_eq!(Elvish.quote("A"), "A");
 
         // Single quotes
-        assert_eq!(Elvish.quote("it's"), "'it's'");
-        assert_eq!(Elvish.quote("value'with'quotes"), "'value'with'quotes'");
+        assert_eq!(Elvish.quote("it's"), "\"it's\"");
+        assert_eq!(Elvish.quote("value'with'quotes"), "\"value'with'quotes\"");
 
         // Double quotes
         assert_eq!(Elvish.quote("value with spaces"), r#"'value with spaces'"#);

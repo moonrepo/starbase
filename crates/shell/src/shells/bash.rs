@@ -78,16 +78,19 @@ impl Shell for Bash {
     // https://mywiki.wooledge.org/SignalTrap
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
                     r#"
-export __ORIG_PATH="$PATH"
-
-{function}() {{
+{activate_function}() {{
   local previous_exit_status=$?;
   local output;
   trap '' SIGINT;
-  output=$({command})
+  output=$({activate_command})
   if [ -n "$output" ]; then
     eval "$output";
   fi
@@ -95,12 +98,36 @@ export __ORIG_PATH="$PATH"
   return $previous_exit_status;
 }};
 
-if [[ ";${{PROMPT_COMMAND[*]:-}};" != *";{function};"* ]]; then
-  if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
-    PROMPT_COMMAND=({function} "${{PROMPT_COMMAND[@]}}")
-  else
-    PROMPT_COMMAND="{function}${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
+{deactivate_function}() {{
+  local output;
+  output=$({deactivate_command})
+  if [ -n "$output" ]; then
+    eval "$output";
   fi
+  if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
+    local filtered=();
+    local entry;
+    for entry in "${{PROMPT_COMMAND[@]}}"; do
+      if [[ "$entry" != "{activate_function}" ]]; then
+        filtered+=("$entry");
+      fi
+    done
+    PROMPT_COMMAND=("${{filtered[@]}}");
+  else
+    PROMPT_COMMAND=";${{PROMPT_COMMAND:-}};";
+    PROMPT_COMMAND="${{PROMPT_COMMAND//;{activate_function};/;}}";
+    PROMPT_COMMAND="${{PROMPT_COMMAND#;}}";
+    PROMPT_COMMAND="${{PROMPT_COMMAND%;}}";
+  fi
+  unset -f {activate_function} {deactivate_function};
+}};
+
+if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
+  if [[ " ${{PROMPT_COMMAND[*]:-}} " != *" {activate_function} "* ]]; then
+    PROMPT_COMMAND=({activate_function} "${{PROMPT_COMMAND[@]}}")
+  fi
+elif [[ ";${{PROMPT_COMMAND:-}};" != *";{activate_function};"* ]]; then
+  PROMPT_COMMAND="{activate_function}${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
 fi
 "#
                 )
@@ -169,8 +196,10 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            command: "starbase hook bash".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook bash".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate bash".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Bash.format_hook(hook).unwrap());

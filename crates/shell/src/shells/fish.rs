@@ -65,13 +65,21 @@ impl Shell for Fish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
                     r#"
-set -gx __ORIG_PATH $PATH
+function {activate_function} --on-variable PWD;
+  {activate_command} | source
+end;
 
-function {function} --on-variable PWD;
-  {command} | source
+function {deactivate_function};
+  {deactivate_command} | source
+  functions --erase {activate_function} {deactivate_function}
 end;
 "#
                 )
@@ -133,8 +141,10 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            command: "starbase hook fish".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook fish".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate fish".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Fish.format_hook(hook).unwrap());

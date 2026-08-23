@@ -35,24 +35,37 @@ impl Shell for Zsh {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir { command, function } => {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
                 format!(
                     r#"
-export __ORIG_PATH="$PATH"
-
-{function}() {{
+{activate_function}() {{
   local output
   trap '' SIGINT
-  output=$({command})
+  output=$({activate_command})
   if [ -n "$output" ]; then
     eval "$output";
   fi
   trap - SIGINT
 }}
 
+{deactivate_function}() {{
+  local output
+  output=$({deactivate_command})
+  if [ -n "$output" ]; then
+    eval "$output";
+  fi
+  chpwd_functions=(${{chpwd_functions:#{activate_function}}})
+  unfunction {activate_function} {deactivate_function} 2>/dev/null
+}}
+
 typeset -ag chpwd_functions
-if (( ! ${{chpwd_functions[(I){function}]}} )); then
-  chpwd_functions=({function} $chpwd_functions)
+if (( ! ${{chpwd_functions[(I){activate_function}]}} )); then
+  chpwd_functions=({activate_function} $chpwd_functions)
 fi
 "#
                 )
@@ -117,8 +130,10 @@ mod tests {
     #[test]
     fn formats_cd_hook() {
         let hook = Hook::OnChangeDir {
-            command: "starbase hook zsh".into(),
-            function: "_starbase_hook".into(),
+            activate_command: "starbase hook zsh".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate zsh".into(),
+            deactivate_function: "_starbase_deactivate".into(),
         };
 
         assert_snapshot!(Zsh::new().format_hook(hook).unwrap());

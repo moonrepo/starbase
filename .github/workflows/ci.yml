@@ -52,12 +52,38 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        # Shells that must be present for the hook E2E tests
+        # (`crates/shell/tests/hook_e2e_test.rs`), which skip missing shells
+        # unless listed here. pwsh is pre-installed on all runner images.
+        include:
+          - os: ubuntu-latest
+            required-shells: bash,zsh,fish,elvish,nu,murex,pwsh,xonsh,sh,dash,ash
+          - os: macos-latest
+            required-shells: bash,zsh,fish,elvish,nu,murex,pwsh,xonsh,sh,dash
+          - os: windows-latest
+            required-shells: nu,pwsh,powershell
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
+        with:
+          bins: nu
+      - name: Install shells (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh fish elvish xonsh busybox
+          # busybox runs its ash applet when invoked as `ash`
+          sudo ln -sf "$(command -v busybox)" /usr/local/bin/ash
+          go install github.com/lmorg/murex@latest
+          echo "$HOME/go/bin" >> "$GITHUB_PATH"
+      - name: Install shells (macOS)
+        if: runner.os == 'macOS'
+        run: brew install fish elvish murex xonsh
       - name: Run tests
         run: cargo test --workspace
+        env:
+          STARBASE_REQUIRED_SHELLS: ${{ matrix.required-shells }}
   wasm:
     name: WASM
     runs-on: ${{ matrix.os }}

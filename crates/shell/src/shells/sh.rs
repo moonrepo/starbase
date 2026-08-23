@@ -1,4 +1,5 @@
 use super::Shell;
+use crate::helpers::normalize_newlines;
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Quotable, Sh as ShQuoter};
@@ -62,6 +63,49 @@ impl Shell for Sh {
         }
     }
 
+    // POSIX shells have no native change-dir or prompt hook, so shadow the
+    // `cd` builtin with a function. Redefining the function is naturally
+    // idempotent, and deactivation restores the builtin with `unset -f`.
+    // Caveat: this clobbers any other tool's `cd` wrapper, as POSIX offers
+    // no way to introspect or chain an existing function.
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
+                format!(
+                    r#"
+{activate_function}() {{
+  {activate_function}_output=$({activate_command})
+  if [ -n "${activate_function}_output" ]; then
+    eval "${activate_function}_output"
+  fi
+  unset {activate_function}_output
+}}
+
+{deactivate_function}() {{
+  {deactivate_function}_output=$({deactivate_command})
+  if [ -n "${deactivate_function}_output" ]; then
+    eval "${deactivate_function}_output"
+  fi
+  unset {deactivate_function}_output
+  unset -f cd {activate_function} {deactivate_function}
+}}
+
+cd() {{
+  command cd "$@" || return $?
+  {activate_function}
+  return 0
+}}
+"#
+                )
+            }
+        }))
+    }
+
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         home_dir.join(".profile")
     }
@@ -84,6 +128,7 @@ impl fmt::Display for Sh {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use starbase_sandbox::assert_snapshot;
 
     #[test]
     fn formats_env_var() {
@@ -91,6 +136,18 @@ mod tests {
             Sh.format_env_set("PROTO_HOME", "$HOME/.proto"),
             r#"export PROTO_HOME="$HOME/.proto";"#
         );
+    }
+
+    #[test]
+    fn formats_cd_hook() {
+        let hook = Hook::OnChangeDir {
+            activate_command: "starbase hook sh".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate sh".into(),
+            deactivate_function: "_starbase_deactivate".into(),
+        };
+
+        assert_snapshot!(Sh.format_hook(hook).unwrap());
     }
 
     #[test]

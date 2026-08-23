@@ -2,8 +2,6 @@
 source: crates/shell/src/shells/zsh.rs
 expression: "Zsh::new().format_hook(hook).unwrap()"
 ---
-export __ORIG_PATH="$PATH"
-
 _starbase_hook() {
   local output
   trap '' SIGINT
@@ -12,6 +10,16 @@ _starbase_hook() {
     eval "$output";
   fi
   trap - SIGINT
+}
+
+_starbase_deactivate() {
+  local output
+  output=$(starbase deactivate zsh)
+  if [ -n "$output" ]; then
+    eval "$output";
+  fi
+  chpwd_functions=(${chpwd_functions:#_starbase_hook})
+  unfunction _starbase_hook _starbase_deactivate 2>/dev/null
 }
 
 typeset -ag chpwd_functions

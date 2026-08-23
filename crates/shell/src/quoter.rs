@@ -294,7 +294,17 @@ impl<'a> Quoter<'a> {
             .options
             .quote_pairs
             .iter()
-            .find(|(_, _, is_expansion)| !is_expansion)
+            .find(|(open, close, is_expansion)| {
+                !is_expansion
+                    && !quotable_contains(&self.data, open)
+                    && !quotable_contains(&self.data, close)
+            })
+            .or_else(|| {
+                self.options
+                    .quote_pairs
+                    .iter()
+                    .find(|(_, _, is_expansion)| !is_expansion)
+            })
             .or(self.options.quote_pairs.first())
             .unwrap();
 
@@ -345,6 +355,13 @@ fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
     !needle.is_empty()
         && haystack.len() >= needle.len()
         && haystack.windows(needle.len()).any(|chunk| chunk == needle)
+}
+
+fn quotable_contains(data: &Quotable<'_>, needle: &str) -> bool {
+    match data {
+        Quotable::Bytes(bytes) => contains_subslice(bytes, needle.as_bytes()),
+        Quotable::Text(text) => text.contains(needle),
+    }
 }
 
 fn quotable_contains_syntax(data: &Quotable<'_>, syntaxes: &[Syntax]) -> bool {
@@ -438,5 +455,13 @@ mod tests {
         // as already-quoted (they would silently collapse to `foobarbaz`).
         assert!(!quoter("'foo'bar'baz'").is_quoted());
         assert!(!quoter("'a' 'b'").is_quoted());
+    }
+
+    #[test]
+    fn quote_uses_an_available_non_expansion_pair() {
+        let mut options = QuoterOptions::default();
+        options.quote_pairs.push(("%(".into(), ")".into(), false));
+
+        assert_eq!(Quoter::new("don't", options).quote(), "%(don't)");
     }
 }

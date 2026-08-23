@@ -20,8 +20,51 @@ pub enum Statement<'data> {
     },
 }
 
+#[non_exhaustive]
 pub enum Hook {
-    OnChangeDir { command: String, function: String },
+    /// Registers a function that evaluates a command's output whenever the
+    /// current directory changes, alongside a paired function that reverses
+    /// it and unregisters the trigger.
+    ///
+    /// The trigger mechanism differs per shell:
+    ///
+    /// - On directory change: zsh (`chpwd_functions`), fish (`--on-variable PWD`),
+    ///   nu (`env_change.PWD`), elvish (`$after-chdir`), xonsh (`events.on_chdir`),
+    ///   pwsh (`LocationChangedAction`).
+    /// - On every prompt: bash (`PROMPT_COMMAND`), murex (`onPrompt`),
+    ///   powershell (wraps the global `prompt` function).
+    /// - On `cd` itself: sh, ash, dash — the `cd` builtin is shadowed with a
+    ///   function, and deactivation restores it. This clobbers any other `cd`
+    ///   wrapper, as POSIX offers no way to chain functions.
+    /// - Unsupported: ion.
+    ///
+    /// Most shells evaluate the command's output as shell syntax. Nu cannot
+    /// evaluate code at runtime, so both commands must instead print JSON:
+    /// `{ "env": { "KEY": "value" | null }, "paths": ["..."], "path": "..." }`,
+    /// where a null value unsets the variable, `paths` sets `PATH` from a
+    /// list, and `path` sets it from a pre-joined string.
+    ///
+    /// Consumers typically append an invocation of the activate function for
+    /// the initial run. This must include call parentheses for xonsh
+    /// (`_hook()`), and be a bare word for every other shell.
+    OnChangeDir {
+        /// Command that prints statements to evaluate when activating,
+        /// in shell specific-syntax (or JSON for nu), e.g. `proto activate zsh --export`.
+        activate_command: String,
+
+        /// Name of the function that evaluates [`Hook::OnChangeDir::activate_command`],
+        /// and is registered on the shell's change-dir (or prompt) trigger.
+        activate_function: String,
+
+        /// Command that prints statements to evaluate when deactivating,
+        /// in shell specific-syntax (or JSON for nu), e.g. `proto deactivate zsh --export`.
+        deactivate_command: String,
+
+        /// Name of the user-callable function that deactivates the current session:
+        /// evaluates [`Hook::OnChangeDir::deactivate_command`], unregisters the
+        /// change-dir trigger, and removes both functions where the shell allows it.
+        deactivate_function: String,
+    },
 }
 
 impl Hook {

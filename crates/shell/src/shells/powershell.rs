@@ -123,6 +123,30 @@ impl PowerShell {
 
         format!("Join-Path {}", parts.join(" "))
     }
+
+    fn format_env_value(&self, value: &str) -> String {
+        if get_env_var_regex().is_match(value) {
+            let value = self.replace_env(value);
+            let mut output = String::with_capacity(value.len() + 2);
+
+            output.push('"');
+
+            for ch in value.chars() {
+                match ch {
+                    '`' => output.push_str("``"),
+                    '"' => output.push_str("\"\""),
+                    _ => output.push(ch),
+                }
+            }
+
+            output.push('"');
+            output
+        } else if value.contains('\\') {
+            self.create_quoter(value.into()).quote()
+        } else {
+            self.quote(value)
+        }
+    }
 }
 
 // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-5.1
@@ -187,15 +211,7 @@ impl Shell for PowerShell {
             Statement::SetEnv { key, value } => {
                 let key = get_env_key_native(key);
 
-                if value.contains('/') || value.contains('\\') {
-                    format!("$env:{} = {};", key, self.join_path(value))
-                } else {
-                    format!(
-                        "$env:{} = {};",
-                        key,
-                        self.quote(self.replace_env(value).as_str())
-                    )
-                }
+                format!("$env:{} = {};", key, self.format_env_value(value))
             }
             Statement::UnsetAlias { name } => {
                 format!("Remove-Alias -Name {} -Force;", self.quote(name))
@@ -211,10 +227,64 @@ impl Shell for PowerShell {
         }
     }
 
+    // Windows PowerShell 5.1 lacks `LocationChangedAction` (added in
+    // PowerShell 6.1), so wrap the global `prompt` function instead — the
+    // same pattern used by starship, zoxide, and posh-git. This fires on
+    // every prompt rather than only on cd, matching bash's `PROMPT_COMMAND`.
+    // Deactivation restores the prompt saved at activation time, which also
+    // discards any wrapper another tool installed after ours — an inherent
+    // property of prompt wrapping.
+    fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
+        Ok(normalize_newlines(match hook {
+            Hook::OnChangeDir {
+                activate_command,
+                activate_function,
+                deactivate_command,
+                deactivate_function,
+            } => {
+                format!(
+                    r#"function {activate_function} {{
+  $previousExitCode = $global:LASTEXITCODE;
+  $exports = {activate_command};
+  if ($exports) {{
+    $exports | Out-String | Invoke-Expression;
+  }}
+  $global:LASTEXITCODE = $previousExitCode;
+}}
+
+function {deactivate_function} {{
+  $exports = {deactivate_command};
+  if ($exports) {{
+    $exports | Out-String | Invoke-Expression;
+  }}
+
+  if (Get-Variable -Name '{activate_function}_prompt' -Scope Global -ErrorAction Ignore) {{
+    Set-Item -Path 'function:global:prompt' -Value $global:{activate_function}_prompt;
+    Remove-Variable -Name '{activate_function}_prompt' -Scope Global;
+  }}
+
+  Remove-Item -LiteralPath 'function:{activate_function}' -ErrorAction Ignore;
+  Remove-Item -LiteralPath 'function:{deactivate_function}' -ErrorAction Ignore;
+}}
+
+if (-not (Get-Variable -Name '{activate_function}_prompt' -Scope Global -ErrorAction Ignore)) {{
+  $global:{activate_function}_prompt = $function:prompt;
+
+  function global:prompt {{
+    {activate_function};
+    & $global:{activate_function}_prompt;
+  }}
+}};
+"#
+                )
+            }
+        }))
+    }
+
     fn get_config_path(&self, home_dir: &Path) -> PathBuf {
         home_dir
             .join("Documents")
-            .join("PowerShell")
+            .join("WindowsPowerShell")
             .join("Microsoft.PowerShell_profile.ps1")
     }
 
@@ -323,10 +393,24 @@ mod tests {
     }
 
     #[test]
+    fn formats_cd_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        let hook = Hook::OnChangeDir {
+            activate_command: "starbase hook powershell".into(),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: "starbase deactivate powershell".into(),
+            deactivate_function: "_starbase_deactivate".into(),
+        };
+
+        assert_snapshot!(PowerShell.format_hook(hook).unwrap());
+    }
+
+    #[test]
     fn formats_env_var() {
         assert_eq!(
             PowerShell.format_env_set("PROTO_HOME", "$HOME/.proto"),
-            r#"$env:PROTO_HOME = Join-Path $HOME ".proto";"#
+            r#"$env:PROTO_HOME = "$HOME/.proto";"#
         );
         assert_eq!(
             PowerShell.format_env_set("PROTO_HOME", "$HOME"),
@@ -339,6 +423,14 @@ mod tests {
         assert_eq!(
             PowerShell.format_env_set("STRING", "a b c"),
             r#"$env:STRING = 'a b c';"#
+        );
+        assert_eq!(
+            PowerShell.format_env_set("URL", "https://$HOST/api"),
+            r#"$env:URL = "https://$env:HOST/api";"#
+        );
+        assert_eq!(
+            PowerShell.format_env_set("WINDOWS_PATH", r"$HOME\some\path"),
+            r#"$env:WINDOWS_PATH = "$HOME\some\path";"#
         );
     }
 
@@ -498,6 +590,18 @@ mod tests {
                     .join("Microsoft.PowerShell_profile.ps1"),
             ]
         );
+    }
+
+    #[test]
+    fn uses_windows_powershell_config_path() {
+        let home_dir = Path::new("home");
+        let expected = home_dir
+            .join("Documents")
+            .join("WindowsPowerShell")
+            .join("Microsoft.PowerShell_profile.ps1");
+
+        assert_eq!(PowerShell.get_config_path(home_dir), expected);
+        assert_eq!(PowerShell.get_env_path(home_dir), expected);
     }
 
     #[test]

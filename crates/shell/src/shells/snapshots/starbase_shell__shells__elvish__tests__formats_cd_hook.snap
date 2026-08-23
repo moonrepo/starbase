@@ -2,12 +2,14 @@
 source: crates/shell/src/shells/elvish.rs
 expression: Elvish.format_hook(hook).unwrap()
 ---
-set-env __ORIG_PATH $E:PATH
-
-fn _starbase_hook {
-  eval (starbase hook elvish);
+fn _starbase_hook {|@_|
+  eval (starbase hook elvish | slurp)
 }
 
-set @edit:before-readline = $@edit:before-readline {
-  _starbase_hook
+fn _starbase_deactivate {
+  eval (starbase deactivate elvish | slurp)
+  set after-chdir = [(each {|hook| if (not (and (has-key $hook def) (eq $hook[def] $_starbase_hook~[def]))) { put $hook } } $after-chdir)]
 }
+
+set after-chdir = [(each {|hook| if (not (and (has-key $hook def) (eq $hook[def] $_starbase_hook~[def]))) { put $hook } } $after-chdir)]
+set @after-chdir = $@after-chdir $_starbase_hook~
