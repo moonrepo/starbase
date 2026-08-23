@@ -1,6 +1,24 @@
 use serial_test::serial;
-use starbase_shell::ShellType;
+use starbase_shell::{Hook, ShellType};
 use std::env;
+
+#[test]
+fn all_shells_except_ion_support_cd_hook() {
+    for shell_type in ShellType::variants() {
+        let result = shell_type.build().format_hook(Hook::OnChangeDir {
+            activate_command: format!("starbase hook {shell_type}"),
+            activate_function: "_starbase_hook".into(),
+            deactivate_command: format!("starbase deactivate {shell_type}"),
+            deactivate_function: "_starbase_deactivate".into(),
+        });
+
+        if shell_type == ShellType::Ion {
+            assert!(result.is_err(), "{shell_type} should not support cd hooks");
+        } else {
+            assert!(result.is_ok(), "{shell_type} should support cd hooks");
+        }
+    }
+}
 
 #[test]
 #[serial]

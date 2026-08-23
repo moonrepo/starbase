@@ -27,7 +27,7 @@ fn format_hook(shell: ShellType, activate_command: &str, deactivate_command: &st
         .build()
         .format_hook(Hook::OnChangeDir {
             activate_command: activate_command.into(),
-            activate_function: "_starbase_hook".into(),
+            activate_function: "_starbase_activate".into(),
             deactivate_command: deactivate_command.into(),
             deactivate_function: "_starbase_deactivate".into(),
         })
@@ -91,15 +91,15 @@ fn bash_activates_and_deactivates() {
 PROMPT_COMMAND="starship_precmd"
 source ./hook.sh
 source ./hook.sh
-_starbase_hook
+_starbase_activate
 printf '%s\n' "$PROMPT_COMMAND"
 printf 'E2E_FOO=%s E2E_BAR=%s\n' "$E2E_FOO" "$E2E_BAR"
 _starbase_deactivate
 printf '%s\n' "$PROMPT_COMMAND"
 printf 'E2E_FOO=%s E2E_BAR=%s\n' "${E2E_FOO:-unset}" "${E2E_BAR:-unset}"
-type -t _starbase_hook >/dev/null 2>&1 || printf 'functions removed\n'
+type -t _starbase_activate >/dev/null 2>&1 || printf 'functions removed\n'
 source ./hook.sh
-_starbase_hook
+_starbase_activate
 printf '%s\n' "$PROMPT_COMMAND"
 printf 'E2E_FOO=%s\n' "$E2E_FOO"
 "#,
@@ -108,7 +108,7 @@ printf 'E2E_FOO=%s\n' "$E2E_FOO"
     if let Some(output) = run_script(&sandbox, "bash", &["./string.sh"]) {
         assert_eq!(
             stdout(&output),
-            "_starbase_hook;starship_precmd\nE2E_FOO=123 E2E_BAR=456\nstarship_precmd\nE2E_FOO=unset E2E_BAR=unset\nfunctions removed\n_starbase_hook;starship_precmd\nE2E_FOO=123\n"
+            "_starbase_activate;starship_precmd\nE2E_FOO=123 E2E_BAR=456\nstarship_precmd\nE2E_FOO=unset E2E_BAR=unset\nfunctions removed\n_starbase_activate;starship_precmd\nE2E_FOO=123\n"
         );
     }
 
@@ -131,7 +131,7 @@ printf '%s\n' "${PROMPT_COMMAND[*]}"
     if let Some(output) = run_script(&sandbox, "bash", &["./array.sh"]) {
         assert_eq!(
             stdout(&output),
-            "_starbase_hook starship_precmd other_thing\nstarship_precmd other_thing\n_starbase_hook starship_precmd other_thing\n"
+            "_starbase_activate starship_precmd other_thing\nstarship_precmd other_thing\n_starbase_activate starship_precmd other_thing\n"
         );
     }
 }
@@ -161,7 +161,7 @@ print -r -- "HOOKS=${#chpwd_functions[@]}"
 print -r -- "E2E_FOO=${E2E_FOO:-unset} E2E_BAR=${E2E_BAR:-unset}"
 cd /tmp
 print -r -- "after cd E2E_FOO=${E2E_FOO:-unset}"
-whence -w _starbase_hook >/dev/null 2>&1 || print -r -- "functions removed"
+whence -w _starbase_activate >/dev/null 2>&1 || print -r -- "functions removed"
 source "$root/hook.zsh"
 cd /usr
 print -r -- "HOOKS=${#chpwd_functions[@]} E2E_FOO=${E2E_FOO:-unset}"
@@ -202,7 +202,7 @@ if set -q E2E_FOO
 else
   printf 'E2E_FOO unset\n'
 end
-functions -q _starbase_hook; or printf 'functions removed\n'
+functions -q _starbase_activate; or printf 'functions removed\n'
 source $root/hook.fish
 cd /usr
 printf 'E2E_FOO=%s\n' $E2E_FOO
@@ -244,7 +244,7 @@ fn elvish_activates_and_deactivates() {
             "{hook}\n{}",
             r#"
 var root = $pwd
-_starbase_hook
+_starbase_activate
 echo direct=$E:E2E_FOO
 set-env E2E_FOO reset
 cd /
@@ -299,7 +299,7 @@ fn nu_activates_and_deactivates() {
 source "./hook.nu"
 source "./hook.nu"
 
-_starbase_hook
+_starbase_activate
 
 print $"foo=($env | get --optional E2E_FOO | default MISSING)"
 print $"gone=($env | get --optional E2E_GONE | default REMOVED)"
@@ -314,7 +314,7 @@ print $"hooks=($env.config.hooks.env_change.PWD | length)"
 
 source "./hook.nu"
 
-_starbase_hook
+_starbase_activate
 
 print $"foo=($env | get --optional E2E_FOO | default MISSING)"
 print $"hooks=($env.config.hooks.env_change.PWD | length)"
@@ -348,12 +348,12 @@ fn murex_activates_and_deactivates() {
         "test.mx",
         r#"
 source ./hook.mx
-_starbase_hook
+_starbase_activate
 out $ENV.E2E_FOO
 _starbase_deactivate
 sh -c 'echo "${E2E_FOO:-removed}"'
 source ./hook.mx
-_starbase_hook
+_starbase_activate
 out $ENV.E2E_FOO
 out done
 "#,
@@ -436,16 +436,16 @@ fn xonsh_activates_and_deactivates() {
         format!(
             "{hook}\n{hook}\n{}\n{hook}\n{}",
             r#"
-_starbase_hook()
+_starbase_activate()
 print("foo=" + ${...}.get('E2E_FOO', 'unset'))
-print("hooks=" + str(sum(1 for h in events.on_chdir if getattr(h, '__name__', '') == '_starbase_hook')))
+print("hooks=" + str(sum(1 for h in events.on_chdir if getattr(h, '__name__', '') == '_starbase_activate')))
 $E2E_FOO = 'reset'
 cd /
 print("chdir foo=" + ${...}.get('E2E_FOO', 'unset'))
 _starbase_deactivate()
-print("hooks=" + str(sum(1 for h in events.on_chdir if getattr(h, '__name__', '') == '_starbase_hook')))
+print("hooks=" + str(sum(1 for h in events.on_chdir if getattr(h, '__name__', '') == '_starbase_activate')))
 print("removed foo=" + ${...}.get('E2E_FOO', 'unset'))
-print("funcs=" + str('_starbase_hook' in globals() or '_starbase_deactivate' in globals()))
+print("funcs=" + str('_starbase_activate' in globals() or '_starbase_deactivate' in globals()))
 cd /tmp
 print("after foo=" + ${...}.get('E2E_FOO', 'unset'))
 "#,
@@ -483,18 +483,18 @@ fn powershell_activates_and_deactivates() {
         r#"
 . $PSScriptRoot/hook.ps1
 . $PSScriptRoot/hook.ps1
-Write-Output "wrapped=$($function:prompt.ToString().Contains('_starbase_hook'))"
-Write-Output "nested=$($global:_starbase_hook_prompt.ToString().Contains('_starbase_hook'))"
+Write-Output "wrapped=$($function:prompt.ToString().Contains('_starbase_activate'))"
+Write-Output "nested=$($global:_starbase_activate_prompt.ToString().Contains('_starbase_activate'))"
 & cmd /c exit 7
 prompt > $null
 Write-Output "E2E_FOO=$env:E2E_FOO E2E_BAR=$env:E2E_BAR"
 Write-Output "EXIT=$global:LASTEXITCODE"
 _starbase_deactivate
-Write-Output "unwrapped=$(-not $function:prompt.ToString().Contains('_starbase_hook'))"
+Write-Output "unwrapped=$(-not $function:prompt.ToString().Contains('_starbase_activate'))"
 Write-Output "E2E_FOO=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
 prompt > $null
 Write-Output "still=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
-Write-Output "FUNCS=$((Get-Command _starbase_hook, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
+Write-Output "FUNCS=$((Get-Command _starbase_activate, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
 . $PSScriptRoot/hook.ps1
 prompt > $null
 Write-Output "cycle=$env:E2E_FOO"
@@ -546,7 +546,7 @@ $action = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
 if ($null -eq $action) { Write-Output "HANDLERS=0" } else { Write-Output "HANDLERS=$($action.GetInvocationList().Count)" }
 Set-Location /
 Write-Output "E2E_FOO=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
-Write-Output "FUNCS=$((Get-Command _starbase_hook, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
+Write-Output "FUNCS=$((Get-Command _starbase_activate, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
 . $PSScriptRoot/hook.ps1
 Set-Location ([System.IO.Path]::GetTempPath())
 Write-Output "E2E_FOO=$env:E2E_FOO"

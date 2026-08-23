@@ -215,6 +215,9 @@ impl Shell for PowerShell {
     // PowerShell 6.1), so wrap the global `prompt` function instead — the
     // same pattern used by starship, zoxide, and posh-git. This fires on
     // every prompt rather than only on cd, matching bash's `PROMPT_COMMAND`.
+    // Deactivation restores the prompt saved at activation time, which also
+    // discards any wrapper another tool installed after ours — an inherent
+    // property of prompt wrapping.
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
             Hook::OnChangeDir {

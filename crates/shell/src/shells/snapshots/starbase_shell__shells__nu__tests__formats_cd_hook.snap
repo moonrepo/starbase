@@ -33,7 +33,9 @@ export def --env _starbase_hook [] {
 }
 
 export def --env _starbase_deactivate [] {
-    _starbase_hook_apply (starbase deactivate nu | from json)
+    # Unregistering must happen even when the command fails, so the
+    # reversal is best-effort, consistent with the other shells.
+    _starbase_hook_apply (try { starbase deactivate nu | from json } catch { {} })
 
     # Nu cannot undefine commands at runtime, so the functions remain
     # defined, but the hook itself is unregistered.

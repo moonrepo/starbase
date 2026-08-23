@@ -166,7 +166,9 @@ export def --env {activate_function} [] {{
 }}
 
 export def --env {deactivate_function} [] {{
-    {activate_function}_apply ({deactivate_command} | from json)
+    # Unregistering must happen even when the command fails, so the
+    # reversal is best-effort, consistent with the other shells.
+    {activate_function}_apply (try {{ {deactivate_command} | from json }} catch {{ {{}} }})
 
     # Nu cannot undefine commands at runtime, so the functions remain
     # defined, but the hook itself is unregistered.

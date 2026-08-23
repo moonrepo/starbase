@@ -20,7 +20,33 @@ pub enum Statement<'data> {
     },
 }
 
+#[non_exhaustive]
 pub enum Hook {
+    /// Registers a function that evaluates a command's output whenever the
+    /// current directory changes, alongside a paired function that reverses
+    /// it and unregisters the trigger.
+    ///
+    /// The trigger mechanism differs per shell:
+    ///
+    /// - On directory change: zsh (`chpwd_functions`), fish (`--on-variable PWD`),
+    ///   nu (`env_change.PWD`), elvish (`$after-chdir`), xonsh (`events.on_chdir`),
+    ///   pwsh (`LocationChangedAction`).
+    /// - On every prompt: bash (`PROMPT_COMMAND`), murex (`onPrompt`),
+    ///   powershell (wraps the global `prompt` function).
+    /// - On `cd` itself: sh, ash, dash — the `cd` builtin is shadowed with a
+    ///   function, and deactivation restores it. This clobbers any other `cd`
+    ///   wrapper, as POSIX offers no way to chain functions.
+    /// - Unsupported: ion.
+    ///
+    /// Most shells evaluate the command's output as shell syntax. Nu cannot
+    /// evaluate code at runtime, so both commands must instead print JSON:
+    /// `{ "env": { "KEY": "value" | null }, "paths": ["..."], "path": "..." }`,
+    /// where a null value unsets the variable, `paths` sets `PATH` from a
+    /// list, and `path` sets it from a pre-joined string.
+    ///
+    /// Consumers typically append an invocation of the activate function for
+    /// the initial run. This must include call parentheses for xonsh
+    /// (`_hook()`), and be a bare word for every other shell.
     OnChangeDir {
         /// Command that prints statements to evaluate when activating,
         /// in shell specific-syntax (or JSON for nu), e.g. `proto activate zsh --export`.
