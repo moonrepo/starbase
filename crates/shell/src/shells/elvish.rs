@@ -114,10 +114,23 @@ fn {activate_function} {{|@_|
 fn {deactivate_function} {{
   eval ({deactivate_command} | slurp)
   set after-chdir = [(each {{|hook| if (not (and (has-key $hook def) (eq $hook[def] ${activate_function}~[def]))) {{ put $hook }} }} $after-chdir)]
+  try {{
+    edit:del-vars ['{activate_function}~' '{deactivate_function}~']
+  }} catch _ {{
+    # Nothing was exported when non-interactive
+  }}
 }}
 
 set after-chdir = [(each {{|hook| if (not (and (has-key $hook def) (eq $hook[def] ${activate_function}~[def]))) {{ put $hook }} }} $after-chdir)]
 set @after-chdir = $@after-chdir ${activate_function}~
+
+# Consumers `eval` this code, which runs in a restricted namespace, so export
+# both functions for the interactive session to be able to call them
+try {{
+  edit:add-vars [&'{activate_function}~'=${activate_function}~ &'{deactivate_function}~'=${deactivate_function}~]
+}} catch _ {{
+  # The `edit:` module only exists in an interactive session
+}}
 "#
                 )
             }

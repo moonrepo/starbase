@@ -9,7 +9,20 @@ fn _starbase_hook {|@_|
 fn _starbase_deactivate {
   eval (starbase deactivate elvish | slurp)
   set after-chdir = [(each {|hook| if (not (and (has-key $hook def) (eq $hook[def] $_starbase_hook~[def]))) { put $hook } } $after-chdir)]
+  try {
+    edit:del-vars ['_starbase_hook~' '_starbase_deactivate~']
+  } catch _ {
+    # Nothing was exported when non-interactive
+  }
 }
 
 set after-chdir = [(each {|hook| if (not (and (has-key $hook def) (eq $hook[def] $_starbase_hook~[def]))) { put $hook } } $after-chdir)]
 set @after-chdir = $@after-chdir $_starbase_hook~
+
+# Consumers `eval` this code, which runs in a restricted namespace, so export
+# both functions for the interactive session to be able to call them
+try {
+  edit:add-vars [&'_starbase_hook~'=$_starbase_hook~ &'_starbase_deactivate~'=$_starbase_deactivate~]
+} catch _ {
+  # The `edit:` module only exists in an interactive session
+}

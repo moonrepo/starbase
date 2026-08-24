@@ -46,12 +46,23 @@ pub enum Hook {
     ///
     /// Consumers typically append an invocation of the activate function for
     /// the initial run. This must include call parentheses for xonsh
-    /// (`_hook()`), and be a bare word for every other shell.
+    /// (`_hook()`), and be a bare word for every other shell. Elvish and
+    /// xonsh evaluate the hook in a namespace of their own, so the appended
+    /// call works because it is part of the same evaluated string, not
+    /// because the function is reachable afterwards.
     ///
-    /// In xonsh, `execx()` does not evaluate into the shell's namespace, so
-    /// the generated code exports both functions into `__xonsh__.ctx`. This
-    /// keeps them callable after the documented `execx($(...))` sourcing, and
-    /// the deactivate function removes them from that namespace again.
+    /// Reaching both functions afterwards is what the shell scope must be
+    /// told about, since neither `eval` nor `execx()` evaluate into it:
+    ///
+    /// - Xonsh: the generated code assigns both functions into
+    ///   `__xonsh__.ctx`, and the deactivate function pops them again.
+    /// - Elvish: the generated code passes both functions to `edit:add-vars`,
+    ///   and the deactivate function removes them with `edit:del-vars`. The
+    ///   `edit:` module only exists in an interactive session, so both calls
+    ///   are wrapped in `try` and do nothing when scripted. Names added this
+    ///   way become available in the next REPL cycle. A script that must call
+    ///   the functions should evaluate the hook as a module instead
+    ///   (`use <module>`), which namespaces them as `<module>:<function>`.
     OnChangeDir {
         /// Command that prints statements to evaluate when activating,
         /// in shell specific-syntax (or JSON for nu), e.g. `proto activate zsh --export`.

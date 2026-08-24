@@ -238,6 +238,12 @@ fn elvish_activates_and_deactivates() {
     // through `eval` (a separate compile unit), since redefining a `fn`
     // within the same unit is a compile error — this mirrors a session
     // re-evaluating the activation output.
+    //
+    // The hook exports both functions to the interactive namespace with
+    // `edit:add-vars`, and drops them again with `edit:del-vars`. The `edit:`
+    // module doesn't exist when scripted, so this run also asserts that the
+    // `try` around each call swallows that and nothing else aborts — under
+    // `eval` an uncaught exception there would take the whole hook down.
     sandbox.create_file(
         "test.elv",
         format!(
