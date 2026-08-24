@@ -1,0 +1,14 @@
+function ${{ activate_function }} {
+  ${{ activate_command }} -> source
+}
+
+function ${{ deactivate_function }} {
+  ${{ deactivate_command }} -> source
+  !event onPrompt ${{ activate_function }}
+  !function ${{ activate_function }}
+  !function ${{ deactivate_function }}
+}
+
+event onPrompt ${{ activate_function }}=before {
+  ${{ activate_function }}
+}

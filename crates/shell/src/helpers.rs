@@ -11,6 +11,39 @@ pub static PATH_DELIMITER: &str = ":";
 #[cfg(windows)]
 pub static PATH_DELIMITER: &str = ";";
 
+/// Replace every `${{ key }}` placeholder in the template with its value.
+/// Placeholders are the only syntax, so everything else is copied verbatim,
+/// braces and all. A placeholder with no value, or one that is never closed,
+/// is left in place, where the rendered output makes it obvious.
+pub fn render_template(template: &str, values: &[(&str, &str)]) -> String {
+    let mut output = String::with_capacity(template.len());
+    let mut rest = template;
+
+    while let Some(index) = rest.find("${{") {
+        output.push_str(&rest[..index]);
+        rest = &rest[index + 3..];
+
+        let Some(end) = rest.find("}}") else {
+            output.push_str("${{");
+            break;
+        };
+
+        match values.iter().find(|(name, _)| *name == rest[..end].trim()) {
+            Some((_, value)) => output.push_str(value),
+            None => {
+                output.push_str("${{");
+                output.push_str(&rest[..end]);
+                output.push_str("}}");
+            }
+        };
+
+        rest = &rest[end + 2..];
+    }
+
+    output.push_str(rest);
+    output
+}
+
 pub fn is_absolute_dir(value: OsString) -> Option<PathBuf> {
     let dir = PathBuf::from(&value);
 
@@ -97,5 +130,47 @@ pub fn quotable_into_string(data: Quotable<'_>) -> String {
     match data {
         Quotable::Bytes(bytes) => String::from_utf8_lossy(bytes).into(),
         Quotable::Text(text) => text.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renders_placeholders() {
+        assert_eq!(
+            render_template(
+                "fn ${{ name }}() { echo ${{ value }}; }",
+                &[("name", "hook"), ("value", "123")]
+            ),
+            "fn hook() { echo 123; }"
+        );
+    }
+
+    #[test]
+    fn renders_repeated_and_unspaced_placeholders() {
+        assert_eq!(
+            render_template("${{name}} ${{  name  }} $${{ name }}", &[("name", "hook")]),
+            "hook hook $hook"
+        );
+    }
+
+    #[test]
+    fn leaves_shell_syntax_alone() {
+        let template = "if [ -n \"${PROMPT:-}\" ]; then f() { echo {}; }; fi";
+
+        assert_eq!(render_template(template, &[("name", "hook")]), template);
+    }
+
+    #[test]
+    fn keeps_unresolved_placeholders_visible() {
+        assert_eq!(
+            render_template(
+                "${{ known }} ${{ missing }} ${{ unclosed",
+                &[("known", "1")]
+            ),
+            "1 ${{ missing }} ${{ unclosed"
+        );
     }
 }

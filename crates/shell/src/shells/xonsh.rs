@@ -1,5 +1,7 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines};
+use crate::helpers::{
+    ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines, render_template,
+};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -109,38 +111,15 @@ impl Shell for Xonsh {
                 activate_function,
                 deactivate_command,
                 deactivate_function,
-            } => {
-                format!(
-                    r#"
-def {activate_function}(olddir=None, newdir=None, **kwargs):
-    output = $({activate_command})
-    if output:
-        execx(output)
-
-def {deactivate_function}():
-    output = $({deactivate_command})
-    if output:
-        execx(output)
-    for event in (events.on_chdir, events.on_pre_prompt):
-        for handler in list(event):
-            if getattr(handler, '__name__', '') == '{activate_function}':
-                event.discard(handler)
-    __xonsh__.ctx.pop('{activate_function}', None)
-    __xonsh__.ctx.pop('{deactivate_function}', None)
-
-# Re-sourcing creates new function objects, so deduplicate by name
-if not any(getattr(handler, '__name__', '') == '{activate_function}' for handler in events.on_chdir):
-    events.on_chdir({activate_function})
-
-if not any(getattr(handler, '__name__', '') == '{activate_function}' for handler in events.on_pre_prompt):
-    events.on_pre_prompt({activate_function})
-
-# execx() does not evaluate into the shell namespace, so export both functions
-__xonsh__.ctx['{activate_function}'] = {activate_function}
-__xonsh__.ctx['{deactivate_function}'] = {deactivate_function}
-"#
-                )
-            }
+            } => render_template(
+                include_str!("hooks/xonsh.xsh"),
+                &[
+                    ("activate_command", &activate_command),
+                    ("activate_function", &activate_function),
+                    ("deactivate_command", &deactivate_command),
+                    ("deactivate_function", &deactivate_function),
+                ],
+            ),
         }))
     }
 

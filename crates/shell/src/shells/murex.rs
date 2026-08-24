@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines};
+use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -76,26 +76,15 @@ impl Shell for Murex {
                 activate_function,
                 deactivate_command,
                 deactivate_function,
-            } => {
-                format!(
-                    r#"
-function {activate_function} {{
-  {activate_command} -> source
-}}
-
-function {deactivate_function} {{
-  {deactivate_command} -> source
-  !event onPrompt {activate_function}
-  !function {activate_function}
-  !function {deactivate_function}
-}}
-
-event onPrompt {activate_function}=before {{
-  {activate_function}
-}}
-"#
-                )
-            }
+            } => render_template(
+                include_str!("hooks/murex.mx"),
+                &[
+                    ("activate_command", &activate_command),
+                    ("activate_function", &activate_function),
+                    ("deactivate_command", &deactivate_command),
+                    ("deactivate_function", &deactivate_function),
+                ],
+            ),
         }))
     }
 

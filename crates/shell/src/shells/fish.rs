@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines};
+use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Fish as FishQuoter, Quotable, QuoteRefExt};
@@ -70,20 +70,15 @@ impl Shell for Fish {
                 activate_function,
                 deactivate_command,
                 deactivate_function,
-            } => {
-                format!(
-                    r#"
-function {activate_function} --on-variable PWD --on-event fish_prompt;
-  {activate_command} | source
-end;
-
-function {deactivate_function};
-  {deactivate_command} | source
-  functions --erase {activate_function} {deactivate_function}
-end;
-"#
-                )
-            }
+            } => render_template(
+                include_str!("hooks/fish.fish"),
+                &[
+                    ("activate_command", &activate_command),
+                    ("activate_function", &activate_function),
+                    ("deactivate_command", &deactivate_command),
+                    ("deactivate_function", &deactivate_function),
+                ],
+            ),
         }))
     }
 

@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::normalize_newlines;
+use crate::helpers::{normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Quotable, Sh as ShQuoter};
@@ -75,34 +75,15 @@ impl Shell for Sh {
                 activate_function,
                 deactivate_command,
                 deactivate_function,
-            } => {
-                format!(
-                    r#"
-{activate_function}() {{
-  {activate_function}_output=$({activate_command})
-  if [ -n "${activate_function}_output" ]; then
-    eval "${activate_function}_output"
-  fi
-  unset {activate_function}_output
-}}
-
-{deactivate_function}() {{
-  {deactivate_function}_output=$({deactivate_command})
-  if [ -n "${deactivate_function}_output" ]; then
-    eval "${deactivate_function}_output"
-  fi
-  unset {deactivate_function}_output
-  unset -f cd {activate_function} {deactivate_function}
-}}
-
-cd() {{
-  command cd "$@" || return $?
-  {activate_function}
-  return 0
-}}
-"#
-                )
-            }
+            } => render_template(
+                include_str!("hooks/sh.sh"),
+                &[
+                    ("activate_command", &activate_command),
+                    ("activate_function", &activate_function),
+                    ("deactivate_command", &deactivate_command),
+                    ("deactivate_function", &deactivate_function),
+                ],
+            ),
         }))
     }
 
