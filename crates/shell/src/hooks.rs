@@ -56,20 +56,34 @@ pub enum Hook {
     /// trigger lives in the `edit:` module, which does not exist outside an
     /// interactive session, so that registration is skipped entirely there.
     ///
-    /// Most shells evaluate the command's output as shell syntax. Nu cannot
-    /// evaluate code at runtime, so both commands must instead print JSON:
-    /// `{ "env": { "KEY": "value" | null }, "paths": ["..."], "path": "...",
-    /// "aliases": { "name": "command" | null } }`, where a null value unsets
-    /// the variable, `paths` sets `PATH` from a list, `path` sets it from a
-    /// pre-joined string, and an alias is defined from a command line (not a
-    /// string) or removed when null.
+    /// Every shell evaluates the command's output as its own syntax. Nu has no
+    /// runtime `eval`, so it stages that output in a file and applies it with
+    /// `source`, which parses and runs the file in the scope that triggered the
+    /// hook. Each trigger therefore registers two entries: the activate
+    /// function, which writes the file, and a `source` entry that reads it. Nu
+    /// parses a hook entry defined as a string immediately before running it,
+    /// so the second entry always sees what the first just wrote. This is also
+    /// what makes aliases work, `alias` and `hide` being parse time keywords
+    /// that no command can run.
     ///
-    /// Nu aliases are also parse time only, so they cannot be defined by the
-    /// command that applies the rest of the data. They are instead staged as
-    /// a `pre_prompt` hook, which nu parses in the scope that triggered it,
-    /// and which drops itself once it has run. Aliases therefore apply at the
-    /// next prompt rather than immediately, and not at all when scripted,
-    /// where hooks never fire.
+    /// The staged file lives in `$nu.temp-dir`, keyed by pid and by activate
+    /// function name, so that concurrent sessions and separate tools cannot
+    /// read each other's statements. Its path must be a parse time constant,
+    /// as `source` rejects a runtime one. Keying by pid is what keeps two
+    /// sessions from applying each other's statements, the window between the
+    /// write and the `source` being wide enough to collide in practice. The
+    /// `source` entry deletes the file once it has applied it, so nothing is
+    /// left behind for a session exit to orphan, and nu has no exit hook to
+    /// clean up with. Deleting it is safe because the writer entry runs first
+    /// on every trigger, recreating it before the `source` entry is parsed.
+    ///
+    /// Two consequences are specific to nu. Deactivation is staged the same
+    /// way, since no command can evaluate shell syntax either, so it lands on
+    /// the trigger that follows the call rather than immediately, and the
+    /// staged teardown unregisters the `source` entry as its last act. And
+    /// because every statement is applied by a hook, a non-interactive nu
+    /// never activates: `pre_prompt` does not fire there, and calling the
+    /// activate function only writes the file.
     ///
     /// Consumers typically append an invocation of the activate function for
     /// the initial run. This must include call parentheses for xonsh
@@ -92,7 +106,7 @@ pub enum Hook {
     ///   (`use <module>`), which namespaces them as `<module>:<function>`.
     OnContextChange {
         /// Command that prints statements to evaluate when activating,
-        /// in shell specific-syntax (or JSON for nu), e.g. `proto activate zsh --export`.
+        /// in shell specific-syntax, e.g. `proto activate zsh --export`.
         activate_command: String,
 
         /// Name of the function that evaluates [`Hook::OnContextChange::activate_command`],
@@ -100,7 +114,7 @@ pub enum Hook {
         activate_function: String,
 
         /// Command that prints statements to evaluate when deactivating,
-        /// in shell specific-syntax (or JSON for nu), e.g. `proto deactivate zsh --export`.
+        /// in shell specific-syntax, e.g. `proto deactivate zsh --export`.
         deactivate_command: String,
 
         /// Name of the user-callable function that deactivates the current session:

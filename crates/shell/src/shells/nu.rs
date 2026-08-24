@@ -32,6 +32,25 @@ impl Nu {
         }
     }
 
+    /// Quotes a value for the right-hand side of an assignment. The shared
+    /// quoter leaves simple words bare, but Nushell parses a bare word in an
+    /// assignment as an external command call ("External command calls must be
+    /// explicit in assignments"), so anything the quoter left unquoted is
+    /// quoted here instead.
+    fn quote_assignment(&self, value: &str) -> String {
+        let quoted = self.quote(value);
+
+        // Must stay in sync with the pairs registered in `create_quoter`
+        if ["$\"", "$'", "r#", "\"", "'", "`"]
+            .iter()
+            .any(|open| quoted.starts_with(open))
+        {
+            quoted
+        } else {
+            Self::quote_string(value)
+        }
+    }
+
     fn quote_string(value: impl AsRef<str>) -> String {
         let value = value.as_ref();
         let mut output = String::with_capacity(value.len() + 2);
@@ -145,21 +164,27 @@ impl Shell for Nu {
                         Self::quote_string(path)
                     )
                 } else {
-                    format!("$env.{} = {}", get_env_key_native(key), self.quote(value))
+                    format!(
+                        "$env.{} = {}",
+                        get_env_key_native(key),
+                        self.quote_assignment(value)
+                    )
                 }
             }
             Statement::UnsetAlias { name } => {
                 format!("hide {name}")
             }
             Statement::UnsetEnv { key } => {
-                format!("hide-env {}", get_env_key_native(key))
+                // A bare `hide-env` is a hard error when the variable is not
+                // set, which would abort every statement after it, as the whole
+                // list is applied as one sourced block. `hide` (for aliases) is
+                // already tolerant of a missing name, so only this needs the flag.
+                format!("hide-env --ignore-errors {}", get_env_key_native(key))
             }
         }
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        let path_key = get_env_key_native("PATH");
-
         // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
             Hook::OnContextChange {
@@ -168,116 +193,97 @@ impl Shell for Nu {
                 deactivate_command,
                 deactivate_function,
             } => {
-                // Staged alias definitions are identified by this comment on
-                // their first line, so that they can be replaced and removed
-                let alias_marker = format!("# {activate_function} aliases");
+                // Nushell has no runtime `eval`, but `source` parses and runs a
+                // file in the scope that invoked it, which is enough to apply the
+                // statement list. Hook entries defined as a string are parsed one
+                // at a time, immediately before each one runs, so a `source` entry
+                // registered after the writer entry sees the file it just wrote.
+                //
+                // `source` requires a parse time constant path (a runtime path
+                // fails with `nu::shell::not_a_constant`), so it is a `const`. The
+                // name is keyed by pid, so concurrent sessions cannot read each
+                // other's statements, and by function, so two tools cannot clobber
+                // each other.
+                let file = format!(r#"$"($nu.temp-dir)/{activate_function}-($nu.pid).nu""#);
+                let file_const = format!("{activate_function}_file");
 
-                // Appended to the staged definitions, so that the entry drops
-                // itself once the parser has seen it
-                let alias_cleanup = format!(
-                    r#"$env.config = ($env.config | upsert hooks.pre_prompt ((($env.config | get --optional hooks.pre_prompt) | default []) | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{alias_marker}")) }}))"#
+                // Identifies the `source` entry by its first line, so that the
+                // teardown can find and unregister it
+                let source_marker = format!("# {activate_function} source");
+                let source_entry = format!(
+                    "{source_marker}\nconst {file_const} = {file}\nsource ${file_const}\nrm --force --permanent ${file_const}"
                 );
+
+                let mut register = String::new();
+                let mut unregister = String::new();
+                let mut cleanup = vec![];
+
+                for trigger in ["env_change.PWD", "pre_prompt"] {
+                    register.push_str(&format!(
+                        r#"
+    $env.config = ($env.config | upsert hooks.{trigger} {{ |config|
+        $entries | reduce --fold (($config | get --optional hooks.{trigger}) | default []) {{ |entry, acc|
+            if $entry in $acc {{ $acc }} else {{ $acc | append $entry }}
+        }}
+    }})
+"#
+                    ));
+
+                    unregister.push_str(&format!(
+                        r#"
+    $env.config = ($env.config | upsert hooks.{trigger} (
+        ($env.config | get --optional hooks.{trigger}) | default []
+            | where {{ |hook| $hook != {{ code: "{activate_function}" }} }}
+    ))
+"#
+                    ));
+
+                    cleanup.push(format!(
+                        r#"$env.config = ($env.config | upsert hooks.{trigger} ((($env.config | get --optional hooks.{trigger}) | default []) | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{source_marker}")) }}))"#
+                    ));
+                }
+
+                // Appended to the staged teardown, so that the `source` entry
+                // drops itself once it has applied it
+                let cleanup = cleanup.join("\n");
 
                 format!(
                     r#"
-export def --env {activate_function}_apply [data] {{
-    # This must be a `for` loop and not an `each`/`items` closure,
-    # as closures do not propagate environment changes, even when
-    # the command itself is `def --env`.
-    for pair in ($data | get --optional env | default {{}} | transpose key value) {{
-        if $pair.value == null {{
-            if $pair.key in $env {{
-                hide-env $pair.key
-            }}
-        }} else {{
-            load-env {{ ($pair.key): $pair.value }}
-        }}
-    }}
-
-    let path_list = $data | get --optional paths | default []
-    let path_string = $data | get --optional path | default ''
-
-    if ($path_list | is-not-empty) {{
-        $env.{path_key} = $path_list
-    }}
-
-    if ($path_string | is-not-empty) {{
-        $env.{path_key} = $path_string
-    }}
-
-    # `alias` and `hide` are parse time keywords, so no command can run
-    # them. Only a hook defined as a string is parsed in the scope that
-    # triggered it, so the definitions are staged as a `pre_prompt` hook,
-    # which applies them before the next prompt is drawn.
-    let alias_lines = ($data | get --optional aliases | default {{}} | transpose key value | each {{ |pair|
-        if $pair.value == null {{
-            $"hide ($pair.key)"
-        }} else {{
-            $"alias ($pair.key) = ($pair.value)"
-        }}
-    }})
-
-    # Definitions staged by a previous run are dropped, whether they were
-    # applied or not, so that deactivating also cancels a pending stage
-    let hooks_before = ($env.config | get --optional hooks.pre_prompt) | default []
-    let hooks_after = ($hooks_before | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{alias_marker}")) }})
-
-    if ($alias_lines | is-not-empty) or (($hooks_after | length) != ($hooks_before | length)) {{
-        $env.config = ($env.config | upsert hooks.pre_prompt (
-            if ($alias_lines | is-empty) {{
-                $hooks_after
-            }} else {{
-                $hooks_after | append {{ code: (["{alias_marker}"] ++ $alias_lines ++ ['{alias_cleanup}'] | str join (char newline)) }}
-            }}
-        ))
-    }}
-}}
-
 export def --env {activate_function} [] {{
-    {activate_function}_apply ({activate_command} | from json)
+    # Staged for the `source` entry that runs next. A failing command stages
+    # nothing rather than aborting the prompt, and its stderr is left alone.
+    let file = {file}
+
+    try {{ {activate_command} | save --force $file }} catch {{ "" | save --force $file }}
 }}
 
 export def --env {deactivate_function} [] {{
-    # Unregistering must happen even when the command fails, so the
-    # reversal is best-effort, consistent with the other shells.
-    {activate_function}_apply (try {{ {deactivate_command} | from json }} catch {{ {{}} }})
+    # The statements are shell syntax and no command can evaluate them, so the
+    # reversal is staged the same way, and lands on the next trigger rather
+    # than immediately. Its last act is to unregister the `source` entry.
+    let file = {file}
 
-    # Nu cannot undefine commands at runtime, so the functions remain
-    # defined, but the hook itself is unregistered from both triggers.
-    $env.config = ($env.config | upsert hooks.env_change.PWD (
-        ($env.config | get --optional hooks.env_change.PWD) | default []
-            | where {{ |hook| $hook != {{ code: "{activate_function}" }} }}
-    ))
+    try {{ {deactivate_command} | save --force $file }} catch {{ "" | save --force $file }}
 
-    $env.config = ($env.config | upsert hooks.pre_prompt (
-        ($env.config | get --optional hooks.pre_prompt) | default []
-            | where {{ |hook| $hook != {{ code: "{activate_function}" }} }}
-    ))
-}}
+    ["" '{cleanup}'] | str join (char newline) | save --append $file
+
+    # The writer entry goes now, so that it cannot overwrite the staged
+    # teardown before the `source` entry has applied it.
+{unregister}}}
 
 export-env {{
-    $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
-        let list = ($config | get --optional hooks.env_change.PWD) | default []
-        let hook = {{ code: "{activate_function}" }}
+    # The `source` entry parses this file before running it, so it must exist
+    # ahead of the first trigger. It removes it again once applied, so this
+    # only has to cover the window before the first one.
+    let file = {file}
 
-        if $hook in $list {{
-            $list
-        }} else {{
-            $list | append $hook
-        }}
-    }})
+    if not ($file | path exists) {{ "" | save --force $file }}
 
-    $env.config = ($env.config | upsert hooks.pre_prompt {{ |config|
-        let list = ($config | get --optional hooks.pre_prompt) | default []
-        let hook = {{ code: "{activate_function}" }}
-
-        if $hook in $list {{
-            $list
-        }} else {{
-            $list | append $hook
-        }}
-    }})
-}}"#
+    let entries = [
+        {{ code: "{activate_function}" }}
+        {{ code: '{source_entry}' }}
+    ]
+{register}}}"#
                 )
             }
         }))
@@ -542,6 +548,27 @@ mod tests {
                     .join("env.nu"),
                 home_dir.join(".config").join("nushell").join("env.nu"),
             ]
+        );
+    }
+
+    #[test]
+    fn quotes_env_value_that_the_quoter_leaves_bare() {
+        // A bare word on the right of an assignment is parsed as an external
+        // command call, which is a hard error
+        assert_eq!(
+            Nu.format_env_set("PROTO_ACTIVATED_ENV", "MY_VAR"),
+            r#"$env.PROTO_ACTIVATED_ENV = "MY_VAR""#
+        );
+        assert_eq!(Nu.format_env_set("FOO", ""), "$env.FOO = ''");
+    }
+
+    #[test]
+    fn formats_env_unset() {
+        // Tolerates a variable that is not set, so that it cannot abort the
+        // statements after it
+        assert_eq!(
+            Nu.format_env_unset("FOO"),
+            format!("hide-env --ignore-errors {}", get_env_key_native("FOO"))
         );
     }
 

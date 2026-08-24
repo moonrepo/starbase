@@ -292,19 +292,22 @@ echo cycle=$E:E2E_FOO hooks=(count $after-chdir)
     }
 }
 
-// Nushell cannot eval code at runtime, so both hook functions parse a JSON
-// payload instead: `{ env: { KEY: value | null }, paths: [..], path: ".." }`.
-// Hooks only fire inside the interactive REPL, so this drives the functions
-// directly (as the init call does) and asserts the registration list instead.
+// Nushell has no runtime `eval`, so the hook stages the statements in a file
+// and applies them with a second hook entry that `source`s it. Hooks only fire
+// inside the interactive REPL, so this drives the functions directly (as the
+// init call does) and asserts what was staged, that feeding it to a fresh nu
+// really does apply it, and the registration list.
 #[test]
 fn nu_activates_and_deactivates() {
+    let path_key = if cfg!(windows) { "Path" } else { "PATH" };
+
     let hook = format_hook(
         ShellType::Nu,
-        r#"echo '{"env":{"E2E_FOO":"123","E2E_GONE":null},"paths":[],"path":"/e2e-stub-path","aliases":{"e2e_ll":"echo ALIASOK","e2e_gone":null}}'"#,
-        r#"echo '{"env":{"E2E_FOO":null},"paths":[],"path":"/e2e-restored-path","aliases":{"e2e_ll":null}}'"#,
+        &format!(
+            r#"echo "$env.E2E_FOO = '123'\nhide-env --ignore-errors E2E_GONE\n$env.{path_key} = ([] | prepend \"/e2e-stub-path\" | uniq)\nalias e2e_ll = print ALIASOK""#
+        ),
+        r#"echo "hide-env --ignore-errors E2E_FOO\nhide e2e_ll""#,
     );
-
-    let path_key = if cfg!(windows) { "Path" } else { "PATH" };
 
     let sandbox = create_empty_sandbox();
     sandbox.create_file("hook.nu", &hook);
@@ -312,64 +315,70 @@ fn nu_activates_and_deactivates() {
     // Sourcing the same file twice dedupes the `export def`s at parse time,
     // but re-runs `export-env` — so the second source exercises the
     // registration dedup guard, and the source after deactivation re-registers.
-    //
-    // Aliases are staged as a `pre_prompt` hook, since only a hook defined as
-    // a string is parsed in the scope that triggered it. Hooks never fire in a
-    // script, so this asserts the staged definitions instead: what they are,
-    // and that feeding them to a fresh nu really does define the alias.
+    // Each trigger holds two entries: the writer, and the `source` that applies
+    // what it wrote. Deactivation removes only the writer, leaving the `source`
+    // entry to apply the staged teardown (and then unregister itself) on the
+    // next trigger, which is why the count drops to one rather than zero.
     sandbox.create_file(
         "test.nu",
         format!(
-            r#"$env.E2E_GONE = "preset"
+            r#"const sb_file = $"($nu.temp-dir)/_starbase_activate-($nu.pid).nu"
 
 def registered [] {{
-    let hook = {{ code: "_starbase_activate" }}
     let pwd_list = ($env.config | get --optional hooks.env_change.PWD) | default []
     let prompt_list = ($env.config | get --optional hooks.pre_prompt) | default []
 
-    $"($pwd_list | where {{ |it| $it == $hook }} | length),($prompt_list | where {{ |it| $it == $hook }} | length)"
+    $"($pwd_list | length),($prompt_list | length)"
 }}
 
-def staged [] {{
-    $env.config.hooks.pre_prompt | last | get code
-}}
-
-def staged_count [] {{
-    $env.config.hooks.pre_prompt
-        | where {{ |it| ($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str contains "_starbase_activate aliases") }}
-        | length
-}}
+def staged [] {{ open $sb_file | str trim }}
 
 def staged_defs [] {{
-    staged | lines | where {{ |line| ($line | str starts-with "alias ") or ($line | str starts-with "hide ") }} | str join ","
+    staged
+        | lines
+        | where {{ |line| ($line | str starts-with "alias ") or ($line | str starts-with "hide") or (($line | str starts-with "$env.") and not ($line | str contains "upsert hooks")) }}
+        | str join ","
+}}
+
+# The teardown ends with the statements that unregister the `source` entry
+def cleanup_lines [] {{
+    staged | lines | where {{ |line| $line | str contains "upsert hooks" }} | length
 }}
 
 source "./hook.nu"
 source "./hook.nu"
+
+print $"hooks=(registered)"
 
 _starbase_activate
 
-print $"foo=($env | get --optional E2E_FOO | default MISSING)"
-print $"gone=($env | get --optional E2E_GONE | default REMOVED)"
-print $"path=($env.{path_key})"
-print $"hooks=(registered)"
-print $"staged=(staged_count) (staged_defs)"
-print $"parsed=(^$nu.current-exe --no-config-file --commands $"(staged)\ne2e_ll" | str trim)"
+print $"staged=(staged_defs)"
+
+# Hooks never fire in a script, so the staged statements are fed to a fresh nu
+# to prove they apply: the alias is defined, the variable is set, the preset
+# one is removed, and the path is replaced.
+let probe = ([
+    "$env.E2E_GONE = 'preset'"
+    (staged)
+    "e2e_ll"
+    "print $env.E2E_FOO"
+    "print ('E2E_GONE' in $env)"
+    "print ($env.{path_key} | str join ',')"
+] | str join (char newline))
+
+print $"applied=(^$nu.current-exe --no-config-file --commands $probe | str trim | split row (char newline) | str join ',')"
 
 _starbase_deactivate
 
-print $"foo=($env | get --optional E2E_FOO | default REMOVED)"
-print $"path=($env.{path_key})"
 print $"hooks=(registered)"
-print $"staged=(staged_count) (staged_defs)"
+print $"teardown=(staged_defs) cleanup=(cleanup_lines)"
 
 source "./hook.nu"
 
 _starbase_activate
 
-print $"foo=($env | get --optional E2E_FOO | default MISSING)"
 print $"hooks=(registered)"
-print $"staged=(staged_count) (staged_defs)"
+print $"staged=(staged_defs)"
 "#
         ),
     );
@@ -377,10 +386,16 @@ print $"staged=(staged_count) (staged_defs)"
     if let Some(output) = run_script(&sandbox, "nu", &["./test.nu"]) {
         assert_eq!(
             stdout(&output),
-            "foo=123\ngone=REMOVED\npath=/e2e-stub-path\nhooks=1,1\n\
-             staged=1 alias e2e_ll = echo ALIASOK,hide e2e_gone\nparsed=ALIASOK\n\
-             foo=REMOVED\npath=/e2e-restored-path\nhooks=0,0\nstaged=1 hide e2e_ll\n\
-             foo=123\nhooks=1,1\nstaged=1 alias e2e_ll = echo ALIASOK,hide e2e_gone\n"
+            "hooks=2,2\n\
+             staged=$env.E2E_FOO = '123',hide-env --ignore-errors E2E_GONE,\
+             $env.PATH_KEY = ([] | prepend \"/e2e-stub-path\" | uniq),alias e2e_ll = print ALIASOK\n\
+             applied=ALIASOK,123,false,/e2e-stub-path\n\
+             hooks=1,1\n\
+             teardown=hide-env --ignore-errors E2E_FOO,hide e2e_ll cleanup=2\n\
+             hooks=2,2\n\
+             staged=$env.E2E_FOO = '123',hide-env --ignore-errors E2E_GONE,\
+             $env.PATH_KEY = ([] | prepend \"/e2e-stub-path\" | uniq),alias e2e_ll = print ALIASOK\n"
+                .replace("PATH_KEY", path_key)
         );
     }
 }
