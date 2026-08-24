@@ -47,6 +47,11 @@ pub enum Hook {
     /// Consumers typically append an invocation of the activate function for
     /// the initial run. This must include call parentheses for xonsh
     /// (`_hook()`), and be a bare word for every other shell.
+    ///
+    /// In xonsh, `execx()` does not evaluate into the shell's namespace, so
+    /// the generated code exports both functions into `__xonsh__.ctx`. This
+    /// keeps them callable after the documented `execx($(...))` sourcing, and
+    /// the deactivate function removes them from that namespace again.
     OnChangeDir {
         /// Command that prints statements to evaluate when activating,
         /// in shell specific-syntax (or JSON for nu), e.g. `proto activate zsh --export`.

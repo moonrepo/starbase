@@ -83,16 +83,20 @@ impl Shell for Xonsh {
                 }
             }
             Statement::SetAlias { name, value } => {
-                format!("aliases[\"{name}\"] = {}", self.quote(value))
+                // The right-hand side is Python, not a shell word, so the value
+                // must be a string literal, like `SetEnv` below
+                format!("aliases[\"{name}\"] = {}", self.format_string(value))
             }
             Statement::SetEnv { key, value } => {
                 format!("${key} = {}", self.format_string(value))
             }
+            // `del` raises a `KeyError` when the alias/variable doesn't exist,
+            // which would abort the entire block of statements
             Statement::UnsetAlias { name } => {
-                format!("del aliases[\"{name}\"]")
+                format!("aliases.pop(\"{name}\", None)")
             }
             Statement::UnsetEnv { key } => {
-                format!("del ${key}")
+                format!("${{...}}.pop(\"{key}\", None)")
             }
         }
     }
@@ -114,18 +118,22 @@ def {activate_function}(olddir=None, newdir=None, **kwargs):
         execx(output)
 
 def {deactivate_function}():
-    global {activate_function}, {deactivate_function}
     output = $({deactivate_command})
     if output:
         execx(output)
     for handler in list(events.on_chdir):
         if getattr(handler, '__name__', '') == '{activate_function}':
             events.on_chdir.discard(handler)
-    del {activate_function}, {deactivate_function}
+    __xonsh__.ctx.pop('{activate_function}', None)
+    __xonsh__.ctx.pop('{deactivate_function}', None)
 
 # Re-sourcing creates new function objects, so deduplicate by name
 if not any(getattr(handler, '__name__', '') == '{activate_function}' for handler in events.on_chdir):
     events.on_chdir({activate_function})
+
+# execx() does not evaluate into the shell namespace, so export both functions
+__xonsh__.ctx['{activate_function}'] = {activate_function}
+__xonsh__.ctx['{deactivate_function}'] = {deactivate_function}
 "#
                 )
             }
@@ -224,13 +232,29 @@ mod tests {
     fn formats_alias_set() {
         assert_eq!(
             Xonsh.format_alias_set("ll", "ls -la"),
-            "aliases[\"ll\"] = 'ls -la'"
+            r#"aliases["ll"] = f"ls -la""#
+        );
+        assert_eq!(
+            Xonsh.format_alias_set("proto", "$PROTO_HOME/bin/proto"),
+            r#"aliases["proto"] = f"{$PROTO_HOME}/bin/proto""#
+        );
+        assert_eq!(
+            Xonsh.format_alias_set("brace", "echo {value}"),
+            r#"aliases["brace"] = f"echo {{value}}""#
         );
     }
 
     #[test]
     fn formats_alias_unset() {
-        assert_eq!(Xonsh.format_alias_unset("ll"), "del aliases[\"ll\"]");
+        assert_eq!(Xonsh.format_alias_unset("ll"), r#"aliases.pop("ll", None)"#);
+    }
+
+    #[test]
+    fn formats_env_unset() {
+        assert_eq!(
+            Xonsh.format_env_unset("PROTO_VERSION"),
+            r#"${...}.pop("PROTO_VERSION", None)"#
+        );
     }
 
     #[test]
