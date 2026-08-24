@@ -162,7 +162,7 @@ impl Shell for Nu {
 
         // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
+            Hook::OnContextChange {
                 activate_command,
                 activate_function,
                 deactivate_command,
@@ -492,10 +492,10 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn formats_cd_hook() {
+    fn formats_context_change_hook() {
         use starbase_sandbox::assert_snapshot;
 
-        let hook = Hook::OnChangeDir {
+        let hook = Hook::OnContextChange {
             activate_command: "starbase hook nu".into(),
             activate_function: "_starbase_hook".into(),
             deactivate_command: "starbase deactivate nu".into(),

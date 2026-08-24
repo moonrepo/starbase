@@ -1,4 +1,4 @@
-// End-to-end tests for the `Hook::OnChangeDir` activation flow. Each test
+// End-to-end tests for the `Hook::OnContextChange` activation flow. Each test
 // renders the hook with stub "activate" and "deactivate" commands, runs the
 // result through the real shell binary, and asserts that:
 //
@@ -6,11 +6,15 @@
 //   propagate to the session,
 // - the change-dir trigger fires,
 // - sourcing the hook twice registers it once,
-// - the deactivate function reverts the environment, unregisters the trigger
-//   (a subsequent cd does not re-activate), and removes the functions where
-//   the shell allows it,
-// - evaluating the hook again after deactivation re-activates: the trigger
-//   re-registers (exactly once) and fires again.
+// - the deactivate function reverts the environment, unregisters every
+//   trigger (a subsequent cd does not re-activate), and removes the functions
+//   where the shell allows it,
+// - evaluating the hook again after deactivation re-activates: the triggers
+//   re-register (exactly once each) and fire again.
+//
+// These run non-interactively, where prompt triggers never fire, so a shell
+// that registers on both is only exercised through its change-dir trigger —
+// the prompt registration is asserted by counting handlers instead.
 //
 // A test is skipped when its shell is not installed, unless the shell is
 // listed in the `STARBASE_REQUIRED_SHELLS` environment variable
@@ -25,7 +29,7 @@ use std::process::{Command, Output};
 fn format_hook(shell: ShellType, activate_command: &str, deactivate_command: &str) -> String {
     shell
         .build()
-        .format_hook(Hook::OnChangeDir {
+        .format_hook(Hook::OnContextChange {
             activate_command: activate_command.into(),
             activate_function: "_starbase_activate".into(),
             deactivate_command: deactivate_command.into(),

@@ -126,8 +126,8 @@ mod tests {
     // own `PROMPT` function, and `eval`/`source` are gated behind unsafe
     // builtins that are not loaded by default.
     #[test]
-    fn errors_for_cd_hook() {
-        let hook = Hook::OnChangeDir {
+    fn errors_for_context_change_hook() {
+        let hook = Hook::OnContextChange {
             activate_command: "starbase hook ion".into(),
             activate_function: "_starbase_hook".into(),
             deactivate_command: "starbase deactivate ion".into(),

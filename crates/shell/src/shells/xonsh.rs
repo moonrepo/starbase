@@ -104,7 +104,7 @@ impl Shell for Xonsh {
     // https://xon.sh/events.html
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
+            Hook::OnContextChange {
                 activate_command,
                 activate_function,
                 deactivate_command,
@@ -183,8 +183,8 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
+    fn formats_context_change_hook() {
+        let hook = Hook::OnContextChange {
             activate_command: "starbase hook xonsh".into(),
             activate_function: "_starbase_hook".into(),
             deactivate_command: "starbase deactivate xonsh".into(),

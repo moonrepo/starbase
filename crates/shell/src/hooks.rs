@@ -23,8 +23,9 @@ pub enum Statement<'data> {
 #[non_exhaustive]
 pub enum Hook {
     /// Registers a function that evaluates a command's output whenever the
-    /// current directory changes, alongside a paired function that reverses
-    /// it and unregisters the trigger.
+    /// shell's context changes — the working directory, or whatever state a
+    /// new prompt reflects — alongside a paired function that reverses it and
+    /// unregisters the triggers.
     ///
     /// A shell registers on every trigger it provides, and deactivation
     /// unregisters all of them:
@@ -89,13 +90,13 @@ pub enum Hook {
     ///   way become available in the next REPL cycle. A script that must call
     ///   the functions should evaluate the hook as a module instead
     ///   (`use <module>`), which namespaces them as `<module>:<function>`.
-    OnChangeDir {
+    OnContextChange {
         /// Command that prints statements to evaluate when activating,
         /// in shell specific-syntax (or JSON for nu), e.g. `proto activate zsh --export`.
         activate_command: String,
 
-        /// Name of the function that evaluates [`Hook::OnChangeDir::activate_command`],
-        /// and is registered on the shell's change-dir (or prompt) trigger.
+        /// Name of the function that evaluates [`Hook::OnContextChange::activate_command`],
+        /// and is registered on every trigger the shell provides.
         activate_function: String,
 
         /// Command that prints statements to evaluate when deactivating,
@@ -103,8 +104,8 @@ pub enum Hook {
         deactivate_command: String,
 
         /// Name of the user-callable function that deactivates the current session:
-        /// evaluates [`Hook::OnChangeDir::deactivate_command`], unregisters the
-        /// change-dir trigger, and removes both functions where the shell allows it.
+        /// evaluates [`Hook::OnContextChange::deactivate_command`], unregisters
+        /// every trigger, and removes both functions where the shell allows it.
         deactivate_function: String,
     },
 }
@@ -112,7 +113,7 @@ pub enum Hook {
 impl Hook {
     pub fn get_info(&self) -> &str {
         match self {
-            Hook::OnChangeDir { .. } => "on change directory",
+            Hook::OnContextChange { .. } => "on context change",
         }
     }
 }

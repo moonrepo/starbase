@@ -71,7 +71,7 @@ impl Shell for Murex {
     // hook referenced from https://github.com/direnv/direnv/blob/ff451a860b31f176d252c410b43d7803ec0f8b23/internal/cmd/shell_murex.go#L12
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
+            Hook::OnContextChange {
                 activate_command,
                 activate_function,
                 deactivate_command,
@@ -176,8 +176,8 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
+    fn formats_context_change_hook() {
+        let hook = Hook::OnContextChange {
             activate_command: "starbase hook murex".into(),
             activate_function: "_starbase_hook".into(),
             deactivate_command: "starbase deactivate murex".into(),

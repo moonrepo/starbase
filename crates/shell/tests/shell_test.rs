@@ -3,9 +3,9 @@ use starbase_shell::{Hook, ShellType};
 use std::env;
 
 #[test]
-fn all_shells_except_ion_support_cd_hook() {
+fn all_shells_except_ion_support_context_change_hook() {
     for shell_type in ShellType::variants() {
-        let result = shell_type.build().format_hook(Hook::OnChangeDir {
+        let result = shell_type.build().format_hook(Hook::OnContextChange {
             activate_command: format!("starbase hook {shell_type}"),
             activate_function: "_starbase_hook".into(),
             deactivate_command: format!("starbase deactivate {shell_type}"),
@@ -13,9 +13,15 @@ fn all_shells_except_ion_support_cd_hook() {
         });
 
         if shell_type == ShellType::Ion {
-            assert!(result.is_err(), "{shell_type} should not support cd hooks");
+            assert!(
+                result.is_err(),
+                "{shell_type} should not support context change hooks"
+            );
         } else {
-            assert!(result.is_ok(), "{shell_type} should support cd hooks");
+            assert!(
+                result.is_ok(),
+                "{shell_type} should support context change hooks"
+            );
         }
     }
 }
