@@ -70,6 +70,11 @@ function {deactivate_function} {{
     Remove-Variable -Name '{activate_function}_handler' -Scope Global;
   }}
 
+  if (Get-Variable -Name '{activate_function}_prompt' -Scope Global -ErrorAction Ignore) {{
+    Set-Item -Path 'function:global:prompt' -Value $global:{activate_function}_prompt;
+    Remove-Variable -Name '{activate_function}_prompt' -Scope Global;
+  }}
+
   Remove-Item -LiteralPath 'function:{activate_function}' -ErrorAction Ignore;
   Remove-Item -LiteralPath 'function:{deactivate_function}' -ErrorAction Ignore;
 }}
@@ -86,6 +91,15 @@ if (-not (Get-Variable -Name '{activate_function}_handler' -Scope Global -ErrorA
     $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction,
     $global:{activate_function}_handler
   );
+}};
+
+if (-not (Get-Variable -Name '{activate_function}_prompt' -Scope Global -ErrorAction Ignore)) {{
+  $global:{activate_function}_prompt = $function:prompt;
+
+  function global:prompt {{
+    {activate_function};
+    & $global:{activate_function}_prompt;
+  }}
 }};
 "#
                 )

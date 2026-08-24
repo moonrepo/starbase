@@ -73,7 +73,7 @@ impl Shell for Fish {
             } => {
                 format!(
                     r#"
-function {activate_function} --on-variable PWD;
+function {activate_function} --on-variable PWD --on-event fish_prompt;
   {activate_command} | source
 end;
 

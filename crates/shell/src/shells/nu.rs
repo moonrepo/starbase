@@ -243,9 +243,14 @@ export def --env {deactivate_function} [] {{
     {activate_function}_apply (try {{ {deactivate_command} | from json }} catch {{ {{}} }})
 
     # Nu cannot undefine commands at runtime, so the functions remain
-    # defined, but the hook itself is unregistered.
+    # defined, but the hook itself is unregistered from both triggers.
     $env.config = ($env.config | upsert hooks.env_change.PWD (
         ($env.config | get --optional hooks.env_change.PWD) | default []
+            | where {{ |hook| $hook != {{ code: "{activate_function}" }} }}
+    ))
+
+    $env.config = ($env.config | upsert hooks.pre_prompt (
+        ($env.config | get --optional hooks.pre_prompt) | default []
             | where {{ |hook| $hook != {{ code: "{activate_function}" }} }}
     ))
 }}
@@ -253,6 +258,17 @@ export def --env {deactivate_function} [] {{
 export-env {{
     $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
         let list = ($config | get --optional hooks.env_change.PWD) | default []
+        let hook = {{ code: "{activate_function}" }}
+
+        if $hook in $list {{
+            $list
+        }} else {{
+            $list | append $hook
+        }}
+    }})
+
+    $env.config = ($env.config | upsert hooks.pre_prompt {{ |config|
+        let list = ($config | get --optional hooks.pre_prompt) | default []
         let hook = {{ code: "{activate_function}" }}
 
         if $hook in $list {{

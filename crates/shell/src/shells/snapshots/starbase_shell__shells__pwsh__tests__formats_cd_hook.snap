@@ -25,6 +25,11 @@ function _starbase_deactivate {
     Remove-Variable -Name '_starbase_hook_handler' -Scope Global;
   }
 
+  if (Get-Variable -Name '_starbase_hook_prompt' -Scope Global -ErrorAction Ignore) {
+    Set-Item -Path 'function:global:prompt' -Value $global:_starbase_hook_prompt;
+    Remove-Variable -Name '_starbase_hook_prompt' -Scope Global;
+  }
+
   Remove-Item -LiteralPath 'function:_starbase_hook' -ErrorAction Ignore;
   Remove-Item -LiteralPath 'function:_starbase_deactivate' -ErrorAction Ignore;
 }
@@ -41,4 +46,13 @@ if (-not (Get-Variable -Name '_starbase_hook_handler' -Scope Global -ErrorAction
     $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction,
     $global:_starbase_hook_handler
   );
+};
+
+if (-not (Get-Variable -Name '_starbase_hook_prompt' -Scope Global -ErrorAction Ignore)) {
+  $global:_starbase_hook_prompt = $function:prompt;
+
+  function global:prompt {
+    _starbase_hook;
+    & $global:_starbase_hook_prompt;
+  }
 };

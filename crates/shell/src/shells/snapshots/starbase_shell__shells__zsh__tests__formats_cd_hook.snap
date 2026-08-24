@@ -19,10 +19,16 @@ _starbase_deactivate() {
     eval "$output";
   fi
   chpwd_functions=(${chpwd_functions:#_starbase_hook})
+  precmd_functions=(${precmd_functions:#_starbase_hook})
   unfunction _starbase_hook _starbase_deactivate 2>/dev/null
 }
 
 typeset -ag chpwd_functions
 if (( ! ${chpwd_functions[(I)_starbase_hook]} )); then
   chpwd_functions=(_starbase_hook $chpwd_functions)
+fi
+
+typeset -ag precmd_functions
+if (( ! ${precmd_functions[(I)_starbase_hook]} )); then
+  precmd_functions=(_starbase_hook $precmd_functions)
 fi

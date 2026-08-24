@@ -2,7 +2,7 @@
 source: crates/shell/src/shells/fish.rs
 expression: Fish.format_hook(hook).unwrap()
 ---
-function _starbase_hook --on-variable PWD;
+function _starbase_hook --on-variable PWD --on-event fish_prompt;
   starbase hook fish | source
 end;
 

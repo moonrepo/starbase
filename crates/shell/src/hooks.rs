@@ -26,17 +26,34 @@ pub enum Hook {
     /// current directory changes, alongside a paired function that reverses
     /// it and unregisters the trigger.
     ///
-    /// The trigger mechanism differs per shell:
+    /// A shell registers on every trigger it provides, and deactivation
+    /// unregisters all of them:
     ///
-    /// - On directory change: zsh (`chpwd_functions`), fish (`--on-variable PWD`),
-    ///   nu (`env_change.PWD`), elvish (`$after-chdir`), xonsh (`events.on_chdir`),
-    ///   pwsh (`LocationChangedAction`).
-    /// - On every prompt: bash (`PROMPT_COMMAND`), murex (`onPrompt`),
-    ///   powershell (wraps the global `prompt` function).
+    /// - Directory change and prompt: zsh (`chpwd_functions`,
+    ///   `precmd_functions`), fish (`--on-variable PWD`,
+    ///   `--on-event fish_prompt`), nu (`env_change.PWD`, `pre_prompt`),
+    ///   elvish (`$after-chdir`, `$edit:before-readline`), xonsh
+    ///   (`events.on_chdir`, `events.on_pre_prompt`), pwsh
+    ///   (`LocationChangedAction`, wraps the global `prompt` function).
+    /// - Prompt only: bash (`PROMPT_COMMAND`), murex (`onPrompt`), powershell
+    ///   (wraps the global `prompt` function, as `LocationChangedAction`
+    ///   requires PowerShell 6+).
     /// - On `cd` itself: sh, ash, dash — the `cd` builtin is shadowed with a
     ///   function, and deactivation restores it. This clobbers any other `cd`
-    ///   wrapper, as POSIX offers no way to chain functions.
+    ///   wrapper, as POSIX offers no way to chain functions. These shells have
+    ///   no prompt hook to register on.
     /// - Unsupported: ion.
+    ///
+    /// Registering both triggers means the activate command runs on every
+    /// prompt as well as on every directory change, so a `cd` that returns to
+    /// a prompt runs it twice. In exchange, the prompt trigger catches state
+    /// that changed without a `cd`, and applies the activation to a session
+    /// that sources the hook without ever changing directory.
+    ///
+    /// Prompt triggers only fire in an interactive session, so scripted use
+    /// sees the directory trigger alone. Elvish goes further: its prompt
+    /// trigger lives in the `edit:` module, which does not exist outside an
+    /// interactive session, so that registration is skipped entirely there.
     ///
     /// Most shells evaluate the command's output as shell syntax. Nu cannot
     /// evaluate code at runtime, so both commands must instead print JSON:
