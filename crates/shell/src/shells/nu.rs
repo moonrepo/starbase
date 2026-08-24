@@ -168,6 +168,16 @@ impl Shell for Nu {
                 deactivate_command,
                 deactivate_function,
             } => {
+                // Staged alias definitions are identified by this comment on
+                // their first line, so that they can be replaced and removed
+                let alias_marker = format!("# {activate_function} aliases");
+
+                // Appended to the staged definitions, so that the entry drops
+                // itself once the parser has seen it
+                let alias_cleanup = format!(
+                    r#"$env.config = ($env.config | upsert hooks.pre_prompt ((($env.config | get --optional hooks.pre_prompt) | default []) | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{alias_marker}")) }}))"#
+                );
+
                 format!(
                     r#"
 export def --env {activate_function}_apply [data] {{
@@ -193,6 +203,33 @@ export def --env {activate_function}_apply [data] {{
 
     if ($path_string | is-not-empty) {{
         $env.{path_key} = $path_string
+    }}
+
+    # `alias` and `hide` are parse time keywords, so no command can run
+    # them. Only a hook defined as a string is parsed in the scope that
+    # triggered it, so the definitions are staged as a `pre_prompt` hook,
+    # which applies them before the next prompt is drawn.
+    let alias_lines = ($data | get --optional aliases | default {{}} | transpose key value | each {{ |pair|
+        if $pair.value == null {{
+            $"hide ($pair.key)"
+        }} else {{
+            $"alias ($pair.key) = ($pair.value)"
+        }}
+    }})
+
+    # Definitions staged by a previous run are dropped, whether they were
+    # applied or not, so that deactivating also cancels a pending stage
+    let hooks_before = ($env.config | get --optional hooks.pre_prompt) | default []
+    let hooks_after = ($hooks_before | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{alias_marker}")) }})
+
+    if ($alias_lines | is-not-empty) or (($hooks_after | length) != ($hooks_before | length)) {{
+        $env.config = ($env.config | upsert hooks.pre_prompt (
+            if ($alias_lines | is-empty) {{
+                $hooks_after
+            }} else {{
+                $hooks_after | append {{ code: (["{alias_marker}"] ++ $alias_lines ++ ['{alias_cleanup}'] | str join (char newline)) }}
+            }}
+        ))
     }}
 }}
 

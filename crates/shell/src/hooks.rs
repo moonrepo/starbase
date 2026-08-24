@@ -40,9 +40,18 @@ pub enum Hook {
     ///
     /// Most shells evaluate the command's output as shell syntax. Nu cannot
     /// evaluate code at runtime, so both commands must instead print JSON:
-    /// `{ "env": { "KEY": "value" | null }, "paths": ["..."], "path": "..." }`,
-    /// where a null value unsets the variable, `paths` sets `PATH` from a
-    /// list, and `path` sets it from a pre-joined string.
+    /// `{ "env": { "KEY": "value" | null }, "paths": ["..."], "path": "...",
+    /// "aliases": { "name": "command" | null } }`, where a null value unsets
+    /// the variable, `paths` sets `PATH` from a list, `path` sets it from a
+    /// pre-joined string, and an alias is defined from a command line (not a
+    /// string) or removed when null.
+    ///
+    /// Nu aliases are also parse time only, so they cannot be defined by the
+    /// command that applies the rest of the data. They are instead staged as
+    /// a `pre_prompt` hook, which nu parses in the scope that triggered it,
+    /// and which drops itself once it has run. Aliases therefore apply at the
+    /// next prompt rather than immediately, and not at all when scripted,
+    /// where hooks never fire.
     ///
     /// Consumers typically append an invocation of the activate function for
     /// the initial run. This must include call parentheses for xonsh

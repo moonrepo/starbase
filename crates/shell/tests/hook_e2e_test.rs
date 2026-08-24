@@ -286,8 +286,8 @@ echo cycle=$E:E2E_FOO hooks=(count $after-chdir)
 fn nu_activates_and_deactivates() {
     let hook = format_hook(
         ShellType::Nu,
-        r#"echo '{"env":{"E2E_FOO":"123","E2E_GONE":null},"paths":[],"path":"/e2e-stub-path"}'"#,
-        r#"echo '{"env":{"E2E_FOO":null},"paths":[],"path":"/e2e-restored-path"}'"#,
+        r#"echo '{"env":{"E2E_FOO":"123","E2E_GONE":null},"paths":[],"path":"/e2e-stub-path","aliases":{"e2e_ll":"echo ALIASOK","e2e_gone":null}}'"#,
+        r#"echo '{"env":{"E2E_FOO":null},"paths":[],"path":"/e2e-restored-path","aliases":{"e2e_ll":null}}'"#,
     );
 
     let path_key = if cfg!(windows) { "Path" } else { "PATH" };
@@ -298,10 +298,23 @@ fn nu_activates_and_deactivates() {
     // Sourcing the same file twice dedupes the `export def`s at parse time,
     // but re-runs `export-env` — so the second source exercises the
     // registration dedup guard, and the source after deactivation re-registers.
+    //
+    // Aliases are staged as a `pre_prompt` hook, since only a hook defined as
+    // a string is parsed in the scope that triggered it. Hooks never fire in a
+    // script, so this asserts the staged definitions instead: what they are,
+    // and that feeding them to a fresh nu really does define the alias.
     sandbox.create_file(
         "test.nu",
         format!(
             r#"$env.E2E_GONE = "preset"
+
+def staged [] {{
+    $env.config.hooks.pre_prompt | last | get code
+}}
+
+def staged_defs [] {{
+    staged | lines | where {{ |line| ($line | str starts-with "alias ") or ($line | str starts-with "hide ") }} | str join ","
+}}
 
 source "./hook.nu"
 source "./hook.nu"
@@ -312,12 +325,15 @@ print $"foo=($env | get --optional E2E_FOO | default MISSING)"
 print $"gone=($env | get --optional E2E_GONE | default REMOVED)"
 print $"path=($env.{path_key})"
 print $"hooks=($env.config.hooks.env_change.PWD | length)"
+print $"staged=($env.config.hooks.pre_prompt | length) (staged_defs)"
+print $"parsed=(^$nu.current-exe --no-config-file --commands $"(staged)\ne2e_ll" | str trim)"
 
 _starbase_deactivate
 
 print $"foo=($env | get --optional E2E_FOO | default REMOVED)"
 print $"path=($env.{path_key})"
 print $"hooks=($env.config.hooks.env_change.PWD | length)"
+print $"staged=($env.config.hooks.pre_prompt | length) (staged_defs)"
 
 source "./hook.nu"
 
@@ -325,6 +341,7 @@ _starbase_activate
 
 print $"foo=($env | get --optional E2E_FOO | default MISSING)"
 print $"hooks=($env.config.hooks.env_change.PWD | length)"
+print $"staged=($env.config.hooks.pre_prompt | length) (staged_defs)"
 "#
         ),
     );
@@ -332,7 +349,10 @@ print $"hooks=($env.config.hooks.env_change.PWD | length)"
     if let Some(output) = run_script(&sandbox, "nu", &["./test.nu"]) {
         assert_eq!(
             stdout(&output),
-            "foo=123\ngone=REMOVED\npath=/e2e-stub-path\nhooks=1\nfoo=REMOVED\npath=/e2e-restored-path\nhooks=0\nfoo=123\nhooks=1\n"
+            "foo=123\ngone=REMOVED\npath=/e2e-stub-path\nhooks=1\n\
+             staged=1 alias e2e_ll = echo ALIASOK,hide e2e_gone\nparsed=ALIASOK\n\
+             foo=REMOVED\npath=/e2e-restored-path\nhooks=0\nstaged=1 hide e2e_ll\n\
+             foo=123\nhooks=1\nstaged=1 alias e2e_ll = echo ALIASOK,hide e2e_gone\n"
         );
     }
 }
