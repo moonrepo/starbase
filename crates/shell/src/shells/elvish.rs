@@ -55,6 +55,7 @@ impl Shell for Elvish {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = self.replace_env(
@@ -93,7 +94,7 @@ impl Shell for Elvish {
                     format!("fn {name} {{|@_| {value} $@_ }}")
                 }
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!(
                     "set-env {} {};",
                     self.quote(key),
@@ -112,7 +113,7 @@ impl Shell for Elvish {
                     format!("del {name}~")
                 }
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("unset-env {};", self.quote(key))
             }
         }

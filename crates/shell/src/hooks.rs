@@ -1,30 +1,42 @@
+/// A change to apply to a shell session.
+///
+/// Every variant carries a `hook` flag, which selects between the syntax a
+/// [`Hook`] needs and the syntax everything else needs — a profile, an rc
+/// file, or output a session evaluates at the top level. The two only differ
+/// where a shell treats hook evaluated code differently, which today is elvish
+/// aliases: a hook evaluates its statements in a namespace that is thrown
+/// away, so an alias has to be added to the interactive namespace rather than
+/// defined with `fn`. The flag is carried by every variant so that another
+/// shell can diverge later without the enum changing shape again.
 pub enum Statement<'data> {
     ModifyPath {
         paths: &'data [String],
         key: Option<&'data str>,
         orig_key: Option<&'data str>,
+        /// Format for embedding in a [`Hook`]. See [`Statement`].
+        hook: bool,
     },
     SetAlias {
         name: &'data str,
         value: &'data str,
-        /// Format for embedding in a [`Hook`], rather than for a profile or
-        /// the top level of a session. Only elvish differs: statements
-        /// evaluated by a hook land in a namespace that is thrown away, so an
-        /// alias has to be added to the interactive namespace instead of
-        /// being defined with `fn`.
+        /// Format for embedding in a [`Hook`]. See [`Statement`].
         hook: bool,
     },
     SetEnv {
         key: &'data str,
         value: &'data str,
+        /// Format for embedding in a [`Hook`]. See [`Statement`].
+        hook: bool,
     },
     UnsetAlias {
         name: &'data str,
-        /// See [`Statement::SetAlias::hook`].
+        /// Format for embedding in a [`Hook`]. See [`Statement`].
         hook: bool,
     },
     UnsetEnv {
         key: &'data str,
+        /// Format for embedding in a [`Hook`]. See [`Statement`].
+        hook: bool,
     },
 }
 
@@ -115,7 +127,7 @@ pub enum Hook {
     ///
     /// Elvish aliases ride the same mechanism, since a function defined by the
     /// evaluated statements would be dropped with the namespace that `eval`
-    /// discards. This is what [`Statement::SetAlias::hook`] selects: the hook
+    /// discards. This is what the `hook` flag on [`Statement`] selects: the hook
     /// form adds the alias to the interactive namespace, while the default
     /// form defines a plain `fn`, which is what a profile wants, since a
     /// profile is evaluated in the interactive namespace already. Two

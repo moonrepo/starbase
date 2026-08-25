@@ -37,6 +37,7 @@ impl Shell for Sh {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let mut value = paths.join(":");
@@ -51,13 +52,13 @@ impl Shell for Sh {
             Statement::SetAlias { name, value, .. } => {
                 format!("alias {}={};", self.quote(name), self.quote(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!("export {}={};", self.quote(key), self.quote(value))
             }
             Statement::UnsetAlias { name, .. } => {
                 format!("unalias {};", self.quote(name))
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("unset {};", self.quote(key))
             }
         }

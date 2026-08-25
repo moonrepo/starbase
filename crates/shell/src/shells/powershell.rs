@@ -187,6 +187,7 @@ impl Shell for PowerShell {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let mut value = format!("$env:{} = @(\n", get_env_key_native(key));
@@ -218,7 +219,7 @@ impl Shell for PowerShell {
                     self.quote(value)
                 )
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 let key = get_env_key_native(key);
 
                 format!("$env:{} = {};", key, self.format_env_value(value))
@@ -226,7 +227,7 @@ impl Shell for PowerShell {
             Statement::UnsetAlias { name, .. } => {
                 format!("Remove-Alias -Name {} -Force;", self.quote(name))
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!(
                     r#"if (Test-Path "env:{}") {{
   Remove-Item -LiteralPath "env:{key}";

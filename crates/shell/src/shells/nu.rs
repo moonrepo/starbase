@@ -101,6 +101,7 @@ impl Shell for Nu {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 // $FOO -> $env.FOO
                 let env_regex = get_env_var_regex();
@@ -155,7 +156,7 @@ impl Shell for Nu {
                 // alias to the string literal instead of running the command.
                 format!("alias {name} = {value}")
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 if value.starts_with("$HOME/") {
                     let path = value.trim_start_matches("$HOME/");
                     format!(
@@ -175,7 +176,7 @@ impl Shell for Nu {
             Statement::UnsetAlias { name, .. } => {
                 format!("hide {name}")
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 // A bare `hide-env` is a hard error when the variable is not
                 // set, which would abort every statement after it, as the whole
                 // list is applied as one sourced block. `hide` (for aliases) is

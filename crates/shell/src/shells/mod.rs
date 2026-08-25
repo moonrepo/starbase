@@ -90,12 +90,16 @@ pub trait Shell: Debug + Display + Send + Sync {
 
     /// Format an environment variable that will be set to the entire shell.
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        self.format(Statement::SetEnv { key, value })
+        self.format(Statement::SetEnv {
+            key,
+            value,
+            hook: false,
+        })
     }
 
     /// Format an environment variable that will be unset from the entire shell.
     fn format_env_unset(&self, key: &str) -> String {
-        self.format(Statement::UnsetEnv { key })
+        self.format(Statement::UnsetEnv { key, hook: false })
     }
 
     /// Format the provided paths to prepend the `PATH` environment variable.
@@ -104,6 +108,7 @@ pub trait Shell: Debug + Display + Send + Sync {
             paths,
             key: Some("PATH"),
             orig_key: Some("PATH"),
+            hook: false,
         })
     }
 
@@ -113,6 +118,7 @@ pub trait Shell: Debug + Display + Send + Sync {
             paths,
             key: Some("PATH"),
             orig_key: None,
+            hook: false,
         })
     }
 

@@ -52,6 +52,7 @@ impl Shell for Murex {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = self.replace_env(paths.join(PATH_DELIMITER));
@@ -66,7 +67,7 @@ impl Shell for Murex {
             Statement::SetAlias { name, value, .. } => {
                 format!("alias {}={};", self.quote(name), self.quote(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!(
                     "$ENV.{}={}",
                     self.quote(key),
@@ -76,7 +77,7 @@ impl Shell for Murex {
             Statement::UnsetAlias { name, .. } => {
                 format!("!alias {};", self.quote(name))
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("unset {};", self.quote(key))
             }
         }

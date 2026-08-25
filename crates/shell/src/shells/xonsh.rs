@@ -71,6 +71,7 @@ impl Shell for Xonsh {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = paths
@@ -89,7 +90,7 @@ impl Shell for Xonsh {
                 // must be a string literal, like `SetEnv` below
                 format!("aliases[\"{name}\"] = {}", self.format_string(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!("${key} = {}", self.format_string(value))
             }
             // `del` raises a `KeyError` when the alias/variable doesn't exist,
@@ -97,7 +98,7 @@ impl Shell for Xonsh {
             Statement::UnsetAlias { name, .. } => {
                 format!("aliases.pop(\"{name}\", None)")
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("${{...}}.pop(\"{key}\", None)")
             }
         }

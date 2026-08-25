@@ -54,6 +54,7 @@ impl Shell for Ion {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = self.replace_env(paths.join(":"));
@@ -66,7 +67,7 @@ impl Shell for Ion {
             Statement::SetAlias { name, value, .. } => {
                 format!("alias {} = {}", self.quote(name), self.quote(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!(
                     "export {}={}",
                     self.quote(key),
@@ -76,7 +77,7 @@ impl Shell for Ion {
             Statement::UnsetAlias { name, .. } => {
                 format!("unalias {}", self.quote(name))
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("drop {}", self.quote(key))
             }
         }
