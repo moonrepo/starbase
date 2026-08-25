@@ -104,6 +104,13 @@ pub enum Hook {
     ///   way become available in the next REPL cycle. A script that must call
     ///   the functions should evaluate the hook as a module instead
     ///   (`use <module>`), which namespaces them as `<module>:<function>`.
+    ///
+    /// Elvish aliases ride the same mechanism, since a function defined by the
+    /// evaluated statements would be dropped with the namespace that `eval`
+    /// discards. Two consequences are user visible: an alias set on entering a
+    /// directory becomes callable at the following prompt rather than
+    /// immediately, and a non-interactive elvish gets no aliases at all, the
+    /// same way it gets no hook functions.
     OnContextChange {
         /// Command that prints statements to evaluate when activating,
         /// in shell specific-syntax, e.g. `proto activate zsh --export`.

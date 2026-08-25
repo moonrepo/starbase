@@ -1,4 +1,5 @@
 use serial_test::serial;
+use starbase_sandbox::assert_snapshot;
 use starbase_shell::{Hook, ShellType};
 use std::env;
 
@@ -44,6 +45,45 @@ fn no_shell_leaves_template_placeholders() {
         assert!(
             !output.contains("${{"),
             "{shell_type} hook has an unresolved template placeholder:\n{output}"
+        );
+    }
+}
+
+// A plain alphanumeric value needs no shell quoting, and that is exactly the
+// case that broke three shells: nu and murex parse the right side of an
+// assignment as an expression, powershell as a pipeline, and a bareword is a
+// command there, not a value.
+#[test]
+fn formats_a_plain_env_value_for_every_shell() {
+    let rendered = ShellType::variants()
+        .iter()
+        .map(|shell_type| {
+            format!(
+                "{shell_type}: {}",
+                shell_type.build().format_env_set("KEY", "value")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_snapshot!(rendered);
+}
+
+#[test]
+fn expression_shells_quote_a_plain_env_value() {
+    for shell_type in [
+        ShellType::Murex,
+        ShellType::Nu,
+        ShellType::PowerShell,
+        ShellType::Pwsh,
+    ] {
+        let output = shell_type.build().format_env_set("KEY", "value");
+
+        assert!(
+            ["'value'", "\"value\"", "%(value)"]
+                .iter()
+                .any(|quoted| output.contains(quoted)),
+            "{shell_type} left a plain value unquoted: {output}"
         );
     }
 }

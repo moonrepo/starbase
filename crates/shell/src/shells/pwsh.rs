@@ -166,7 +166,7 @@ mod tests {
         );
         assert_eq!(
             Pwsh::new().format_env_set("BOOL", "true"),
-            r#"$env:BOOL = true;"#
+            r#"$env:BOOL = 'true';"#
         );
         assert_eq!(
             Pwsh::new().format_env_set("STRING", "a b c"),

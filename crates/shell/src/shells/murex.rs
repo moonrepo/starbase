@@ -21,6 +21,20 @@ impl Murex {
             .replace_all(value.as_ref(), "$$ENV.$name")
             .to_string()
     }
+
+    /// Quote a value for the right side of an assignment, which murex parses
+    /// as an expression. A bareword is a syntax error there, so a value that
+    /// needs no shell quoting still needs syntax quoting.
+    fn quote_assignment(&self, value: &str) -> String {
+        let quoter = self.create_quoter(value.into());
+
+        // Interpolated and already quoted values keep the quoting they have
+        if quoter.is_empty() || quoter.is_quoted() || quoter.requires_expansion() {
+            self.quote(value)
+        } else {
+            self.create_quoter(value.into()).quote()
+        }
+    }
 }
 
 impl Shell for Murex {
@@ -56,7 +70,7 @@ impl Shell for Murex {
                 format!(
                     "$ENV.{}={}",
                     self.quote(key),
-                    self.quote(self.replace_env(value).as_str())
+                    self.quote_assignment(self.replace_env(value).as_str())
                 )
             }
             Statement::UnsetAlias { name } => {
@@ -126,6 +140,9 @@ mod tests {
             r#"$ENV.PROTO_HOME="$ENV.HOME/.proto""#
         );
         assert_eq!(Murex.format_env_set("FOO", "don't"), "$ENV.FOO=%(don't)");
+        // The expression parser rejects a bareword, so a plain value is quoted
+        assert_eq!(Murex.format_env_set("BOOL", "true"), "$ENV.BOOL='true'");
+        assert_eq!(Murex.format_env_set("EMPTY", ""), "$ENV.EMPTY=''");
     }
 
     #[cfg(unix)]

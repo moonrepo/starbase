@@ -146,7 +146,15 @@ impl PowerShell {
         } else if value.contains('\\') {
             self.create_quoter(value.into()).quote()
         } else {
-            self.quote(value)
+            // PowerShell parses the right side of an assignment as a pipeline,
+            // so a bareword would run as a command instead of being a value
+            let quoter = self.create_quoter(value.into());
+
+            if quoter.is_empty() || quoter.is_quoted() {
+                self.quote(value)
+            } else {
+                self.create_quoter(value.into()).quote()
+            }
         }
     }
 }
@@ -392,7 +400,7 @@ mod tests {
         );
         assert_eq!(
             PowerShell.format_env_set("BOOL", "true"),
-            r#"$env:BOOL = true;"#
+            r#"$env:BOOL = 'true';"#
         );
         assert_eq!(
             PowerShell.format_env_set("STRING", "a b c"),

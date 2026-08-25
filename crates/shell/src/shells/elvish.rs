@@ -79,8 +79,12 @@ impl Shell for Elvish {
                     None => format!("set paths = [{value}];"),
                 }
             }
+            // `eval` runs in a restricted namespace that is dropped when it
+            // returns, so an alias must be added to the interactive namespace
+            // the same way the hook adds its own functions. `@_` forwards the
+            // arguments, which a bare `fn` would reject
             Statement::SetAlias { name, value } => {
-                format!("fn {name} {{ {value} }}")
+                format!("try {{ edit:add-vars [&'{name}~'={{|@_| {value} $@_ }}] }} catch _ {{ }}")
             }
             Statement::SetEnv { key, value } => {
                 format!(
@@ -89,8 +93,12 @@ impl Shell for Elvish {
                     self.quote(self.replace_env(value).as_str())
                 )
             }
+            // The alias lives in the `{name}~` slot, and `del` on a missing
+            // variable is a compilation error, which would take down every
+            // statement sharing the `eval`. `edit:del-vars` tolerates a name
+            // that was never added
             Statement::UnsetAlias { name } => {
-                format!("del {name};")
+                format!("try {{ edit:del-vars ['{name}~'] }} catch _ {{ }}")
             }
             Statement::UnsetEnv { key } => {
                 format!("unset-env {};", self.quote(key))
@@ -245,12 +253,22 @@ mod tests {
 
     #[test]
     fn formats_alias_set() {
-        assert_eq!(Elvish.format_alias_set("ll", "ls -la"), "fn ll { ls -la }");
+        assert_eq!(
+            Elvish.format_alias_set("ll", "ls -la"),
+            "try { edit:add-vars [&'ll~'={|@_| ls -la $@_ }] } catch _ { }"
+        );
+        assert_eq!(
+            Elvish.format_alias_set("..", "cd .."),
+            "try { edit:add-vars [&'..~'={|@_| cd .. $@_ }] } catch _ { }"
+        );
     }
 
     #[test]
     fn formats_alias_unset() {
-        assert_eq!(Elvish.format_alias_unset("ll"), "del ll;");
+        assert_eq!(
+            Elvish.format_alias_unset("ll"),
+            "try { edit:del-vars ['ll~'] } catch _ { }"
+        );
     }
 
     #[test]
