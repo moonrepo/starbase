@@ -31,6 +31,10 @@ sysinfo = { version = "0.39.6", default-features = false, features = [
 starbase_sandbox = { path = "../sandbox" }
 serial_test = { workspace = true }
 
+# Interactive E2E tests drive a real shell through a pty
+[target."cfg(unix)".dev-dependencies]
+libc = "0.2"
+
 [features]
 default = []
 miette = ["dep:miette"]

@@ -3158,6 +3158,7 @@ name = "starbase_shell"
 version = "0.13.0"
 dependencies = [
  "base64 0.23.1",
+ "libc",
  "miette",
  "regex",
  "serial_test",
