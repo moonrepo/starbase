@@ -6,33 +6,31 @@ fn _starbase_hook {|@_|
   eval (starbase hook elvish | slurp)
 }
 
+# Re-sourcing creates a new function object every time, so a registered handler
+# is matched by its body rather than by identity
+fn _starbase_hook_others {|handlers|
+  each {|handler| if (not (and (has-key $handler def) (eq $handler[def] $_starbase_hook~[def]))) { put $handler } } $handlers
+}
+
 fn _starbase_deactivate {
   eval (starbase deactivate elvish | slurp)
-  set after-chdir = [(each {|hook| if (not (and (has-key $hook def) (eq $hook[def] $_starbase_hook~[def]))) { put $hook } } $after-chdir)]
+  set @after-chdir = (_starbase_hook_others $after-chdir)
   try {
-    eval &ns=(ns [&activate~=$_starbase_hook~]) 'set edit:before-readline = [(each {|hook| if (not (and (has-key $hook def) (eq $hook[def] $activate~[def]))) { put $hook } } $edit:before-readline)]'
+    eval &ns=(ns [&others~=$_starbase_hook_others~]) 'set @edit:before-readline = (others $edit:before-readline)'
     edit:del-vars ['_starbase_hook~' '_starbase_deactivate~']
   } catch _ {
     # Nothing was registered or exported when non-interactive
   }
 }
 
-set after-chdir = [(each {|hook| if (not (and (has-key $hook def) (eq $hook[def] $_starbase_hook~[def]))) { put $hook } } $after-chdir)]
-set @after-chdir = $@after-chdir $_starbase_hook~
+set @after-chdir = (_starbase_hook_others $after-chdir) $_starbase_hook~
 
-# The prompt trigger lives in the `edit:` module, which only exists in an
-# interactive session. Referencing it directly is a compilation error, which
-# `try` cannot catch, so the registration is compiled at runtime by `eval`
+# The prompt trigger and the exported names both live in the `edit:` module,
+# which only exists in an interactive session. Referencing it directly is a
+# compilation error, which `try` cannot catch, so the registration is compiled
+# at runtime by `eval`
 try {
-  eval &ns=(ns [&activate~=$_starbase_hook~]) 'set edit:before-readline = [(each {|hook| if (not (and (has-key $hook def) (eq $hook[def] $activate~[def]))) { put $hook } } $edit:before-readline)]
-set @edit:before-readline = $@edit:before-readline $activate~'
-} catch _ {
-  # The `edit:` module only exists in an interactive session
-}
-
-# Consumers `eval` this code, which runs in a restricted namespace, so export
-# both functions for the interactive session to be able to call them
-try {
+  eval &ns=(ns [&others~=$_starbase_hook_others~ &activate~=$_starbase_hook~]) 'set @edit:before-readline = (others $edit:before-readline) $activate~'
   edit:add-vars [&'_starbase_hook~'=$_starbase_hook~ &'_starbase_deactivate~'=$_starbase_deactivate~]
 } catch _ {
   # The `edit:` module only exists in an interactive session
