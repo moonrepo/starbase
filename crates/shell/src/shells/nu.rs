@@ -149,7 +149,7 @@ impl Shell for Nu {
 
                 normalize_newlines(value)
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 // A Nushell alias maps a name to an expression (a command line), not
                 // to a string. Quoting the value (e.g. `alias ll = 'ls -la'`) would
                 // alias to the string literal instead of running the command.
@@ -172,7 +172,7 @@ impl Shell for Nu {
                     )
                 }
             }
-            Statement::UnsetAlias { name } => {
+            Statement::UnsetAlias { name, .. } => {
                 format!("hide {name}")
             }
             Statement::UnsetEnv { key } => {

@@ -68,12 +68,16 @@ pub trait Shell: Debug + Display + Send + Sync {
 
     /// Format an alias that will be set to the entire shell.
     fn format_alias_set(&self, name: &str, value: &str) -> String {
-        self.format(Statement::SetAlias { name, value })
+        self.format(Statement::SetAlias {
+            name,
+            value,
+            hook: false,
+        })
     }
 
     /// Format an alias that will be unset from the entire shell.
     fn format_alias_unset(&self, name: &str) -> String {
-        self.format(Statement::UnsetAlias { name })
+        self.format(Statement::UnsetAlias { name, hook: false })
     }
 
     /// Format an environment variable by either setting or unsetting the value.

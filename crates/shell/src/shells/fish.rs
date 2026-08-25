@@ -48,13 +48,13 @@ impl Shell for Fish {
                     None => format!("set -gx {key} {value};"),
                 }
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 format!("alias {} {};", name, self.quote(value))
             }
             Statement::SetEnv { key, value } => {
                 format!("set -gx {} {};", key, self.quote(value))
             }
-            Statement::UnsetAlias { name } => {
+            Statement::UnsetAlias { name, .. } => {
                 format!("functions -e {name};")
             }
             Statement::UnsetEnv { key } => {

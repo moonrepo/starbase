@@ -22,7 +22,7 @@
 // broken install step fails loudly instead of silently skipping.
 
 use starbase_sandbox::{Sandbox, create_empty_sandbox};
-use starbase_shell::{Hook, ShellType};
+use starbase_shell::{Hook, ShellType, Statement};
 use std::io;
 use std::process::{Command, Output};
 
@@ -499,7 +499,11 @@ fn xonsh_activates_and_deactivates() {
             "{}\n{}\n{}\n",
             shell.format_env_set("E2E_FOO", "123"),
             shell.format_env_set("E2E_BAR", "456"),
-            shell.format_alias_set("e2e_alias", "echo aliased"),
+            shell.format(Statement::SetAlias {
+                name: "e2e_alias",
+                value: "echo aliased",
+                hook: true,
+            }),
         ),
     );
     sandbox.create_file(
@@ -509,8 +513,14 @@ fn xonsh_activates_and_deactivates() {
             shell.format_env_unset("E2E_FOO"),
             shell.format_env_unset("E2E_NEVER_SET"),
             shell.format_env_unset("E2E_BAR"),
-            shell.format_alias_unset("e2e_never_set"),
-            shell.format_alias_unset("e2e_alias"),
+            shell.format(Statement::UnsetAlias {
+                name: "e2e_never_set",
+                hook: true,
+            }),
+            shell.format(Statement::UnsetAlias {
+                name: "e2e_alias",
+                hook: true,
+            }),
         ),
     );
 

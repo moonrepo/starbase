@@ -7,6 +7,12 @@ pub enum Statement<'data> {
     SetAlias {
         name: &'data str,
         value: &'data str,
+        /// Format for embedding in a [`Hook`], rather than for a profile or
+        /// the top level of a session. Only elvish differs: statements
+        /// evaluated by a hook land in a namespace that is thrown away, so an
+        /// alias has to be added to the interactive namespace instead of
+        /// being defined with `fn`.
+        hook: bool,
     },
     SetEnv {
         key: &'data str,
@@ -14,6 +20,8 @@ pub enum Statement<'data> {
     },
     UnsetAlias {
         name: &'data str,
+        /// See [`Statement::SetAlias::hook`].
+        hook: bool,
     },
     UnsetEnv {
         key: &'data str,
@@ -107,10 +115,14 @@ pub enum Hook {
     ///
     /// Elvish aliases ride the same mechanism, since a function defined by the
     /// evaluated statements would be dropped with the namespace that `eval`
-    /// discards. Two consequences are user visible: an alias set on entering a
-    /// directory becomes callable at the following prompt rather than
-    /// immediately, and a non-interactive elvish gets no aliases at all, the
-    /// same way it gets no hook functions.
+    /// discards. This is what [`Statement::SetAlias::hook`] selects: the hook
+    /// form adds the alias to the interactive namespace, while the default
+    /// form defines a plain `fn`, which is what a profile wants, since a
+    /// profile is evaluated in the interactive namespace already. Two
+    /// consequences of the hook form are user visible: an alias set on
+    /// entering a directory becomes callable at the following prompt rather
+    /// than immediately, and a non-interactive elvish gets no aliases at all,
+    /// the same way it gets no hook functions.
     OnContextChange {
         /// Command that prints statements to evaluate when activating,
         /// in shell specific-syntax, e.g. `proto activate zsh --export`.

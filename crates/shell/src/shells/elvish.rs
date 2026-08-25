@@ -79,12 +79,19 @@ impl Shell for Elvish {
                     None => format!("set paths = [{value}];"),
                 }
             }
-            // `eval` runs in a restricted namespace that is dropped when it
-            // returns, so an alias must be added to the interactive namespace
-            // the same way the hook adds its own functions. `@_` forwards the
-            // arguments, which a bare `fn` would reject
-            Statement::SetAlias { name, value } => {
-                format!("try {{ edit:add-vars [&'{name}~'={{|@_| {value} $@_ }}] }} catch _ {{ }}")
+            // `@_` forwards the arguments, which a bare `fn` body would
+            // reject. A hook evaluates its statements in a namespace that is
+            // dropped when `eval` returns, so there the alias is added to the
+            // interactive namespace instead, the way the hook adds its own
+            // functions
+            Statement::SetAlias { name, value, hook } => {
+                if hook {
+                    format!(
+                        "try {{ edit:add-vars [&'{name}~'={{|@_| {value} $@_ }}] }} catch _ {{ }}"
+                    )
+                } else {
+                    format!("fn {name} {{|@_| {value} $@_ }}")
+                }
             }
             Statement::SetEnv { key, value } => {
                 format!(
@@ -93,12 +100,17 @@ impl Shell for Elvish {
                     self.quote(self.replace_env(value).as_str())
                 )
             }
-            // The alias lives in the `{name}~` slot, and `del` on a missing
-            // variable is a compilation error, which would take down every
-            // statement sharing the `eval`. `edit:del-vars` tolerates a name
-            // that was never added
-            Statement::UnsetAlias { name } => {
-                format!("try {{ edit:del-vars ['{name}~'] }} catch _ {{ }}")
+            // An alias lives in the `{name}~` slot, not `{name}`. A hook
+            // cannot use `del`, since a missing variable is a compilation
+            // error, which would take down every statement sharing the `eval`
+            // rather than just this one. `edit:del-vars` tolerates a name that
+            // was never added
+            Statement::UnsetAlias { name, hook } => {
+                if hook {
+                    format!("try {{ edit:del-vars ['{name}~'] }} catch _ {{ }}")
+                } else {
+                    format!("del {name}~")
+                }
             }
             Statement::UnsetEnv { key } => {
                 format!("unset-env {};", self.quote(key))
@@ -255,18 +267,43 @@ mod tests {
     fn formats_alias_set() {
         assert_eq!(
             Elvish.format_alias_set("ll", "ls -la"),
-            "try { edit:add-vars [&'ll~'={|@_| ls -la $@_ }] } catch _ { }"
-        );
-        assert_eq!(
-            Elvish.format_alias_set("..", "cd .."),
-            "try { edit:add-vars [&'..~'={|@_| cd .. $@_ }] } catch _ { }"
+            "fn ll {|@_| ls -la $@_ }"
         );
     }
 
     #[test]
     fn formats_alias_unset() {
+        // The alias is a function, which lives in the `~` slot
+        assert_eq!(Elvish.format_alias_unset("ll"), "del ll~");
+    }
+
+    #[test]
+    fn formats_hook_alias_set() {
         assert_eq!(
-            Elvish.format_alias_unset("ll"),
+            Elvish.format(Statement::SetAlias {
+                name: "ll",
+                value: "ls -la",
+                hook: true
+            }),
+            "try { edit:add-vars [&'ll~'={|@_| ls -la $@_ }] } catch _ { }"
+        );
+        assert_eq!(
+            Elvish.format(Statement::SetAlias {
+                name: "..",
+                value: "cd ..",
+                hook: true
+            }),
+            "try { edit:add-vars [&'..~'={|@_| cd .. $@_ }] } catch _ { }"
+        );
+    }
+
+    #[test]
+    fn formats_hook_alias_unset() {
+        assert_eq!(
+            Elvish.format(Statement::UnsetAlias {
+                name: "ll",
+                hook: true
+            }),
             "try { edit:del-vars ['ll~'] } catch _ { }"
         );
     }

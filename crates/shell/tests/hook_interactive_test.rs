@@ -21,7 +21,7 @@ mod pty;
 
 use pty::Pty;
 use starbase_sandbox::{Sandbox, create_empty_sandbox};
-use starbase_shell::{Hook, ShellType};
+use starbase_shell::{Hook, ShellType, Statement};
 
 struct Case {
     shell: ShellType,
@@ -374,6 +374,50 @@ fn powershell_activates_and_deactivates() {
     });
 }
 
+// The default statement form targets a profile, which elvish evaluates in the
+// interactive namespace, so a plain `fn` is enough there. Nothing outside a
+// pty can tell the two forms apart.
+#[test]
+fn elvish_defines_profile_aliases() {
+    let shell = ShellType::Elvish.build();
+    let sandbox = create_empty_sandbox();
+    let root = sandbox.path().display().to_string();
+
+    sandbox.create_file(
+        "report.sh",
+        "printf '%s foo=%s\\n' \"$1\" \"${E2E_FOO:-unset}\"\n",
+    );
+    sandbox.create_file(
+        "rc.elv",
+        format!(
+            "{}\necho rc-loaded\n",
+            shell.format_alias_set("e2e_alias", &format!("sh {root}/report.sh"))
+        ),
+    );
+
+    let Some(mut session) =
+        Pty::spawn_with_term("elvish", &["-rc", &format!("{root}/rc.elv")], "dumb")
+    else {
+        return;
+    };
+
+    let output = session.sync("e2e_alias ALIAS", "ALIAS foo=");
+
+    assert_eq!(reported(&output, "ALIAS"), "unset");
+
+    session.send(&shell.format_alias_unset("e2e_alias"));
+    session.send("e2e_alias GONE");
+
+    let output = session.sync(&format!("sh {root}/report.sh AFTER"), "AFTER foo=");
+
+    assert!(
+        output.contains("executable file not found"),
+        "alias outlived its removal:\n{output}"
+    );
+
+    drop(sandbox);
+}
+
 // Elvish aliases are a function added to the interactive namespace with
 // `edit:add-vars`, so nothing about them is observable outside a pty.
 #[test]
@@ -390,16 +434,26 @@ fn elvish_sets_and_unsets_aliases() {
         "set.elv",
         format!(
             "{}\n",
-            shell.format_alias_set("e2e_alias", &format!("sh {root}/report.sh"))
+            shell.format(Statement::SetAlias {
+                name: "e2e_alias",
+                value: &format!("sh {root}/report.sh"),
+                hook: true,
+            })
         ),
     );
     sandbox.create_file(
         "unset.elv",
         format!(
             "{}\n{}\n",
-            shell.format_alias_unset("e2e_alias"),
+            shell.format(Statement::UnsetAlias {
+                name: "e2e_alias",
+                hook: true,
+            }),
             // A name that was never added must not abort the block
-            shell.format_alias_unset("e2e_never_added")
+            shell.format(Statement::UnsetAlias {
+                name: "e2e_never_added",
+                hook: true,
+            })
         ),
     );
 

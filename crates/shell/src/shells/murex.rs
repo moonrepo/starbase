@@ -63,7 +63,7 @@ impl Shell for Murex {
                     None => format!(r#"$ENV.{key}="{value}""#),
                 }
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 format!("alias {}={};", self.quote(name), self.quote(value))
             }
             Statement::SetEnv { key, value } => {
@@ -73,7 +73,7 @@ impl Shell for Murex {
                     self.quote_assignment(self.replace_env(value).as_str())
                 )
             }
-            Statement::UnsetAlias { name } => {
+            Statement::UnsetAlias { name, .. } => {
                 format!("!alias {};", self.quote(name))
             }
             Statement::UnsetEnv { key } => {

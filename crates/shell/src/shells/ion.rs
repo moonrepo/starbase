@@ -63,7 +63,7 @@ impl Shell for Ion {
                     None => format!(r#"export {key} = "{value}""#,),
                 }
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 format!("alias {} = {}", self.quote(name), self.quote(value))
             }
             Statement::SetEnv { key, value } => {
@@ -73,7 +73,7 @@ impl Shell for Ion {
                     self.quote(self.replace_env(value).as_str())
                 )
             }
-            Statement::UnsetAlias { name } => {
+            Statement::UnsetAlias { name, .. } => {
                 format!("unalias {}", self.quote(name))
             }
             Statement::UnsetEnv { key } => {

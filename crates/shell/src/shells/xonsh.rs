@@ -84,7 +84,7 @@ impl Shell for Xonsh {
                     None => format!(r#"${key} = [{value}]"#),
                 }
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 // The right-hand side is Python, not a shell word, so the value
                 // must be a string literal, like `SetEnv` below
                 format!("aliases[\"{name}\"] = {}", self.format_string(value))
@@ -94,7 +94,7 @@ impl Shell for Xonsh {
             }
             // `del` raises a `KeyError` when the alias/variable doesn't exist,
             // which would abort the entire block of statements
-            Statement::UnsetAlias { name } => {
+            Statement::UnsetAlias { name, .. } => {
                 format!("aliases.pop(\"{name}\", None)")
             }
             Statement::UnsetEnv { key } => {
