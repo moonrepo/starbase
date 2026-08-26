@@ -176,6 +176,31 @@ fn run_case(case: Case) {
 
     assert_eq!(reported(&output, "S5"), "unset", "{}", case.shell);
 
+    // Re-activating means evaluating the hook again, since every trigger is
+    // registered by the hook's top level rather than by the activate function
+    // — which most shells have deleted by now anyway. Calling that function
+    // alone would apply the statements once and leave the session unhooked.
+    if let Some(evaluate) = case.evaluate {
+        session.send(&evaluate(&format!("{root}/hook.{}", case.extension)));
+    }
+
+    let output = session.sync(&report("S6"), "S6 foo=");
+    let expected = if case.activates_on_prompt {
+        "123"
+    } else {
+        "unset"
+    };
+
+    assert_eq!(reported(&output, "S6"), expected, "{}", case.shell);
+
+    // Both triggers are live again, so a directory change activates as it did
+    // the first time round
+    session.send("cd /tmp");
+
+    let output = session.sync(&report("S7"), "S7 foo=");
+
+    assert_eq!(reported(&output, "S7"), "123", "{}", case.shell);
+
     drop(sandbox);
 }
 
