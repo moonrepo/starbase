@@ -7,6 +7,13 @@ expression: "PowerShell.format_hook(Hook::RegisterHandlers\n{ function: \"_starb
 if (-not (Get-Variable -Name '_starbase_hook_on_prompt' -Scope Global -ErrorAction Ignore)) {
   $global:_starbase_hook_on_prompt = $function:prompt;
 
+  # A session started without a prompt (`-File`, `-Command`) has nothing to
+  # save: fall back to the engine's default, so the wrapper never invokes
+  # `$null` and unregistering always restores a callable prompt
+  if ($null -eq $global:_starbase_hook_on_prompt) {
+    $global:_starbase_hook_on_prompt = { "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) " };
+  }
+
   function global:prompt {
     _starbase_hook;
     & $global:_starbase_hook_on_prompt;

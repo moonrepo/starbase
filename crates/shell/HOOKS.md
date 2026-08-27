@@ -217,7 +217,10 @@ implementation. Nothing fires on prompts, so activation happens on the next
 ### PowerShell (powershell, pwsh)
 
 - Both wrap the global `prompt` function, saving the previous one in a global
-  variable and restoring it on unregister. pwsh additionally registers a
+  variable and restoring it on unregister. A session started without a prompt
+  (`-File`, `-Command`) has nothing to save, so registration falls back to the
+  engine's default prompt — otherwise the wrapper would invoke `$null` on
+  every render, and unregistering would have nothing callable to restore. pwsh additionally registers a
   `LocationChangedAction` delegate (5.1 lacks it).
 - The activate template preserves `$LASTEXITCODE` across the hook, so a
   prompt refresh does not clobber the user's last exit status.

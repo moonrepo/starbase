@@ -588,6 +588,11 @@ print("unhooked foo=" + ${{...}}.get('E2E_FOO', 'unset'))
         format!(
             "{hook}\n{hook}\n{}\n{hook}\n{}",
             r#"
+# apt's xonsh (0.14.4 on Ubuntu 24.04) has a race where an early `$()`
+# capture can return empty on Linux, which no-ops the first activation.
+# Fixed in later versions; warm the machinery up before asserting.
+_ = $(echo warm)
+
 def _counts():
     return "%d,%d" % (
         sum(1 for h in events.on_chdir if getattr(h, '__name__', '') == '_starbase_activate'),
@@ -638,7 +643,8 @@ fn xonsh_hook_functions_are_callable_after_execx() {
     sandbox.create_file(
         "test.xsh",
         format!(
-            r#"execx($(cat {}/hook.xsh))
+            r#"_ = $(echo warm)
+execx($(cat {}/hook.xsh))
 print("callable=" + str('_starbase_activate' in globals() and '_starbase_deactivate' in globals()))
 _starbase_activate()
 print("foo=" + ${{...}}.get('E2E_FOO', 'unset'))
@@ -679,7 +685,7 @@ fn powershell_activates_and_deactivates() {
 . $PSScriptRoot/hook.ps1
 . $PSScriptRoot/hook.ps1
 Write-Output "wrapped=$($function:prompt.ToString().Contains('_starbase_activate'))"
-Write-Output "nested=$($global:_starbase_activate_prompt.ToString().Contains('_starbase_activate'))"
+Write-Output "nested=$($global:_starbase_activate_on_prompt.ToString().Contains('_starbase_activate'))"
 & cmd /c exit 7
 prompt > $null
 Write-Output "E2E_FOO=$env:E2E_FOO E2E_BAR=$env:E2E_BAR"
