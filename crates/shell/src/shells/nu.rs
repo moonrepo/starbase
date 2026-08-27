@@ -189,81 +189,41 @@ impl Shell for Nu {
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
-            Hook::OnContextChange {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                // Nushell has no runtime `eval`, but `source` parses and runs a
-                // file in the scope that invoked it, which is enough to apply the
-                // statement list. Hook entries defined as a string are parsed one
-                // at a time, immediately before each one runs, so a `source` entry
-                // registered after the writer entry sees the file it just wrote.
-                //
-                // `source` requires a parse time constant path (a runtime path
-                // fails with `nu::shell::not_a_constant`), so it is a `const`. The
-                // name is keyed by pid, so concurrent sessions cannot read each
-                // other's statements, and by function, so two tools cannot clobber
-                // each other.
-                let file = format!(r#"$"($nu.temp-dir)/{activate_function}-($nu.pid).nu""#);
-                let file_const = format!("{activate_function}_file");
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                // The statements are applied by a `source` entry staged on the
+                // next prompt, which finds them at this path
+                let file = format!(r#"$"($nu.temp-dir)/{function}-($nu.pid).nu""#);
+                let file_const = format!("{function}_file");
 
-                // Identifies the `source` entry by its first line, so that the
-                // teardown can find and unregister it
-                let source_marker = format!("# {activate_function} source");
-                let source_entry = format!(
-                    "{source_marker}\nconst {file_const} = {file}\nsource ${file_const}\nrm --force --permanent ${file_const}"
+                // Identifies the staged entry by its first line, so that a
+                // second write replaces it, and so that it can remove itself
+                let marker = format!("# {function} apply");
+
+                // Removes the staged entry once it has run, which is what
+                // makes it a one shot
+                let cleanup = format!(
+                    r#"$env.config = ($env.config | upsert hooks.pre_prompt ((($env.config | get --optional hooks.pre_prompt) | default []) | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{marker}")) }}))"#
                 );
 
-                let mut register = String::new();
-                let mut unregister = String::new();
-                let mut cleanup = vec![];
-
-                for trigger in ["env_change.PWD", "pre_prompt"] {
-                    register.push_str(&format!(
-                        r#"
-    $env.config = ($env.config | upsert hooks.{trigger} {{ |config|
-        $entries | reduce --fold (($config | get --optional hooks.{trigger}) | default []) {{ |entry, acc|
-            if $entry in $acc {{ $acc }} else {{ $acc | append $entry }}
-        }}
-    }})
-"#
-                    ));
-
-                    unregister.push_str(&format!(
-                        r#"
-    $env.config = ($env.config | upsert hooks.{trigger} (
-        ($env.config | get --optional hooks.{trigger}) | default []
-            | where {{ |hook| $hook != {{ code: "{activate_function}" }} }}
-    ))
-"#
-                    ));
-
-                    cleanup.push(format!(
-                        r#"$env.config = ($env.config | upsert hooks.{trigger} ((($env.config | get --optional hooks.{trigger}) | default []) | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{source_marker}")) }}))"#
-                    ));
-                }
-
-                // Appended to the staged teardown, so that the `source` entry
-                // drops itself once it has applied it
-                let cleanup = cleanup.join("\n");
+                let staged = format!(
+                    "'{marker}\nconst {file_const} = {file}\nsource ${file_const}\nrm --force --permanent ${file_const}\n{cleanup}'"
+                );
 
                 render_template(
-                    include_str!("hooks/nu.nu"),
+                    include_str!("hooks/function/nu.nu"),
                     &[
-                        ("activate_command", &activate_command),
-                        ("activate_function", &activate_function),
-                        ("cleanup", &cleanup),
-                        ("deactivate_command", &deactivate_command),
-                        ("deactivate_function", &deactivate_function),
+                        ("command", &command),
                         ("file", &file),
-                        ("register", &register),
-                        ("source_entry", &source_entry),
-                        ("unregister", &unregister),
+                        ("function", &function),
+                        ("marker", &marker),
+                        ("staged", &staged),
                     ],
                 )
             }
+            Hook::OnContextChange { function } => render_template(
+                include_str!("hooks/context/nu.nu"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -475,18 +435,31 @@ mod tests {
     }
 
     #[cfg(unix)]
+    #[cfg(unix)]
+    #[test]
+    fn formats_activate_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        assert_snapshot!(
+            Nu.format_hook(Hook::Activate {
+                command: "starbase hook nu".into(),
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
+
+    #[cfg(unix)]
     #[test]
     fn formats_context_change_hook() {
         use starbase_sandbox::assert_snapshot;
 
-        let hook = Hook::OnContextChange {
-            activate_command: "starbase hook nu".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate nu".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
-
-        assert_snapshot!(Nu.format_hook(hook).unwrap());
+        assert_snapshot!(
+            Nu.format_hook(Hook::OnContextChange {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
     }
 
     #[cfg(unix)]

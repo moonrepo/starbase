@@ -1,24 +1,9 @@
 ---
 source: crates/shell/src/shells/sh.rs
-expression: Sh.format_hook(hook).unwrap()
+expression: "Sh.format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
 ---
-_starbase_hook() {
-  _starbase_hook_output=$(starbase hook sh)
-  if [ -n "$_starbase_hook_output" ]; then
-    eval "$_starbase_hook_output"
-  fi
-  unset _starbase_hook_output
-}
-
-_starbase_deactivate() {
-  _starbase_deactivate_output=$(starbase deactivate sh)
-  if [ -n "$_starbase_deactivate_output" ]; then
-    eval "$_starbase_deactivate_output"
-  fi
-  unset _starbase_deactivate_output
-  unset -f cd _starbase_hook _starbase_deactivate
-}
-
+# POSIX shells have no change-dir or prompt hook, so `cd` is shadowed. This
+# clobbers any other `cd` wrapper, as there is no way to chain functions
 cd() {
   command cd "$@" || return $?
   _starbase_hook

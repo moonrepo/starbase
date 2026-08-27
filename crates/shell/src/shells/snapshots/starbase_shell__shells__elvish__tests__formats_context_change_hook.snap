@@ -1,37 +1,20 @@
 ---
 source: crates/shell/src/shells/elvish.rs
-expression: Elvish.format_hook(hook).unwrap()
+expression: "Elvish.format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
 ---
-fn _starbase_hook {|@_|
-  eval (starbase hook elvish | slurp)
-}
-
 # Re-sourcing creates a new function object every time, so a registered handler
 # is matched by its body rather than by identity
 fn _starbase_hook_others {|handlers|
   each {|handler| if (not (and (has-key $handler def) (eq $handler[def] $_starbase_hook~[def]))) { put $handler } } $handlers
 }
 
-fn _starbase_deactivate {
-  eval (starbase deactivate elvish | slurp)
-  set @after-chdir = (_starbase_hook_others $after-chdir)
-  try {
-    eval &ns=(ns [&others~=$_starbase_hook_others~]) 'set @edit:before-readline = (others $edit:before-readline)'
-    edit:del-vars ['_starbase_hook~' '_starbase_deactivate~']
-  } catch _ {
-    # Nothing was registered or exported when non-interactive
-  }
-}
-
 set @after-chdir = (_starbase_hook_others $after-chdir) $_starbase_hook~
 
-# The prompt trigger and the exported names both live in the `edit:` module,
-# which only exists in an interactive session. Referencing it directly is a
-# compilation error, which `try` cannot catch, so the registration is compiled
-# at runtime by `eval`
+# The prompt trigger lives in the `edit:` module, which only exists in an
+# interactive session. Referencing it directly is a compilation error, which
+# `try` cannot catch, so the registration is compiled at runtime by `eval`
 try {
   eval &ns=(ns [&others~=$_starbase_hook_others~ &activate~=$_starbase_hook~]) 'set @edit:before-readline = (others $edit:before-readline) $activate~'
-  edit:add-vars [&'_starbase_hook~'=$_starbase_hook~ &'_starbase_deactivate~'=$_starbase_deactivate~]
 } catch _ {
   # The `edit:` module only exists in an interactive session
 }

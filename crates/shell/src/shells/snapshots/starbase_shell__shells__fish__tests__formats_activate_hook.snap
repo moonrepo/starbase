@@ -1,0 +1,7 @@
+---
+source: crates/shell/src/shells/fish.rs
+expression: "Fish.format_hook(Hook::Activate\n{\n    command: \"starbase hook fish\".into(), function: \"_starbase_hook\".into(),\n}).unwrap()"
+---
+function _starbase_hook;
+  starbase hook fish | source
+end;

@@ -247,19 +247,15 @@ impl Shell for PowerShell {
     // property of prompt wrapping.
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnContextChange {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => render_template(
-                include_str!("hooks/powershell.ps1"),
-                &[
-                    ("activate_command", &activate_command),
-                    ("activate_function", &activate_function),
-                    ("deactivate_command", &deactivate_command),
-                    ("deactivate_function", &deactivate_function),
-                ],
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/powershell.ps1"),
+                    &[("command", &command), ("function", &function)],
+                )
+            }
+            Hook::OnContextChange { function } => render_template(
+                include_str!("hooks/context/powershell.ps1"),
+                &[("function", &function)],
             ),
         }))
     }
@@ -376,17 +372,30 @@ mod tests {
     }
 
     #[test]
+    fn formats_activate_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        assert_snapshot!(
+            PowerShell
+                .format_hook(Hook::Activate {
+                    command: "starbase hook powershell".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn formats_context_change_hook() {
         use starbase_sandbox::assert_snapshot;
 
-        let hook = Hook::OnContextChange {
-            activate_command: "starbase hook powershell".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate powershell".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
-
-        assert_snapshot!(PowerShell.format_hook(hook).unwrap());
+        assert_snapshot!(
+            PowerShell
+                .format_hook(Hook::OnContextChange {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]

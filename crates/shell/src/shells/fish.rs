@@ -66,19 +66,15 @@ impl Shell for Fish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnContextChange {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => render_template(
-                include_str!("hooks/fish.fish"),
-                &[
-                    ("activate_command", &activate_command),
-                    ("activate_function", &activate_function),
-                    ("deactivate_command", &deactivate_command),
-                    ("deactivate_function", &deactivate_function),
-                ],
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/fish.fish"),
+                    &[("command", &command), ("function", &function)],
+                )
+            }
+            Hook::OnContextChange { function } => render_template(
+                include_str!("hooks/context/fish.fish"),
+                &[("function", &function)],
             ),
         }))
     }
@@ -135,15 +131,24 @@ mod tests {
     }
 
     #[test]
-    fn formats_context_change_hook() {
-        let hook = Hook::OnContextChange {
-            activate_command: "starbase hook fish".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate fish".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Fish.format_hook(Hook::Activate {
+                command: "starbase hook fish".into(),
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
 
-        assert_snapshot!(Fish.format_hook(hook).unwrap());
+    #[test]
+    fn formats_context_change_hook() {
+        assert_snapshot!(
+            Fish.format_hook(Hook::OnContextChange {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
     }
 
     #[test]

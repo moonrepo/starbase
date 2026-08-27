@@ -1,0 +1,13 @@
+---
+source: crates/shell/src/shells/zsh.rs
+expression: "Zsh::new().format_hook(Hook::Activate\n{\n    command: \"starbase hook zsh\".into(), function: \"_starbase_hook\".into(),\n}).unwrap()"
+---
+_starbase_hook() {
+  local output
+  trap '' SIGINT
+  output=$(starbase hook zsh)
+  if [ -n "$output" ]; then
+    eval "$output";
+  fi
+  trap - SIGINT
+}

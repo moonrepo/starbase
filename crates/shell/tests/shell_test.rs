@@ -3,27 +3,60 @@ use starbase_sandbox::assert_snapshot;
 use starbase_shell::{Hook, ShellType};
 use std::env;
 
-#[test]
-fn all_shells_except_ion_support_context_change_hook() {
-    for shell_type in ShellType::variants() {
-        let result = shell_type.build().format_hook(Hook::OnContextChange {
-            activate_command: format!("starbase hook {shell_type}"),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: format!("starbase deactivate {shell_type}"),
-            deactivate_function: "_starbase_deactivate".into(),
-        });
+fn hooks(shell_type: ShellType) -> [Hook; 3] {
+    [
+        Hook::Activate {
+            command: format!("starbase hook {shell_type}"),
+            function: "_starbase_activate".into(),
+        },
+        Hook::Deactivate {
+            command: format!("starbase deactivate {shell_type}"),
+            function: "_starbase_deactivate".into(),
+        },
+        Hook::OnContextChange {
+            function: "_starbase_activate".into(),
+        },
+    ]
+}
 
-        if shell_type == ShellType::Ion {
-            assert!(
-                result.is_err(),
-                "{shell_type} should not support context change hooks"
-            );
-        } else {
-            assert!(
-                result.is_ok(),
-                "{shell_type} should support context change hooks"
-            );
+#[test]
+fn all_shells_except_ion_support_every_hook() {
+    for shell_type in ShellType::variants() {
+        for hook in hooks(shell_type) {
+            let info = hook.get_info().to_owned();
+            let result = shell_type.build().format_hook(hook);
+
+            if shell_type == ShellType::Ion {
+                assert!(result.is_err(), "{shell_type} should not support {info}");
+            } else {
+                assert!(result.is_ok(), "{shell_type} should support {info}");
+            }
         }
+    }
+}
+
+// Deactivating is activating with another name and another command, so the two
+// share a template. Anything that drifts between them is a bug in the shell.
+#[test]
+fn deactivate_matches_activate() {
+    for shell_type in ShellType::variants() {
+        let shell = shell_type.build();
+
+        let Ok(activate) = shell.format_hook(Hook::Activate {
+            command: "print statements".into(),
+            function: "_starbase_hook".into(),
+        }) else {
+            continue;
+        };
+
+        let deactivate = shell
+            .format_hook(Hook::Deactivate {
+                command: "print statements".into(),
+                function: "_starbase_hook".into(),
+            })
+            .unwrap();
+
+        assert_eq!(activate, deactivate, "{shell_type}");
     }
 }
 
@@ -33,19 +66,18 @@ fn all_shells_except_ion_support_context_change_hook() {
 #[test]
 fn no_shell_leaves_template_placeholders() {
     for shell_type in ShellType::variants() {
-        let Ok(output) = shell_type.build().format_hook(Hook::OnContextChange {
-            activate_command: format!("starbase hook {shell_type}"),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: format!("starbase deactivate {shell_type}"),
-            deactivate_function: "_starbase_deactivate".into(),
-        }) else {
-            continue;
-        };
+        for hook in hooks(shell_type) {
+            let info = hook.get_info().to_owned();
 
-        assert!(
-            !output.contains("${{"),
-            "{shell_type} hook has an unresolved template placeholder:\n{output}"
-        );
+            let Ok(output) = shell_type.build().format_hook(hook) else {
+                continue;
+            };
+
+            assert!(
+                !output.contains("${{"),
+                "{shell_type} {info} hook has an unresolved template placeholder:\n{output}"
+            );
+        }
     }
 }
 

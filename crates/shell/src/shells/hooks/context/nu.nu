@@ -1,9 +1,5 @@
----
-source: crates/shell/src/shells/nu.rs
-expression: "Nu.format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
----
 export-env {
-    let entry = { code: "_starbase_hook" }
+    let entry = { code: "${{ function }}" }
 
     $env.config = ($env.config | upsert hooks.env_change.PWD { |config|
         let list = ($config | get --optional hooks.env_change.PWD) | default []

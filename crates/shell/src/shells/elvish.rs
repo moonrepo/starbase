@@ -121,19 +121,15 @@ impl Shell for Elvish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnContextChange {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => render_template(
-                include_str!("hooks/elvish.elv"),
-                &[
-                    ("activate_command", &activate_command),
-                    ("activate_function", &activate_function),
-                    ("deactivate_command", &deactivate_command),
-                    ("deactivate_function", &deactivate_function),
-                ],
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/elvish.elv"),
+                    &[("command", &command), ("function", &function)],
+                )
+            }
+            Hook::OnContextChange { function } => render_template(
+                include_str!("hooks/context/elvish.elv"),
+                &[("function", &function)],
             ),
         }))
     }
@@ -224,15 +220,26 @@ mod tests {
     }
 
     #[test]
-    fn formats_context_change_hook() {
-        let hook = Hook::OnContextChange {
-            activate_command: "starbase hook elvish".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate elvish".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Elvish
+                .format_hook(Hook::Activate {
+                    command: "starbase hook elvish".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Elvish.format_hook(hook).unwrap());
+    #[test]
+    fn formats_context_change_hook() {
+        assert_snapshot!(
+            Elvish
+                .format_hook(Hook::OnContextChange {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]

@@ -1,30 +1,11 @@
 ---
 source: crates/shell/src/shells/xonsh.rs
-expression: Xonsh.format_hook(hook).unwrap()
+expression: "Xonsh.format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
 ---
-def _starbase_hook(olddir=None, newdir=None, **kwargs):
-    output = $(starbase hook xonsh)
-    if output:
-        execx(output)
-
-def _starbase_deactivate():
-    output = $(starbase deactivate xonsh)
-    if output:
-        execx(output)
-    for event in (events.on_chdir, events.on_pre_prompt):
-        for handler in list(event):
-            if getattr(handler, '__name__', '') == '_starbase_hook':
-                event.discard(handler)
-    __xonsh__.ctx.pop('_starbase_hook', None)
-    __xonsh__.ctx.pop('_starbase_deactivate', None)
-
-# Re-sourcing creates new function objects, so deduplicate by name
+# The function may have been defined by a separate `execx()`, whose namespace
+# is not the shell's, so it is taken from where the definition exported it
 if not any(getattr(handler, '__name__', '') == '_starbase_hook' for handler in events.on_chdir):
-    events.on_chdir(_starbase_hook)
+    events.on_chdir(__xonsh__.ctx['_starbase_hook'])
 
 if not any(getattr(handler, '__name__', '') == '_starbase_hook' for handler in events.on_pre_prompt):
-    events.on_pre_prompt(_starbase_hook)
-
-# execx() does not evaluate into the shell namespace, so export both functions
-__xonsh__.ctx['_starbase_hook'] = _starbase_hook
-__xonsh__.ctx['_starbase_deactivate'] = _starbase_deactivate
+    events.on_pre_prompt(__xonsh__.ctx['_starbase_hook'])

@@ -1,4 +1,5 @@
-// Interactive E2E tests for the `Hook::OnContextChange` activation flow.
+// Interactive E2E tests for the activation flow, rendered from the three
+// hooks a session needs: both functions, and the registration.
 //
 // The non-interactive suite in `hook_e2e_test.rs` covers what a script can
 // reach. Everything a prompt drives is invisible there: prompt triggers never
@@ -40,6 +41,9 @@ struct Case {
     /// A line editor either needs terminal capabilities or hangs asking for
     /// them, so each shell says what it wants
     term: &'static str,
+    /// True for nu, which cannot evaluate statements where the function runs,
+    /// and stages them for the next prompt instead
+    defers_statements: bool,
 }
 
 fn setup(case: &Case) -> (Sandbox, String) {
@@ -63,14 +67,26 @@ fn setup(case: &Case) -> (Sandbox, String) {
         format!("{}\n", shell.format_env_unset("E2E_FOO")),
     );
 
-    let hook = shell
-        .format_hook(Hook::OnContextChange {
-            activate_command: format!("cat {root}/activate.txt"),
-            activate_function: "_starbase_activate".into(),
-            deactivate_command: format!("cat {root}/deactivate.txt"),
-            deactivate_function: "_starbase_deactivate".into(),
-        })
-        .unwrap();
+    let hook = [
+        shell
+            .format_hook(Hook::Activate {
+                command: format!("cat {root}/activate.txt"),
+                function: "_starbase_activate".into(),
+            })
+            .unwrap(),
+        shell
+            .format_hook(Hook::Deactivate {
+                command: format!("cat {root}/deactivate.txt"),
+                function: "_starbase_deactivate".into(),
+            })
+            .unwrap(),
+        shell
+            .format_hook(Hook::OnContextChange {
+                function: "_starbase_activate".into(),
+            })
+            .unwrap(),
+    ]
+    .join("\n\n");
 
     sandbox.create_file(format!("hook.{}", case.extension), &hook);
 
@@ -163,43 +179,37 @@ fn run_case(case: Case) {
 
     assert_eq!(reported(&output, "S3"), expected, "{}", case.shell);
 
-    // Deactivation reverts the environment and unregisters every trigger
-    session.send(case.deactivate_call);
-
-    let output = session.sync(&report("S4"), "S4 foo=");
-
-    assert_eq!(reported(&output, "S4"), "unset", "{}", case.shell);
-
-    session.send("cd /");
+    // Deactivating reports on the same line, since the trigger stays
+    // registered and the next prompt would activate over the top of it
+    session.send(&format!("{} ; {}", case.deactivate_call, report("S4")));
 
     let output = session.sync(&report("S5"), "S5 foo=");
-
-    assert_eq!(reported(&output, "S5"), "unset", "{}", case.shell);
-
-    // Re-activating means evaluating the hook again, since every trigger is
-    // registered by the hook's top level rather than by the activate function
-    // — which most shells have deleted by now anyway. Calling that function
-    // alone would apply the statements once and leave the session unhooked.
-    if let Some(evaluate) = case.evaluate {
-        session.send(&evaluate(&format!("{root}/hook.{}", case.extension)));
-    }
-
-    let output = session.sync(&report("S6"), "S6 foo=");
-    let expected = if case.activates_on_prompt {
+    let expected = if case.defers_statements {
+        // Nu stages the statements for the next prompt rather than applying
+        // them where the function ran
         "123"
     } else {
         "unset"
     };
 
-    assert_eq!(reported(&output, "S6"), expected, "{}", case.shell);
+    assert_eq!(reported(&output, "S4"), expected, "{}", case.shell);
 
-    // Both triggers are live again, so a directory change activates as it did
-    // the first time round
-    session.send("cd /tmp");
+    // Deactivating does not unregister anything, so a shell with a prompt
+    // trigger activates again on the very next prompt
+    let expected = match (case.activates_on_prompt, case.defers_statements) {
+        (_, true) => "unset",
+        (true, _) => "123",
+        (false, _) => "unset",
+    };
 
-    let output = session.sync(&report("S7"), "S7 foo=");
+    assert_eq!(reported(&output, "S5"), expected, "{}", case.shell);
 
-    assert_eq!(reported(&output, "S7"), "123", "{}", case.shell);
+    // And a directory change activates every shell again, deactivated or not
+    session.send("cd /");
+
+    let output = session.sync(&report("S6"), "S6 foo=");
+
+    assert_eq!(reported(&output, "S6"), "123", "{}", case.shell);
 
     drop(sandbox);
 }
@@ -215,6 +225,7 @@ fn bash_activates_and_deactivates() {
         evaluate: Some(|path| format!("source {path}")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: true,
+        defers_statements: false,
     });
 }
 
@@ -229,6 +240,7 @@ fn zsh_activates_and_deactivates() {
         evaluate: Some(|path| format!("source {path}")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: true,
+        defers_statements: false,
     });
 }
 
@@ -243,6 +255,7 @@ fn fish_activates_and_deactivates() {
         evaluate: Some(|path| format!("source {path}")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: true,
+        defers_statements: false,
     });
 }
 
@@ -259,6 +272,7 @@ fn elvish_activates_and_deactivates() {
         evaluate: Some(|path| format!("eval (slurp < {path})")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: true,
+        defers_statements: false,
     });
 }
 
@@ -275,6 +289,7 @@ fn xonsh_activates_and_deactivates() {
         evaluate: Some(|path| format!("execx($(cat {path}))")),
         deactivate_call: "_starbase_deactivate()",
         activates_on_prompt: true,
+        defers_statements: false,
     });
 }
 
@@ -289,6 +304,7 @@ fn nu_activates_and_deactivates() {
         evaluate: Some(|path| format!("source \"{path}\"")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: true,
+        defers_statements: true,
     });
 }
 
@@ -325,6 +341,7 @@ fn murex_activates_and_deactivates() {
         evaluate: None,
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: true,
+        defers_statements: false,
     });
 }
 
@@ -340,6 +357,7 @@ fn sh_activates_and_deactivates() {
         deactivate_call: "_starbase_deactivate",
         // POSIX shells shadow `cd` and have no prompt hook
         activates_on_prompt: false,
+        defers_statements: false,
     });
 }
 
@@ -354,6 +372,7 @@ fn dash_activates_and_deactivates() {
         evaluate: Some(|path| format!(". {path}")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: false,
+        defers_statements: false,
     });
 }
 
@@ -368,6 +387,7 @@ fn ash_activates_and_deactivates() {
         evaluate: Some(|path| format!(". {path}")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: false,
+        defers_statements: false,
     });
 }
 
@@ -382,6 +402,7 @@ fn pwsh_activates_and_deactivates() {
         evaluate: Some(|path| format!(". {path}")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: true,
+        defers_statements: false,
     });
 }
 
@@ -396,6 +417,7 @@ fn powershell_activates_and_deactivates() {
         evaluate: Some(|path| format!(". {path}")),
         deactivate_call: "_starbase_deactivate",
         activates_on_prompt: true,
+        defers_statements: false,
     });
 }
 

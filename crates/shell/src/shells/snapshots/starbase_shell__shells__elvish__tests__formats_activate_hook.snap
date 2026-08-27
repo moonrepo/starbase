@@ -1,0 +1,15 @@
+---
+source: crates/shell/src/shells/elvish.rs
+expression: "Elvish.format_hook(Hook::Activate\n{\n    command: \"starbase hook elvish\".into(), function: \"_starbase_hook\".into(),\n}).unwrap()"
+---
+fn _starbase_hook {|@_|
+  eval (starbase hook elvish | slurp)
+}
+
+# Consumers `eval` this code, which runs in a namespace that is thrown away, so
+# the function is exported for the session to be able to call it
+try {
+  edit:add-vars [&'_starbase_hook~'=$_starbase_hook~]
+} catch _ {
+  # The `edit:` module only exists in an interactive session
+}

@@ -86,19 +86,15 @@ impl Shell for Murex {
     // hook referenced from https://github.com/direnv/direnv/blob/ff451a860b31f176d252c410b43d7803ec0f8b23/internal/cmd/shell_murex.go#L12
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnContextChange {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => render_template(
-                include_str!("hooks/murex.mx"),
-                &[
-                    ("activate_command", &activate_command),
-                    ("activate_function", &activate_function),
-                    ("deactivate_command", &deactivate_command),
-                    ("deactivate_function", &deactivate_function),
-                ],
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/murex.mx"),
+                    &[("command", &command), ("function", &function)],
+                )
+            }
+            Hook::OnContextChange { function } => render_template(
+                include_str!("hooks/context/murex.mx"),
+                &[("function", &function)],
             ),
         }))
     }
@@ -183,15 +179,26 @@ mod tests {
     }
 
     #[test]
-    fn formats_context_change_hook() {
-        let hook = Hook::OnContextChange {
-            activate_command: "starbase hook murex".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate murex".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Murex
+                .format_hook(Hook::Activate {
+                    command: "starbase hook murex".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Murex.format_hook(hook).unwrap());
+    #[test]
+    fn formats_context_change_hook() {
+        assert_snapshot!(
+            Murex
+                .format_hook(Hook::OnContextChange {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]

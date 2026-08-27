@@ -1,0 +1,12 @@
+---
+source: crates/shell/src/shells/powershell.rs
+expression: "PowerShell.format_hook(Hook::Activate\n{\n    command: \"starbase hook powershell\".into(), function:\n    \"_starbase_hook\".into(),\n}).unwrap()"
+---
+function _starbase_hook {
+  $previousExitCode = $global:LASTEXITCODE;
+  $exports = starbase hook powershell;
+  if ($exports) {
+    $exports | Out-String | Invoke-Expression;
+  }
+  $global:LASTEXITCODE = $previousExitCode;
+}

@@ -1,20 +1,20 @@
-// End-to-end tests for the `Hook::OnContextChange` activation flow. Each test
-// renders the hook with stub "activate" and "deactivate" commands, runs the
-// result through the real shell binary, and asserts that:
+// End-to-end tests for the activation flow. Each test renders the three hooks
+// a session needs — the activate function, the deactivate function, and the
+// registration that calls the activate one — runs the result through the real
+// shell binary, and asserts that:
 //
 // - the emitted activation statements are evaluated and environment changes
 //   propagate to the session,
 // - the change-dir trigger fires,
 // - sourcing the hook twice registers it once,
-// - the deactivate function reverts the environment, unregisters every
-//   trigger (a subsequent cd does not re-activate), and removes the functions
-//   where the shell allows it,
-// - evaluating the hook again after deactivation re-activates: the triggers
-//   re-register (exactly once each) and fire again.
+// - the deactivate function reverts the environment, and leaves the
+//   registration and both functions in place, so a later trigger activates
+//   again.
 //
 // These run non-interactively, where prompt triggers never fire, so a shell
 // that registers on both is only exercised through its change-dir trigger —
 // the prompt registration is asserted by counting handlers instead.
+//
 //
 // A test is skipped when its shell is not installed, unless the shell is
 // listed in the `STARBASE_REQUIRED_SHELLS` environment variable
@@ -26,16 +26,31 @@ use starbase_shell::{Hook, ShellType, Statement};
 use std::io;
 use std::process::{Command, Output};
 
+/// Render the three hooks a session needs, the way a consumer emits them:
+/// both functions, then the registration that calls the activate one.
 fn format_hook(shell: ShellType, activate_command: &str, deactivate_command: &str) -> String {
-    shell
-        .build()
-        .format_hook(Hook::OnContextChange {
-            activate_command: activate_command.into(),
-            activate_function: "_starbase_activate".into(),
-            deactivate_command: deactivate_command.into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        })
-        .unwrap()
+    let shell = shell.build();
+
+    [
+        shell
+            .format_hook(Hook::Activate {
+                command: activate_command.into(),
+                function: "_starbase_activate".into(),
+            })
+            .unwrap(),
+        shell
+            .format_hook(Hook::Deactivate {
+                command: deactivate_command.into(),
+                function: "_starbase_deactivate".into(),
+            })
+            .unwrap(),
+        shell
+            .format_hook(Hook::OnContextChange {
+                function: "_starbase_activate".into(),
+            })
+            .unwrap(),
+    ]
+    .join("\n\n")
 }
 
 fn run_script(sandbox: &Sandbox, bin: &str, args: &[&str]) -> Option<Output> {
@@ -88,7 +103,7 @@ fn bash_activates_and_deactivates() {
 
     // String form `PROMPT_COMMAND`: invoking the hook (as the prompt would)
     // applies the exports, sourcing twice registers once, and deactivating
-    // reverts the environment and removes the registration + functions.
+    // reverts the environment while leaving the registration alone.
     sandbox.create_file(
         "string.sh",
         r#"
@@ -101,8 +116,7 @@ printf 'E2E_FOO=%s E2E_BAR=%s\n' "$E2E_FOO" "$E2E_BAR"
 _starbase_deactivate
 printf '%s\n' "$PROMPT_COMMAND"
 printf 'E2E_FOO=%s E2E_BAR=%s\n' "${E2E_FOO:-unset}" "${E2E_BAR:-unset}"
-type -t _starbase_activate >/dev/null 2>&1 || printf 'functions removed\n'
-source ./hook.sh
+type -t _starbase_activate >/dev/null 2>&1 && printf 'functions kept\n'
 _starbase_activate
 printf '%s\n' "$PROMPT_COMMAND"
 printf 'E2E_FOO=%s\n' "$E2E_FOO"
@@ -112,12 +126,13 @@ printf 'E2E_FOO=%s\n' "$E2E_FOO"
     if let Some(output) = run_script(&sandbox, "bash", &["./string.sh"]) {
         assert_eq!(
             stdout(&output),
-            "_starbase_activate;starship_precmd\nE2E_FOO=123 E2E_BAR=456\nstarship_precmd\nE2E_FOO=unset E2E_BAR=unset\nfunctions removed\n_starbase_activate;starship_precmd\nE2E_FOO=123\n"
+            "_starbase_activate;starship_precmd\nE2E_FOO=123 E2E_BAR=456\n_starbase_activate;starship_precmd\nE2E_FOO=unset E2E_BAR=unset\nfunctions kept\n_starbase_activate;starship_precmd\nE2E_FOO=123\n"
         );
     }
 
     // Array form `PROMPT_COMMAND` (bash >= 5.1) with multiple entries:
-    // registration and deactivation only touch our own entry.
+    // registration adds one entry and leaves the rest alone, and repeating it
+    // does not add a second.
     sandbox.create_file(
         "array.sh",
         r#"
@@ -135,7 +150,7 @@ printf '%s\n' "${PROMPT_COMMAND[*]}"
     if let Some(output) = run_script(&sandbox, "bash", &["./array.sh"]) {
         assert_eq!(
             stdout(&output),
-            "_starbase_activate starship_precmd other_thing\nstarship_precmd other_thing\n_starbase_activate starship_precmd other_thing\n"
+            "_starbase_activate starship_precmd other_thing\n_starbase_activate starship_precmd other_thing\n_starbase_activate starship_precmd other_thing\n"
         );
     }
 }
@@ -163,9 +178,9 @@ print -r -- "HOOKS=${#chpwd_functions[@]},${#precmd_functions[@]}"
 _starbase_deactivate
 print -r -- "HOOKS=${#chpwd_functions[@]},${#precmd_functions[@]}"
 print -r -- "E2E_FOO=${E2E_FOO:-unset} E2E_BAR=${E2E_BAR:-unset}"
+whence -w _starbase_activate >/dev/null 2>&1 && print -r -- "functions kept"
 cd /tmp
 print -r -- "after cd E2E_FOO=${E2E_FOO:-unset}"
-whence -w _starbase_activate >/dev/null 2>&1 || print -r -- "functions removed"
 source "$root/hook.zsh"
 cd /usr
 print -r -- "HOOKS=${#chpwd_functions[@]},${#precmd_functions[@]} E2E_FOO=${E2E_FOO:-unset}"
@@ -176,7 +191,7 @@ print -r -- "HOOKS=${#chpwd_functions[@]},${#precmd_functions[@]} E2E_FOO=${E2E_
     if let Some(output) = run_script(&sandbox, "zsh", &["-f", "./test.zsh"]) {
         assert_eq!(
             stdout(&output),
-            "E2E_FOO=123 E2E_BAR=456\nHOOKS=1,1\nHOOKS=0,0\nE2E_FOO=unset E2E_BAR=unset\nafter cd E2E_FOO=unset\nfunctions removed\nHOOKS=1,1 E2E_FOO=123\n"
+            "E2E_FOO=123 E2E_BAR=456\nHOOKS=1,1\nHOOKS=1,1\nE2E_FOO=unset E2E_BAR=unset\nfunctions kept\nafter cd E2E_FOO=123\nHOOKS=1,1 E2E_FOO=123\n"
         );
     }
 }
@@ -197,8 +212,8 @@ fn fish_activates_and_deactivates() {
         r#"
 function handlers
   printf 'handlers=%s,%s\n' \
-    (functions --handlers-type variable | string match -r '^PWD _starbase_activate$' | count) \
-    (functions --handlers-type generic | string match -r '^fish_prompt _starbase_activate$' | count)
+    (functions --handlers-type variable | string match -r '^PWD _starbase_activate_on_context$' | count) \
+    (functions --handlers-type generic | string match -r '^fish_prompt _starbase_activate_on_context$' | count)
 end
 
 set root (pwd)
@@ -208,15 +223,13 @@ printf 'E2E_FOO=%s E2E_BAR=%s\n' $E2E_FOO $E2E_BAR
 handlers
 _starbase_deactivate
 handlers
-cd /tmp
 if set -q E2E_FOO
   printf 'still set\n'
 else
   printf 'E2E_FOO unset\n'
 end
-functions -q _starbase_activate; or printf 'functions removed\n'
-source $root/hook.fish
-cd /usr
+functions -q _starbase_activate; and printf 'functions kept\n'
+cd /tmp
 printf 'E2E_FOO=%s\n' $E2E_FOO
 "#,
     );
@@ -224,7 +237,7 @@ printf 'E2E_FOO=%s\n' $E2E_FOO
     if let Some(output) = run_script(&sandbox, "fish", &["--no-config", "./test.fish"]) {
         assert_eq!(
             stdout(&output),
-            "E2E_FOO=123 E2E_BAR=456\nhandlers=1,1\nhandlers=0,0\nE2E_FOO unset\nfunctions removed\nE2E_FOO=123\n"
+            "E2E_FOO=123 E2E_BAR=456\nhandlers=1,1\nhandlers=1,1\nE2E_FOO unset\nfunctions kept\nE2E_FOO=123\n"
         );
     }
 }
@@ -287,7 +300,7 @@ echo cycle=$E:E2E_FOO hooks=(count $after-chdir)
     if let Some(output) = run_script(&sandbox, "elvish", &["./test.elv"]) {
         assert_eq!(
             stdout(&output),
-            "direct=123\nchdir=123,456\nhooks=1\nhooks=0\nremoved=\nafter=reset2\ncycle=123 hooks=1\n"
+            "direct=123\nchdir=123,456\nhooks=1\nhooks=1\nremoved=\nafter=123\ncycle=123 hooks=1\n"
         );
     }
 }
@@ -312,17 +325,16 @@ fn nu_activates_and_deactivates() {
     let sandbox = create_empty_sandbox();
     sandbox.create_file("hook.nu", &hook);
 
-    // Sourcing the same file twice dedupes the `export def`s at parse time,
-    // but re-runs `export-env` — so the second source exercises the
-    // registration dedup guard, and the source after deactivation re-registers.
-    // Each trigger holds two entries: the writer, and the `source` that applies
-    // what it wrote. Deactivation removes only the writer, leaving the `source`
-    // entry to apply the staged teardown (and then unregister itself) on the
-    // next trigger, which is why the count drops to one rather than zero.
+    // Sourcing the same file twice dedupes the `export def`s at parse time, but
+    // re-runs `export-env`, so the second source exercises the registration
+    // dedup guard. Each function writes its statements to a file of its own and
+    // stages a one shot entry to apply them, so calling one adds an entry to
+    // `pre_prompt` rather than changing what is registered.
     sandbox.create_file(
         "test.nu",
         format!(
-            r#"const sb_file = $"($nu.temp-dir)/_starbase_activate-($nu.pid).nu"
+            r#"const sb_activate = $"($nu.temp-dir)/_starbase_activate-($nu.pid).nu"
+const sb_deactivate = $"($nu.temp-dir)/_starbase_deactivate-($nu.pid).nu"
 
 def registered [] {{
     let pwd_list = ($env.config | get --optional hooks.env_change.PWD) | default []
@@ -331,18 +343,8 @@ def registered [] {{
     $"($pwd_list | length),($prompt_list | length)"
 }}
 
-def staged [] {{ open $sb_file | str trim }}
-
-def staged_defs [] {{
-    staged
-        | lines
-        | where {{ |line| ($line | str starts-with "alias ") or ($line | str starts-with "hide") or (($line | str starts-with "$env.") and not ($line | str contains "upsert hooks")) }}
-        | str join ","
-}}
-
-# The teardown ends with the statements that unregister the `source` entry
-def cleanup_lines [] {{
-    staged | lines | where {{ |line| $line | str contains "upsert hooks" }} | length
+def statements [file] {{
+    open $file | str trim | lines | str join ","
 }}
 
 source "./hook.nu"
@@ -352,14 +354,14 @@ print $"hooks=(registered)"
 
 _starbase_activate
 
-print $"staged=(staged_defs)"
+print $"staged=(statements $sb_activate) hooks=(registered)"
 
 # Hooks never fire in a script, so the staged statements are fed to a fresh nu
-# to prove they apply: the alias is defined, the variable is set, the preset
-# one is removed, and the path is replaced.
+# to prove they apply: the alias is defined, the variable is set, the preset one
+# is removed, and the path is replaced.
 let probe = ([
     "$env.E2E_GONE = 'preset'"
-    (staged)
+    (open $sb_activate)
     "e2e_ll"
     "print $env.E2E_FOO"
     "print ('E2E_GONE' in $env)"
@@ -370,15 +372,9 @@ print $"applied=(^$nu.current-exe --no-config-file --commands $probe | str trim 
 
 _starbase_deactivate
 
-print $"hooks=(registered)"
-print $"teardown=(staged_defs) cleanup=(cleanup_lines)"
-
-source "./hook.nu"
-
-_starbase_activate
-
-print $"hooks=(registered)"
-print $"staged=(staged_defs)"
+# Deactivating stages the reversal the same way, and leaves the registration
+# alone, so the writer keeps running on every trigger
+print $"teardown=(statements $sb_deactivate) hooks=(registered)"
 "#
         ),
     );
@@ -386,15 +382,12 @@ print $"staged=(staged_defs)"
     if let Some(output) = run_script(&sandbox, "nu", &["./test.nu"]) {
         assert_eq!(
             stdout(&output),
-            "hooks=2,2\n\
+            "hooks=1,1\n\
              staged=$env.E2E_FOO = '123',hide-env --ignore-errors E2E_GONE,\
-             $env.PATH_KEY = ([] | prepend \"/e2e-stub-path\" | uniq),alias e2e_ll = print ALIASOK\n\
+             $env.PATH_KEY = ([] | prepend \"/e2e-stub-path\" | uniq),\
+             alias e2e_ll = print ALIASOK hooks=1,2\n\
              applied=ALIASOK,123,false,/e2e-stub-path\n\
-             hooks=1,1\n\
-             teardown=hide-env --ignore-errors E2E_FOO,hide e2e_ll cleanup=2\n\
-             hooks=2,2\n\
-             staged=$env.E2E_FOO = '123',hide-env --ignore-errors E2E_GONE,\
-             $env.PATH_KEY = ([] | prepend \"/e2e-stub-path\" | uniq),alias e2e_ll = print ALIASOK\n"
+             teardown=hide-env --ignore-errors E2E_FOO,hide e2e_ll hooks=1,3\n"
                 .replace("PATH_KEY", path_key)
         );
     }
@@ -463,10 +456,7 @@ echo "COUNT=$E2E_COUNT"
 _starbase_deactivate
 echo "FOO=${E2E_FOO:-unset}"
 cd /usr
-echo "after COUNT=${E2E_COUNT:-0}"
-. "$root/hook.sh"
-cd /
-echo "cycle FOO=$E2E_FOO COUNT=$E2E_COUNT"
+echo "after FOO=${E2E_FOO:-unset} COUNT=${E2E_COUNT:-0}"
 "#,
     );
 
@@ -474,7 +464,7 @@ echo "cycle FOO=$E2E_FOO COUNT=$E2E_COUNT"
         if let Some(output) = run_script(&sandbox, bin, &["./test.sh"]) {
             assert_eq!(
                 stdout(&output),
-                "FOO=123 COUNT=1\nCOUNT=2\nFOO=unset\nafter COUNT=0\ncycle FOO=123 COUNT=1\n",
+                "FOO=123 COUNT=1\nCOUNT=2\nFOO=unset\nafter FOO=123 COUNT=1\n",
                 "shell: {bin}"
             );
         }
@@ -552,7 +542,7 @@ _starbase_deactivate()
 print("hooks=" + _counts())
 print("removed foo=" + ${...}.get('E2E_FOO', 'unset'))
 print("removed alias=" + str('e2e_alias' in aliases))
-print("funcs=" + str('_starbase_activate' in globals() or '_starbase_deactivate' in globals()))
+print("funcs=" + str('_starbase_activate' in globals() and '_starbase_deactivate' in globals()))
 cd /tmp
 print("after foo=" + ${...}.get('E2E_FOO', 'unset'))
 "#,
@@ -566,7 +556,7 @@ print("cycle foo=" + ${...}.get('E2E_FOO', 'unset'))
     if let Some(output) = run_script(&sandbox, "xonsh", &["--no-rc", "./test.xsh"]) {
         assert_eq!(
             stdout(&output),
-            "foo=123\nalias=True\nhooks=1,1\nchdir foo=123\nhooks=0,0\nremoved foo=unset\nremoved alias=False\nfuncs=False\nafter foo=unset\ncycle foo=123\n"
+            "foo=123\nalias=True\nhooks=1,1\nchdir foo=123\nhooks=1,1\nremoved foo=unset\nremoved alias=False\nfuncs=True\nafter foo=123\ncycle foo=123\n"
         );
     }
 }
@@ -594,7 +584,7 @@ _starbase_activate()
 print("foo=" + ${{...}}.get('E2E_FOO', 'unset'))
 _starbase_deactivate()
 print("foo=" + ${{...}}.get('E2E_FOO', 'unset'))
-print("callable=" + str('_starbase_activate' in globals() or '_starbase_deactivate' in globals()))
+print("callable=" + str('_starbase_activate' in globals() and '_starbase_deactivate' in globals()))
 "#,
             sandbox.path().display()
         ),
@@ -603,7 +593,7 @@ print("callable=" + str('_starbase_activate' in globals() or '_starbase_deactiva
     if let Some(output) = run_script(&sandbox, "xonsh", &["--no-rc", "./test.xsh"]) {
         assert_eq!(
             stdout(&output),
-            "callable=True\nfoo=123\nfoo=unset\ncallable=False\n"
+            "callable=True\nfoo=123\nfoo=unset\ncallable=True\n"
         );
     }
 }
@@ -634,14 +624,11 @@ prompt > $null
 Write-Output "E2E_FOO=$env:E2E_FOO E2E_BAR=$env:E2E_BAR"
 Write-Output "EXIT=$global:LASTEXITCODE"
 _starbase_deactivate
-Write-Output "unwrapped=$(-not $function:prompt.ToString().Contains('_starbase_activate'))"
+Write-Output "wrapped=$($function:prompt.ToString().Contains('_starbase_activate'))"
 Write-Output "E2E_FOO=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
-prompt > $null
-Write-Output "still=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
 Write-Output "FUNCS=$((Get-Command _starbase_activate, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
-. $PSScriptRoot/hook.ps1
 prompt > $null
-Write-Output "cycle=$env:E2E_FOO"
+Write-Output "again=$env:E2E_FOO"
 "#,
     );
 
@@ -659,9 +646,9 @@ Write-Output "cycle=$env:E2E_FOO"
         assert_eq!(
             stdout(&output),
             if cfg!(target_os = "macos") {
-                "wrapped=True\nnested=False\nE2E_FOO=123 E2E_BAR=456\nEXIT=\nunwrapped=True\nE2E_FOO=unset\nstill=unset\nFUNCS=0\ncycle=123\n"
+                "wrapped=True\nnested=False\nE2E_FOO=123 E2E_BAR=456\nEXIT=\nwrapped=True\nE2E_FOO=unset\nFUNCS=2\nagain=123\n"
             } else {
-                "wrapped=True\nnested=False\nE2E_FOO=123 E2E_BAR=456\nEXIT=7\nunwrapped=True\nE2E_FOO=unset\nstill=unset\nFUNCS=0\ncycle=123\n"
+                "wrapped=True\nnested=False\nE2E_FOO=123 E2E_BAR=456\nEXIT=7\nwrapped=True\nE2E_FOO=unset\nFUNCS=2\nagain=123\n"
             }
         );
     }
@@ -691,18 +678,12 @@ Write-Output "E2E_FOO=$env:E2E_FOO E2E_BAR=$env:E2E_BAR"
 Write-Output "EXIT=$global:LASTEXITCODE"
 Write-Output "HANDLERS=$($ExecutionContext.SessionState.InvokeCommand.LocationChangedAction.GetInvocationList().Count)"
 _starbase_deactivate
-$action = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
-if ($null -eq $action) { Write-Output "HANDLERS=0" } else { Write-Output "HANDLERS=$($action.GetInvocationList().Count)" }
-Write-Output "unwrapped=$(-not $function:prompt.ToString().Contains('_starbase_activate'))"
-Set-Location /
-Write-Output "E2E_FOO=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
-prompt > $null
-Write-Output "still=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
-Write-Output "FUNCS=$((Get-Command _starbase_activate, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
-. $PSScriptRoot/hook.ps1
-Set-Location ([System.IO.Path]::GetTempPath())
-Write-Output "E2E_FOO=$env:E2E_FOO"
 Write-Output "HANDLERS=$($ExecutionContext.SessionState.InvokeCommand.LocationChangedAction.GetInvocationList().Count)"
+Write-Output "wrapped=$($function:prompt.ToString().Contains('_starbase_activate'))"
+Write-Output "E2E_FOO=$(if ($env:E2E_FOO) { $env:E2E_FOO } else { 'unset' })"
+Write-Output "FUNCS=$((Get-Command _starbase_activate, _starbase_deactivate -ErrorAction Ignore | Measure-Object).Count)"
+Set-Location /
+Write-Output "again=$env:E2E_FOO"
 Remove-Item -LiteralPath 'env:E2E_FOO' -ErrorAction Ignore
 prompt > $null
 Write-Output "prompt=$env:E2E_FOO"
@@ -722,9 +703,9 @@ Write-Output "prompt=$env:E2E_FOO"
     ) {
         assert_eq!(
             stdout(&output),
-            "wrapped=True\nE2E_FOO=123 E2E_BAR=456\nEXIT=7\nHANDLERS=1\nHANDLERS=0\n\
-             unwrapped=True\nE2E_FOO=unset\nstill=unset\nFUNCS=0\n\
-             E2E_FOO=123\nHANDLERS=1\nprompt=123\n"
+            "wrapped=True\nE2E_FOO=123 E2E_BAR=456\nEXIT=7\nHANDLERS=1\nHANDLERS=1\n\
+             wrapped=True\nE2E_FOO=unset\nFUNCS=2\n\
+             again=123\nprompt=123\n"
         );
     }
 }

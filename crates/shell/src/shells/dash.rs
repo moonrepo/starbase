@@ -63,15 +63,26 @@ mod tests {
     }
 
     #[test]
-    fn formats_context_change_hook() {
-        let hook = Hook::OnContextChange {
-            activate_command: "starbase hook dash".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate dash".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Dash::new()
+                .format_hook(Hook::Activate {
+                    command: "starbase hook dash".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Dash::new().format_hook(hook).unwrap());
+    #[test]
+    fn formats_context_change_hook() {
+        assert_snapshot!(
+            Dash::new()
+                .format_hook(Hook::OnContextChange {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]

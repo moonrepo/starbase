@@ -71,19 +71,15 @@ impl Shell for Sh {
     // no way to introspect or chain an existing function.
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnContextChange {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => render_template(
-                include_str!("hooks/sh.sh"),
-                &[
-                    ("activate_command", &activate_command),
-                    ("activate_function", &activate_function),
-                    ("deactivate_command", &deactivate_command),
-                    ("deactivate_function", &deactivate_function),
-                ],
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/sh.sh"),
+                    &[("command", &command), ("function", &function)],
+                )
+            }
+            Hook::OnContextChange { function } => render_template(
+                include_str!("hooks/context/sh.sh"),
+                &[("function", &function)],
             ),
         }))
     }
@@ -121,15 +117,24 @@ mod tests {
     }
 
     #[test]
-    fn formats_context_change_hook() {
-        let hook = Hook::OnContextChange {
-            activate_command: "starbase hook sh".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate sh".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Sh.format_hook(Hook::Activate {
+                command: "starbase hook sh".into(),
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
 
-        assert_snapshot!(Sh.format_hook(hook).unwrap());
+    #[test]
+    fn formats_context_change_hook() {
+        assert_snapshot!(
+            Sh.format_hook(Hook::OnContextChange {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
     }
 
     #[test]

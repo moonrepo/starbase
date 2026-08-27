@@ -1,0 +1,3 @@
+event onPrompt ${{ function }}=before {
+  ${{ function }}
+}

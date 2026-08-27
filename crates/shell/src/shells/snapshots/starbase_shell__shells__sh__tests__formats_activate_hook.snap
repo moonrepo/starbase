@@ -1,0 +1,11 @@
+---
+source: crates/shell/src/shells/sh.rs
+expression: "Sh.format_hook(Hook::Activate\n{\n    command: \"starbase hook sh\".into(), function: \"_starbase_hook\".into(),\n}).unwrap()"
+---
+_starbase_hook() {
+  _starbase_hook_output=$(starbase hook sh)
+  if [ -n "$_starbase_hook_output" ]; then
+    eval "$_starbase_hook_output"
+  fi
+  unset _starbase_hook_output
+}

@@ -1,0 +1,15 @@
+---
+source: crates/shell/src/shells/bash.rs
+expression: "Bash.format_hook(Hook::Activate\n{\n    command: \"starbase hook bash\".into(), function: \"_starbase_hook\".into(),\n}).unwrap()"
+---
+_starbase_hook() {
+  local previous_exit_status=$?;
+  local output;
+  trap '' SIGINT;
+  output=$(starbase hook bash)
+  if [ -n "$output" ]; then
+    eval "$output";
+  fi
+  trap - SIGINT;
+  return $previous_exit_status;
+};

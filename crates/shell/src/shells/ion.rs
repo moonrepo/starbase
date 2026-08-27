@@ -127,15 +127,22 @@ mod tests {
     // own `PROMPT` function, and `eval`/`source` are gated behind unsafe
     // builtins that are not loaded by default.
     #[test]
-    fn errors_for_context_change_hook() {
-        let hook = Hook::OnContextChange {
-            activate_command: "starbase hook ion".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate ion".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
-
-        assert!(Ion.format_hook(hook).is_err());
+    fn errors_for_every_hook() {
+        for hook in [
+            Hook::Activate {
+                command: "starbase hook ion".into(),
+                function: "_starbase_hook".into(),
+            },
+            Hook::Deactivate {
+                command: "starbase deactivate ion".into(),
+                function: "_starbase_deactivate".into(),
+            },
+            Hook::OnContextChange {
+                function: "_starbase_hook".into(),
+            },
+        ] {
+            assert!(Ion.format_hook(hook).is_err());
+        }
     }
 
     #[test]
