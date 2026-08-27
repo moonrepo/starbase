@@ -1,0 +1,6 @@
+---
+source: crates/shell/src/shells/zsh.rs
+expression: "Zsh::new().format_hook(Hook::UnregisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+---
+chpwd_functions=(${chpwd_functions:#_starbase_hook})
+precmd_functions=(${precmd_functions:#_starbase_hook})

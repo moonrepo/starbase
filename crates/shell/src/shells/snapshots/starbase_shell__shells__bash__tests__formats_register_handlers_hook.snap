@@ -1,6 +1,6 @@
 ---
 source: crates/shell/src/shells/bash.rs
-expression: "Bash.format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+expression: "Bash.format_hook(Hook::RegisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
 ---
 if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
   if [[ " ${PROMPT_COMMAND[*]:-} " != *" _starbase_hook "* ]]; then

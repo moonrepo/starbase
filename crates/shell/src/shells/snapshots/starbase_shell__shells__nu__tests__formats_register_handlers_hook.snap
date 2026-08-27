@@ -1,6 +1,6 @@
 ---
 source: crates/shell/src/shells/nu.rs
-expression: "Nu.format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+expression: "Nu.format_hook(Hook::RegisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
 ---
 export-env {
     let entry = { code: "_starbase_hook" }

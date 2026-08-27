@@ -137,7 +137,10 @@ mod tests {
                 command: "starbase deactivate ion".into(),
                 function: "_starbase_deactivate".into(),
             },
-            Hook::OnContextChange {
+            Hook::RegisterHandlers {
+                function: "_starbase_hook".into(),
+            },
+            Hook::UnregisterHandlers {
                 function: "_starbase_hook".into(),
             },
         ] {

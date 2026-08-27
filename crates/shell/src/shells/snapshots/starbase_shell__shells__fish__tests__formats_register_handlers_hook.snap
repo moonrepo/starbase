@@ -1,6 +1,6 @@
 ---
 source: crates/shell/src/shells/fish.rs
-expression: "Fish.format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+expression: "Fish.format_hook(Hook::RegisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
 ---
 # An event handler is part of a function definition, so the trigger calls the
 # function rather than being attached to it

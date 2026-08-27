@@ -1,6 +1,6 @@
 ---
 source: crates/shell/src/shells/xonsh.rs
-expression: "Xonsh.format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+expression: "Xonsh.format_hook(Hook::RegisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
 ---
 # The function may have been defined by a separate `execx()`, whose namespace
 # is not the shell's, so it is taken from where the definition exported it

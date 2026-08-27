@@ -3,7 +3,7 @@ use starbase_sandbox::assert_snapshot;
 use starbase_shell::{Hook, ShellType};
 use std::env;
 
-fn hooks(shell_type: ShellType) -> [Hook; 3] {
+fn hooks(shell_type: ShellType) -> [Hook; 4] {
     [
         Hook::Activate {
             command: format!("starbase hook {shell_type}"),
@@ -13,7 +13,10 @@ fn hooks(shell_type: ShellType) -> [Hook; 3] {
             command: format!("starbase deactivate {shell_type}"),
             function: "_starbase_deactivate".into(),
         },
-        Hook::OnContextChange {
+        Hook::RegisterHandlers {
+            function: "_starbase_activate".into(),
+        },
+        Hook::UnregisterHandlers {
             function: "_starbase_activate".into(),
         },
     ]

@@ -220,8 +220,12 @@ impl Shell for Nu {
                     ],
                 )
             }
-            Hook::OnContextChange { function } => render_template(
-                include_str!("hooks/context/nu.nu"),
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/nu.nu"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/nu.nu"),
                 &[("function", &function)],
             ),
         }))
@@ -450,12 +454,26 @@ mod tests {
     }
 
     #[cfg(unix)]
+    #[cfg(unix)]
     #[test]
-    fn formats_context_change_hook() {
+    fn formats_register_handlers_hook() {
         use starbase_sandbox::assert_snapshot;
 
         assert_snapshot!(
-            Nu.format_hook(Hook::OnContextChange {
+            Nu.format_hook(Hook::RegisterHandlers {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        assert_snapshot!(
+            Nu.format_hook(Hook::UnregisterHandlers {
                 function: "_starbase_hook".into(),
             })
             .unwrap()

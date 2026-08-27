@@ -85,8 +85,12 @@ impl Shell for Bash {
                     &[("command", &command), ("function", &function)],
                 )
             }
-            Hook::OnContextChange { function } => render_template(
-                include_str!("hooks/context/bash.bash"),
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/bash.bash"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/bash.bash"),
                 &[("function", &function)],
             ),
         }))
@@ -162,9 +166,19 @@ mod tests {
     }
 
     #[test]
-    fn formats_context_change_hook() {
+    fn formats_register_handlers_hook() {
         assert_snapshot!(
-            Bash.format_hook(Hook::OnContextChange {
+            Bash.format_hook(Hook::RegisterHandlers {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Bash.format_hook(Hook::UnregisterHandlers {
                 function: "_starbase_hook".into(),
             })
             .unwrap()

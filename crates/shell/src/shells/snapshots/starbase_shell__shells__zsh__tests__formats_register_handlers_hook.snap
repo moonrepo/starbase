@@ -1,6 +1,6 @@
 ---
 source: crates/shell/src/shells/zsh.rs
-expression: "Zsh::new().format_hook(Hook::OnContextChange\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+expression: "Zsh::new().format_hook(Hook::RegisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
 ---
 typeset -ag chpwd_functions
 if (( ! ${chpwd_functions[(I)_starbase_hook]} )); then

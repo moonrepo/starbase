@@ -81,7 +81,7 @@ fn setup(case: &Case) -> (Sandbox, String) {
             })
             .unwrap(),
         shell
-            .format_hook(Hook::OnContextChange {
+            .format_hook(Hook::RegisterHandlers {
                 function: "_starbase_activate".into(),
             })
             .unwrap(),
@@ -89,6 +89,15 @@ fn setup(case: &Case) -> (Sandbox, String) {
     .join("\n\n");
 
     sandbox.create_file(format!("hook.{}", case.extension), &hook);
+
+    sandbox.create_file(
+        format!("unhook.{}", case.extension),
+        shell
+            .format_hook(Hook::UnregisterHandlers {
+                function: "_starbase_activate".into(),
+            })
+            .unwrap(),
+    );
 
     // Reporting from inside the file proves the clobber landed, whichever
     // shell ran it
@@ -210,6 +219,16 @@ fn run_case(case: Case) {
     let output = session.sync(&report("S6"), "S6 foo=");
 
     assert_eq!(reported(&output, "S6"), "123", "{}", case.shell);
+
+    // Unregistering is what actually ends it: the triggers stop firing, so the
+    // clobbered value survives a directory change and a prompt
+    session.send(&evaluate(&format!("{root}/unhook.{}", case.extension)));
+    session.send(&evaluate(&format!("{root}/clobber.{}", case.extension)));
+    session.send("cd /tmp");
+
+    let output = session.sync(&report("S7"), "S7 foo=");
+
+    assert_eq!(reported(&output, "S7"), "changed", "{}", case.shell);
 
     drop(sandbox);
 }

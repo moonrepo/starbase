@@ -46,8 +46,12 @@ impl Shell for Pwsh {
                     &[("command", &command), ("function", &function)],
                 )
             }
-            Hook::OnContextChange { function } => render_template(
-                include_str!("hooks/context/pwsh.ps1"),
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/pwsh.ps1"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/pwsh.ps1"),
                 &[("function", &function)],
             ),
         }))
@@ -183,10 +187,21 @@ mod tests {
     }
 
     #[test]
-    fn formats_context_change_hook() {
+    fn formats_register_handlers_hook() {
         assert_snapshot!(
             Pwsh::new()
-                .format_hook(Hook::OnContextChange {
+                .format_hook(Hook::RegisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Pwsh::new()
+                .format_hook(Hook::UnregisterHandlers {
                     function: "_starbase_hook".into(),
                 })
                 .unwrap()

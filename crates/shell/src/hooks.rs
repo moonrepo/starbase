@@ -54,7 +54,7 @@ pub enum Hook {
     /// generated code exports the function to the session: xonsh assigns it
     /// into `__xonsh__.ctx`, and elvish passes it to `edit:add-vars`, which
     /// only exists in an interactive session and takes effect in the next REPL
-    /// cycle. In elvish this also means [`Hook::OnContextChange`] must be
+    /// cycle. In elvish this also means [`Hook::RegisterHandlers`] must be
     /// evaluated in the same namespace as the definition it registers, since a
     /// separate `eval` cannot see it.
     Activate {
@@ -69,10 +69,10 @@ pub enum Hook {
     /// Defines a function that reverses [`Hook::Activate`], by evaluating the
     /// output of a command that prints the opposite statements.
     ///
-    /// This is [`Hook::Activate`] with another name and another command. It
-    /// does not unregister [`Hook::OnContextChange`], so a shell that has
-    /// registered one keeps triggering afterwards, and the command is expected
-    /// to account for that by printing nothing once a session is torn down.
+    /// This is [`Hook::Activate`] with another name and another command, and
+    /// nothing more: the triggers keep firing afterwards, so a session that is
+    /// torn down for good wants [`Hook::UnregisterHandlers`] as well, or a
+    /// command that prints nothing once deactivated.
     Deactivate {
         /// Command that prints statements to evaluate, in shell specific
         /// syntax, e.g. `proto deactivate zsh --export`.
@@ -112,8 +112,24 @@ pub enum Hook {
     /// sees the directory trigger alone. Elvish goes further: its prompt
     /// trigger lives in the `edit:` module, which does not exist outside an
     /// interactive session, so that registration is skipped entirely there.
-    OnContextChange {
+    RegisterHandlers {
         /// Name of the function to register, as defined by [`Hook::Activate`].
+        function: String,
+    },
+
+    /// Removes what [`Hook::RegisterHandlers`] registered, leaving the rest of
+    /// the session alone, so that a torn down session stops evaluating the
+    /// command on every context change.
+    ///
+    /// Unregistering a function that was never registered does nothing. The
+    /// functions themselves stay defined, since a shell that cannot undefine
+    /// them at runtime (nu) would be left half torn down.
+    ///
+    /// The POSIX shells restore the `cd` builtin by dropping the shadow, which
+    /// also drops any other `cd` wrapper that was installed after it.
+    UnregisterHandlers {
+        /// Name of the function to unregister, as passed to
+        /// [`Hook::RegisterHandlers`].
         function: String,
     },
 }
@@ -123,7 +139,8 @@ impl Hook {
         match self {
             Hook::Activate { .. } => "activate",
             Hook::Deactivate { .. } => "deactivate",
-            Hook::OnContextChange { .. } => "on context change",
+            Hook::RegisterHandlers { .. } => "register handlers",
+            Hook::UnregisterHandlers { .. } => "unregister handlers",
         }
     }
 }
