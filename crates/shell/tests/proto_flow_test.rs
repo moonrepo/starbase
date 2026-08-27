@@ -61,7 +61,7 @@ fn run_case(case: Case) {
 
     sandbox.create_file(
         "report.sh",
-        "printf '%s foo=%s\\n' \"$1\" \"${E2E_FOO:-unset}\"\n",
+        "printf '%s foo=%s\\n%s ok\\n' \"$1\" \"${E2E_FOO:-unset}\" \"$1\"\n",
     );
 
     // What `proto activate --export` would print
@@ -124,11 +124,11 @@ fn run_case(case: Case) {
 
     let report = |label: &str| format!("sh {root}/report.sh {label}");
 
-    session.wait_until_ready(&report("READY"), "READY foo=");
+    session.wait_until_ready(&report("READY"), "READY ok");
     session.send(&(case.evaluate)(&format!("{root}/hook.{}", case.extension)));
 
     // Activation: by prompt where the shell has one, by cd everywhere
-    let output = session.sync(&report("S1"), "S1 foo=");
+    let output = session.sync(&report("S1"), "S1 ok");
     let expected = if case.activates_on_prompt {
         "123"
     } else {
@@ -137,9 +137,7 @@ fn run_case(case: Case) {
 
     assert_eq!(reported(&output, "S1"), expected, "{}", case.shell);
 
-    session.send("cd /tmp");
-
-    let output = session.sync(&report("S2"), "S2 foo=");
+    let output = session.sync(&format!("cd /tmp ; {}", report("S2")), "S2 ok");
 
     assert_eq!(reported(&output, "S2"), "123", "{}", case.shell);
 
@@ -147,14 +145,12 @@ fn run_case(case: Case) {
     // and remove the functions, all through the command's printed statements
     session.send(case.deactivate_call);
 
-    let output = session.sync(&report("S3"), "S3 foo=");
+    let output = session.sync(&report("S3"), "S3 ok");
 
     assert_eq!(reported(&output, "S3"), "unset", "{}", case.shell);
 
     // Handlers are gone, so a directory change re-activates nothing
-    session.send("cd /");
-
-    let output = session.sync(&report("S4"), "S4 foo=");
+    let output = session.sync(&format!("cd / ; {}", report("S4")), "S4 ok");
 
     assert_eq!(reported(&output, "S4"), "unset", "{}", case.shell);
 
@@ -166,7 +162,7 @@ fn run_case(case: Case) {
             .as_str(),
     );
 
-    let output = session.sync(&report("S5"), "S5 foo=");
+    let output = session.sync(&report("S5"), "S5 ok");
 
     assert_eq!(reported(&output, "S5"), "unset", "{}", case.shell);
 

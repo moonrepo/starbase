@@ -55,7 +55,7 @@ fn setup(case: &Case) -> (Sandbox, String) {
     // and proves the activation exported it
     sandbox.create_file(
         "report.sh",
-        "printf '%s foo=%s\\n' \"$1\" \"${E2E_FOO:-unset}\"\n",
+        "printf '%s foo=%s\\n%s ok\\n' \"$1\" \"${E2E_FOO:-unset}\" \"$1\"\n",
     );
 
     sandbox.create_file(
@@ -90,13 +90,19 @@ fn setup(case: &Case) -> (Sandbox, String) {
 
     sandbox.create_file(format!("hook.{}", case.extension), &hook);
 
+    // Every file a test evaluates ends by reporting, so the evaluation can be
+    // acknowledged (and retried) like any other step — a busy line editor
+    // silently drops typed input, so an unacknowledged send may never run
     sandbox.create_file(
         format!("unhook.{}", case.extension),
-        shell
-            .format_hook(Hook::UnregisterHandlers {
-                function: "_starbase_activate".into(),
-            })
-            .unwrap(),
+        format!(
+            "{}\nsh {root}/report.sh UNHOOK\n",
+            shell
+                .format_hook(Hook::UnregisterHandlers {
+                    function: "_starbase_activate".into(),
+                })
+                .unwrap()
+        ),
     );
 
     // Reporting from inside the file proves the clobber landed, whichever
@@ -105,6 +111,13 @@ fn setup(case: &Case) -> (Sandbox, String) {
         format!("clobber.{}", case.extension),
         format!(
             "{}\nsh {root}/report.sh CLOBBER\n",
+            shell.format_env_set("E2E_FOO", "changed")
+        ),
+    );
+    sandbox.create_file(
+        format!("clobber2.{}", case.extension),
+        format!(
+            "{}\nsh {root}/report.sh CLOBBER2\n",
             shell.format_env_set("E2E_FOO", "changed")
         ),
     );
@@ -144,7 +157,7 @@ fn run_case(case: Case) {
 
     // Nothing can be typed until one round trip has completed, since a shell
     // that is still starting up drops whatever was typed
-    session.wait_until_ready(&report("READY"), "READY foo=");
+    session.wait_until_ready(&report("READY"), "READY ok");
 
     // Sourcing alone activates in a shell with a prompt trigger, since the
     // next prompt fires before anything else can run
@@ -152,7 +165,7 @@ fn run_case(case: Case) {
         session.send(&evaluate(&format!("{root}/hook.{}", case.extension)));
     }
 
-    let output = session.sync(&report("S1"), "S1 foo=");
+    let output = session.sync(&report("S1"), "S1 ok");
     let expected = if case.activates_on_prompt {
         "123"
     } else {
@@ -162,9 +175,7 @@ fn run_case(case: Case) {
     assert_eq!(reported(&output, "S1"), expected, "{}", case.shell);
 
     // Both triggers converge here, since a prompt follows the directory change
-    session.send("cd /tmp");
-
-    let output = session.sync(&report("S2"), "S2 foo=");
+    let output = session.sync(&format!("cd /tmp ; {}", report("S2")), "S2 ok");
 
     assert_eq!(reported(&output, "S2"), "123", "{}", case.shell);
 
@@ -172,9 +183,12 @@ fn run_case(case: Case) {
     // asserted before a prompt has had the chance to reapply anything
     let evaluate = case.evaluate.unwrap_or(|path| format!("source {path}"));
 
-    session.send(&evaluate(&format!("{root}/clobber.{}", case.extension)));
+    session.sync(
+        &evaluate(&format!("{root}/clobber.{}", case.extension)),
+        "CLOBBER ok",
+    );
 
-    let output = session.sync(&report("S3"), "S3 foo=");
+    let output = session.sync(&report("S3"), "S3 ok");
 
     assert_eq!(reported(&output, "CLOBBER"), "changed", "{}", case.shell);
 
@@ -192,7 +206,7 @@ fn run_case(case: Case) {
     // registered and the next prompt would activate over the top of it
     session.send(&format!("{} ; {}", case.deactivate_call, report("S4")));
 
-    let output = session.sync(&report("S5"), "S5 foo=");
+    let output = session.sync(&report("S5"), "S5 ok");
     let expected = if case.defers_statements {
         // Nu stages the statements for the next prompt rather than applying
         // them where the function ran
@@ -203,30 +217,37 @@ fn run_case(case: Case) {
 
     assert_eq!(reported(&output, "S4"), expected, "{}", case.shell);
 
-    // Deactivating does not unregister anything, so a shell with a prompt
-    // trigger activates again on the very next prompt
-    let expected = match (case.activates_on_prompt, case.defers_statements) {
-        (_, true) => "unset",
-        (true, _) => "123",
-        (false, _) => "unset",
+    // Deactivating does not unregister anything, so once the prompts settle a
+    // prompt-triggered shell is active again. That includes nu, one prompt
+    // later: its staged teardown and the activation the still-registered
+    // handler staged beside it land on consecutive prompts, so the S5 read
+    // above is a transient that must not be asserted.
+    let output = session.sync(&report("S5B"), "S5B ok");
+    let expected = if case.activates_on_prompt {
+        "123"
+    } else {
+        "unset"
     };
 
-    assert_eq!(reported(&output, "S5"), expected, "{}", case.shell);
+    assert_eq!(reported(&output, "S5B"), expected, "{}", case.shell);
 
     // And a directory change activates every shell again, deactivated or not
-    session.send("cd /");
-
-    let output = session.sync(&report("S6"), "S6 foo=");
+    let output = session.sync(&format!("cd / ; {}", report("S6")), "S6 ok");
 
     assert_eq!(reported(&output, "S6"), "123", "{}", case.shell);
 
     // Unregistering is what actually ends it: the triggers stop firing, so the
     // clobbered value survives a directory change and a prompt
-    session.send(&evaluate(&format!("{root}/unhook.{}", case.extension)));
-    session.send(&evaluate(&format!("{root}/clobber.{}", case.extension)));
-    session.send("cd /tmp");
+    session.sync(
+        &evaluate(&format!("{root}/unhook.{}", case.extension)),
+        "UNHOOK ok",
+    );
+    session.sync(
+        &evaluate(&format!("{root}/clobber2.{}", case.extension)),
+        "CLOBBER2 ok",
+    );
 
-    let output = session.sync(&report("S7"), "S7 foo=");
+    let output = session.sync(&format!("cd /tmp ; {}", report("S7")), "S7 ok");
 
     assert_eq!(reported(&output, "S7"), "changed", "{}", case.shell);
 
@@ -451,7 +472,7 @@ fn elvish_defines_profile_aliases() {
 
     sandbox.create_file(
         "report.sh",
-        "printf '%s foo=%s\\n' \"$1\" \"${E2E_FOO:-unset}\"\n",
+        "printf '%s foo=%s\\n%s ok\\n' \"$1\" \"${E2E_FOO:-unset}\" \"$1\"\n",
     );
     sandbox.create_file(
         "rc.elv",
@@ -467,14 +488,14 @@ fn elvish_defines_profile_aliases() {
         return;
     };
 
-    let output = session.sync("e2e_alias ALIAS", "ALIAS foo=");
+    let output = session.sync("e2e_alias ALIAS", "ALIAS ok");
 
     assert_eq!(reported(&output, "ALIAS"), "unset");
 
     session.send(&shell.format_alias_unset("e2e_alias"));
     session.send("e2e_alias GONE");
 
-    let output = session.sync(&format!("sh {root}/report.sh AFTER"), "AFTER foo=");
+    let output = session.sync(&format!("sh {root}/report.sh AFTER"), "AFTER ok");
 
     assert!(
         output.contains("executable file not found"),
@@ -494,7 +515,7 @@ fn elvish_sets_and_unsets_aliases() {
 
     sandbox.create_file(
         "report.sh",
-        "printf '%s foo=%s\\n' \"$1\" \"${E2E_FOO:-unset}\"\n",
+        "printf '%s foo=%s\\n%s ok\\n' \"$1\" \"${E2E_FOO:-unset}\" \"$1\"\n",
     );
     sandbox.create_file(
         "set.elv",
@@ -530,14 +551,14 @@ fn elvish_sets_and_unsets_aliases() {
     session.send(&format!("eval (slurp < {root}/set.elv)"));
 
     // The argument is forwarded, which a bare `fn` would reject
-    let output = session.run("e2e_alias ALIAS", "ALIAS foo=");
+    let output = session.run("e2e_alias ALIAS", "ALIAS ok");
 
     assert_eq!(reported(&output, "ALIAS"), "unset");
 
     session.send(&format!("eval (slurp < {root}/unset.elv)"));
     session.send("e2e_alias GONE");
 
-    let output = session.run(&format!("sh {root}/report.sh AFTER"), "AFTER foo=");
+    let output = session.run(&format!("sh {root}/report.sh AFTER"), "AFTER ok");
 
     assert!(
         output.contains("executable file not found"),
