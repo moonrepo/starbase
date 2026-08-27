@@ -1,4 +1,5 @@
 fn ${{ function }} {|@_|
+  # ${{ function }}
   eval (${{ command }} | slurp)
 }
 

@@ -144,8 +144,13 @@ pub enum Hook {
     /// functions themselves stay defined, since a shell that cannot undefine
     /// them at runtime (nu) would be left half torn down.
     ///
-    /// The POSIX shells restore the `cd` builtin by dropping the shadow, which
-    /// also drops any other `cd` wrapper that was installed after it.
+    /// Most shells unregister by removing an entry from a list, which cannot
+    /// affect anyone else's registration. The exceptions restore saved state:
+    /// the POSIX shells drop the `cd` shadow to restore the builtin, and
+    /// powershell (pwsh included) restores the prompt function it saved when
+    /// registering — so a `cd` wrapper or prompt wrapper another tool
+    /// installed *after* this one is dropped with it. Unregister before other
+    /// tools' teardown, or after their setup, when stacking matters.
     UnregisterHandlers {
         /// Name of the function to unregister, as passed to
         /// [`Hook::RegisterHandlers`].

@@ -407,6 +407,9 @@ print $"teardown=(statements $sb_deactivate) hooks=(registered)"
 
 source "./unhook.nu"
 
+# 0,1: the registration is gone from both triggers, and so is the activate
+# function's staged entry, which would otherwise re-apply after teardown. The
+# deactivate function's staged entry remains, still holding work to do.
 print $"unhooked=(registered)"
 "#
         ),
@@ -421,7 +424,7 @@ print $"unhooked=(registered)"
              alias e2e_ll = print ALIASOK hooks=1,2\n\
              applied=ALIASOK,123,false,/e2e-stub-path\n\
              teardown=hide-env --ignore-errors E2E_FOO,hide e2e_ll hooks=1,3\n\
-             unhooked=0,2\n"
+             unhooked=0,1\n"
                 .replace("PATH_KEY", path_key)
         );
     }

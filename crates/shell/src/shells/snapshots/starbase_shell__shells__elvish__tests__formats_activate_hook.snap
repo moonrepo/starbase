@@ -3,6 +3,7 @@ source: crates/shell/src/shells/elvish.rs
 expression: "Elvish.format_hook(Hook::Activate\n{\n    command: \"starbase hook elvish\".into(), function: \"_starbase_hook\".into(),\n}).unwrap()"
 ---
 fn _starbase_hook {|@_|
+  # _starbase_hook
   eval (starbase hook elvish | slurp)
 }
 
