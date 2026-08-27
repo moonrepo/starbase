@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{normalize_newlines, render_template};
+use crate::helpers::{indent_lines, normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Quotable, Sh as ShQuoter};
@@ -54,6 +54,12 @@ impl Shell for Sh {
             }
             Statement::SetEnv { key, value, .. } => {
                 format!("export {}={};", self.quote(key), self.quote(value))
+            }
+            Statement::SetFunction { name, body, .. } => {
+                format!("{name}() {{\n{}\n}}", indent_lines(body, "  "))
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("unset -f {name}")
             }
             Statement::UnsetAlias { name, .. } => {
                 format!("unalias {};", self.quote(name))
@@ -165,6 +171,19 @@ mod tests {
             Sh.format_path_set(&["$PROTO_HOME/shims".into(), "$PROTO_HOME/bin".into()]),
             r#"export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin";"#
         );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Sh.format_function_set("e2e", "echo hi"),
+            "e2e() {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Sh.format_function_unset("e2e"), "unset -f e2e");
     }
 
     #[test]

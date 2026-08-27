@@ -1,7 +1,7 @@
 use super::Shell;
 use crate::helpers::{
-    PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines,
-    render_template,
+    PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, indent_lines,
+    normalize_newlines, render_template,
 };
 use crate::hooks::*;
 use crate::quoter::*;
@@ -106,6 +106,28 @@ impl Shell for Elvish {
             // error, which would take down every statement sharing the `eval`
             // rather than just this one. `edit:del-vars` tolerates a name that
             // was never added
+            // A hook evaluates its statements in a namespace that is thrown
+            // away, so the definition is added to the interactive namespace
+            // instead, the way the hook adds its own functions
+            Statement::SetFunction { name, body, hook } => {
+                let body = indent_lines(body, "  ");
+
+                if hook {
+                    format!("try {{ edit:add-vars [&'{name}~'={{|@_|\n{body}\n}}] }} catch _ {{ }}")
+                } else {
+                    format!("fn {name} {{|@_|\n{body}\n}}")
+                }
+            }
+            // `del` on a missing name is a compilation error, which a hook
+            // cannot afford, since it would take down every statement sharing
+            // the `eval`
+            Statement::UnsetFunction { name, hook } => {
+                if hook {
+                    format!("try {{ edit:del-vars ['{name}~'] }} catch _ {{ }}")
+                } else {
+                    format!("del {name}~")
+                }
+            }
             Statement::UnsetAlias { name, hook } => {
                 if hook {
                     format!("try {{ edit:del-vars ['{name}~'] }} catch _ {{ }}")
@@ -284,6 +306,38 @@ mod tests {
                 ]
             );
         }
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Elvish.format_function_set("e2e", "echo hi"),
+            "fn e2e {|@_|\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Elvish.format_function_unset("e2e"), "del e2e~");
+    }
+
+    #[test]
+    fn formats_hook_function() {
+        assert_eq!(
+            Elvish.format(Statement::SetFunction {
+                name: "e2e",
+                body: "echo hi",
+                hook: true
+            }),
+            "try { edit:add-vars [&'e2e~'={|@_|\n  echo hi\n}] } catch _ { }"
+        );
+        assert_eq!(
+            Elvish.format(Statement::UnsetFunction {
+                name: "e2e",
+                hook: true
+            }),
+            "try { edit:del-vars ['e2e~'] } catch _ { }"
+        );
     }
 
     #[test]

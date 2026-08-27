@@ -262,6 +262,22 @@ mod tests {
     }
 
     #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Pwsh::new().format_function_set("e2e", "echo hi"),
+            "function global:e2e {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(
+            Pwsh::new().format_function_unset("e2e"),
+            "Remove-Item -LiteralPath 'function:e2e' -ErrorAction Ignore;"
+        );
+    }
+
+    #[test]
     fn formats_alias_set() {
         assert_eq!(
             Pwsh::new().format_alias_set("ll", "Get-ChildItem"),

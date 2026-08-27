@@ -44,6 +44,21 @@ pub fn render_template(template: &str, values: &[(&str, &str)]) -> String {
     output
 }
 
+/// Indent every line of a function body, so that a definition reads the way
+/// the shell's own code does. Python needs this to parse at all.
+pub fn indent_lines(body: &str, prefix: &str) -> String {
+    body.lines()
+        .map(|line| {
+            if line.trim().is_empty() {
+                line.to_owned()
+            } else {
+                format!("{prefix}{line}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub fn is_absolute_dir(value: OsString) -> Option<PathBuf> {
     let dir = PathBuf::from(&value);
 

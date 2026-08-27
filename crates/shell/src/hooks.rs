@@ -4,9 +4,9 @@
 /// [`Hook`] needs and the syntax everything else needs — a profile, an rc
 /// file, or output a session evaluates at the top level. The two only differ
 /// where a shell treats hook evaluated code differently, which today is elvish
-/// aliases: a hook evaluates its statements in a namespace that is thrown
-/// away, so an alias has to be added to the interactive namespace rather than
-/// defined with `fn`. The flag is carried by every variant so that another
+/// aliases and functions, and xonsh functions: a hook evaluates its statements
+/// in a namespace that is thrown away, so a definition has to be added to the
+/// session's namespace rather than left where it was made. The flag is carried by every variant so that another
 /// shell can diverge later without the enum changing shape again.
 pub enum Statement<'data> {
     ModifyPath {
@@ -28,6 +28,15 @@ pub enum Statement<'data> {
         /// Format for embedding in a [`Hook`]. See [`Statement`].
         hook: bool,
     },
+    /// Defines a function, the way [`Hook::Activate`] defines its own.
+    SetFunction {
+        name: &'data str,
+        /// Body of the function, in the shell's own syntax, which is indented
+        /// to sit inside the definition.
+        body: &'data str,
+        /// Format for embedding in a [`Hook`]. See [`Statement`].
+        hook: bool,
+    },
     UnsetAlias {
         name: &'data str,
         /// Format for embedding in a [`Hook`]. See [`Statement`].
@@ -35,6 +44,16 @@ pub enum Statement<'data> {
     },
     UnsetEnv {
         key: &'data str,
+        /// Format for embedding in a [`Hook`]. See [`Statement`].
+        hook: bool,
+    },
+    /// Removes a function defined by [`Statement::SetFunction`].
+    ///
+    /// Removing a function that was never defined is tolerated everywhere
+    /// except elvish, whose `del` is a compilation error for a missing name,
+    /// and which therefore only tolerates it in the hook form.
+    UnsetFunction {
+        name: &'data str,
         /// Format for embedding in a [`Hook`]. See [`Statement`].
         hook: bool,
     },

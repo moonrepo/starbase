@@ -1,7 +1,7 @@
 use super::Shell;
 use crate::helpers::{
-    ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, normalize_newlines,
-    render_template,
+    ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, indent_lines,
+    normalize_newlines, render_template,
 };
 use crate::hooks::*;
 use crate::quoter::*;
@@ -172,6 +172,13 @@ impl Shell for Nu {
                         self.quote_assignment(value)
                     )
                 }
+            }
+            // Nu has no way to undefine a command, so removing one hides it
+            Statement::SetFunction { name, body, .. } => {
+                format!("def --env {name} [] {{\n{}\n}}", indent_lines(body, "    "))
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("hide {name}")
             }
             Statement::UnsetAlias { name, .. } => {
                 format!("hide {name}")
@@ -539,6 +546,19 @@ mod tests {
             Nu.format_env_unset("FOO"),
             format!("hide-env --ignore-errors {}", get_env_key_native("FOO"))
         );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Nu.format_function_set("e2e", "echo hi"),
+            "def --env e2e [] {\n    echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Nu.format_function_unset("e2e"), "hide e2e");
     }
 
     #[test]

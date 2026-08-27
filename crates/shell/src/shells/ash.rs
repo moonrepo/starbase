@@ -124,6 +124,19 @@ mod tests {
     }
 
     #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Ash::new().format_function_set("e2e", "echo hi"),
+            "e2e() {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Ash::new().format_function_unset("e2e"), "unset -f e2e");
+    }
+
+    #[test]
     fn formats_alias_set() {
         assert_eq!(
             Ash::new().format_alias_set("ll", "ls -la"),

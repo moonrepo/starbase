@@ -1,5 +1,7 @@
 use super::Shell;
-use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines, render_template};
+use crate::helpers::{
+    PATH_DELIMITER, get_env_var_regex, indent_lines, normalize_newlines, render_template,
+};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -73,6 +75,12 @@ impl Shell for Murex {
                     self.quote(key),
                     self.quote_assignment(self.replace_env(value).as_str())
                 )
+            }
+            Statement::SetFunction { name, body, .. } => {
+                format!("function {name} {{\n{}\n}}", indent_lines(body, "  "))
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("!function {name};")
             }
             Statement::UnsetAlias { name, .. } => {
                 format!("!alias {};", self.quote(name))
@@ -228,6 +236,19 @@ mod tests {
                 home_dir.join(".murex_preload"),
             ]
         );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Murex.format_function_set("e2e", "echo hi"),
+            "function e2e {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Murex.format_function_unset("e2e"), "!function e2e;");
     }
 
     #[test]

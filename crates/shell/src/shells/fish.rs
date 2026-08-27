@@ -1,5 +1,7 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines, render_template};
+use crate::helpers::{
+    ProfileSet, get_config_dir, indent_lines, normalize_newlines, render_template,
+};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Fish as FishQuoter, Quotable, QuoteRefExt};
@@ -54,6 +56,12 @@ impl Shell for Fish {
             }
             Statement::SetEnv { key, value, .. } => {
                 format!("set -gx {} {};", key, self.quote(value))
+            }
+            Statement::SetFunction { name, body, .. } => {
+                format!("function {name};\n{}\nend;", indent_lines(body, "  "))
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("functions --erase {name};")
             }
             Statement::UnsetAlias { name, .. } => {
                 format!("functions -e {name};")
@@ -174,6 +182,19 @@ mod tests {
             Fish::new().get_profile_paths(&home_dir),
             vec![home_dir.join(".config").join("fish").join("config.fish")]
         );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Fish.format_function_set("e2e", "echo hi"),
+            "function e2e;\n  echo hi\nend;"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Fish.format_function_unset("e2e"), "functions --erase e2e;");
     }
 
     #[test]

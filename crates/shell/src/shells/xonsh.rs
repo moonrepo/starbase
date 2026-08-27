@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::{
-    ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines, render_template,
+    ProfileSet, get_config_dir, get_env_var_regex, indent_lines, normalize_newlines,
+    render_template,
 };
 use crate::hooks::*;
 use crate::quoter::*;
@@ -95,6 +96,28 @@ impl Shell for Xonsh {
             }
             // `del` raises a `KeyError` when the alias/variable doesn't exist,
             // which would abort the entire block of statements
+            // A hook applies its statements with `execx()`, whose namespace is
+            // not the shell's, so the definition is exported the way the hook
+            // exports its own functions
+            Statement::SetFunction { name, body, hook } => {
+                let body = if body.trim().is_empty() {
+                    "    pass".into()
+                } else {
+                    indent_lines(body, "    ")
+                };
+                let define = format!("def {name}(*args, **kwargs):\n{body}");
+
+                if hook {
+                    format!("{define}\n__xonsh__.ctx['{name}'] = {name}")
+                } else {
+                    define
+                }
+            }
+            // `del` raises for a name that was never defined, and the shell's
+            // namespace is the context in both cases
+            Statement::UnsetFunction { name, .. } => {
+                format!("__xonsh__.ctx.pop('{name}', None)")
+            }
             Statement::UnsetAlias { name, .. } => {
                 format!("aliases.pop(\"{name}\", None)")
             }
@@ -231,6 +254,41 @@ mod tests {
                 home_dir.join(".config").join("xonsh").join("rc.xsh"),
                 home_dir.join(".xonshrc"),
             ]
+        );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Xonsh.format_function_set("e2e", "echo hi"),
+            "def e2e(*args, **kwargs):\n    echo hi"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(
+            Xonsh.format_function_unset("e2e"),
+            "__xonsh__.ctx.pop('e2e', None)"
+        );
+    }
+
+    #[test]
+    fn formats_hook_function() {
+        assert_eq!(
+            Xonsh.format(Statement::SetFunction {
+                name: "e2e",
+                body: "echo hi",
+                hook: true
+            }),
+            "def e2e(*args, **kwargs):\n    echo hi\n__xonsh__.ctx['e2e'] = e2e"
+        );
+        assert_eq!(
+            Xonsh.format(Statement::UnsetFunction {
+                name: "e2e",
+                hook: true
+            }),
+            "__xonsh__.ctx.pop('e2e', None)"
         );
     }
 

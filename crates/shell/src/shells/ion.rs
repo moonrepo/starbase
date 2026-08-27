@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex};
+use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, indent_lines};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -73,6 +73,14 @@ impl Shell for Ion {
                     self.quote(key),
                     self.quote(self.replace_env(value).as_str())
                 )
+            }
+            Statement::SetFunction { name, body, .. } => {
+                format!("fn {name}\n{}\nend", indent_lines(body, "  "))
+            }
+            // Ion has no way to remove a function, so this is a comment rather
+            // than a statement that would fail
+            Statement::UnsetFunction { name, .. } => {
+                format!("# no way to remove the {name} function")
             }
             Statement::UnsetAlias { name, .. } => {
                 format!("unalias {}", self.quote(name))
@@ -172,6 +180,22 @@ mod tests {
         assert_eq!(
             Ion::new().get_profile_paths(&home_dir),
             vec![home_dir.join(".config").join("ion").join("initrc")]
+        );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Ion.format_function_set("e2e", "echo hi"),
+            "fn e2e\n  echo hi\nend"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(
+            Ion.format_function_unset("e2e"),
+            "# no way to remove the e2e function"
         );
     }
 

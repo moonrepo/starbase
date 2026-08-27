@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{normalize_newlines, render_template};
+use crate::helpers::{indent_lines, normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Bash as BashQuoter, QuoteRefExt};
@@ -66,6 +66,12 @@ impl Shell for Bash {
             }
             Statement::SetEnv { key, value, .. } => {
                 format!("export {}={};", self.quote(key), self.quote(value))
+            }
+            Statement::SetFunction { name, body, .. } => {
+                format!("{name}() {{\n{}\n}}", indent_lines(body, "  "))
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("unset -f {name};")
             }
             Statement::UnsetAlias { name, .. } => {
                 format!("unalias {};", self.quote(name))
@@ -205,6 +211,19 @@ mod tests {
                 vec![home_dir.join(".bashrc"), home_dir.join(".profile")]
             );
         }
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Bash.format_function_set("e2e", "echo hi"),
+            "e2e() {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Bash.format_function_unset("e2e"), "unset -f e2e;");
     }
 
     #[test]

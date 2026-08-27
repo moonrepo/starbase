@@ -80,6 +80,28 @@ pub trait Shell: Debug + Display + Send + Sync {
         self.format(Statement::UnsetAlias { name, hook: false })
     }
 
+    /// Format a function by either defining or removing it.
+    fn format_function(&self, name: &str, body: Option<&str>) -> String {
+        match body {
+            Some(body) => self.format_function_set(name, body),
+            None => self.format_function_unset(name),
+        }
+    }
+
+    /// Format a function that will be defined for the entire shell.
+    fn format_function_set(&self, name: &str, body: &str) -> String {
+        self.format(Statement::SetFunction {
+            name,
+            body,
+            hook: false,
+        })
+    }
+
+    /// Format a function that will be removed from the entire shell.
+    fn format_function_unset(&self, name: &str) -> String {
+        self.format(Statement::UnsetFunction { name, hook: false })
+    }
+
     /// Format an environment variable by either setting or unsetting the value.
     fn format_env(&self, key: &str, value: Option<&str>) -> String {
         match value {

@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::{
-    ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines, render_template,
+    ProfileSet, get_env_key_native, get_env_var_regex, indent_lines, normalize_newlines,
+    render_template,
 };
 use crate::hooks::*;
 use crate::quoter::*;
@@ -223,6 +224,17 @@ impl Shell for PowerShell {
                 let key = get_env_key_native(key);
 
                 format!("$env:{} = {};", key, self.format_env_value(value))
+            }
+            // `global:` so that a definition applied by a hook, which runs
+            // inside a function, outlives the scope that applied it
+            Statement::SetFunction { name, body, .. } => {
+                format!(
+                    "function global:{name} {{\n{}\n}}",
+                    indent_lines(body, "  ")
+                )
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("Remove-Item -LiteralPath 'function:{name}' -ErrorAction Ignore;")
             }
             Statement::UnsetAlias { name, .. } => {
                 format!("Remove-Alias -Name {} -Force;", self.quote(name))
@@ -611,6 +623,22 @@ mod tests {
 
         assert_eq!(PowerShell.get_config_path(home_dir), expected);
         assert_eq!(PowerShell.get_env_path(home_dir), expected);
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            PowerShell.format_function_set("e2e", "echo hi"),
+            "function global:e2e {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(
+            PowerShell.format_function_unset("e2e"),
+            "Remove-Item -LiteralPath 'function:e2e' -ErrorAction Ignore;"
+        );
     }
 
     #[test]
