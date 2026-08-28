@@ -8,9 +8,9 @@ repository = "https://github.com/moonrepo/starbase"
 rust-version = "1.89.0"
 
 [dependencies]
-starbase_console = { path = "../console" }
-starbase_shell = { path = "../shell" }
-starbase_styles = { path = "../styles" }
+starbase_console = { version = "0.6.34", path = "../console" }
+starbase_shell = { version = "0.12.8", path = "../shell" }
+starbase_styles = { version = "0.6.9", path = "../styles" }
 bytes = { workspace = true }
 miette = { workspace = true }
 rustc-hash = { workspace = true }
