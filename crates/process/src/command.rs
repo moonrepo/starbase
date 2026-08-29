@@ -11,7 +11,6 @@ use std::collections::VecDeque;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::hash::Hasher;
-use std::sync::Arc;
 
 /// Debugging and environment-detection flags for a [`Command`], typically
 /// set by the host application rather than by end users.
@@ -88,7 +87,7 @@ pub struct Command<R: Reporter> {
     pub shell: Option<ShellType>,
 
     /// Console to write output to
-    pub console: Option<Arc<Console<R>>>,
+    pub console: Option<Console<R>>,
 }
 
 impl<R: Reporter> Command<R> {
@@ -524,7 +523,7 @@ impl<R: Reporter> Command<R> {
     }
 
     /// Attach a console to write output to.
-    pub fn set_console(&mut self, console: Arc<Console<R>>) -> &mut Self {
+    pub fn set_console(&mut self, console: Console<R>) -> &mut Self {
         self.console = Some(console);
         self
     }
@@ -592,7 +591,7 @@ impl<R: Reporter> Command<R> {
 
     /// Convert this command to use a different console reporter type,
     /// carrying over every other field and attaching the given console.
-    pub fn with_console<T: Reporter>(self, console: Arc<Console<T>>) -> Command<T> {
+    pub fn with_console<T: Reporter>(self, console: Console<T>) -> Command<T> {
         Command {
             args: self.args,
             cache: self.cache,
