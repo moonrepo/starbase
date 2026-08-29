@@ -1,5 +1,7 @@
 use super::Shell;
-use crate::helpers::{PATH_DELIMITER, get_env_var_regex, normalize_newlines};
+use crate::helpers::{
+    PATH_DELIMITER, get_env_var_regex, indent_lines, normalize_newlines, render_template,
+};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -21,6 +23,20 @@ impl Murex {
             .replace_all(value.as_ref(), "$$ENV.$name")
             .to_string()
     }
+
+    /// Quote a value for the right side of an assignment, which murex parses
+    /// as an expression. A bareword is a syntax error there, so a value that
+    /// needs no shell quoting still needs syntax quoting.
+    fn quote_assignment(&self, value: &str) -> String {
+        let quoter = self.create_quoter(value.into());
+
+        // Interpolated and already quoted values keep the quoting they have
+        if quoter.is_empty() || quoter.is_quoted() || quoter.requires_expansion() {
+            self.quote(value)
+        } else {
+            self.create_quoter(value.into()).quote()
+        }
+    }
 }
 
 impl Shell for Murex {
@@ -38,6 +54,7 @@ impl Shell for Murex {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = self.replace_env(paths.join(PATH_DELIMITER));
@@ -49,20 +66,26 @@ impl Shell for Murex {
                     None => format!(r#"$ENV.{key}="{value}""#),
                 }
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 format!("alias {}={};", self.quote(name), self.quote(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!(
                     "$ENV.{}={}",
                     self.quote(key),
-                    self.quote(self.replace_env(value).as_str())
+                    self.quote_assignment(self.replace_env(value).as_str())
                 )
             }
-            Statement::UnsetAlias { name } => {
+            Statement::SetFunction { name, body, .. } => {
+                format!("function {name} {{\n{}\n}}", indent_lines(body, "  "))
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("!function {name};")
+            }
+            Statement::UnsetAlias { name, .. } => {
                 format!("!alias {};", self.quote(name))
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("unset {};", self.quote(key))
             }
         }
@@ -71,31 +94,20 @@ impl Shell for Murex {
     // hook referenced from https://github.com/direnv/direnv/blob/ff451a860b31f176d252c410b43d7803ec0f8b23/internal/cmd/shell_murex.go#L12
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"
-function {activate_function} {{
-  {activate_command} -> source
-}}
-
-function {deactivate_function} {{
-  {deactivate_command} -> source
-  !event onPrompt {activate_function}
-  !function {activate_function}
-  !function {deactivate_function}
-}}
-
-event onPrompt {activate_function}=before {{
-  {activate_function}
-}}
-"#
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/murex.mx"),
+                    &[("command", &command), ("function", &function)],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/murex.mx"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/murex.mx"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -137,6 +149,9 @@ mod tests {
             r#"$ENV.PROTO_HOME="$ENV.HOME/.proto""#
         );
         assert_eq!(Murex.format_env_set("FOO", "don't"), "$ENV.FOO=%(don't)");
+        // The expression parser rejects a bareword, so a plain value is quoted
+        assert_eq!(Murex.format_env_set("BOOL", "true"), "$ENV.BOOL='true'");
+        assert_eq!(Murex.format_env_set("EMPTY", ""), "$ENV.EMPTY=''");
     }
 
     #[cfg(unix)]
@@ -176,15 +191,37 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook murex".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate murex".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Murex
+                .format_hook(Hook::Activate {
+                    command: "starbase hook murex".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Murex.format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        assert_snapshot!(
+            Murex
+                .format_hook(Hook::RegisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Murex
+                .format_hook(Hook::UnregisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]
@@ -199,6 +236,19 @@ mod tests {
                 home_dir.join(".murex_preload"),
             ]
         );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Murex.format_function_set("e2e", "echo hi"),
+            "function e2e {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Murex.format_function_unset("e2e"), "!function e2e;");
     }
 
     #[test]

@@ -68,12 +68,38 @@ pub trait Shell: Debug + Display + Send + Sync {
 
     /// Format an alias that will be set to the entire shell.
     fn format_alias_set(&self, name: &str, value: &str) -> String {
-        self.format(Statement::SetAlias { name, value })
+        self.format(Statement::SetAlias {
+            name,
+            value,
+            hook: false,
+        })
     }
 
     /// Format an alias that will be unset from the entire shell.
     fn format_alias_unset(&self, name: &str) -> String {
-        self.format(Statement::UnsetAlias { name })
+        self.format(Statement::UnsetAlias { name, hook: false })
+    }
+
+    /// Format a function by either defining or removing it.
+    fn format_function(&self, name: &str, body: Option<&str>) -> String {
+        match body {
+            Some(body) => self.format_function_set(name, body),
+            None => self.format_function_unset(name),
+        }
+    }
+
+    /// Format a function that will be defined for the entire shell.
+    fn format_function_set(&self, name: &str, body: &str) -> String {
+        self.format(Statement::SetFunction {
+            name,
+            body,
+            hook: false,
+        })
+    }
+
+    /// Format a function that will be removed from the entire shell.
+    fn format_function_unset(&self, name: &str) -> String {
+        self.format(Statement::UnsetFunction { name, hook: false })
     }
 
     /// Format an environment variable by either setting or unsetting the value.
@@ -86,12 +112,16 @@ pub trait Shell: Debug + Display + Send + Sync {
 
     /// Format an environment variable that will be set to the entire shell.
     fn format_env_set(&self, key: &str, value: &str) -> String {
-        self.format(Statement::SetEnv { key, value })
+        self.format(Statement::SetEnv {
+            key,
+            value,
+            hook: false,
+        })
     }
 
     /// Format an environment variable that will be unset from the entire shell.
     fn format_env_unset(&self, key: &str) -> String {
-        self.format(Statement::UnsetEnv { key })
+        self.format(Statement::UnsetEnv { key, hook: false })
     }
 
     /// Format the provided paths to prepend the `PATH` environment variable.
@@ -100,6 +130,7 @@ pub trait Shell: Debug + Display + Send + Sync {
             paths,
             key: Some("PATH"),
             orig_key: Some("PATH"),
+            hook: false,
         })
     }
 
@@ -109,6 +140,7 @@ pub trait Shell: Debug + Display + Send + Sync {
             paths,
             key: Some("PATH"),
             orig_key: None,
+            hook: false,
         })
     }
 

@@ -1,5 +1,7 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, normalize_newlines};
+use crate::helpers::{
+    ProfileSet, get_config_dir, indent_lines, normalize_newlines, render_template,
+};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Fish as FishQuoter, Quotable, QuoteRefExt};
@@ -35,6 +37,7 @@ impl Shell for Fish {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = paths
@@ -48,16 +51,22 @@ impl Shell for Fish {
                     None => format!("set -gx {key} {value};"),
                 }
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 format!("alias {} {};", name, self.quote(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!("set -gx {} {};", key, self.quote(value))
             }
-            Statement::UnsetAlias { name } => {
+            Statement::SetFunction { name, body, .. } => {
+                format!("function {name};\n{}\nend;", indent_lines(body, "  "))
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("functions --erase {name};")
+            }
+            Statement::UnsetAlias { name, .. } => {
                 format!("functions -e {name};")
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("set -ge {key};")
             }
         }
@@ -65,25 +74,20 @@ impl Shell for Fish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"
-function {activate_function} --on-variable PWD;
-  {activate_command} | source
-end;
-
-function {deactivate_function};
-  {deactivate_command} | source
-  functions --erase {activate_function} {deactivate_function}
-end;
-"#
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/fish.fish"),
+                    &[("command", &command), ("function", &function)],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/fish.fish"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/fish.fish"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -139,15 +143,34 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook fish".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate fish".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Fish.format_hook(Hook::Activate {
+                command: "starbase hook fish".into(),
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
 
-        assert_snapshot!(Fish.format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        assert_snapshot!(
+            Fish.format_hook(Hook::RegisterHandlers {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Fish.format_hook(Hook::UnregisterHandlers {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
     }
 
     #[test]
@@ -159,6 +182,19 @@ mod tests {
             Fish::new().get_profile_paths(&home_dir),
             vec![home_dir.join(".config").join("fish").join("config.fish")]
         );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Fish.format_function_set("e2e", "echo hi"),
+            "function e2e;\n  echo hi\nend;"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Fish.format_function_unset("e2e"), "functions --erase e2e;");
     }
 
     #[test]

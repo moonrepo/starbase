@@ -1,5 +1,5 @@
 use super::{Bash, Shell};
-use crate::helpers::{is_absolute_dir, normalize_newlines};
+use crate::helpers::{is_absolute_dir, normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use std::env;
@@ -35,41 +35,20 @@ impl Shell for Zsh {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"
-{activate_function}() {{
-  local output
-  trap '' SIGINT
-  output=$({activate_command})
-  if [ -n "$output" ]; then
-    eval "$output";
-  fi
-  trap - SIGINT
-}}
-
-{deactivate_function}() {{
-  local output
-  output=$({deactivate_command})
-  if [ -n "$output" ]; then
-    eval "$output";
-  fi
-  chpwd_functions=(${{chpwd_functions:#{activate_function}}})
-  unfunction {activate_function} {deactivate_function} 2>/dev/null
-}}
-
-typeset -ag chpwd_functions
-if (( ! ${{chpwd_functions[(I){activate_function}]}} )); then
-  chpwd_functions=({activate_function} $chpwd_functions)
-fi
-"#
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/zsh.zsh"),
+                    &[("command", &command), ("function", &function)],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/zsh.zsh"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/zsh.zsh"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -128,15 +107,37 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook zsh".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate zsh".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Zsh::new()
+                .format_hook(Hook::Activate {
+                    command: "starbase hook zsh".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Zsh::new().format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        assert_snapshot!(
+            Zsh::new()
+                .format_hook(Hook::RegisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Zsh::new()
+                .format_hook(Hook::UnregisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]
@@ -152,6 +153,19 @@ mod tests {
                 home_dir.join(".zshenv"),
             ]
         );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Zsh::new().format_function_set("e2e", "echo hi"),
+            "e2e() {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Zsh::new().format_function_unset("e2e"), "unset -f e2e;");
     }
 
     #[test]

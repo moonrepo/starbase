@@ -63,15 +63,37 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook ash".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate ash".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Ash::new()
+                .format_hook(Hook::Activate {
+                    command: "starbase hook ash".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Ash::new().format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        assert_snapshot!(
+            Ash::new()
+                .format_hook(Hook::RegisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Ash::new()
+                .format_hook(Hook::UnregisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]
@@ -99,6 +121,19 @@ mod tests {
             Ash::new().get_profile_paths(&home_dir),
             vec![home_dir.join(".ashrc"), home_dir.join(".profile")]
         );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Ash::new().format_function_set("e2e", "echo hi"),
+            "e2e() {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Ash::new().format_function_unset("e2e"), "unset -f e2e");
     }
 
     #[test]

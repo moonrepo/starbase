@@ -1,0 +1,12 @@
+---
+source: crates/shell/src/shells/xonsh.rs
+expression: "Xonsh.format_hook(Hook::Activate\n{\n    command: \"starbase hook xonsh\".into(), function: \"_starbase_hook\".into(),\n}).unwrap()"
+---
+def _starbase_hook(olddir=None, newdir=None, **kwargs):
+    output = $(starbase hook xonsh)
+    if output:
+        execx(output)
+
+# execx() does not evaluate into the shell namespace, so the function is
+# exported for the session, and for the registration, to be able to reach it
+__xonsh__.ctx['_starbase_hook'] = _starbase_hook

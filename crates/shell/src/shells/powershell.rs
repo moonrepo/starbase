@@ -1,5 +1,8 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_env_key_native, get_env_var_regex, normalize_newlines};
+use crate::helpers::{
+    ProfileSet, get_env_key_native, get_env_var_regex, indent_lines, normalize_newlines,
+    render_template,
+};
 use crate::hooks::*;
 use crate::quoter::*;
 use base64::Engine;
@@ -144,7 +147,15 @@ impl PowerShell {
         } else if value.contains('\\') {
             self.create_quoter(value.into()).quote()
         } else {
-            self.quote(value)
+            // PowerShell parses the right side of an assignment as a pipeline,
+            // so a bareword would run as a command instead of being a value
+            let quoter = self.create_quoter(value.into());
+
+            if quoter.is_empty() || quoter.is_quoted() {
+                self.quote(value)
+            } else {
+                self.create_quoter(value.into()).quote()
+            }
         }
     }
 }
@@ -177,6 +188,7 @@ impl Shell for PowerShell {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let mut value = format!("$env:{} = @(\n", get_env_key_native(key));
@@ -201,22 +213,33 @@ impl Shell for PowerShell {
 
                 normalize_newlines(value)
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 format!(
                     "Set-Alias -Name {} -Value {};",
                     self.quote(name),
                     self.quote(value)
                 )
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 let key = get_env_key_native(key);
 
                 format!("$env:{} = {};", key, self.format_env_value(value))
             }
-            Statement::UnsetAlias { name } => {
+            // `global:` so that a definition applied by a hook, which runs
+            // inside a function, outlives the scope that applied it
+            Statement::SetFunction { name, body, .. } => {
+                format!(
+                    "function global:{name} {{\n{}\n}}",
+                    indent_lines(body, "  ")
+                )
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("Remove-Item -LiteralPath 'function:{name}' -ErrorAction Ignore;")
+            }
+            Statement::UnsetAlias { name, .. } => {
                 format!("Remove-Alias -Name {} -Force;", self.quote(name))
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!(
                     r#"if (Test-Path "env:{}") {{
   Remove-Item -LiteralPath "env:{key}";
@@ -236,48 +259,20 @@ impl Shell for PowerShell {
     // property of prompt wrapping.
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"function {activate_function} {{
-  $previousExitCode = $global:LASTEXITCODE;
-  $exports = {activate_command};
-  if ($exports) {{
-    $exports | Out-String | Invoke-Expression;
-  }}
-  $global:LASTEXITCODE = $previousExitCode;
-}}
-
-function {deactivate_function} {{
-  $exports = {deactivate_command};
-  if ($exports) {{
-    $exports | Out-String | Invoke-Expression;
-  }}
-
-  if (Get-Variable -Name '{activate_function}_prompt' -Scope Global -ErrorAction Ignore) {{
-    Set-Item -Path 'function:global:prompt' -Value $global:{activate_function}_prompt;
-    Remove-Variable -Name '{activate_function}_prompt' -Scope Global;
-  }}
-
-  Remove-Item -LiteralPath 'function:{activate_function}' -ErrorAction Ignore;
-  Remove-Item -LiteralPath 'function:{deactivate_function}' -ErrorAction Ignore;
-}}
-
-if (-not (Get-Variable -Name '{activate_function}_prompt' -Scope Global -ErrorAction Ignore)) {{
-  $global:{activate_function}_prompt = $function:prompt;
-
-  function global:prompt {{
-    {activate_function};
-    & $global:{activate_function}_prompt;
-  }}
-}};
-"#
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/powershell.ps1"),
+                    &[("command", &command), ("function", &function)],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/powershell.ps1"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/powershell.ps1"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -393,17 +388,43 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
+    fn formats_activate_hook() {
         use starbase_sandbox::assert_snapshot;
 
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook powershell".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate powershell".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+        assert_snapshot!(
+            PowerShell
+                .format_hook(Hook::Activate {
+                    command: "starbase hook powershell".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(PowerShell.format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        assert_snapshot!(
+            PowerShell
+                .format_hook(Hook::RegisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        assert_snapshot!(
+            PowerShell
+                .format_hook(Hook::UnregisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]
@@ -418,7 +439,7 @@ mod tests {
         );
         assert_eq!(
             PowerShell.format_env_set("BOOL", "true"),
-            r#"$env:BOOL = true;"#
+            r#"$env:BOOL = 'true';"#
         );
         assert_eq!(
             PowerShell.format_env_set("STRING", "a b c"),
@@ -602,6 +623,22 @@ mod tests {
 
         assert_eq!(PowerShell.get_config_path(home_dir), expected);
         assert_eq!(PowerShell.get_env_path(home_dir), expected);
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            PowerShell.format_function_set("e2e", "echo hi"),
+            "function global:e2e {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(
+            PowerShell.format_function_unset("e2e"),
+            "Remove-Item -LiteralPath 'function:e2e' -ErrorAction Ignore;"
+        );
     }
 
     #[test]

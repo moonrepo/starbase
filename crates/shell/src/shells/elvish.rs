@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::{
-    PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines,
+    PATH_DELIMITER, ProfileSet, get_config_dir, get_env_var_regex, indent_lines,
+    normalize_newlines, render_template,
 };
 use crate::hooks::*;
 use crate::quoter::*;
@@ -54,6 +55,7 @@ impl Shell for Elvish {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = self.replace_env(
@@ -78,20 +80,62 @@ impl Shell for Elvish {
                     None => format!("set paths = [{value}];"),
                 }
             }
-            Statement::SetAlias { name, value } => {
-                format!("fn {name} {{ {value} }}")
+            // `@_` forwards the arguments, which a bare `fn` body would
+            // reject. A hook evaluates its statements in a namespace that is
+            // dropped when `eval` returns, so there the alias is added to the
+            // interactive namespace instead, the way the hook adds its own
+            // functions
+            Statement::SetAlias { name, value, hook } => {
+                if hook {
+                    format!(
+                        "try {{ edit:add-vars [&'{name}~'={{|@_| {value} $@_ }}] }} catch _ {{ }}"
+                    )
+                } else {
+                    format!("fn {name} {{|@_| {value} $@_ }}")
+                }
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!(
                     "set-env {} {};",
                     self.quote(key),
                     self.quote(self.replace_env(value).as_str())
                 )
             }
-            Statement::UnsetAlias { name } => {
-                format!("del {name};")
+            // An alias lives in the `{name}~` slot, not `{name}`. A hook
+            // cannot use `del`, since a missing variable is a compilation
+            // error, which would take down every statement sharing the `eval`
+            // rather than just this one. `edit:del-vars` tolerates a name that
+            // was never added
+            // A hook evaluates its statements in a namespace that is thrown
+            // away, so the definition is added to the interactive namespace
+            // instead, the way the hook adds its own functions
+            Statement::SetFunction { name, body, hook } => {
+                let body = indent_lines(body, "  ");
+
+                if hook {
+                    format!("try {{ edit:add-vars [&'{name}~'={{|@_|\n{body}\n}}] }} catch _ {{ }}")
+                } else {
+                    format!("fn {name} {{|@_|\n{body}\n}}")
+                }
             }
-            Statement::UnsetEnv { key } => {
+            // `del` on a missing name is a compilation error, which a hook
+            // cannot afford, since it would take down every statement sharing
+            // the `eval`
+            Statement::UnsetFunction { name, hook } => {
+                if hook {
+                    format!("try {{ edit:del-vars ['{name}~'] }} catch _ {{ }}")
+                } else {
+                    format!("del {name}~")
+                }
+            }
+            Statement::UnsetAlias { name, hook } => {
+                if hook {
+                    format!("try {{ edit:del-vars ['{name}~'] }} catch _ {{ }}")
+                } else {
+                    format!("del {name}~")
+                }
+            }
+            Statement::UnsetEnv { key, .. } => {
                 format!("unset-env {};", self.quote(key))
             }
         }
@@ -99,28 +143,20 @@ impl Shell for Elvish {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"
-fn {activate_function} {{|@_|
-  eval ({activate_command} | slurp)
-}}
-
-fn {deactivate_function} {{
-  eval ({deactivate_command} | slurp)
-  set after-chdir = [(each {{|hook| if (not (and (has-key $hook def) (eq $hook[def] ${activate_function}~[def]))) {{ put $hook }} }} $after-chdir)]
-}}
-
-set after-chdir = [(each {{|hook| if (not (and (has-key $hook def) (eq $hook[def] ${activate_function}~[def]))) {{ put $hook }} }} $after-chdir)]
-set @after-chdir = $@after-chdir ${activate_function}~
-"#
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/elvish.elv"),
+                    &[("command", &command), ("function", &function)],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/elvish.elv"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/elvish.elv"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -210,15 +246,37 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook elvish".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate elvish".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Elvish
+                .format_hook(Hook::Activate {
+                    command: "starbase hook elvish".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Elvish.format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        assert_snapshot!(
+            Elvish
+                .format_hook(Hook::RegisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Elvish
+                .format_hook(Hook::UnregisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]
@@ -251,13 +309,80 @@ mod tests {
     }
 
     #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Elvish.format_function_set("e2e", "echo hi"),
+            "fn e2e {|@_|\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Elvish.format_function_unset("e2e"), "del e2e~");
+    }
+
+    #[test]
+    fn formats_hook_function() {
+        assert_eq!(
+            Elvish.format(Statement::SetFunction {
+                name: "e2e",
+                body: "echo hi",
+                hook: true
+            }),
+            "try { edit:add-vars [&'e2e~'={|@_|\n  echo hi\n}] } catch _ { }"
+        );
+        assert_eq!(
+            Elvish.format(Statement::UnsetFunction {
+                name: "e2e",
+                hook: true
+            }),
+            "try { edit:del-vars ['e2e~'] } catch _ { }"
+        );
+    }
+
+    #[test]
     fn formats_alias_set() {
-        assert_eq!(Elvish.format_alias_set("ll", "ls -la"), "fn ll { ls -la }");
+        assert_eq!(
+            Elvish.format_alias_set("ll", "ls -la"),
+            "fn ll {|@_| ls -la $@_ }"
+        );
     }
 
     #[test]
     fn formats_alias_unset() {
-        assert_eq!(Elvish.format_alias_unset("ll"), "del ll;");
+        // The alias is a function, which lives in the `~` slot
+        assert_eq!(Elvish.format_alias_unset("ll"), "del ll~");
+    }
+
+    #[test]
+    fn formats_hook_alias_set() {
+        assert_eq!(
+            Elvish.format(Statement::SetAlias {
+                name: "ll",
+                value: "ls -la",
+                hook: true
+            }),
+            "try { edit:add-vars [&'ll~'={|@_| ls -la $@_ }] } catch _ { }"
+        );
+        assert_eq!(
+            Elvish.format(Statement::SetAlias {
+                name: "..",
+                value: "cd ..",
+                hook: true
+            }),
+            "try { edit:add-vars [&'..~'={|@_| cd .. $@_ }] } catch _ { }"
+        );
+    }
+
+    #[test]
+    fn formats_hook_alias_unset() {
+        assert_eq!(
+            Elvish.format(Statement::UnsetAlias {
+                name: "ll",
+                hook: true
+            }),
+            "try { edit:del-vars ['ll~'] } catch _ { }"
+        );
     }
 
     #[test]

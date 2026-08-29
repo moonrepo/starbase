@@ -1,0 +1,17 @@
+---
+source: crates/shell/tests/shell_test.rs
+expression: rendered
+---
+ash: export KEY=value;
+bash: export KEY=value;
+dash: export KEY=value;
+elvish: set-env KEY value;
+fish: set -gx KEY value;
+ion: export KEY=value
+murex: $ENV.KEY='value'
+nu: $env.KEY = "value"
+powershell: $env:KEY = 'value';
+pwsh: $env:KEY = 'value';
+sh: export KEY=value;
+xonsh: $KEY = f"value"
+zsh: export KEY=value;

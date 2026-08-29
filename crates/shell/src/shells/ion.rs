@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex};
+use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, indent_lines};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -54,6 +54,7 @@ impl Shell for Ion {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = self.replace_env(paths.join(":"));
@@ -63,20 +64,28 @@ impl Shell for Ion {
                     None => format!(r#"export {key} = "{value}""#,),
                 }
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 format!("alias {} = {}", self.quote(name), self.quote(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!(
                     "export {}={}",
                     self.quote(key),
                     self.quote(self.replace_env(value).as_str())
                 )
             }
-            Statement::UnsetAlias { name } => {
+            Statement::SetFunction { name, body, .. } => {
+                format!("fn {name}\n{}\nend", indent_lines(body, "  "))
+            }
+            // Ion has no way to remove a function, so this is a comment rather
+            // than a statement that would fail
+            Statement::UnsetFunction { name, .. } => {
+                format!("# no way to remove the {name} function")
+            }
+            Statement::UnsetAlias { name, .. } => {
                 format!("unalias {}", self.quote(name))
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("drop {}", self.quote(key))
             }
         }
@@ -126,15 +135,25 @@ mod tests {
     // own `PROMPT` function, and `eval`/`source` are gated behind unsafe
     // builtins that are not loaded by default.
     #[test]
-    fn errors_for_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook ion".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate ion".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
-
-        assert!(Ion.format_hook(hook).is_err());
+    fn errors_for_every_hook() {
+        for hook in [
+            Hook::Activate {
+                command: "starbase hook ion".into(),
+                function: "_starbase_hook".into(),
+            },
+            Hook::Deactivate {
+                command: "starbase deactivate ion".into(),
+                function: "_starbase_deactivate".into(),
+            },
+            Hook::RegisterHandlers {
+                function: "_starbase_hook".into(),
+            },
+            Hook::UnregisterHandlers {
+                function: "_starbase_hook".into(),
+            },
+        ] {
+            assert!(Ion.format_hook(hook).is_err());
+        }
     }
 
     #[test]
@@ -161,6 +180,22 @@ mod tests {
         assert_eq!(
             Ion::new().get_profile_paths(&home_dir),
             vec![home_dir.join(".config").join("ion").join("initrc")]
+        );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Ion.format_function_set("e2e", "echo hi"),
+            "fn e2e\n  echo hi\nend"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(
+            Ion.format_function_unset("e2e"),
+            "# no way to remove the e2e function"
         );
     }
 

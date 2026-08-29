@@ -1,0 +1,6 @@
+---
+source: crates/shell/src/shells/sh.rs
+expression: "Sh.format_hook(Hook::UnregisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+---
+# Dropping the shadow restores the builtin, which is all a POSIX shell has
+unset -f cd

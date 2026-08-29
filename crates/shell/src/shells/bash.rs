@@ -1,5 +1,5 @@
 use super::Shell;
-use crate::helpers::normalize_newlines;
+use crate::helpers::{indent_lines, normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::{Bash as BashQuoter, QuoteRefExt};
@@ -49,6 +49,7 @@ impl Shell for Bash {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let mut value = paths.join(":");
@@ -60,16 +61,22 @@ impl Shell for Bash {
 
                 format!(r#"export {key}="{value}";"#)
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 format!("alias {}={};", self.quote(name), self.quote(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!("export {}={};", self.quote(key), self.quote(value))
             }
-            Statement::UnsetAlias { name } => {
+            Statement::SetFunction { name, body, .. } => {
+                format!("{name}() {{\n{}\n}}", indent_lines(body, "  "))
+            }
+            Statement::UnsetFunction { name, .. } => {
+                format!("unset -f {name};")
+            }
+            Statement::UnsetAlias { name, .. } => {
                 format!("unalias {};", self.quote(name))
             }
-            Statement::UnsetEnv { key } => {
+            Statement::UnsetEnv { key, .. } => {
                 format!("unset {};", self.quote(key))
             }
         }
@@ -78,60 +85,20 @@ impl Shell for Bash {
     // https://mywiki.wooledge.org/SignalTrap
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"
-{activate_function}() {{
-  local previous_exit_status=$?;
-  local output;
-  trap '' SIGINT;
-  output=$({activate_command})
-  if [ -n "$output" ]; then
-    eval "$output";
-  fi
-  trap - SIGINT;
-  return $previous_exit_status;
-}};
-
-{deactivate_function}() {{
-  local output;
-  output=$({deactivate_command})
-  if [ -n "$output" ]; then
-    eval "$output";
-  fi
-  if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
-    local filtered=();
-    local entry;
-    for entry in "${{PROMPT_COMMAND[@]}}"; do
-      if [[ "$entry" != "{activate_function}" ]]; then
-        filtered+=("$entry");
-      fi
-    done
-    PROMPT_COMMAND=("${{filtered[@]}}");
-  else
-    PROMPT_COMMAND=";${{PROMPT_COMMAND:-}};";
-    PROMPT_COMMAND="${{PROMPT_COMMAND//;{activate_function};/;}}";
-    PROMPT_COMMAND="${{PROMPT_COMMAND#;}}";
-    PROMPT_COMMAND="${{PROMPT_COMMAND%;}}";
-  fi
-  unset -f {activate_function} {deactivate_function};
-}};
-
-if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
-  if [[ " ${{PROMPT_COMMAND[*]:-}} " != *" {activate_function} "* ]]; then
-    PROMPT_COMMAND=({activate_function} "${{PROMPT_COMMAND[@]}}")
-  fi
-elif [[ ";${{PROMPT_COMMAND:-}};" != *";{activate_function};"* ]]; then
-  PROMPT_COMMAND="{activate_function}${{PROMPT_COMMAND:+;$PROMPT_COMMAND}}"
-fi
-"#
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/bash.bash"),
+                    &[("command", &command), ("function", &function)],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/bash.bash"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/bash.bash"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -194,15 +161,34 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook bash".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate bash".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Bash.format_hook(Hook::Activate {
+                command: "starbase hook bash".into(),
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
 
-        assert_snapshot!(Bash.format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        assert_snapshot!(
+            Bash.format_hook(Hook::RegisterHandlers {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Bash.format_hook(Hook::UnregisterHandlers {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
     }
 
     #[test]
@@ -225,6 +211,19 @@ mod tests {
                 vec![home_dir.join(".bashrc"), home_dir.join(".profile")]
             );
         }
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Bash.format_function_set("e2e", "echo hi"),
+            "e2e() {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Bash.format_function_unset("e2e"), "unset -f e2e;");
     }
 
     #[test]

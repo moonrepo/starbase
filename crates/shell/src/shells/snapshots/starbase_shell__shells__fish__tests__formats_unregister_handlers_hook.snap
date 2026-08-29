@@ -1,0 +1,6 @@
+---
+source: crates/shell/src/shells/fish.rs
+expression: "Fish.format_hook(Hook::UnregisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+---
+# Erasing the wrapper unbinds both events with it
+functions --erase _starbase_hook_on_context;

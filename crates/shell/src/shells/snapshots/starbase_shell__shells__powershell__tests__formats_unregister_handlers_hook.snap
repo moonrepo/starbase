@@ -1,0 +1,8 @@
+---
+source: crates/shell/src/shells/powershell.rs
+expression: "PowerShell.format_hook(Hook::UnregisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+---
+if (Get-Variable -Name '_starbase_hook_on_prompt' -Scope Global -ErrorAction Ignore) {
+  Set-Item -Path 'function:global:prompt' -Value $global:_starbase_hook_on_prompt;
+  Remove-Variable -Name '_starbase_hook_on_prompt' -Scope Global;
+}

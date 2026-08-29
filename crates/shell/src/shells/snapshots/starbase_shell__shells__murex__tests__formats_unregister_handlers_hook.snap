@@ -1,0 +1,5 @@
+---
+source: crates/shell/src/shells/murex.rs
+expression: "Murex.format_hook(Hook::UnregisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+---
+!event onPrompt _starbase_hook_on_prompt

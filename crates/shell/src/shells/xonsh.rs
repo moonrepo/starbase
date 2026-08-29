@@ -1,5 +1,8 @@
 use super::Shell;
-use crate::helpers::{ProfileSet, get_config_dir, get_env_var_regex, normalize_newlines};
+use crate::helpers::{
+    ProfileSet, get_config_dir, get_env_var_regex, indent_lines, normalize_newlines,
+    render_template,
+};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -69,6 +72,7 @@ impl Shell for Xonsh {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 let key = key.unwrap_or("PATH");
                 let value = paths
@@ -82,17 +86,43 @@ impl Shell for Xonsh {
                     None => format!(r#"${key} = [{value}]"#),
                 }
             }
-            Statement::SetAlias { name, value } => {
-                format!("aliases[\"{name}\"] = {}", self.quote(value))
+            Statement::SetAlias { name, value, .. } => {
+                // The right-hand side is Python, not a shell word, so the value
+                // must be a string literal, like `SetEnv` below
+                format!("aliases[\"{name}\"] = {}", self.format_string(value))
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 format!("${key} = {}", self.format_string(value))
             }
-            Statement::UnsetAlias { name } => {
-                format!("del aliases[\"{name}\"]")
+            // `del` raises a `KeyError` when the alias/variable doesn't exist,
+            // which would abort the entire block of statements
+            // A hook applies its statements with `execx()`, whose namespace is
+            // not the shell's, so the definition is exported the way the hook
+            // exports its own functions
+            Statement::SetFunction { name, body, hook } => {
+                let body = if body.trim().is_empty() {
+                    "    pass".into()
+                } else {
+                    indent_lines(body, "    ")
+                };
+                let define = format!("def {name}(*args, **kwargs):\n{body}");
+
+                if hook {
+                    format!("{define}\n__xonsh__.ctx['{name}'] = {name}")
+                } else {
+                    define
+                }
             }
-            Statement::UnsetEnv { key } => {
-                format!("del ${key}")
+            // `del` raises for a name that was never defined, and the shell's
+            // namespace is the context in both cases
+            Statement::UnsetFunction { name, .. } => {
+                format!("__xonsh__.ctx.pop('{name}', None)")
+            }
+            Statement::UnsetAlias { name, .. } => {
+                format!("aliases.pop(\"{name}\", None)")
+            }
+            Statement::UnsetEnv { key, .. } => {
+                format!("${{...}}.pop(\"{key}\", None)")
             }
         }
     }
@@ -100,35 +130,20 @@ impl Shell for Xonsh {
     // https://xon.sh/events.html
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"
-def {activate_function}(olddir=None, newdir=None, **kwargs):
-    output = $({activate_command})
-    if output:
-        execx(output)
-
-def {deactivate_function}():
-    global {activate_function}, {deactivate_function}
-    output = $({deactivate_command})
-    if output:
-        execx(output)
-    for handler in list(events.on_chdir):
-        if getattr(handler, '__name__', '') == '{activate_function}':
-            events.on_chdir.discard(handler)
-    del {activate_function}, {deactivate_function}
-
-# Re-sourcing creates new function objects, so deduplicate by name
-if not any(getattr(handler, '__name__', '') == '{activate_function}' for handler in events.on_chdir):
-    events.on_chdir({activate_function})
-"#
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/xonsh.xsh"),
+                    &[("command", &command), ("function", &function)],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/xonsh.xsh"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/xonsh.xsh"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -171,15 +186,37 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook xonsh".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate xonsh".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Xonsh
+                .format_hook(Hook::Activate {
+                    command: "starbase hook xonsh".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Xonsh.format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        assert_snapshot!(
+            Xonsh
+                .format_hook(Hook::RegisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Xonsh
+                .format_hook(Hook::UnregisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]
@@ -221,16 +258,67 @@ mod tests {
     }
 
     #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Xonsh.format_function_set("e2e", "echo hi"),
+            "def e2e(*args, **kwargs):\n    echo hi"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(
+            Xonsh.format_function_unset("e2e"),
+            "__xonsh__.ctx.pop('e2e', None)"
+        );
+    }
+
+    #[test]
+    fn formats_hook_function() {
+        assert_eq!(
+            Xonsh.format(Statement::SetFunction {
+                name: "e2e",
+                body: "echo hi",
+                hook: true
+            }),
+            "def e2e(*args, **kwargs):\n    echo hi\n__xonsh__.ctx['e2e'] = e2e"
+        );
+        assert_eq!(
+            Xonsh.format(Statement::UnsetFunction {
+                name: "e2e",
+                hook: true
+            }),
+            "__xonsh__.ctx.pop('e2e', None)"
+        );
+    }
+
+    #[test]
     fn formats_alias_set() {
         assert_eq!(
             Xonsh.format_alias_set("ll", "ls -la"),
-            "aliases[\"ll\"] = 'ls -la'"
+            r#"aliases["ll"] = f"ls -la""#
+        );
+        assert_eq!(
+            Xonsh.format_alias_set("proto", "$PROTO_HOME/bin/proto"),
+            r#"aliases["proto"] = f"{$PROTO_HOME}/bin/proto""#
+        );
+        assert_eq!(
+            Xonsh.format_alias_set("brace", "echo {value}"),
+            r#"aliases["brace"] = f"echo {{value}}""#
         );
     }
 
     #[test]
     fn formats_alias_unset() {
-        assert_eq!(Xonsh.format_alias_unset("ll"), "del aliases[\"ll\"]");
+        assert_eq!(Xonsh.format_alias_unset("ll"), r#"aliases.pop("ll", None)"#);
+    }
+
+    #[test]
+    fn formats_env_unset() {
+        assert_eq!(
+            Xonsh.format_env_unset("PROTO_VERSION"),
+            r#"${...}.pop("PROTO_VERSION", None)"#
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 use super::Shell;
 use crate::helpers::{
-    ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, normalize_newlines,
+    ProfileSet, get_config_dir, get_env_key_native, get_env_var_regex, indent_lines,
+    normalize_newlines, render_template,
 };
 use crate::hooks::*;
 use crate::quoter::*;
@@ -29,6 +30,25 @@ impl Nu {
             None
         } else {
             Some(format!("path join {}", parts.join(" ")))
+        }
+    }
+
+    /// Quotes a value for the right-hand side of an assignment. The shared
+    /// quoter leaves simple words bare, but Nushell parses a bare word in an
+    /// assignment as an external command call ("External command calls must be
+    /// explicit in assignments"), so anything the quoter left unquoted is
+    /// quoted here instead.
+    fn quote_assignment(&self, value: &str) -> String {
+        let quoted = self.quote(value);
+
+        // Must stay in sync with the pairs registered in `create_quoter`
+        if ["$\"", "$'", "r#", "\"", "'", "`"]
+            .iter()
+            .any(|open| quoted.starts_with(open))
+        {
+            quoted
+        } else {
+            Self::quote_string(value)
         }
     }
 
@@ -81,6 +101,7 @@ impl Shell for Nu {
                 paths,
                 key,
                 orig_key,
+                ..
             } => {
                 // $FOO -> $env.FOO
                 let env_regex = get_env_var_regex();
@@ -129,13 +150,13 @@ impl Shell for Nu {
 
                 normalize_newlines(value)
             }
-            Statement::SetAlias { name, value } => {
+            Statement::SetAlias { name, value, .. } => {
                 // A Nushell alias maps a name to an expression (a command line), not
                 // to a string. Quoting the value (e.g. `alias ll = 'ls -la'`) would
                 // alias to the string literal instead of running the command.
                 format!("alias {name} = {value}")
             }
-            Statement::SetEnv { key, value } => {
+            Statement::SetEnv { key, value, .. } => {
                 if value.starts_with("$HOME/") {
                     let path = value.trim_start_matches("$HOME/");
                     format!(
@@ -145,88 +166,75 @@ impl Shell for Nu {
                         Self::quote_string(path)
                     )
                 } else {
-                    format!("$env.{} = {}", get_env_key_native(key), self.quote(value))
+                    format!(
+                        "$env.{} = {}",
+                        get_env_key_native(key),
+                        self.quote_assignment(value)
+                    )
                 }
             }
-            Statement::UnsetAlias { name } => {
+            // Nu has no way to undefine a command, so removing one hides it
+            Statement::SetFunction { name, body, .. } => {
+                format!("def --env {name} [] {{\n{}\n}}", indent_lines(body, "    "))
+            }
+            Statement::UnsetFunction { name, .. } => {
                 format!("hide {name}")
             }
-            Statement::UnsetEnv { key } => {
-                format!("hide-env {}", get_env_key_native(key))
+            Statement::UnsetAlias { name, .. } => {
+                format!("hide {name}")
+            }
+            Statement::UnsetEnv { key, .. } => {
+                // A bare `hide-env` is a hard error when the variable is not
+                // set, which would abort every statement after it, as the whole
+                // list is applied as one sourced block. `hide` (for aliases) is
+                // already tolerant of a missing name, so only this needs the flag.
+                format!("hide-env --ignore-errors {}", get_env_key_native(key))
             }
         }
     }
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
-        let path_key = get_env_key_native("PATH");
-
         // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"
-export def --env {activate_function}_apply [data] {{
-    # This must be a `for` loop and not an `each`/`items` closure,
-    # as closures do not propagate environment changes, even when
-    # the command itself is `def --env`.
-    for pair in ($data | get --optional env | default {{}} | transpose key value) {{
-        if $pair.value == null {{
-            if $pair.key in $env {{
-                hide-env $pair.key
-            }}
-        }} else {{
-            load-env {{ ($pair.key): $pair.value }}
-        }}
-    }}
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                // The statements are applied by a `source` entry staged on the
+                // next prompt, which finds them at this path
+                let file = format!(r#"$"($nu.temp-dir)/{function}-($nu.pid).nu""#);
+                let file_const = format!("{function}_file");
 
-    let path_list = $data | get --optional paths | default []
-    let path_string = $data | get --optional path | default ''
+                // Identifies the staged entry by its first line, so that a
+                // second write replaces it, and so that it can remove itself
+                let marker = format!("# {function} apply");
 
-    if ($path_list | is-not-empty) {{
-        $env.{path_key} = $path_list
-    }}
+                // Removes the staged entry once it has run, which is what
+                // makes it a one shot
+                let cleanup = format!(
+                    r#"$env.config = ($env.config | upsert hooks.pre_prompt ((($env.config | get --optional hooks.pre_prompt) | default []) | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{marker}")) }}))"#
+                );
 
-    if ($path_string | is-not-empty) {{
-        $env.{path_key} = $path_string
-    }}
-}}
+                let staged = format!(
+                    "'{marker}\nconst {file_const} = {file}\nsource ${file_const}\nrm --force --permanent ${file_const}\n{cleanup}'"
+                );
 
-export def --env {activate_function} [] {{
-    {activate_function}_apply ({activate_command} | from json)
-}}
-
-export def --env {deactivate_function} [] {{
-    # Unregistering must happen even when the command fails, so the
-    # reversal is best-effort, consistent with the other shells.
-    {activate_function}_apply (try {{ {deactivate_command} | from json }} catch {{ {{}} }})
-
-    # Nu cannot undefine commands at runtime, so the functions remain
-    # defined, but the hook itself is unregistered.
-    $env.config = ($env.config | upsert hooks.env_change.PWD (
-        ($env.config | get --optional hooks.env_change.PWD) | default []
-            | where {{ |hook| $hook != {{ code: "{activate_function}" }} }}
-    ))
-}}
-
-export-env {{
-    $env.config = ($env.config | upsert hooks.env_change.PWD {{ |config|
-        let list = ($config | get --optional hooks.env_change.PWD) | default []
-        let hook = {{ code: "{activate_function}" }}
-
-        if $hook in $list {{
-            $list
-        }} else {{
-            $list | append $hook
-        }}
-    }})
-}}"#
+                render_template(
+                    include_str!("hooks/function/nu.nu"),
+                    &[
+                        ("command", &command),
+                        ("file", &file),
+                        ("function", &function),
+                        ("marker", &marker),
+                        ("staged", &staged),
+                    ],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/nu.nu"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/nu.nu"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -438,18 +446,45 @@ mod tests {
     }
 
     #[cfg(unix)]
+    #[cfg(unix)]
     #[test]
-    fn formats_cd_hook() {
+    fn formats_activate_hook() {
         use starbase_sandbox::assert_snapshot;
 
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook nu".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate nu".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+        assert_snapshot!(
+            Nu.format_hook(Hook::Activate {
+                command: "starbase hook nu".into(),
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
 
-        assert_snapshot!(Nu.format_hook(hook).unwrap());
+    #[cfg(unix)]
+    #[cfg(unix)]
+    #[test]
+    fn formats_register_handlers_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        assert_snapshot!(
+            Nu.format_hook(Hook::RegisterHandlers {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        use starbase_sandbox::assert_snapshot;
+
+        assert_snapshot!(
+            Nu.format_hook(Hook::UnregisterHandlers {
+                function: "_starbase_hook".into(),
+            })
+            .unwrap()
+        );
     }
 
     #[cfg(unix)]
@@ -490,6 +525,40 @@ mod tests {
                 home_dir.join(".config").join("nushell").join("env.nu"),
             ]
         );
+    }
+
+    #[test]
+    fn quotes_env_value_that_the_quoter_leaves_bare() {
+        // A bare word on the right of an assignment is parsed as an external
+        // command call, which is a hard error
+        assert_eq!(
+            Nu.format_env_set("PROTO_ACTIVATED_ENV", "MY_VAR"),
+            r#"$env.PROTO_ACTIVATED_ENV = "MY_VAR""#
+        );
+        assert_eq!(Nu.format_env_set("FOO", ""), "$env.FOO = ''");
+    }
+
+    #[test]
+    fn formats_env_unset() {
+        // Tolerates a variable that is not set, so that it cannot abort the
+        // statements after it
+        assert_eq!(
+            Nu.format_env_unset("FOO"),
+            format!("hide-env --ignore-errors {}", get_env_key_native("FOO"))
+        );
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Nu.format_function_set("e2e", "echo hi"),
+            "def --env e2e [] {\n    echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(Nu.format_function_unset("e2e"), "hide e2e");
     }
 
     #[test]

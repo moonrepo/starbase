@@ -1,0 +1,19 @@
+---
+source: crates/shell/src/shells/bash.rs
+expression: "Bash.format_hook(Hook::UnregisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+---
+if [[ "$(declare -p PROMPT_COMMAND 2>&1)" == "declare -a"* ]]; then
+  _starbase_hook_filtered=();
+  for _starbase_hook_entry in "${PROMPT_COMMAND[@]}"; do
+    if [[ "$_starbase_hook_entry" != "_starbase_hook" ]]; then
+      _starbase_hook_filtered+=("$_starbase_hook_entry");
+    fi
+  done
+  PROMPT_COMMAND=("${_starbase_hook_filtered[@]}");
+  unset _starbase_hook_filtered _starbase_hook_entry;
+else
+  PROMPT_COMMAND=";${PROMPT_COMMAND:-};";
+  PROMPT_COMMAND="${PROMPT_COMMAND//;_starbase_hook;/;}";
+  PROMPT_COMMAND="${PROMPT_COMMAND#;}";
+  PROMPT_COMMAND="${PROMPT_COMMAND%;}";
+fi

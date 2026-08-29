@@ -1,6 +1,6 @@
 use super::Shell;
 use super::powershell::PowerShell;
-use crate::helpers::{ProfileSet, normalize_newlines};
+use crate::helpers::{ProfileSet, normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
@@ -40,56 +40,20 @@ impl Shell for Pwsh {
 
     fn format_hook(&self, hook: Hook) -> Result<String, crate::ShellError> {
         Ok(normalize_newlines(match hook {
-            Hook::OnChangeDir {
-                activate_command,
-                activate_function,
-                deactivate_command,
-                deactivate_function,
-            } => {
-                format!(
-                    r#"function {activate_function} {{
-  $previousExitCode = $global:LASTEXITCODE;
-  $exports = {activate_command};
-  if ($exports) {{
-    $exports | Out-String | Invoke-Expression;
-  }}
-  $global:LASTEXITCODE = $previousExitCode;
-}}
-
-function {deactivate_function} {{
-  $exports = {deactivate_command};
-  if ($exports) {{
-    $exports | Out-String | Invoke-Expression;
-  }}
-
-  if (Get-Variable -Name '{activate_function}_handler' -Scope Global -ErrorAction Ignore) {{
-    $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [System.Delegate]::Remove(
-      $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction,
-      $global:{activate_function}_handler
-    );
-    Remove-Variable -Name '{activate_function}_handler' -Scope Global;
-  }}
-
-  Remove-Item -LiteralPath 'function:{activate_function}' -ErrorAction Ignore;
-  Remove-Item -LiteralPath 'function:{deactivate_function}' -ErrorAction Ignore;
-}}
-
-if (-not (Get-Variable -Name '{activate_function}_handler' -Scope Global -ErrorAction Ignore)) {{
-  $global:{activate_function}_handler = [System.EventHandler[System.Management.Automation.LocationChangedEventArgs]] {{
-    param([object] $source, [System.Management.Automation.LocationChangedEventArgs] $changedArgs)
-    end {{
-      {activate_function}
-    }}
-  }};
-
-  $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = [System.Delegate]::Combine(
-    $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction,
-    $global:{activate_function}_handler
-  );
-}};
-"#
+            Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
+                render_template(
+                    include_str!("hooks/function/pwsh.ps1"),
+                    &[("command", &command), ("function", &function)],
                 )
             }
+            Hook::RegisterHandlers { function } => render_template(
+                include_str!("hooks/register/pwsh.ps1"),
+                &[("function", &function)],
+            ),
+            Hook::UnregisterHandlers { function } => render_template(
+                include_str!("hooks/unregister/pwsh.ps1"),
+                &[("function", &function)],
+            ),
         }))
     }
 
@@ -202,7 +166,7 @@ mod tests {
         );
         assert_eq!(
             Pwsh::new().format_env_set("BOOL", "true"),
-            r#"$env:BOOL = true;"#
+            r#"$env:BOOL = 'true';"#
         );
         assert_eq!(
             Pwsh::new().format_env_set("STRING", "a b c"),
@@ -211,15 +175,37 @@ mod tests {
     }
 
     #[test]
-    fn formats_cd_hook() {
-        let hook = Hook::OnChangeDir {
-            activate_command: "starbase hook pwsh".into(),
-            activate_function: "_starbase_hook".into(),
-            deactivate_command: "starbase deactivate pwsh".into(),
-            deactivate_function: "_starbase_deactivate".into(),
-        };
+    fn formats_activate_hook() {
+        assert_snapshot!(
+            Pwsh::new()
+                .format_hook(Hook::Activate {
+                    command: "starbase hook pwsh".into(),
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
 
-        assert_snapshot!(Pwsh::new().format_hook(hook).unwrap());
+    #[test]
+    fn formats_register_handlers_hook() {
+        assert_snapshot!(
+            Pwsh::new()
+                .format_hook(Hook::RegisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn formats_unregister_handlers_hook() {
+        assert_snapshot!(
+            Pwsh::new()
+                .format_hook(Hook::UnregisterHandlers {
+                    function: "_starbase_hook".into(),
+                })
+                .unwrap()
+        );
     }
 
     #[test]
@@ -273,6 +259,22 @@ mod tests {
                 ]
             );
         }
+    }
+
+    #[test]
+    fn formats_function_set() {
+        assert_eq!(
+            Pwsh::new().format_function_set("e2e", "echo hi"),
+            "function global:e2e {\n  echo hi\n}"
+        );
+    }
+
+    #[test]
+    fn formats_function_unset() {
+        assert_eq!(
+            Pwsh::new().format_function_unset("e2e"),
+            "Remove-Item -LiteralPath 'function:e2e' -ErrorAction Ignore;"
+        );
     }
 
     #[test]

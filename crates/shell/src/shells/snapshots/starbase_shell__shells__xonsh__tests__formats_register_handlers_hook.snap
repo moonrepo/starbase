@@ -1,0 +1,11 @@
+---
+source: crates/shell/src/shells/xonsh.rs
+expression: "Xonsh.format_hook(Hook::RegisterHandlers\n{ function: \"_starbase_hook\".into(), }).unwrap()"
+---
+# The function may have been defined by a separate `execx()`, whose namespace
+# is not the shell's, so it is taken from where the definition exported it
+if not any(getattr(handler, '__name__', '') == '_starbase_hook' for handler in events.on_chdir):
+    events.on_chdir(__xonsh__.ctx['_starbase_hook'])
+
+if not any(getattr(handler, '__name__', '') == '_starbase_hook' for handler in events.on_pre_prompt):
+    events.on_pre_prompt(__xonsh__.ctx['_starbase_hook'])
