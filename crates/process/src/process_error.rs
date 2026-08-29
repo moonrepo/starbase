@@ -1,5 +1,8 @@
+use crate::{Output, SignalType};
+use bytes::Bytes;
 use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
+use std::time::Duration;
 use thiserror::Error;
 
 /// Errors that can occur while spawning, running, or communicating with a
@@ -19,6 +22,128 @@ pub enum ProcessError {
         #[source]
         /// The underlying I/O error.
         error: Box<std::io::Error>,
+    },
+
+    /// Final process bookkeeping failed after the direct child exited.
+    #[diagnostic(code(process::finalization::failed))]
+    #[error(
+        "Failed to finalize process {} after it exited.",
+        .bin.style(Style::Shell),
+    )]
+    Finalization {
+        /// The binary name that was executed.
+        bin: String,
+        #[source]
+        /// The underlying finalization error.
+        error: Box<std::io::Error>,
+        /// Output captured when an exit status was available.
+        output: Option<Output>,
+        /// Stdout and stderr captured when no exit status was available.
+        partial_bytes: Box<(Bytes, Bytes)>,
+    },
+
+    /// Process cleanup failed after another execution failure.
+    #[diagnostic(code(process::cleanup::failed))]
+    #[error(
+        "Failed to clean up process {} after: {failure}",
+        .bin.style(Style::Shell),
+    )]
+    Cleanup {
+        /// The binary name that was executed.
+        bin: String,
+        #[source]
+        /// The cleanup I/O error.
+        error: Box<std::io::Error>,
+        /// The original execution failure.
+        failure: Box<ProcessError>,
+        /// Output captured before cleanup failed.
+        output: Option<Output>,
+        /// Stdout and stderr captured when no exit status was available for `output`.
+        partial_bytes: Box<(Bytes, Bytes)>,
+    },
+
+    /// A command option is not supported by synchronous memory capture.
+    #[diagnostic(code(process::capture::unsupported_option))]
+    #[error(
+        "Process option {option} is not supported by blocking memory capture for {}.",
+        .bin.style(Style::Shell),
+    )]
+    UnsupportedCaptureOption {
+        /// The binary name that would have been executed.
+        bin: String,
+        /// The unsupported option.
+        option: &'static str,
+    },
+
+    /// Blocking capture cannot safely wait from this runtime context.
+    #[diagnostic(code(process::capture::runtime_context))]
+    #[error(
+        "Blocking memory capture for {} cannot run from a current-thread Tokio runtime while the process registry is active.",
+        .bin.style(Style::Shell),
+    )]
+    UnsupportedCaptureRuntime {
+        /// The binary name that would have been executed.
+        bin: String,
+    },
+
+    /// The registry requested that the process stop.
+    #[diagnostic(code(process::interrupted))]
+    #[error(
+        "Process {} was interrupted by {signal:?}.",
+        .bin.style(Style::Shell),
+    )]
+    Interrupted {
+        /// The binary name that was executed.
+        bin: String,
+        /// The graceful signal that initiated shutdown.
+        signal: SignalType,
+        /// Output captured before interruption.
+        output: Option<Output>,
+    },
+
+    /// The process exceeded the combined stdout and stderr byte limit.
+    #[diagnostic(code(process::output_limit))]
+    #[error(
+        "Process {} output exceeded the {limit}-byte limit.",
+        .bin.style(Style::Shell),
+    )]
+    OutputLimitExceeded {
+        /// The binary name that was executed.
+        bin: String,
+        /// The configured combined byte limit.
+        limit: usize,
+        /// Output captured before the limit was exceeded.
+        output: Option<Output>,
+    },
+
+    /// The process exited but its output pipes did not close in time.
+    #[diagnostic(code(process::output_drain_timeout))]
+    #[error(
+        "Process {} output did not drain within {timeout:?}.",
+        .bin.style(Style::Shell),
+    )]
+    OutputDrainTimeout {
+        /// The binary name that was executed.
+        bin: String,
+        /// The configured output-drain timeout.
+        timeout: Duration,
+        /// Output captured before the drain deadline.
+        output: Option<Output>,
+    },
+
+    /// The process exceeded its execution timeout.
+    #[diagnostic(code(process::timeout))]
+    #[error(
+        "Process {} exceeded its {timeout:?} timeout.",
+        .bin.style(Style::Shell),
+    )]
+    Timeout {
+        /// The binary name that was executed.
+        bin: String,
+        /// The configured execution timeout.
+        timeout: Duration,
+        /// Output captured before the execution deadline.
+        output: Option<Output>,
     },
 
     /// The process exited with a non-zero status, without captured output.
@@ -108,6 +233,38 @@ impl ProcessError {
     pub fn get_exit_code(&self) -> Option<i32> {
         match self {
             Self::ExitNonZero { code, .. } | Self::ExitNonZeroWithOutput { code, .. } => *code,
+            _ => None,
+        }
+    }
+
+    pub(crate) fn attach_partial_output(&mut self, output: Output) {
+        match self {
+            Self::Interrupted {
+                output: partial, ..
+            }
+            | Self::OutputLimitExceeded {
+                output: partial, ..
+            }
+            | Self::OutputDrainTimeout {
+                output: partial, ..
+            }
+            | Self::Timeout {
+                output: partial, ..
+            }
+            | Self::Finalization {
+                output: partial, ..
+            } => *partial = Some(output),
+            _ => {}
+        }
+    }
+
+    pub(crate) fn partial_output(&self) -> Option<&Output> {
+        match self {
+            Self::Interrupted { output, .. }
+            | Self::OutputLimitExceeded { output, .. }
+            | Self::OutputDrainTimeout { output, .. }
+            | Self::Timeout { output, .. }
+            | Self::Finalization { output, .. } => output.as_ref(),
             _ => None,
         }
     }

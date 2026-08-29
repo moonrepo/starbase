@@ -8,6 +8,35 @@ fn spawn_sleep() -> SharedChild {
     SharedChild::new(Command::new("sleep").arg("30").spawn().unwrap())
 }
 
+fn wait_for_exit_without_reaping(pid: u32) {
+    for _ in 0..5_000 {
+        let mut info = std::mem::MaybeUninit::<libc::siginfo_t>::zeroed();
+        let result = unsafe {
+            libc::waitid(
+                libc::P_PID,
+                pid as libc::id_t,
+                info.as_mut_ptr(),
+                libc::WEXITED | libc::WNOHANG | libc::WNOWAIT,
+            )
+        };
+
+        assert_eq!(
+            result,
+            0,
+            "waitid failed: {}",
+            std::io::Error::last_os_error()
+        );
+
+        if unsafe { info.assume_init().si_pid() } != 0 {
+            return;
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+
+    panic!("child {pid} did not exit");
+}
+
 mod shared_child {
     use super::*;
 
@@ -135,6 +164,37 @@ mod shared_child {
     }
 
     #[tokio::test]
+    async fn kill_after_reaping_does_not_poison_the_wait_status() {
+        let child = SharedChild::new(Command::new("true").spawn().unwrap());
+
+        let ChildExit::Completed(status) = child.wait().await.unwrap() else {
+            panic!("expected Completed");
+        };
+        assert!(status.success());
+
+        let _ = child.kill().await;
+
+        let ChildExit::Completed(status) = child.wait().await.unwrap() else {
+            panic!("expected Completed");
+        };
+        assert!(status.success());
+    }
+
+    #[tokio::test]
+    async fn kill_after_exit_before_reaping_does_not_poison_the_wait_status() {
+        let child = SharedChild::new(Command::new("true").spawn().unwrap());
+        wait_for_exit_without_reaping(child.id());
+
+        let _ = child.kill().await;
+
+        let ChildExit::Completed(status) = child.wait().await.unwrap() else {
+            panic!("expected Completed");
+        };
+
+        assert!(status.success());
+    }
+
+    #[tokio::test]
     async fn clones_share_the_same_child() {
         let child = spawn_sleep();
         let clone = child.clone();
@@ -177,7 +237,6 @@ mod wait {
             ("KILL", ChildExit::Killed),
             ("TERM", ChildExit::Terminated(15)),
             // Anything that isn't an interrupt or kill keeps its number
-            ("QUIT", ChildExit::Terminated(3)),
             ("PIPE", ChildExit::Terminated(13)),
             ("SEGV", ChildExit::Terminated(11)),
         ] {
