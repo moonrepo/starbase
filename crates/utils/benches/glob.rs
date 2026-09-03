@@ -111,6 +111,12 @@ fn walk_fast(c: &mut Criterion) {
         b.iter(|| glob::walk_fast(sandbox.path(), ["**/*.txt"]))
     });
 
+    // Excluded directories should be pruned during the walk, instead
+    // of being walked in full and filtered out afterwards
+    group.bench_function("txt-files-negated", |b| {
+        b.iter(|| glob::walk_fast(sandbox.path(), ["**/*.txt", "!a/**", "!**/B/**"]))
+    });
+
     group.finish();
 }
 
