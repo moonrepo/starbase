@@ -302,6 +302,16 @@ mod walk_fast {
     }
 
     #[test]
+    fn ignores_entries_that_cant_be_read() {
+        let sandbox = create_empty_sandbox();
+
+        // A missing dir isn't an aborted walk, so it stays an empty result
+        let paths = walk_fast(sandbox.path().join("missing"), ["**/*"]).unwrap();
+
+        assert!(paths.is_empty());
+    }
+
+    #[test]
     fn doesnt_traverse_excluded_dirs() {
         let sandbox = create_empty_sandbox();
         sandbox.create_file("wanted/a.txt", "");

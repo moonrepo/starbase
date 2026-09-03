@@ -20,6 +20,13 @@ pub enum GlobError {
 
     #[error("Failed to normalize glob path {}.", .path.style(Style::Path))]
     InvalidPath { path: PathBuf },
+
+    #[error("Failed to walk directory {}, as the walk was aborted before completing.\n{error}", .dir.style(Style::Path))]
+    WalkAborted {
+        dir: PathBuf,
+        #[source]
+        error: Box<jwalk::Error>,
+    },
 }
 
 /// Glob errors.
@@ -40,6 +47,14 @@ pub enum GlobError {
     #[diagnostic(code(glob::invalid_path))]
     #[error("Failed to normalize glob path {}.", .path.style(Style::Path))]
     InvalidPath { path: PathBuf },
+
+    #[diagnostic(code(glob::walk_aborted))]
+    #[error("Failed to walk directory {}, as the walk was aborted before completing.", .dir.style(Style::Path))]
+    WalkAborted {
+        dir: PathBuf,
+        #[source]
+        error: Box<jwalk::Error>,
+    },
 }
 
 impl From<FsError> for GlobError {

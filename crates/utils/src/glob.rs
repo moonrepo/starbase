@@ -520,38 +520,56 @@ fn internal_walk(
             walk = walk.max_depth(max_depth);
         }
 
-        for entry in walk
-            .process_read_dir(move |_depth, _path, _state, children| {
-                for child in children.iter_mut().flatten() {
-                    // The root dir is yielded as its own child at depth 0,
-                    // and must always be read, as globs resolve from it
-                    if child.depth == 0 || !child.file_type.is_dir() {
-                        continue;
-                    }
-
-                    let path = child.path();
-
-                    // Only ignore nested hidden dirs, but do not ignore
-                    // if the root dir is hidden, as globs resolve from it
-                    let skip = ignore_dot_dirs && is_hidden_dot(&path)
-                        // Everything within is excluded, so descending into it
-                        // would only produce paths that are filtered out again
-                        || prune_set.as_ref().is_some_and(|set| {
-                            path.strip_prefix(&root_dir)
-                                .is_ok_and(|suffix| set.is_match(suffix))
-                        });
-
-                    if skip {
-                        // The directory itself is still yielded, we simply
-                        // do not read its children
-                        child.read_children = None;
-                    }
+        let walk = walk.process_read_dir(move |_depth, _path, _state, children| {
+            for child in children.iter_mut().flatten() {
+                // The root dir is yielded as its own child at depth 0,
+                // and must always be read, as globs resolve from it
+                if child.depth == 0 || !child.file_type.is_dir() {
+                    continue;
                 }
-            })
-            .into_iter()
-            .flatten()
-        {
-            add_path(entry.path(), entry.file_type(), dir, &globset);
+
+                let path = child.path();
+
+                // Only ignore nested hidden dirs, but do not ignore if the root
+                // dir is hidden, as globs resolve from it. Excluded dirs are
+                // skipped as descending into them would only produce paths
+                // that are filtered out again.
+                let skip = (ignore_dot_dirs && is_hidden_dot(&path))
+                    || prune_set.as_ref().is_some_and(|set| {
+                        path.strip_prefix(&root_dir)
+                            .is_ok_and(|suffix| set.is_match(suffix))
+                    });
+
+                if skip {
+                    // The directory itself is still yielded, we simply
+                    // do not read its children
+                    child.read_children = None;
+                }
+            }
+        });
+
+        // Aborting the walk would otherwise return an incomplete list of paths,
+        // which callers can't distinguish from an empty directory
+        let aborted = |error: jwalk::Error| GlobError::WalkAborted {
+            dir: dir.to_path_buf(),
+            error: Box::new(error),
+        };
+
+        for entry in walk.try_into_iter().map_err(aborted)? {
+            match entry {
+                Ok(entry) => {
+                    add_path(entry.path(), entry.file_type(), dir, &globset);
+                }
+                Err(error) => {
+                    if error.is_busy() {
+                        return Err(aborted(error));
+                    }
+
+                    // Individual entries may fail to be read (missing file,
+                    // no permissions, etc), which shouldn't abort the walk
+                    trace!(dir = ?dir, "Failed to read entry: {error}");
+                }
+            }
         }
     } else {
         for entry in fs::read_dir(dir)? {

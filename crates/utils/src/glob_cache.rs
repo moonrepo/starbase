@@ -85,3 +85,31 @@ impl GlobCache {
         self.cache.clear_sync();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn doesnt_cache_failed_operations() {
+        let cache = GlobCache::default();
+        let dir = PathBuf::from("/root");
+        let globs = vec!["**/*".to_string()];
+
+        let result = cache.cache(&dir, &globs, |_, _| {
+            Err(GlobError::InvalidPath {
+                path: "/fail".into(),
+            })
+        });
+
+        assert!(result.is_err());
+
+        // A failed operation must not poison the cache for the
+        // remainder of the process
+        let result = cache
+            .cache(&dir, &globs, |_, _| Ok(vec![PathBuf::from("/root/file")]))
+            .unwrap();
+
+        assert_eq!(result, vec![PathBuf::from("/root/file")]);
+    }
+}

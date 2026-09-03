@@ -3193,6 +3193,7 @@ dependencies = [
  "json-strip-comments",
  "jwalk",
  "miette",
+ "rayon",
  "reflink-copy",
  "reqwest",
  "scc",
