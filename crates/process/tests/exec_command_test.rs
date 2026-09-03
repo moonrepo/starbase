@@ -2,13 +2,12 @@
 
 use starbase_console::{Console, EmptyReporter};
 use starbase_process::{ChildExit, Command, ProcessError, ShellType};
-use std::sync::Arc;
 
 fn create_command(script: &str) -> Command<EmptyReporter> {
     let mut command = Command::new("bash");
     command.args(["-c", script]);
     command.no_shell();
-    command.set_console(Arc::new(Console::new_testing()));
+    command.set_console(Console::new_testing());
     command
 }
 
@@ -316,7 +315,7 @@ mod shells {
     #[tokio::test]
     async fn runs_scripts_through_a_shell() {
         let mut command: Command<EmptyReporter> = Command::new_script("printf 'one'; printf 'two'");
-        command.set_console(Arc::new(Console::new_testing()));
+        command.set_console(Console::new_testing());
 
         let output = command.exec_capture_output().await.unwrap();
 
@@ -328,7 +327,7 @@ mod shells {
         let mut command: Command<EmptyReporter> = Command::new("printf");
         command.arg("with space");
         command.set_shell(ShellType::Bash);
-        command.set_console(Arc::new(Console::new_testing()));
+        command.set_console(Console::new_testing());
 
         let output = command.exec_capture_output().await.unwrap();
 
@@ -343,7 +342,7 @@ mod spawn_failures {
     fn create_missing_command() -> Command<EmptyReporter> {
         let mut command: Command<EmptyReporter> = Command::new("starbase-does-not-exist");
         command.no_shell();
-        command.set_console(Arc::new(Console::new_testing()));
+        command.set_console(Console::new_testing());
         command
     }
 

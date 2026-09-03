@@ -6,7 +6,7 @@ use std::fs::FileType;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 use std::time::Instant;
-use tracing::{instrument, trace, warn};
+use tracing::{instrument, trace};
 use wax::{
     Any, Program,
     query::{Boundedness, Variance},
@@ -485,7 +485,7 @@ fn internal_walk_with_retry(
         // than failing, retry on the current thread, which cannot be blocked by
         // other work, at the cost of being slower.
         Err(GlobError::WalkAborted { .. }) => {
-            warn!(
+            trace!(
                 dir = ?dir,
                 "Failed to walk directory in parallel, as the thread pool is too busy; retrying on the current thread",
             );
