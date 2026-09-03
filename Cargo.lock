@@ -3131,7 +3131,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_process"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bytes",
  "libc",
@@ -3191,7 +3191,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
