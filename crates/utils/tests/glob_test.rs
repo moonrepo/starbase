@@ -300,6 +300,62 @@ mod walk_fast {
 
         assert_eq!(paths, vec![sandbox.path().join("src/a.js")]);
     }
+
+    #[test]
+    fn ignores_entries_that_cant_be_read() {
+        let sandbox = create_empty_sandbox();
+
+        // A missing dir isn't an aborted walk, so it stays an empty result
+        let paths = walk_fast(sandbox.path().join("missing"), ["**/*"]).unwrap();
+
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn doesnt_traverse_excluded_dirs() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("wanted/a.txt", "");
+        sandbox.create_file("heavy/b.txt", "");
+        sandbox.create_file("heavy/deep/nested/c.txt", "");
+
+        let mut paths = walk_fast(sandbox.path(), ["**/*.txt", "!heavy/**"]).unwrap();
+        paths.sort();
+
+        assert_eq!(paths, vec![sandbox.path().join("wanted/a.txt")]);
+    }
+
+    #[test]
+    fn doesnt_traverse_excluded_dirs_at_any_depth() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("a/b/wanted.txt", "");
+        sandbox.create_file("a/.venv/lib/dep.txt", "");
+        sandbox.create_file("a/b/.venv/lib/dep.txt", "");
+
+        let mut paths = walk_fast(sandbox.path(), ["**/*.txt", "!**/.venv/**"]).unwrap();
+        paths.sort();
+
+        assert_eq!(paths, vec![sandbox.path().join("a/b/wanted.txt")]);
+    }
+
+    #[test]
+    fn traverses_partially_excluded_dirs() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("dist/a.js", "");
+        sandbox.create_file("dist/a.min.js", "");
+        sandbox.create_file("dist/nested/b.js", "");
+
+        // Only specific files are excluded, so `dist` must still be walked.
+        let mut paths = walk_fast(sandbox.path(), ["**/*.js", "!**/*.min.js"]).unwrap();
+        paths.sort();
+
+        assert_eq!(
+            paths,
+            vec![
+                sandbox.path().join("dist/a.js"),
+                sandbox.path().join("dist/nested/b.js"),
+            ]
+        );
+    }
 }
 
 mod partition_patterns {

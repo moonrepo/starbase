@@ -44,7 +44,7 @@ json-strip-comments = { version = "3.1.2", optional = true }
 serde_json = { workspace = true, optional = true }
 
 # toml
-toml = { version = "1.1.4", optional = true }
+toml = { version = "1.1.5", optional = true }
 
 # yaml
 serde_norway = { workspace = true, optional = true }
@@ -71,12 +71,13 @@ yaml = ["dep:serde", "dep:serde_norway"]
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, optional = true, features = [
-	"Win32_Foundation",
-	"Win32_Storage_FileSystem",
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
 ] }
 
 [dev-dependencies]
 criterion2 = { version = "3.0.4", default-features = false }
+rayon = "1.12.0"
 reqwest = { workspace = true, features = ["rustls"] }
 starbase_sandbox = { path = "../sandbox" }
 starbase_utils = { path = ".", features = [

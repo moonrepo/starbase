@@ -637,7 +637,6 @@ mod scripts {
 mod console {
     use super::*;
     use starbase_console::{Console, Reporter};
-    use std::sync::Arc;
 
     #[derive(Debug, Default)]
     struct OtherReporter;
@@ -650,7 +649,7 @@ mod console {
 
         assert!(command.console.is_none());
 
-        command.set_console(Arc::new(Console::new_testing()));
+        command.set_console(Console::new_testing());
 
         assert!(command.console.is_some());
     }
@@ -663,8 +662,7 @@ mod console {
         let mut console: Console<OtherReporter> = Console::new_testing();
         console.set_reporter(OtherReporter);
 
-        let converted: starbase_process::Command<OtherReporter> =
-            command.with_console(Arc::new(console));
+        let converted: starbase_process::Command<OtherReporter> = command.with_console(console);
 
         assert_eq!(converted.get_args_list(), ["status"]);
         assert!(converted.contains_env("KEY"));

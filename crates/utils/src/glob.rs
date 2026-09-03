@@ -461,24 +461,46 @@ where
         // Only run if the feature is enabled
         #[cfg(feature = "glob-cache")]
         if options.cache && !crate::envx::is_test() {
-            paths.extend(
-                GlobCache::instance()
-                    .cache(&dir, &patterns, |d, p| internal_walk(d, p, &options))?,
-            );
+            paths.extend(GlobCache::instance().cache(&dir, &patterns, |d, p| {
+                internal_walk_with_retry(d, p, &options)
+            })?);
 
             continue;
         }
 
-        paths.extend(internal_walk(&dir, &patterns, &options)?);
+        paths.extend(internal_walk_with_retry(&dir, &patterns, &options)?);
     }
 
     Ok(paths)
+}
+
+fn internal_walk_with_retry(
+    dir: &Path,
+    patterns: &[String],
+    options: &GlobWalkOptions,
+) -> Result<Vec<PathBuf>, GlobError> {
+    match internal_walk(dir, patterns, options, false) {
+        // The walk is aborted when the rayon thread pool is too busy to run it,
+        // which happens when many walks run in parallel on the same pool. Rather
+        // than failing, retry on the current thread, which cannot be blocked by
+        // other work, at the cost of being slower.
+        Err(GlobError::WalkAborted { .. }) => {
+            trace!(
+                dir = ?dir,
+                "Failed to walk directory in parallel, as the thread pool is too busy; retrying on the current thread",
+            );
+
+            internal_walk(dir, patterns, options, true)
+        }
+        result => result,
+    }
 }
 
 fn internal_walk(
     dir: &Path,
     patterns: &[String],
     options: &GlobWalkOptions,
+    serial: bool,
 ) -> Result<Vec<PathBuf>, GlobError> {
     trace!(dir = ?dir, globs = ?patterns, "Finding files");
 
@@ -510,6 +532,8 @@ fn internal_walk(
 
     if max_depth.is_none_or(|depth| depth > 1) {
         let ignore_dot_dirs = options.ignore_dot_dirs;
+        let prune_set = create_prune_set(patterns)?;
+        let root_dir = dir.to_path_buf();
         let mut walk = jwalk::WalkDir::new(dir)
             .follow_links(false)
             .skip_hidden(false);
@@ -518,18 +542,61 @@ fn internal_walk(
             walk = walk.max_depth(max_depth);
         }
 
-        for entry in walk
-            .process_read_dir(move |depth, path, _state, children| {
-                // Only ignore nested hidden dirs, but do not ignore
-                // if the root dir is hidden, as globs resolve from it
-                if ignore_dot_dirs && depth.is_some_and(|d| d > 0) && is_hidden_dot(path) {
-                    children.retain(|_| false);
+        // Walking on the current thread cannot be aborted by a busy pool
+        if serial {
+            walk = walk.parallelism(jwalk::Parallelism::Serial);
+        }
+
+        let walk = walk.process_read_dir(move |_depth, _path, _state, children| {
+            for child in children.iter_mut().flatten() {
+                // The root dir is yielded as its own child at depth 0,
+                // and must always be read, as globs resolve from it
+                if child.depth == 0 || !child.file_type.is_dir() {
+                    continue;
                 }
-            })
-            .into_iter()
-            .flatten()
-        {
-            add_path(entry.path(), entry.file_type(), dir, &globset);
+
+                let path = child.path();
+
+                // Only ignore nested hidden dirs, but do not ignore if the root
+                // dir is hidden, as globs resolve from it. Excluded dirs are
+                // skipped as descending into them would only produce paths
+                // that are filtered out again.
+                let skip = (ignore_dot_dirs && is_hidden_dot(&path))
+                    || prune_set.as_ref().is_some_and(|set| {
+                        path.strip_prefix(&root_dir)
+                            .is_ok_and(|suffix| set.is_match(suffix))
+                    });
+
+                if skip {
+                    // The directory itself is still yielded, we simply
+                    // do not read its children
+                    child.read_children = None;
+                }
+            }
+        });
+
+        // Aborting the walk would otherwise return an incomplete list of paths,
+        // which callers can't distinguish from an empty directory
+        let aborted = |error: jwalk::Error| GlobError::WalkAborted {
+            dir: dir.to_path_buf(),
+            error: Box::new(error),
+        };
+
+        for entry in walk.try_into_iter().map_err(aborted)? {
+            match entry {
+                Ok(entry) => {
+                    add_path(entry.path(), entry.file_type(), dir, &globset);
+                }
+                Err(error) => {
+                    if error.is_busy() {
+                        return Err(aborted(error));
+                    }
+
+                    // Individual entries may fail to be read (missing file,
+                    // no permissions, etc), which shouldn't abort the walk
+                    trace!(dir = ?dir, "Failed to read entry: {error}");
+                }
+            }
         }
     } else {
         for entry in fs::read_dir(dir)? {
@@ -709,6 +776,48 @@ fn segment_matches(pattern: &str, segment: &str) -> bool {
     is_glob(pattern) && create_glob(pattern).is_ok_and(|glob| glob.is_match(Path::new(segment)))
 }
 
+/// Extract the directory portion of a negated pattern that excludes an entire
+/// subtree, like `dist/**` -> `dist`. Returns [`None`] for patterns that only
+/// exclude specific entries, as those directories must still be traversed.
+fn subtree_negation_dir(pattern: &str) -> Option<&str> {
+    for suffix in ["/**/*", "/**"] {
+        if let Some(prefix) = pattern.strip_suffix(suffix) {
+            return if prefix.is_empty() {
+                None
+            } else {
+                Some(prefix)
+            };
+        }
+    }
+
+    None
+}
+
+/// Create a matcher of directories that can be skipped entirely while walking,
+/// as every path within them is excluded by a negated pattern. Without this,
+/// negations only filter results *after* the walk has descended into them,
+/// making an excluded directory just as expensive as an included one.
+fn create_prune_set(patterns: &[String]) -> Result<Option<Any<'static>>, GlobError> {
+    let (_, negations) = split_patterns(patterns);
+    let global_negations = GLOBAL_NEGATIONS.read().unwrap();
+    let mut globs = vec![];
+
+    for pattern in negations
+        .into_iter()
+        .chain(global_negations.iter().copied())
+    {
+        if let Some(dir) = subtree_negation_dir(pattern) {
+            globs.push(create_glob(dir)?.into_owned());
+        }
+    }
+
+    if globs.is_empty() {
+        return Ok(None);
+    }
+
+    any_glob(globs, "<negations>").map(Some)
+}
+
 fn max_traversal_depth(patterns: &[String]) -> Result<Option<usize>, GlobError> {
     let mut max_depth = 1;
 
@@ -781,6 +890,53 @@ mod tests {
             max_traversal_depth(&patterns(&["*/moon.yml", "**/*.rs"])).unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn extracts_subtree_negation_dirs() {
+        assert_eq!(subtree_negation_dir("dist/**"), Some("dist"));
+        assert_eq!(subtree_negation_dir("dist/**/*"), Some("dist"));
+        assert_eq!(
+            subtree_negation_dir("**/node_modules/**"),
+            Some("**/node_modules")
+        );
+        assert_eq!(subtree_negation_dir("a/*/target/**"), Some("a/*/target"));
+
+        // Not entire subtrees, so they must still be traversed
+        assert_eq!(subtree_negation_dir("dist"), None);
+        assert_eq!(subtree_negation_dir("dist/*.map"), None);
+        assert_eq!(subtree_negation_dir("**/*.log"), None);
+        assert_eq!(subtree_negation_dir("**"), None);
+    }
+
+    #[test]
+    fn creates_prune_set_from_negations() {
+        let set = create_prune_set(&patterns(&["**/*.txt", "!heavy/**", "!**/target/**"]))
+            .unwrap()
+            .unwrap();
+
+        assert!(set.is_match(Path::new("heavy")));
+        assert!(set.is_match(Path::new("target")));
+        assert!(set.is_match(Path::new("nested/target")));
+
+        assert!(!set.is_match(Path::new("nested/heavy")));
+        assert!(!set.is_match(Path::new("wanted")));
+    }
+
+    #[test]
+    fn creates_prune_set_from_global_negations() {
+        let set = create_prune_set(&patterns(&["**/*.txt"])).unwrap().unwrap();
+
+        // Globals: `**/.{git,svn}/**` and `node_modules/**`
+        assert!(set.is_match(Path::new(".git")));
+        assert!(set.is_match(Path::new("nested/.git")));
+        assert!(set.is_match(Path::new("node_modules")));
+
+        // Only excluded at the root, so nested ones must be traversed
+        assert!(!set.is_match(Path::new("nested/node_modules")));
+
+        // Not a subtree negation, so it must not prune
+        assert!(!set.is_match(Path::new(".DS_Store")));
     }
 
     #[test]
