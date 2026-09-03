@@ -6,7 +6,7 @@ use std::fs::FileType;
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, RwLock};
 use std::time::Instant;
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 use wax::{
     Any, Program,
     query::{Boundedness, Variance},
@@ -461,24 +461,46 @@ where
         // Only run if the feature is enabled
         #[cfg(feature = "glob-cache")]
         if options.cache && !crate::envx::is_test() {
-            paths.extend(
-                GlobCache::instance()
-                    .cache(&dir, &patterns, |d, p| internal_walk(d, p, &options))?,
-            );
+            paths.extend(GlobCache::instance().cache(&dir, &patterns, |d, p| {
+                internal_walk_with_retry(d, p, &options)
+            })?);
 
             continue;
         }
 
-        paths.extend(internal_walk(&dir, &patterns, &options)?);
+        paths.extend(internal_walk_with_retry(&dir, &patterns, &options)?);
     }
 
     Ok(paths)
+}
+
+fn internal_walk_with_retry(
+    dir: &Path,
+    patterns: &[String],
+    options: &GlobWalkOptions,
+) -> Result<Vec<PathBuf>, GlobError> {
+    match internal_walk(dir, patterns, options, false) {
+        // The walk is aborted when the rayon thread pool is too busy to run it,
+        // which happens when many walks run in parallel on the same pool. Rather
+        // than failing, retry on the current thread, which cannot be blocked by
+        // other work, at the cost of being slower.
+        Err(GlobError::WalkAborted { .. }) => {
+            warn!(
+                dir = ?dir,
+                "Failed to walk directory in parallel, as the thread pool is too busy; retrying on the current thread",
+            );
+
+            internal_walk(dir, patterns, options, true)
+        }
+        result => result,
+    }
 }
 
 fn internal_walk(
     dir: &Path,
     patterns: &[String],
     options: &GlobWalkOptions,
+    serial: bool,
 ) -> Result<Vec<PathBuf>, GlobError> {
     trace!(dir = ?dir, globs = ?patterns, "Finding files");
 
@@ -518,6 +540,11 @@ fn internal_walk(
 
         if let Some(max_depth) = max_depth {
             walk = walk.max_depth(max_depth);
+        }
+
+        // Walking on the current thread cannot be aborted by a busy pool
+        if serial {
+            walk = walk.parallelism(jwalk::Parallelism::Serial);
         }
 
         let walk = walk.process_read_dir(move |_depth, _path, _state, children| {
