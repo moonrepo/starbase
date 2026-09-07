@@ -55,12 +55,14 @@ impl<R: Reporter> Command<R> {
             console.stderr(),
             prefix.clone(),
             "stderr",
+            shared_child.clone(),
         );
         let stdout_handle = spawn_stream_capture_bytes(
             shared_child.take_stdout().await,
             console.stdout(),
             prefix,
             "stdout",
+            shared_child.clone(),
         );
 
         // Wait for the pipes to hit EOF before waiting on the child,
@@ -100,7 +102,8 @@ impl<R: Reporter> Command<R> {
     /// frames are collapsed in the captured bytes so a cached replay only
     /// renders the final frame. If [`Self::cache`] is enabled, a prior
     /// identical run's output is returned instead of spawning again, in
-    /// which case nothing is streamed to the console.
+    /// which case nothing is streamed to the console. Force-killing stops
+    /// capture readers and may truncate unread output.
     pub async fn exec_stream_and_capture_output(&mut self) -> miette::Result<Output> {
         let registry = ProcessRegistry::instance();
 
@@ -130,6 +133,7 @@ fn spawn_stream_capture_bytes<R>(
     stream: ConsoleStream,
     prefix: Option<String>,
     label: &'static str,
+    child: crate::SharedChild,
 ) -> JoinHandle<Vec<u8>>
 where
     R: AsyncRead + Unpin + Send + 'static,
@@ -143,9 +147,18 @@ where
 
         let mut buf = [0u8; 8192];
         let mut at_line_start = true;
+        let stopped = child.output_stopped();
+
+        tokio::pin!(stopped);
 
         loop {
-            match reader.read(&mut buf).await {
+            let result = tokio::select! {
+                biased;
+                _ = &mut stopped => break,
+                result = reader.read(&mut buf) => result,
+            };
+
+            match result {
                 // EOF
                 Ok(0) => break,
                 Ok(read) => {

@@ -7,7 +7,7 @@ use std::pin::pin;
 use std::process::ExitStatus;
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::{Mutex as AsyncMutex, watch};
 
 /// How a child process ended.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -49,6 +49,7 @@ pub struct SharedChild {
     signal: Arc<OnceLock<SignalType>>,
     pid: u32,
     waiter: Arc<AsyncMutex<()>>,
+    output_stop: watch::Sender<bool>,
 }
 
 impl SharedChild {
@@ -59,6 +60,7 @@ impl SharedChild {
             inner: Arc::new(Mutex::new(child)),
             signal: Arc::new(OnceLock::new()),
             waiter: Arc::new(AsyncMutex::new(())),
+            output_stop: watch::channel(false).0,
         }
     }
 
@@ -94,10 +96,12 @@ impl SharedChild {
     }
 
     /// Force kill the child immediately (`SIGKILL` on Unix, terminate on
-    /// Windows), and wait for it to exit.
+    /// Windows), stop capturing output, and wait for it to exit.
+    /// Bytes already captured are retained; unread output may be truncated.
     pub async fn kill(&self) -> io::Result<ChildExit> {
         // Tokio checks its cached exit state before starting a kill.
         self.inner.lock().unwrap().start_kill()?;
+        self.stop_output();
         self.wait().await?;
 
         Ok(ChildExit::Killed)
@@ -107,14 +111,16 @@ impl SharedChild {
     /// remembered, so the resulting [`ChildExit`] reflects it even if the
     /// child's own exit status doesn't carry it (e.g. on Windows).
     /// An already reaped child is not signalled and retains its exit status.
+    /// `Kill` also stops capture readers, including after the child was reaped.
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
         {
             // Reaping and signal delivery use the same lock. Until reaped,
             // the child retains its PID/handle even if it has already exited.
             let child = self.inner.lock().unwrap();
-            if let Some(_pid) = child.id() {
+
+            if let Some(pid) = child.id() {
                 #[cfg(unix)]
-                kill(_pid, signal)?;
+                kill(pid, signal)?;
 
                 #[cfg(windows)]
                 {
@@ -123,14 +129,28 @@ impl SharedChild {
                     let handle = child
                         .raw_handle()
                         .ok_or_else(|| io::Error::other("Child process handle is unavailable"))?;
-                    kill(_pid, RawHandle(handle), signal)?;
+
+                    kill(pid, RawHandle(handle), signal)?;
                 }
 
                 self.signal.get_or_init(|| signal);
             }
         }
 
+        if matches!(signal, SignalType::Kill) {
+            self.stop_output();
+        }
+
         self.wait().await
+    }
+
+    pub fn stop_output(&self) {
+        self.output_stop.send_replace(true);
+    }
+
+    pub async fn output_stopped(&self) {
+        let mut receiver = self.output_stop.subscribe();
+        let _ = receiver.wait_for(|stopped| *stopped).await;
     }
 
     /// Wait for the child to exit, mapping a terminating signal onto the
@@ -143,6 +163,7 @@ impl SharedChild {
         // Tokio supports one waiter. Serialize wait futures, but hold the
         // child lock only during each poll so signals can still be delivered.
         let _waiter = self.waiter.lock().await;
+
         let status = poll_fn(|cx| {
             let mut child = self.inner.lock().unwrap();
             pin!(child.wait()).poll(cx)
@@ -160,7 +181,9 @@ impl SharedChild {
     /// until that work finishes, and its output is captured too. To bound
     /// the wait, make the process being signalled the one holding the
     /// pipes (`exec` in a shell wrapper), as signalling a shell does not
-    /// reach the processes it spawned.
+    /// reach the processes it spawned. Force-killing stops the capture readers
+    /// and returns bytes already captured, without waiting for inherited pipes.
+    /// It does not terminate descendants.
     ///
     /// Pipes that were not requested, or that [`Self::take_stdout`] and
     /// friends already took, come back as empty bytes.
@@ -170,11 +193,18 @@ impl SharedChild {
     pub async fn wait_with_output(&self) -> io::Result<Output> {
         use tokio::{io::AsyncReadExt, try_join};
 
-        async fn read_to_end<A: AsyncReadExt + Unpin>(data: &mut Option<A>) -> io::Result<Vec<u8>> {
+        async fn read_to_end<A: AsyncReadExt + Unpin>(
+            child: &SharedChild,
+            data: &mut Option<A>,
+        ) -> io::Result<Vec<u8>> {
             let mut vec = Vec::new();
 
             if let Some(data) = data.as_mut() {
-                data.read_to_end(&mut vec).await?;
+                tokio::select! {
+                    biased;
+                    _ = child.output_stopped() => {},
+                    result = data.read_to_end(&mut vec) => { result?; },
+                }
             }
 
             Ok(vec)
@@ -185,8 +215,8 @@ impl SharedChild {
             (child.stdout.take(), child.stderr.take())
         };
 
-        let stdout_fut = read_to_end(&mut stdout_pipe);
-        let stderr_fut = read_to_end(&mut stderr_pipe);
+        let stdout_fut = read_to_end(self, &mut stdout_pipe);
+        let stderr_fut = read_to_end(self, &mut stderr_pipe);
 
         let (exit, stdout, stderr) = try_join!(self.wait(), stdout_fut, stderr_fut)?;
 

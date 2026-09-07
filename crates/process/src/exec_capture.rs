@@ -97,7 +97,8 @@ impl<R: Reporter> Command<R> {
     /// A variant of [`Self::exec_capture_output`] that streams buffered
     /// input to the child's stdin as it runs, rather than writing it all
     /// upfront, and reads stdout/stderr line by line rather than to
-    /// completion. Used when [`Self::continuous_pipe`] is enabled.
+    /// completion. Used when [`Self::continuous_pipe`] is enabled. Force-killing
+    /// stops capture readers and may truncate unread output.
     pub async fn exec_capture_continuous_output(&mut self) -> miette::Result<Output> {
         let registry = ProcessRegistry::instance();
         let instant = Instant::now();
@@ -154,8 +155,8 @@ impl<R: Reporter> Command<R> {
             Ok(())
         });
 
-        let stdout_handle = spawn_capture_lines(stdout, "stdout");
-        let stderr_handle = spawn_capture_lines(stderr, "stderr");
+        let stdout_handle = spawn_capture_lines(stdout, "stdout", shared_child.clone());
+        let stderr_handle = spawn_capture_lines(stderr, "stderr", shared_child.clone());
 
         // Attempt to create the child output
         let result = shared_child
@@ -168,17 +169,24 @@ impl<R: Reporter> Command<R> {
 
         self.post_log_command(&shared_child, instant);
 
+        // Keep the child registered until its readers finish, so shutdown
+        // can still stop pipes inherited by descendants after the child exits.
+        let output_result: miette::Result<Output> = async {
+            let exit = result?;
+
+            stdin_handle.await.into_diagnostic()??;
+
+            Ok(Output {
+                exit,
+                stdout: Bytes::from(stdout_handle.await.into_diagnostic()?.join("\n")),
+                stderr: Bytes::from(stderr_handle.await.into_diagnostic()?.join("\n")),
+            })
+        }
+        .await;
+
         registry.remove_running(shared_child).await;
 
-        let exit = result?;
-
-        stdin_handle.await.into_diagnostic()??;
-
-        let output = Output {
-            exit,
-            stdout: Bytes::from(stdout_handle.await.into_diagnostic()?.join("\n")),
-            stderr: Bytes::from(stderr_handle.await.into_diagnostic()?.join("\n")),
-        };
+        let output = output_result?;
 
         self.handle_nonzero_status(&output, true)?;
 
@@ -186,7 +194,11 @@ impl<R: Reporter> Command<R> {
     }
 }
 
-fn spawn_capture_lines<R>(reader: Option<R>, label: &'static str) -> JoinHandle<Vec<String>>
+fn spawn_capture_lines<R>(
+    reader: Option<R>,
+    label: &'static str,
+    child: crate::SharedChild,
+) -> JoinHandle<Vec<String>>
 where
     R: AsyncRead + Unpin + Send + 'static,
 {
@@ -198,9 +210,18 @@ where
         };
 
         let mut lines = BufReader::new(reader).lines();
+        let stopped = child.output_stopped();
+
+        tokio::pin!(stopped);
 
         loop {
-            match lines.next_line().await {
+            let result = tokio::select! {
+                biased;
+                _ = &mut stopped => break,
+                result = lines.next_line() => result,
+            };
+
+            match result {
                 Ok(Some(line)) => logs.push(line),
                 Ok(None) => break,
                 Err(error) => {

@@ -177,6 +177,10 @@ async fn shutdown_processes_from_signal(
 
     let mut set = JoinSet::new();
 
+    // Retain the original handles through escalation: the direct child may
+    // exit and be unregistered while descendants still hold its output pipes.
+    let force_children = children.clone();
+
     for (pid, child) in children {
         let running = processes.clone();
 
@@ -214,7 +218,11 @@ async fn shutdown_processes_from_signal(
         if threshold > 0 {
             sleep(Duration::from_millis(threshold as u64)).await;
 
-            kill_processes(running).await
+            kill_processes(running).await;
+
+            for child in force_children.values() {
+                child.stop_output();
+            }
         }
     });
 
