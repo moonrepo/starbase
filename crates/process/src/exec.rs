@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::process::Command as StdCommand;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
-use tokio::process::{Child, Command as TokioCommand};
+use tokio::process::{ChildStdin, Command as TokioCommand};
 use tracing::{debug, enabled};
 
 impl<R: Reporter> Command<R> {
@@ -200,8 +200,13 @@ impl<R: Reporter> Command<R> {
         debug!(pid = child.id(), "Ran command in {:?}", instant.elapsed());
     }
 
-    pub(crate) async fn write_input_to_child(&self, child: &mut Child) -> miette::Result<()> {
-        let mut stdin = child.stdin.take().expect("Unable to write stdin!");
+    pub(crate) async fn write_input_to_stdin(
+        &self,
+        stdin: Option<ChildStdin>,
+    ) -> miette::Result<()> {
+        let Some(mut stdin) = stdin else {
+            return Ok(());
+        };
 
         if let Err(error) = stdin
             .write_all(self.input.join(OsStr::new(" ")).as_encoded_bytes())

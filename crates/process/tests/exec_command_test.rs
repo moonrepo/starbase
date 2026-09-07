@@ -2,6 +2,7 @@
 
 use starbase_console::{Console, EmptyReporter};
 use starbase_process::{ChildExit, Command, ProcessError, ShellType};
+use std::time::Duration;
 
 fn create_command(script: &str) -> Command<EmptyReporter> {
     let mut command = Command::new("bash");
@@ -74,6 +75,23 @@ mod exec_capture_output {
         let output = command.exec_capture_output().await.unwrap();
 
         assert!(output.success());
+    }
+
+    #[tokio::test]
+    async fn drains_output_while_writing_stdin() {
+        const SIZE: usize = 128 * 1024;
+
+        // The child fills stdout before reading stdin. Writing all input
+        // before draining stdout would block both sides on their pipe buffer.
+        let mut command = create_command(&format!("head -c {SIZE} /dev/zero; cat"));
+        command.input(["x".repeat(SIZE)]);
+
+        let output = tokio::time::timeout(Duration::from_secs(5), command.exec_capture_output())
+            .await
+            .expect("command deadlocked")
+            .unwrap();
+
+        assert_eq!(output.stdout.len(), SIZE * 2);
     }
 
     #[tokio::test]
