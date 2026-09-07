@@ -336,6 +336,45 @@ mod caching {
 
         assert_eq!(first.stdout, second.stdout);
     }
+
+    #[tokio::test]
+    async fn cached_nonzero_output_respects_error_policy() {
+        let mut allowed = create_command("exit 3");
+        allowed.set_cache(true).set_error_on_nonzero(false);
+
+        let output = allowed.exec_capture_output().await.unwrap();
+        assert_eq!(output.code(), Some(3));
+
+        let mut required = create_command("exit 3");
+        required.set_cache(true);
+
+        assert!(matches!(
+            required
+                .exec_capture_output()
+                .await
+                .unwrap_err()
+                .downcast_ref::<ProcessError>(),
+            Some(ProcessError::ExitNonZeroWithOutput { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn keeps_capture_modes_in_separate_cache_entries() {
+        let mut capture = create_command(r"printf 'one\rtwo'");
+        capture.set_cache(true);
+
+        let output = capture.exec_capture_output().await.unwrap();
+        assert_eq!(output.stdout.as_ref(), b"one\rtwo");
+
+        let mut stream_capture = create_command(r"printf 'one\rtwo'");
+        stream_capture.set_cache(true);
+
+        let output = stream_capture
+            .exec_stream_and_capture_output()
+            .await
+            .unwrap();
+        assert_eq!(output.stdout.as_ref(), b"two");
+    }
 }
 
 mod shells {

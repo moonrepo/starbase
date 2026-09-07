@@ -509,6 +509,42 @@ mod cache_key {
     }
 
     #[test]
+    fn changes_with_execution_configuration() {
+        let base = Command::new("git").get_cache_key();
+
+        let mut no_shell = Command::new("git");
+        no_shell.no_shell();
+
+        let mut with_paths = Command::new("git");
+        with_paths.prepend_paths(["/custom/bin"]);
+
+        let mut quoted_arg = Command::new("git");
+        quoted_arg.arg(Arg {
+            quoted_value: Some(OsString::from("'status'")),
+            value: OsString::from("status"),
+        });
+
+        let mut raw_arg = Command::new("git");
+        raw_arg.arg("status");
+
+        assert_ne!(no_shell.get_cache_key(), base);
+        assert_ne!(with_paths.get_cache_key(), base);
+        assert_ne!(quoted_arg.get_cache_key(), raw_arg.get_cache_key());
+        assert_ne!(Command::new_script("git").get_cache_key(), base);
+    }
+
+    #[test]
+    fn does_not_collide_between_collection_boundaries() {
+        let mut arg = Command::new("git");
+        arg.arg("");
+
+        let mut cwd = Command::new("git");
+        cwd.cwd("");
+
+        assert_ne!(arg.get_cache_key(), cwd.get_cache_key());
+    }
+
+    #[test]
     fn changes_with_the_script() {
         assert_ne!(
             Command::new_script("git status").get_cache_key(),
@@ -517,13 +553,12 @@ mod cache_key {
     }
 
     #[test]
-    fn ignores_fields_that_do_not_change_the_result() {
+    fn ignores_display_only_fields() {
         let base = Command::new("git").get_cache_key();
 
         let mut command = Command::new("git");
         command.set_prefix("app:build");
         command.set_print_command(true);
-        command.set_shell(ShellType::Bash);
 
         assert_eq!(command.get_cache_key(), base);
     }

@@ -118,8 +118,12 @@ impl<R: Reporter> Command<R> {
                 .await;
         }
 
-        match registry.cache.entry_async(self.get_cache_key()).await {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
+        match registry
+            .cache
+            .entry_async(self.get_output_cache_key("stream-capture"))
+            .await
+        {
+            Entry::Occupied(entry) => self.handle_cached_output(entry.get().clone()),
             Entry::Vacant(entry) => {
                 let output = self
                     .internal_exec_stream_and_capture_output(&registry)

@@ -120,6 +120,12 @@ impl<R: Reporter> Command<R> {
         Ok(())
     }
 
+    pub(crate) fn handle_cached_output(&mut self, output: Output) -> miette::Result<Output> {
+        self.handle_nonzero_status(&output, true)?;
+
+        Ok(output)
+    }
+
     pub(crate) fn pre_log_command(&self, child: &SharedChild) {
         let root_dir = match &self.debug.root_dir_env_key {
             Some(base_key) => {

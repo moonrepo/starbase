@@ -80,8 +80,12 @@ impl<R: Reporter> Command<R> {
             return self.internal_exec_capture_output(&registry).await;
         }
 
-        match registry.cache.entry_async(self.get_cache_key()).await {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
+        match registry
+            .cache
+            .entry_async(self.get_output_cache_key("capture"))
+            .await
+        {
+            Entry::Occupied(entry) => self.handle_cached_output(entry.get().clone()),
             Entry::Vacant(entry) => {
                 let output = self.internal_exec_capture_output(&registry).await?;
 
