@@ -156,7 +156,7 @@ where
 
         let mut buf = [0u8; 8192];
         let mut at_line_start = true;
-        let stopped = child.output_stopped();
+        let stopped = child.wait_till_output_stopped();
 
         tokio::pin!(stopped);
 

@@ -7,11 +7,14 @@ use std::sync::{Arc, OnceLock};
 use tokio::process::Child;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast::{self, Receiver, Sender};
+use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::task::{JoinHandle, JoinSet};
 use tokio::time::sleep;
 use tracing::{debug, warn};
 
 static INSTANCE: OnceLock<Arc<ProcessRegistry>> = OnceLock::new();
+
+pub type RunningProcessesMap = Arc<RwLock<FxHashMap<u32, SharedChild>>>;
 
 /// Tracks running child processes so they can be looked up, shut down as
 /// a group on a termination signal, and have their output cached across
@@ -25,7 +28,9 @@ pub struct ProcessRegistry {
     /// on them indefinitely instead of force killing.
     pub threshold: u32,
 
-    running: Arc<RwLock<FxHashMap<u32, SharedChild>>>,
+    running: RunningProcessesMap,
+    cleanup_sender: UnboundedSender<SharedChild>,
+    cleanup_handle: JoinHandle<()>,
     signal_sender: Sender<SignalType>,
     signal_wait_handle: JoinHandle<()>,
     signal_shutdown_handle: JoinHandle<()>,
@@ -44,23 +49,31 @@ impl ProcessRegistry {
     /// killed; `0` waits on them indefinitely instead.
     pub fn new(threshold: u32) -> Self {
         let processes = Arc::new(RwLock::new(FxHashMap::default()));
-        let processes_bg = Arc::clone(&processes);
+        let processes_background = Arc::clone(&processes);
+        let processes_cleanup = Arc::clone(&processes);
 
         let (sender, receiver) = broadcast::channel::<SignalType>(10);
         let sender_bg = sender.clone();
+        let (cleanup_sender, cleanup_receiver) = mpsc::unbounded_channel();
+
+        let cleanup_handle = tokio::spawn(async move {
+            cleanup_cancelled_processes(cleanup_receiver, processes_cleanup).await;
+        });
 
         let signal_wait_handle = tokio::spawn(async move {
             wait_for_signal(sender_bg).await;
         });
 
         let signal_shutdown_handle = tokio::spawn(async move {
-            shutdown_processes_from_signal(receiver, processes_bg, threshold).await;
+            shutdown_processes_from_signal(receiver, processes_background, threshold).await;
         });
 
         Self {
             cache: Arc::new(scc::HashCache::new()),
             running: processes,
+            cleanup_sender,
             signal_sender: sender,
+            cleanup_handle,
             signal_wait_handle,
             signal_shutdown_handle,
             threshold,
@@ -84,7 +97,7 @@ impl ProcessRegistry {
     /// Wrap a spawned child and register it as running, so it's tracked
     /// for lookup and shutdown.
     pub async fn add_running(&self, child: Child) -> SharedChild {
-        let shared = SharedChild::new(child);
+        let shared = SharedChild::new_with_cleanup(child, self.cleanup_sender.clone());
 
         self.running
             .write()
@@ -106,7 +119,9 @@ impl ProcessRegistry {
 
     /// Stop tracking a child by pid as running. Does not kill or signal it.
     pub async fn remove_running_by_pid(&self, id: u32) {
-        self.running.write().await.remove(&id);
+        if let Some(child) = self.running.write().await.remove(&id) {
+            child.stop_cleanup();
+        }
     }
 
     /// Subscribe to termination signals received by this registry,
@@ -161,14 +176,34 @@ impl Drop for ProcessRegistry {
             }
         }
 
+        self.cleanup_handle.abort();
         self.signal_wait_handle.abort();
         self.signal_shutdown_handle.abort();
     }
 }
 
+async fn cleanup_cancelled_processes(
+    mut receiver: mpsc::UnboundedReceiver<SharedChild>,
+    processes: RunningProcessesMap,
+) {
+    while let Some(child) = receiver.recv().await {
+        cleanup_cancelled_process(child, Arc::clone(&processes)).await;
+    }
+}
+
+async fn cleanup_cancelled_process(child: SharedChild, processes: RunningProcessesMap) {
+    let pid = child.id();
+
+    if let Err(error) = child.kill_with_signal(SignalType::Kill).await {
+        warn!(pid, %error, "Failed to clean up cancelled child process");
+    }
+
+    processes.write().await.remove(&pid);
+}
+
 async fn shutdown_processes_from_signal(
     mut receiver: Receiver<SignalType>,
-    processes: Arc<RwLock<FxHashMap<u32, SharedChild>>>,
+    processes: RunningProcessesMap,
     threshold: u32,
 ) {
     loop {
@@ -182,11 +217,7 @@ async fn shutdown_processes_from_signal(
     }
 }
 
-async fn shutdown_processes(
-    signal: SignalType,
-    processes: Arc<RwLock<FxHashMap<u32, SharedChild>>>,
-    threshold: u32,
-) {
+async fn shutdown_processes(signal: SignalType, processes: RunningProcessesMap, threshold: u32) {
     // Clone the children, otherwise we encounter a deadlock when the
     // tasks try to acquire a write lock while it is being read
     let children = { processes.read().await.clone() };
@@ -258,10 +289,7 @@ async fn shutdown_processes(
     set.join_all().await;
 }
 
-async fn kill_processes(
-    processes: Arc<RwLock<FxHashMap<u32, SharedChild>>>,
-    children: FxHashMap<u32, SharedChild>,
-) {
+async fn kill_processes(processes: RunningProcessesMap, children: FxHashMap<u32, SharedChild>) {
     if children.is_empty() {
         return;
     }

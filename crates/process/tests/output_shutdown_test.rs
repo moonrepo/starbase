@@ -124,11 +124,11 @@ async fn assert_streaming_capture_stops(continuous: bool) {
         loop {
             if let Ok(pids) = std::fs::read_to_string(&marker) {
                 let pids = pids.split_whitespace().collect::<Vec<_>>();
-                if pids.len() == 2 {
-                    if let Some(child) = registry.get_running_by_pid(pids[0].parse().unwrap()).await
-                    {
-                        break (child, Descendant(pids[1].parse().unwrap()));
-                    }
+
+                if pids.len() == 2
+                    && let Some(child) = registry.get_running_by_pid(pids[0].parse().unwrap()).await
+                {
+                    break (child, Descendant(pids[1].parse().unwrap()));
                 }
             }
             tokio::time::sleep(Duration::from_millis(5)).await;

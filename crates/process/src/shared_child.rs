@@ -5,9 +5,12 @@ use std::future::{Future, poll_fn};
 use std::io;
 use std::pin::pin;
 use std::process::ExitStatus;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{Mutex as AsyncMutex, watch};
+use tracing::warn;
 
 /// How a child process ended.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,14 +45,17 @@ impl ChildExit {
 
 /// A cheaply cloneable handle to a running child process. Every clone
 /// shares the same underlying process, so signalling or waiting on one
-/// clone is visible to all others.
-#[derive(Clone)]
+/// clone is visible to all others. Only the original handle created with
+/// [`Self::new_with_cleanup`] requests cleanup on drop; clones never do.
 pub struct SharedChild {
     inner: Arc<Mutex<Child>>,
     signal: Arc<OnceLock<SignalType>>,
     pid: u32,
     waiter: Arc<AsyncMutex<()>>,
+
     output_stop: watch::Sender<bool>,
+    cleanup: Arc<AtomicBool>,
+    cleanup_sender: Option<UnboundedSender<SharedChild>>,
 }
 
 impl SharedChild {
@@ -61,7 +67,18 @@ impl SharedChild {
             signal: Arc::new(OnceLock::new()),
             waiter: Arc::new(AsyncMutex::new(())),
             output_stop: watch::channel(false).0,
+            cleanup: Arc::new(AtomicBool::new(true)),
+            cleanup_sender: None,
         }
+    }
+
+    /// Wrap a spawned child so it can be shared across tasks, and register
+    /// a cleanup sender to be notified when this handle is dropped.
+    /// Clones do not inherit responsibility for cleanup.
+    pub fn new_with_cleanup(child: Child, cleanup_sender: UnboundedSender<SharedChild>) -> Self {
+        let mut shared_child = Self::new(child);
+        shared_child.cleanup_sender = Some(cleanup_sender);
+        shared_child
     }
 
     /// Return the child's process id.
@@ -182,13 +199,17 @@ impl SharedChild {
         Ok(None)
     }
 
-    pub fn stop_output(&self) {
-        self.output_stop.send_replace(true);
+    /// Disable the original handle's cleanup on drop. This can be called
+    /// through any clone when the child is explicitly unregistered.
+    pub fn stop_cleanup(&self) {
+        self.cleanup.store(false, Ordering::Release);
     }
 
-    pub async fn output_stopped(&self) {
-        let mut receiver = self.output_stop.subscribe();
-        let _ = receiver.wait_for(|stopped| *stopped).await;
+    /// Stop reading from the child's output pipes, so any readers return
+    /// EOF. This is used to avoid deadlocks when the child is killed and
+    /// its output is no longer needed. It does not terminate the child.
+    pub fn stop_output(&self) {
+        self.output_stop.send_replace(true);
     }
 
     /// Wait for the child to exit, mapping a terminating signal onto the
@@ -240,7 +261,7 @@ impl SharedChild {
             if let Some(data) = data.as_mut() {
                 tokio::select! {
                     biased;
-                    _ = child.output_stopped() => {},
+                    _ = child.wait_till_output_stopped() => {},
                     result = data.read_to_end(&mut vec) => { result?; },
                 }
             }
@@ -266,6 +287,48 @@ impl SharedChild {
             stdout: Bytes::from(stdout),
             stderr: Bytes::from(stderr),
         })
+    }
+
+    /// Wait for the child to stop writing to its output pipes, which is
+    /// usually when it exits or is killed.
+    pub async fn wait_till_output_stopped(&self) {
+        let mut receiver = self.output_stop.subscribe();
+        let _ = receiver.wait_for(|stopped| *stopped).await;
+    }
+}
+
+impl Clone for SharedChild {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            signal: Arc::clone(&self.signal),
+            pid: self.pid,
+            waiter: Arc::clone(&self.waiter),
+            output_stop: self.output_stop.clone(),
+            cleanup: Arc::clone(&self.cleanup),
+            // Only the original instance has access to the sender!
+            cleanup_sender: None,
+        }
+    }
+}
+
+impl Drop for SharedChild {
+    fn drop(&mut self) {
+        if let Some(sender) = self.cleanup_sender.take()
+            && self.cleanup.swap(false, Ordering::AcqRel)
+            && let Err(error) = sender.send(self.clone())
+        {
+            let child = error.0;
+            let pid = child.id();
+
+            if let Err(error) = child.send_signal(SignalType::Kill) {
+                warn!(
+                    pid,
+                    %error,
+                    "Failed to kill cancelled child process after registry shutdown",
+                );
+            }
+        }
     }
 }
 

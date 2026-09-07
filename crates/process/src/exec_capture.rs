@@ -211,7 +211,7 @@ where
 
         let mut output = vec![];
         let mut buffer = [0; 8192];
-        let stopped = child.output_stopped();
+        let stopped = child.wait_till_output_stopped();
 
         tokio::pin!(stopped);
 

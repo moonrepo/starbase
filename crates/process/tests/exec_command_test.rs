@@ -1,7 +1,7 @@
 #![cfg(unix)]
 
 use starbase_console::{Console, EmptyReporter};
-use starbase_process::{ChildExit, Command, ProcessError, ShellType};
+use starbase_process::{ChildExit, Command, ProcessError, ProcessRegistry, ShellType};
 use std::time::Duration;
 
 fn create_command(script: &str) -> Command<EmptyReporter> {
@@ -175,6 +175,62 @@ mod exec_stream_output {
             error.downcast_ref::<ProcessError>().unwrap(),
             ProcessError::ExitNonZero { .. }
         ));
+    }
+}
+
+mod cancellation {
+    use super::*;
+
+    #[tokio::test]
+    async fn aborting_execution_kills_and_unregisters_the_child() {
+        let marker = std::env::temp_dir().join(format!(
+            "starbase-process-cancel-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_file(&marker);
+
+        // `exec` keeps the recorded pid as the direct child, avoiding a
+        // background shell process that would outlive this test.
+        let mut command =
+            create_command(&format!("echo $$ > '{}'; exec sleep 30", marker.display()));
+        let task = tokio::spawn(async move { command.exec_capture_output().await });
+        let registry = ProcessRegistry::instance();
+
+        let pid = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if let Ok(pid) = std::fs::read_to_string(&marker)
+                    && let Ok(pid) = pid.trim().parse()
+                    && registry.get_running_by_pid(pid).await.is_some()
+                {
+                    break pid;
+                }
+
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("child was not registered");
+
+        let child = registry.get_running_by_pid(pid).await.unwrap();
+
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while registry.get_running_by_pid(pid).await.is_some() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+
+            assert_eq!(child.wait().await.unwrap(), ChildExit::Killed);
+        })
+        .await
+        .expect("cancelled child remained registered");
+
+        std::fs::remove_file(marker).unwrap();
     }
 }
 
