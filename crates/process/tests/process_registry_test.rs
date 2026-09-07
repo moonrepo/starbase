@@ -114,6 +114,44 @@ mod process_registry {
     }
 
     #[tokio::test]
+    async fn dropping_registry_kills_tracked_children() {
+        let registry = create_registry();
+        let child = registry.add_running(spawn_sleep()).await;
+
+        drop(registry);
+
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), child.wait())
+                .await
+                .unwrap()
+                .unwrap(),
+            starbase_process::ChildExit::Killed
+        );
+    }
+
+    #[tokio::test]
+    async fn zero_threshold_still_signals_before_waiting() {
+        let registry = ProcessRegistry::new(0);
+        let child = registry.add_running(spawn_sleep()).await;
+
+        registry.terminate_running();
+
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                registry.wait_for_running_to_shutdown()
+            )
+            .await
+            .unwrap(),
+            ()
+        );
+        assert_eq!(
+            child.wait().await.unwrap(),
+            starbase_process::ChildExit::Terminated(15)
+        );
+    }
+
+    #[tokio::test]
     async fn shutdown_wait_returns_immediately_when_empty() {
         create_registry().wait_for_running_to_shutdown().await;
     }

@@ -146,7 +146,21 @@ impl ProcessRegistry {
 
 impl Drop for ProcessRegistry {
     fn drop(&mut self) {
-        self.terminate_running();
+        // Drop cannot await the shutdown task. Signal the children directly
+        // before aborting the listeners so they cannot survive registry
+        // destruction merely because the broadcast was not consumed.
+        if let Ok(children) = self.running.try_read() {
+            for child in children.values() {
+                if let Err(error) = child.send_signal(SignalType::Kill) {
+                    warn!(
+                        pid = child.id(),
+                        %error,
+                        "Failed to kill child process while dropping registry",
+                    );
+                }
+            }
+        }
+
         self.signal_wait_handle.abort();
         self.signal_shutdown_handle.abort();
     }
@@ -200,9 +214,9 @@ async fn shutdown_processes(
 
         set.spawn(async move {
             if threshold == 0 {
-                debug!(pid, "Waiting on child process");
+                debug!(pid, "Signalling and waiting on child process");
 
-                if let Err(error) = child.wait().await {
+                if let Err(error) = child.kill_with_signal(signal).await {
                     warn!(
                         pid,
                         error = error.to_string(),

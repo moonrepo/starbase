@@ -113,51 +113,73 @@ impl SharedChild {
     /// An already reaped child is not signalled and retains its exit status.
     /// `Kill` also stops capture readers, including after the child was reaped.
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
-        let mut completed = None;
-
-        {
+        let completed = {
             // Reaping and signal delivery use the same lock. Until reaped,
             // the child retains its PID/handle even if it has already exited.
             let mut child = self.inner.lock().unwrap();
 
-            // The process may have exited since the last poll while its
-            // handle is still held by Tokio. Check that state before sending
-            // a signal so a requested signal cannot replace a real exit
-            // status with the fallback signal value.
-            if let Some(status) = child.try_wait()? {
-                completed = Some(convert_exit_status(status, None));
-            }
-
-            if completed.is_none() {
-                if let Some(pid) = child.id() {
-                    #[cfg(unix)]
-                    kill(pid, signal)?;
-
-                    #[cfg(windows)]
-                    {
-                        // Borrow the live handle only while the lock prevents reaping
-                        // from closing it; never retain a raw handle across waits.
-                        let handle = child.raw_handle().ok_or_else(|| {
-                            io::Error::other("Child process handle is unavailable")
-                        })?;
-
-                        kill(pid, RawHandle(handle), signal)?;
-                    }
-
-                    self.signal.get_or_init(|| signal);
-                }
-            }
-        }
-
-        if matches!(signal, SignalType::Kill) {
-            self.stop_output();
-        }
+            self.send_signal_locked(&mut child, signal)?
+                .map(|status| convert_exit_status(status, None))
+        };
 
         if let Some(exit) = completed {
             return Ok(exit);
         }
 
         self.wait().await
+    }
+
+    /// Send a signal without waiting for the child. This is used by
+    /// synchronous cleanup paths, such as a registry being dropped.
+    pub fn send_signal(&self, signal: SignalType) -> io::Result<()> {
+        let mut child = self.inner.lock().unwrap();
+
+        self.send_signal_locked(&mut child, signal)?;
+
+        Ok(())
+    }
+
+    /// Check the live child and send a signal while its process identity is
+    /// protected by the child lock. Returns an exit status if the child was
+    /// already reaped, so callers can preserve the real result.
+    fn send_signal_locked(
+        &self,
+        child: &mut Child,
+        signal: SignalType,
+    ) -> io::Result<Option<ExitStatus>> {
+        if let Some(status) = child.try_wait()? {
+            if matches!(signal, SignalType::Kill) {
+                self.stop_output();
+            }
+
+            return Ok(Some(status));
+        }
+
+        let Some(pid) = child.id() else {
+            return Ok(None);
+        };
+
+        #[cfg(unix)]
+        kill(pid, signal)?;
+
+        #[cfg(windows)]
+        {
+            // Borrow the live handle only while the lock prevents reaping
+            // from closing it; never retain a raw handle across waits.
+            let handle = child
+                .raw_handle()
+                .ok_or_else(|| io::Error::other("Child process handle is unavailable"))?;
+
+            kill(pid, RawHandle(handle), signal)?;
+        }
+
+        self.signal.get_or_init(|| signal);
+
+        if matches!(signal, SignalType::Kill) {
+            self.stop_output();
+        }
+
+        Ok(None)
     }
 
     pub fn stop_output(&self) {
