@@ -118,7 +118,18 @@ mod exec_capture_continuous_output {
         let output = command.exec_capture_output().await.unwrap();
 
         assert!(output.success());
-        assert_eq!(output.stdout.as_ref(), b"one\ntwo");
+        assert_eq!(output.stdout.as_ref(), b"one\ntwo\n");
+    }
+
+    #[tokio::test]
+    async fn preserves_non_utf8_bytes_and_line_endings() {
+        let mut command = create_command(r"printf 'one\r\ntwo\xff\n'; printf 'err\r\n\xff' 1>&2");
+        command.set_continuous_pipe(true);
+
+        let output = command.exec_capture_output().await.unwrap();
+
+        assert_eq!(output.stdout.as_ref(), b"one\r\ntwo\xff\n");
+        assert_eq!(output.stderr.as_ref(), b"err\r\n\xff");
     }
 
     #[tokio::test]

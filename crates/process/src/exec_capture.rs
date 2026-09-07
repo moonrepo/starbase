@@ -9,7 +9,7 @@ use starbase_console::Reporter;
 use std::io;
 use std::process::Stdio;
 use std::time::Instant;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::task::{self, JoinHandle};
 use tracing::debug;
 
@@ -94,9 +94,9 @@ impl<R: Reporter> Command<R> {
 
     /// A variant of [`Self::exec_capture_output`] that streams buffered
     /// input to the child's stdin as it runs, rather than writing it all
-    /// upfront, and reads stdout/stderr line by line rather than to
-    /// completion. Used when [`Self::continuous_pipe`] is enabled. Force-killing
-    /// stops capture readers and may truncate unread output.
+    /// upfront, while capturing stdout and stderr as raw bytes. Used when
+    /// [`Self::continuous_pipe`] is enabled. Force-killing stops capture
+    /// readers and may truncate unread output.
     pub async fn exec_capture_continuous_output(&mut self) -> miette::Result<Output> {
         let registry = ProcessRegistry::instance();
         let instant = Instant::now();
@@ -153,8 +153,8 @@ impl<R: Reporter> Command<R> {
             Ok(())
         });
 
-        let stdout_handle = spawn_capture_lines(stdout, "stdout", shared_child.clone());
-        let stderr_handle = spawn_capture_lines(stderr, "stderr", shared_child.clone());
+        let stdout_handle = spawn_capture_bytes(stdout, "stdout", shared_child.clone());
+        let stderr_handle = spawn_capture_bytes(stderr, "stderr", shared_child.clone());
 
         // Attempt to create the child output
         let result = shared_child
@@ -176,8 +176,8 @@ impl<R: Reporter> Command<R> {
 
             Ok(Output {
                 exit,
-                stdout: Bytes::from(stdout_handle.await.into_diagnostic()?.join("\n")),
-                stderr: Bytes::from(stderr_handle.await.into_diagnostic()?.join("\n")),
+                stdout: Bytes::from(stdout_handle.await.into_diagnostic()?),
+                stderr: Bytes::from(stderr_handle.await.into_diagnostic()?),
             })
         }
         .await;
@@ -192,22 +192,21 @@ impl<R: Reporter> Command<R> {
     }
 }
 
-fn spawn_capture_lines<R>(
+fn spawn_capture_bytes<R>(
     reader: Option<R>,
     label: &'static str,
     child: crate::SharedChild,
-) -> JoinHandle<Vec<String>>
+) -> JoinHandle<Vec<u8>>
 where
     R: AsyncRead + Unpin + Send + 'static,
 {
     task::spawn(async move {
-        let mut logs = vec![];
-
-        let Some(reader) = reader else {
-            return logs;
+        let Some(mut reader) = reader else {
+            return vec![];
         };
 
-        let mut lines = BufReader::new(reader).lines();
+        let mut output = vec![];
+        let mut buffer = [0; 8192];
         let stopped = child.output_stopped();
 
         tokio::pin!(stopped);
@@ -216,19 +215,20 @@ where
             let result = tokio::select! {
                 biased;
                 _ = &mut stopped => break,
-                result = lines.next_line() => result,
+                result = reader.read(&mut buffer) => result,
             };
 
             match result {
-                Ok(Some(line)) => logs.push(line),
-                Ok(None) => break,
+                Ok(0) => break,
+                Ok(size) => output.extend_from_slice(&buffer[..size]),
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                 Err(error) => {
-                    debug!("Failed to read {label} line: {error}");
+                    debug!("Failed to read {label} bytes: {error}");
                     break;
                 }
             }
         }
 
-        logs
+        output
     })
 }
