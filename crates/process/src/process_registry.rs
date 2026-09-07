@@ -157,8 +157,22 @@ async fn shutdown_processes_from_signal(
     processes: Arc<RwLock<FxHashMap<u32, SharedChild>>>,
     threshold: u32,
 ) {
-    let signal = receiver.recv().await.unwrap_or(SignalType::Kill);
+    loop {
+        let signal = match receiver.recv().await {
+            Ok(signal) => signal,
+            Err(broadcast::error::RecvError::Lagged(_)) => SignalType::Kill,
+            Err(broadcast::error::RecvError::Closed) => break,
+        };
 
+        shutdown_processes(signal, processes.clone(), threshold).await;
+    }
+}
+
+async fn shutdown_processes(
+    signal: SignalType,
+    processes: Arc<RwLock<FxHashMap<u32, SharedChild>>>,
+    threshold: u32,
+) {
     // Clone the children, otherwise we encounter a deadlock when the
     // tasks try to acquire a write lock while it is being read
     let children = { processes.read().await.clone() };
@@ -218,7 +232,7 @@ async fn shutdown_processes_from_signal(
         if threshold > 0 {
             sleep(Duration::from_millis(threshold as u64)).await;
 
-            kill_processes(running).await;
+            kill_processes(running, force_children.clone()).await;
 
             for child in force_children.values() {
                 child.stop_output();
@@ -230,12 +244,15 @@ async fn shutdown_processes_from_signal(
     set.join_all().await;
 }
 
-async fn kill_processes(processes: Arc<RwLock<FxHashMap<u32, SharedChild>>>) {
-    let children = { processes.read().await.clone() };
-
+async fn kill_processes(
+    processes: Arc<RwLock<FxHashMap<u32, SharedChild>>>,
+    children: FxHashMap<u32, SharedChild>,
+) {
     if children.is_empty() {
         return;
     }
+
+    let child_pids = children.keys().copied().collect::<Vec<_>>();
 
     debug!(
         pids = ?children.keys().collect::<Vec<_>>(),
@@ -260,5 +277,13 @@ async fn kill_processes(processes: Arc<RwLock<FxHashMap<u32, SharedChild>>>) {
     }
 
     set.join_all().await;
-    processes.write().await.clear();
+
+    // Only remove the children that belonged to this shutdown request. A
+    // later signal may have registered new children while this escalation
+    // timer was running.
+    let mut running = processes.write().await;
+
+    for pid in child_pids {
+        running.remove(&pid);
+    }
 }

@@ -73,6 +73,47 @@ mod process_registry {
     }
 
     #[tokio::test]
+    async fn a_signal_received_with_no_children_does_not_stop_shutdown_handling() {
+        let registry = create_registry();
+
+        registry.terminate_running();
+        tokio::task::yield_now().await;
+
+        let shared = registry.add_running(spawn_sleep()).await;
+        let pid = shared.id();
+
+        registry.terminate_running();
+        registry.wait_for_running_to_shutdown().await;
+
+        assert!(registry.get_running_by_pid(pid).await.is_none());
+        assert_eq!(
+            shared.wait().await.unwrap(),
+            starbase_process::ChildExit::Terminated(15)
+        );
+    }
+
+    #[tokio::test]
+    async fn shutdown_handling_continues_for_later_children() {
+        let registry = create_registry();
+
+        let first = registry.add_running(spawn_sleep()).await;
+        registry.terminate_running();
+        registry.wait_for_running_to_shutdown().await;
+        assert_eq!(
+            first.wait().await.unwrap(),
+            starbase_process::ChildExit::Terminated(15)
+        );
+
+        let second = registry.add_running(spawn_sleep()).await;
+        registry.terminate_running();
+        registry.wait_for_running_to_shutdown().await;
+        assert_eq!(
+            second.wait().await.unwrap(),
+            starbase_process::ChildExit::Terminated(15)
+        );
+    }
+
+    #[tokio::test]
     async fn shutdown_wait_returns_immediately_when_empty() {
         create_registry().wait_for_running_to_shutdown().await;
     }
