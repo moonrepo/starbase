@@ -1,11 +1,13 @@
 use crate::output::Output;
 use crate::signal::*;
 use bytes::Bytes;
+use std::future::{Future, poll_fn};
 use std::io;
+use std::pin::pin;
 use std::process::ExitStatus;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
 
 /// How a child process ended.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,29 +48,17 @@ pub struct SharedChild {
     inner: Arc<Mutex<Child>>,
     signal: Arc<OnceLock<SignalType>>,
     pid: u32,
-    #[cfg(windows)]
-    handle: RawHandle,
+    waiter: Arc<AsyncMutex<()>>,
 }
 
 impl SharedChild {
     /// Wrap a spawned child so it can be shared across tasks.
-    #[cfg(unix)]
     pub fn new(child: Child) -> Self {
         Self {
             pid: child.id().unwrap(),
             inner: Arc::new(Mutex::new(child)),
             signal: Arc::new(OnceLock::new()),
-        }
-    }
-
-    /// Wrap a spawned child so it can be shared across tasks.
-    #[cfg(windows)]
-    pub fn new(child: Child) -> Self {
-        Self {
-            pid: child.id().unwrap(),
-            handle: RawHandle(child.raw_handle().unwrap()),
-            inner: Arc::new(Mutex::new(child)),
-            signal: Arc::new(OnceLock::new()),
+            waiter: Arc::new(AsyncMutex::new(())),
         }
     }
 
@@ -83,7 +73,7 @@ impl SharedChild {
     /// as end of input. That is usually what you want once all input has
     /// been written.
     pub async fn take_stdin(&self) -> Option<ChildStdin> {
-        self.inner.lock().await.stdin.take()
+        self.inner.lock().unwrap().stdin.take()
     }
 
     /// Take the child's stdout pipe, if it was piped and not already taken.
@@ -93,26 +83,22 @@ impl SharedChild {
     /// `SIGPIPE` on its next write, truncating its output partway through.
     /// [`Self::wait_with_output`] returns empty bytes for a pipe taken here.
     pub async fn take_stdout(&self) -> Option<ChildStdout> {
-        self.inner.lock().await.stdout.take()
+        self.inner.lock().unwrap().stdout.take()
     }
 
     /// Take the child's stderr pipe, if it was piped and not already taken.
     ///
     /// The same `SIGPIPE` caveat as [`Self::take_stdout`] applies.
     pub async fn take_stderr(&self) -> Option<ChildStderr> {
-        self.inner.lock().await.stderr.take()
+        self.inner.lock().unwrap().stderr.take()
     }
 
     /// Force kill the child immediately (`SIGKILL` on Unix, terminate on
     /// Windows), and wait for it to exit.
     pub async fn kill(&self) -> io::Result<ChildExit> {
-        if let Ok(mut child) = self.inner.try_lock() {
-            child.kill().await?;
-        } else {
-            // A waiter may hold the lock until exit. Send SIGKILL before
-            // acquiring it, using the same path as explicit signals.
-            self.kill_with_signal(SignalType::Kill).await?;
-        }
+        // Tokio checks its cached exit state before starting a kill.
+        self.inner.lock().unwrap().start_kill()?;
+        self.wait().await?;
 
         Ok(ChildExit::Killed)
     }
@@ -120,22 +106,30 @@ impl SharedChild {
     /// Send `signal` to the child and wait for it to exit. The signal is
     /// remembered, so the resulting [`ChildExit`] reflects it even if the
     /// child's own exit status doesn't carry it (e.g. on Windows).
+    /// An already reaped child is not signalled and retains its exit status.
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
-        self.signal.get_or_init(|| signal);
-
-        #[cfg(unix)]
         {
-            kill(self.pid, signal)?;
+            // Reaping and signal delivery use the same lock. Until reaped,
+            // the child retains its PID/handle even if it has already exited.
+            let child = self.inner.lock().unwrap();
+            if let Some(_pid) = child.id() {
+                #[cfg(unix)]
+                kill(_pid, signal)?;
+
+                #[cfg(windows)]
+                {
+                    // Borrow the live handle only while the lock prevents reaping
+                    // from closing it; never retain a raw handle across waits.
+                    let handle = child
+                        .raw_handle()
+                        .ok_or_else(|| io::Error::other("Child process handle is unavailable"))?;
+                    kill(_pid, RawHandle(handle), signal)?;
+                }
+
+                self.signal.get_or_init(|| signal);
+            }
         }
 
-        #[cfg(windows)]
-        {
-            kill(self.pid, self.handle.clone(), signal)?;
-        }
-
-        // Acquire the child _after_ the kill command, otherwise it waits for
-        // the command to finish running before killing, because the lock is
-        // currently owned by `wait` or `wait_with_output`!
         self.wait().await
     }
 
@@ -146,8 +140,14 @@ impl SharedChild {
     /// process it may have spawned. Unlike [`Self::wait_with_output`], no
     /// pipes are read, so a child writing to a full pipe will block forever.
     pub async fn wait(&self) -> io::Result<ChildExit> {
-        let mut child = self.inner.lock().await;
-        let status = child.wait().await?;
+        // Tokio supports one waiter. Serialize wait futures, but hold the
+        // child lock only during each poll so signals can still be delivered.
+        let _waiter = self.waiter.lock().await;
+        let status = poll_fn(|cx| {
+            let mut child = self.inner.lock().unwrap();
+            pin!(child.wait()).poll(cx)
+        })
+        .await?;
 
         Ok(convert_exit_status(status, self.signal.get().copied()))
     }
@@ -180,20 +180,21 @@ impl SharedChild {
             Ok(vec)
         }
 
-        let mut child = self.inner.lock().await;
-        let mut stdout_pipe = child.stdout.take();
-        let mut stderr_pipe = child.stderr.take();
+        let (mut stdout_pipe, mut stderr_pipe) = {
+            let mut child = self.inner.lock().unwrap();
+            (child.stdout.take(), child.stderr.take())
+        };
 
         let stdout_fut = read_to_end(&mut stdout_pipe);
         let stderr_fut = read_to_end(&mut stderr_pipe);
 
-        let (status, stdout, stderr) = try_join!(child.wait(), stdout_fut, stderr_fut)?;
+        let (exit, stdout, stderr) = try_join!(self.wait(), stdout_fut, stderr_fut)?;
 
         drop(stdout_pipe);
         drop(stderr_pipe);
 
         Ok(Output {
-            exit: convert_exit_status(status, self.signal.get().copied()),
+            exit,
             stdout: Bytes::from(stdout),
             stderr: Bytes::from(stderr),
         })
