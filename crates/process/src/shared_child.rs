@@ -106,9 +106,13 @@ impl SharedChild {
     /// Force kill the child immediately (`SIGKILL` on Unix, terminate on
     /// Windows), and wait for it to exit.
     pub async fn kill(&self) -> io::Result<ChildExit> {
-        let mut child = self.inner.lock().await;
-
-        child.kill().await?;
+        if let Ok(mut child) = self.inner.try_lock() {
+            child.kill().await?;
+        } else {
+            // A waiter may hold the lock until exit. Send SIGKILL before
+            // acquiring it, using the same path as explicit signals.
+            self.kill_with_signal(SignalType::Kill).await?;
+        }
 
         Ok(ChildExit::Killed)
     }
