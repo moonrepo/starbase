@@ -45,3 +45,21 @@ async fn signalling_after_wait_preserves_reaped_status() {
 async fn signalling_after_capture_preserves_reaped_status() {
     assert_signalling_reaped_child(true).await;
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn signalling_after_unreaped_normal_exit_preserves_status() {
+    let child = SharedChild::new(
+        Command::new("sh")
+            .args(["-c", "sleep 0.05; exit 7"])
+            .spawn()
+            .unwrap(),
+    );
+
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+
+    assert!(matches!(
+        child.kill_with_signal(SignalType::Terminate).await.unwrap(),
+        ChildExit::Completed(status) if status.code() == Some(7)
+    ));
+}

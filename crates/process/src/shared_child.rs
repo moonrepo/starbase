@@ -113,32 +113,48 @@ impl SharedChild {
     /// An already reaped child is not signalled and retains its exit status.
     /// `Kill` also stops capture readers, including after the child was reaped.
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
+        let mut completed = None;
+
         {
             // Reaping and signal delivery use the same lock. Until reaped,
             // the child retains its PID/handle even if it has already exited.
-            let child = self.inner.lock().unwrap();
+            let mut child = self.inner.lock().unwrap();
 
-            if let Some(pid) = child.id() {
-                #[cfg(unix)]
-                kill(pid, signal)?;
+            // The process may have exited since the last poll while its
+            // handle is still held by Tokio. Check that state before sending
+            // a signal so a requested signal cannot replace a real exit
+            // status with the fallback signal value.
+            if let Some(status) = child.try_wait()? {
+                completed = Some(convert_exit_status(status, None));
+            }
 
-                #[cfg(windows)]
-                {
-                    // Borrow the live handle only while the lock prevents reaping
-                    // from closing it; never retain a raw handle across waits.
-                    let handle = child
-                        .raw_handle()
-                        .ok_or_else(|| io::Error::other("Child process handle is unavailable"))?;
+            if completed.is_none() {
+                if let Some(pid) = child.id() {
+                    #[cfg(unix)]
+                    kill(pid, signal)?;
 
-                    kill(pid, RawHandle(handle), signal)?;
+                    #[cfg(windows)]
+                    {
+                        // Borrow the live handle only while the lock prevents reaping
+                        // from closing it; never retain a raw handle across waits.
+                        let handle = child.raw_handle().ok_or_else(|| {
+                            io::Error::other("Child process handle is unavailable")
+                        })?;
+
+                        kill(pid, RawHandle(handle), signal)?;
+                    }
+
+                    self.signal.get_or_init(|| signal);
                 }
-
-                self.signal.get_or_init(|| signal);
             }
         }
 
         if matches!(signal, SignalType::Kill) {
             self.stop_output();
+        }
+
+        if let Some(exit) = completed {
+            return Ok(exit);
         }
 
         self.wait().await
