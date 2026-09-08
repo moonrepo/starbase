@@ -28,23 +28,18 @@ impl<R: Reporter> Command<R> {
 
         let shared_child = registry.add_running(child).await;
 
-        let stdin = if should_pass_stdin {
-            shared_child.take_stdin().await
-        } else {
-            None
-        };
-
         self.pre_log_command(&shared_child);
 
-        let (input_result, result) = tokio::join!(self.write_input_to_stdin(stdin), async {
-            shared_child
-                .wait()
-                .await
-                .map_err(|error| ProcessError::Stream {
-                    bin: self.get_bin_name(),
-                    error: Box::new(error),
-                })
-        });
+        let (input_result, result) =
+            tokio::join!(self.write_input_to_stdin(&shared_child), async {
+                shared_child
+                    .wait()
+                    .await
+                    .map_err(|error| ProcessError::Stream {
+                        bin: self.get_bin_name(),
+                        error: Box::new(error),
+                    })
+            });
 
         self.post_log_command(&shared_child, instant);
 

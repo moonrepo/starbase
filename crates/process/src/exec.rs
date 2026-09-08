@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::process::Command as StdCommand;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
-use tokio::process::{ChildStdin, Command as TokioCommand};
+use tokio::process::Command as TokioCommand;
 use tracing::{debug, enabled};
 
 impl<R: Reporter> Command<R> {
@@ -206,18 +206,24 @@ impl<R: Reporter> Command<R> {
         debug!(pid = child.id(), "Ran command in {:?}", instant.elapsed());
     }
 
-    pub(crate) async fn write_input_to_stdin(
-        &self,
-        stdin: Option<ChildStdin>,
-    ) -> miette::Result<()> {
-        let Some(mut stdin) = stdin else {
+    pub(crate) async fn write_input_to_stdin(&self, child: &SharedChild) -> miette::Result<()> {
+        if !self.should_pass_stdin() {
+            return Ok(());
+        }
+
+        let Some(mut stdin) = child.take_stdin().await else {
             return Ok(());
         };
 
-        if let Err(error) = stdin
-            .write_all(self.input.join(OsStr::new(" ")).as_encoded_bytes())
-            .await
-        {
+        let input = self.input.join(OsStr::new(" "));
+
+        let write_result = tokio::select! {
+            biased;
+            _ = child.wait_till_output_stopped() => return Ok(()),
+            result = stdin.write_all(input.as_encoded_bytes()) => result,
+        };
+
+        if let Err(error) = write_result {
             // The child exited, or closed its stdin, before consuming all
             // input. Not a failure in itself: the child's exit status is
             // the outcome.

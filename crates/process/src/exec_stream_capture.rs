@@ -38,12 +38,6 @@ impl<R: Reporter> Command<R> {
 
         let shared_child = registry.add_running(child).await;
 
-        let stdin = if self.should_pass_stdin() {
-            shared_child.take_stdin().await
-        } else {
-            None
-        };
-
         self.pre_log_command(&shared_child);
 
         let console = self
@@ -67,26 +61,28 @@ impl<R: Reporter> Command<R> {
             shared_child.clone(),
         );
 
-        let (input_result, result) = tokio::join!(self.write_input_to_stdin(stdin), async {
-            // Wait for the pipes to hit EOF before waiting on the child,
-            // otherwise output may be lost.
-            let captured_stderr = stderr_handle.await.unwrap_or_default();
-            let captured_stdout = stdout_handle.await.unwrap_or_default();
+        let (input_result, result) =
+            tokio::join!(self.write_input_to_stdin(&shared_child), async {
+                // Wait for the pipes to hit EOF before waiting on the child,
+                // otherwise output may be lost.
+                let captured_stderr = stderr_handle.await.unwrap_or_default();
+                let captured_stdout = stdout_handle.await.unwrap_or_default();
 
-            let exit = shared_child
-                .wait()
-                .await
-                .map_err(|error| ProcessError::StreamCapture {
-                    bin: self.get_bin_name(),
-                    error: Box::new(error),
-                })?;
+                let exit =
+                    shared_child
+                        .wait()
+                        .await
+                        .map_err(|error| ProcessError::StreamCapture {
+                            bin: self.get_bin_name(),
+                            error: Box::new(error),
+                        })?;
 
-            Ok::<_, miette::Report>(Output {
-                exit,
-                stdout: Bytes::from(captured_stdout),
-                stderr: Bytes::from(captured_stderr),
-            })
-        });
+                Ok::<_, miette::Report>(Output {
+                    exit,
+                    stdout: Bytes::from(captured_stdout),
+                    stderr: Bytes::from(captured_stderr),
+                })
+            });
 
         self.post_log_command(&shared_child, instant);
 

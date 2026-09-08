@@ -35,23 +35,18 @@ impl<R: Reporter> Command<R> {
 
         let shared_child = registry.add_running(child).await;
 
-        let stdin = if should_pass_stdin {
-            shared_child.take_stdin().await
-        } else {
-            None
-        };
-
         self.pre_log_command(&shared_child);
 
-        let (input_result, result) = tokio::join!(self.write_input_to_stdin(stdin), async {
-            shared_child
-                .wait_with_output()
-                .await
-                .map_err(|error| ProcessError::Capture {
-                    bin: self.get_bin_name(),
-                    error: Box::new(error),
-                })
-        });
+        let (input_result, result) =
+            tokio::join!(self.write_input_to_stdin(&shared_child), async {
+                shared_child
+                    .wait_with_output()
+                    .await
+                    .map_err(|error| ProcessError::Capture {
+                        bin: self.get_bin_name(),
+                        error: Box::new(error),
+                    })
+            });
 
         self.post_log_command(&shared_child, instant);
 
@@ -126,10 +121,20 @@ impl<R: Reporter> Command<R> {
         let items = std::mem::take(&mut self.input);
         let bin_name = self.get_bin_name();
 
+        let stdin_child = shared_child.clone();
         let stdin_handle: JoinHandle<miette::Result<()>> = task::spawn(async move {
             if let Some(mut stdin) = stdin {
+                let stopped = stdin_child.wait_till_output_stopped();
+                tokio::pin!(stopped);
+
                 for item in items {
-                    if let Err(error) = stdin.write_all(item.as_encoded_bytes()).await {
+                    let write_result = tokio::select! {
+                        biased;
+                        _ = &mut stopped => break,
+                        result = stdin.write_all(item.as_encoded_bytes()) => result,
+                    };
+
+                    if let Err(error) = write_result {
                         // The child exited, or closed its stdin, before
                         // consuming all input (e.g. `git hash-object`
                         // erroring on a missing file). Not a failure in
