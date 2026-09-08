@@ -303,6 +303,27 @@ mod wait_with_output {
     }
 
     #[tokio::test]
+    async fn preserves_success_when_child_handles_termination_signal() {
+        use tokio::io::AsyncReadExt;
+
+        let child = spawn_printing("trap 'exit 0' TERM; printf ready; while :; do :; done");
+        let mut stdout = child.take_stdout().await.unwrap();
+        let mut ready = [0; 5];
+
+        stdout.read_exact(&mut ready).await.unwrap();
+        assert_eq!(&ready, b"ready");
+
+        assert!(matches!(
+            child.kill_with_signal(SignalType::Terminate).await.unwrap(),
+            ChildExit::Completed(status) if status.success()
+        ));
+        assert!(matches!(
+            child.wait_with_output().await.unwrap().exit,
+            ChildExit::Completed(status) if status.success()
+        ));
+    }
+
+    #[tokio::test]
     async fn preserves_non_utf8_bytes() {
         let output = spawn_printing(r"printf 'a\377b'")
             .wait_with_output()

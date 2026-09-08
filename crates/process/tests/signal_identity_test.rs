@@ -34,6 +34,9 @@ async fn assert_signalling_reaped_child(capture: bool) {
         );
         assert_eq!(child.wait().await.unwrap(), original);
     }
+
+    assert_eq!(child.clone().kill().await.unwrap(), original);
+    assert_eq!(child.wait().await.unwrap(), original);
 }
 
 #[tokio::test]

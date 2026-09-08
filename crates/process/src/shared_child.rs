@@ -116,17 +116,11 @@ impl SharedChild {
     /// Windows), stop capturing output, and wait for it to exit.
     /// Bytes already captured are retained; unread output may be truncated.
     pub async fn kill(&self) -> io::Result<ChildExit> {
-        // Tokio checks its cached exit state before starting a kill.
-        self.inner.lock().unwrap().start_kill()?;
-        self.stop_output();
-        self.wait().await?;
-
-        Ok(ChildExit::Killed)
+        self.kill_with_signal(SignalType::Kill).await
     }
 
-    /// Send `signal` to the child and wait for it to exit. The signal is
-    /// remembered, so the resulting [`ChildExit`] reflects it even if the
-    /// child's own exit status doesn't carry it (e.g. on Windows).
+    /// Send `signal` to the child and wait for it to exit. On Windows, the
+    /// signal is remembered because its exit status does not carry it.
     /// An already reaped child is not signalled and retains its exit status.
     /// `Kill` also stops capture readers, including after the child was reaped.
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
@@ -190,7 +184,15 @@ impl SharedChild {
             kill(pid, RawHandle(handle), signal)?;
         }
 
+        // `CTRL-C` cannot be delivered to an individual Windows process, so
+        // do not report it as an interrupt when the process exits normally.
+        #[cfg(not(windows))]
         self.signal.get_or_init(|| signal);
+
+        #[cfg(windows)]
+        if !matches!(signal, SignalType::Interrupt) {
+            self.signal.get_or_init(|| signal);
+        }
 
         if matches!(signal, SignalType::Kill) {
             self.stop_output();
@@ -332,7 +334,7 @@ impl Drop for SharedChild {
     }
 }
 
-fn convert_exit_status(status: ExitStatus, raw_signal: Option<SignalType>) -> ChildExit {
+fn convert_exit_status(status: ExitStatus, _raw_signal: Option<SignalType>) -> ChildExit {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;
@@ -346,15 +348,15 @@ fn convert_exit_status(status: ExitStatus, raw_signal: Option<SignalType>) -> Ch
         }
     }
 
-    // The Unix signal above sometimes doesn't capture the correct
-    // wait status, so to support those edges, and Windows in general,
-    // we'll read the raw signal that we explicitly used
-    if let Some(signal) = raw_signal {
-        return match signal {
-            SignalType::Interrupt => ChildExit::Interrupted,
-            SignalType::Kill => ChildExit::Killed,
-            other => ChildExit::Terminated(other.get_code()),
-        };
+    #[cfg(not(unix))]
+    {
+        if let Some(signal) = _raw_signal {
+            return match signal {
+                SignalType::Interrupt => ChildExit::Interrupted,
+                SignalType::Kill => ChildExit::Killed,
+                other => ChildExit::Terminated(other.get_code()),
+            };
+        }
     }
 
     ChildExit::Completed(status)
