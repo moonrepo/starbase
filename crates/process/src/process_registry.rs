@@ -94,6 +94,17 @@ impl ProcessRegistry {
         Arc::clone(INSTANCE.get_or_init(|| Arc::new(ProcessRegistry::default())))
     }
 
+    pub(crate) async fn get_cached_output(&self, key: &str) -> miette::Result<Option<Output>> {
+        Ok(self.cache.read_async(key, |_, output| output.clone()).await)
+    }
+
+    pub(crate) async fn cache_output(&self, key: String, output: Output) {
+        // Another identical command may have completed while this one ran.
+        // Keeping the first result is sufficient because both have the same
+        // cache identity.
+        let _ = self.cache.put_async(key, output).await;
+    }
+
     /// Wrap a spawned child and register it as running, so it's tracked
     /// for lookup and shutdown.
     pub async fn add_running(&self, child: Child) -> SharedChild {

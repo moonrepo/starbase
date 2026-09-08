@@ -3,7 +3,6 @@ use crate::output::Output;
 use crate::process_error::ProcessError;
 use crate::process_registry::ProcessRegistry;
 use bytes::Bytes;
-use scc::hash_cache::Entry;
 use starbase_console::{ConsoleStream, Reporter};
 use std::io;
 use std::process::Stdio;
@@ -114,22 +113,19 @@ impl<R: Reporter> Command<R> {
                 .await;
         }
 
-        match registry
-            .cache
-            .entry_async(self.get_output_cache_key("stream-capture"))
-            .await
-        {
-            Entry::Occupied(entry) => self.handle_cached_output(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let output = self
-                    .internal_exec_stream_and_capture_output(&registry)
-                    .await?;
+        let key = self.get_output_cache_key("stream-capture");
 
-                entry.put_entry(output.clone());
-
-                Ok(output)
-            }
+        if let Some(output) = registry.get_cached_output(&key).await? {
+            return Ok(output);
         }
+
+        let output = self
+            .internal_exec_stream_and_capture_output(&registry)
+            .await?;
+
+        registry.cache_output(key, output.clone()).await;
+
+        Ok(output)
     }
 }
 

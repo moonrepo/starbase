@@ -11,6 +11,7 @@ use std::collections::VecDeque;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::hash::Hasher;
+use std::sync::OnceLock;
 
 /// Debugging and environment-detection flags for a [`Command`], typically
 /// set by the host application rather than by end users.
@@ -374,8 +375,10 @@ impl<R: Reporter> Command<R> {
 
     /// Compute a stable hash identifying this command's executable,
     /// arguments, environment, working directory, input, shell, and lookup
-    /// paths. Two commands with the same key are expected to produce the
-    /// same output.
+    /// paths. The system environment is snapshotted once and the current
+    /// working directory is included because they affect commands without
+    /// explicit configuration. Two commands with the same key are expected to
+    /// produce the same output.
     pub fn get_cache_key(&self) -> String {
         let mut hasher = FxHasher::default();
 
@@ -426,6 +429,8 @@ impl<R: Reporter> Command<R> {
             };
         }
 
+        hasher.write_u64(get_system_env_cache_key());
+
         match &self.exe {
             Executable::Binary(exe) => {
                 hasher.write_u8(0);
@@ -443,6 +448,14 @@ impl<R: Reporter> Command<R> {
         }
 
         write_optional(&mut hasher, self.cwd.as_deref());
+
+        // `current_dir` is still relevant when `cwd` is absent, and when a
+        // relative `cwd` is resolved by the spawned command.
+        let inherited_cwd = env::current_dir().ok();
+        write_optional(
+            &mut hasher,
+            inherited_cwd.as_ref().map(|cwd| cwd.as_os_str()),
+        );
 
         hasher.write_usize(self.input.len());
         for input in &self.input {
@@ -645,4 +658,27 @@ impl<R: Reporter> Command<R> {
             console: Some(console),
         }
     }
+}
+
+fn get_system_env_cache_key() -> u64 {
+    static SYSTEM_ENV_CACHE_KEY: OnceLock<u64> = OnceLock::new();
+
+    *SYSTEM_ENV_CACHE_KEY.get_or_init(|| {
+        let mut hasher = FxHasher::default();
+        let mut env = env::vars_os().collect::<Vec<_>>();
+
+        env.sort_by(|a, b| a.0.cmp(&b.0));
+
+        hasher.write_usize(env.len());
+
+        for (key, value) in env {
+            for value in [&key, &value] {
+                let bytes = value.as_encoded_bytes();
+                hasher.write_usize(bytes.len());
+                hasher.write(bytes);
+            }
+        }
+
+        hasher.finish()
+    })
 }
