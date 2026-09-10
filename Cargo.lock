@@ -3070,7 +3070,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "starbase"
-version = "0.13.2"
+version = "0.13.3"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3098,7 +3098,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.14.4"
+version = "0.14.5"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -3118,7 +3118,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_args"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "pest",
  "pest_derive",
@@ -3211,7 +3211,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "base64 0.23.1",
  "libc",
@@ -3227,7 +3227,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_styles"
-version = "0.6.9"
+version = "0.6.10"
 dependencies = [
  "dirs",
  "miette",

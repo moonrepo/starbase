@@ -9,8 +9,8 @@ rust-version = "1.89.0"
 
 [dependencies]
 starbase_console = { version = "0.6.34", path = "../console" }
-starbase_shell = { version = "0.14.0", path = "../shell" }
-starbase_styles = { version = "0.6.9", path = "../styles" }
+starbase_shell = { version = "0.14.1", path = "../shell" }
+starbase_styles = { version = "0.6.10", path = "../styles" }
 bytes = { workspace = true }
 miette = { workspace = true }
 rustc-hash = { workspace = true }
