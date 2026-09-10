@@ -18,6 +18,24 @@ impl Nu {
         Self
     }
 
+    /// The first line of the entry a hook function stages in `pre_prompt`,
+    /// which is how that entry is told apart from every other one.
+    fn staged_marker(function: &str) -> String {
+        format!("# {function} apply")
+    }
+
+    /// A `where` predicate that drops the entry a hook function staged, and
+    /// keeps everything else. Nushell lets a `pre_prompt` entry be a string, a
+    /// closure, or a record whose `code` is a string or a closure (with an
+    /// optional `condition`), so the entry is only inspected as a record, and
+    /// its `code` only compared as a string: piping a closure into
+    /// `str starts-with` is a hard error that aborts the whole hook.
+    fn staged_filter(marker: &str) -> String {
+        format!(
+            r#"{{ |it| let code = (if ($it | describe | str starts-with "record") {{ $it | get --optional code | default "" }} else {{ "" }}); not (($code | describe) == "string" and ($code | str starts-with "{marker}")) }}"#
+        )
+    }
+
     fn join_path(&self, value: impl AsRef<str>) -> Option<String> {
         let parts = value
             .as_ref()
@@ -204,12 +222,13 @@ impl Shell for Nu {
 
                 // Identifies the staged entry by its first line, so that a
                 // second write replaces it, and so that it can remove itself
-                let marker = format!("# {function} apply");
+                let marker = Self::staged_marker(&function);
+                let filter = Self::staged_filter(&marker);
 
                 // Removes the staged entry once it has run, which is what
                 // makes it a one shot
                 let cleanup = format!(
-                    r#"$env.config = ($env.config | upsert hooks.pre_prompt ((($env.config | get --optional hooks.pre_prompt) | default []) | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{marker}")) }}))"#
+                    r#"$env.config = ($env.config | upsert hooks.pre_prompt ((($env.config | get --optional hooks.pre_prompt) | default []) | where {filter}))"#
                 );
 
                 let staged = format!(
@@ -221,6 +240,7 @@ impl Shell for Nu {
                     &[
                         ("command", &command),
                         ("file", &file),
+                        ("filter", &filter),
                         ("function", &function),
                         ("marker", &marker),
                         ("staged", &staged),
@@ -231,10 +251,14 @@ impl Shell for Nu {
                 include_str!("hooks/register/nu.nu"),
                 &[("function", &function)],
             ),
-            Hook::UnregisterHandlers { function } => render_template(
-                include_str!("hooks/unregister/nu.nu"),
-                &[("function", &function)],
-            ),
+            Hook::UnregisterHandlers { function } => {
+                let filter = Self::staged_filter(&Self::staged_marker(&function));
+
+                render_template(
+                    include_str!("hooks/unregister/nu.nu"),
+                    &[("filter", &filter), ("function", &function)],
+                )
+            }
         }))
     }
 

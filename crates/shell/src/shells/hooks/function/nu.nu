@@ -15,8 +15,11 @@ export def --env ${{ function }} [] {
     # stderr is left alone
     try { ${{ command }} | save --force $file } catch { "" | save --force $file }
 
+    # An entry staged by an earlier call is replaced rather than duplicated.
+    # Other entries may be strings, closures, or records holding either, and
+    # are left alone
     let entries = ((($env.config | get --optional hooks.pre_prompt) | default [])
-        | where { |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "${{ marker }}")) })
+        | where ${{ filter }})
 
     $env.config = ($env.config | upsert hooks.pre_prompt ($entries | append { code: ${{ staged }} }))
 }

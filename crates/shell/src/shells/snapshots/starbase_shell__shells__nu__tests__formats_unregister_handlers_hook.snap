@@ -13,8 +13,8 @@ export-env {
     # too: the handler may have staged a fresh activation on this very prompt,
     # and left alone it would resurrect the environment right after teardown
     $env.config = ($env.config | upsert hooks.pre_prompt (
-        (($env.config | get --optional hooks.pre_prompt) | default []) | where { |it|
-            $it != $entry and (not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "# _starbase_hook apply")))
-        }
+        (($env.config | get --optional hooks.pre_prompt) | default [])
+            | where { |it| $it != $entry }
+            | where { |it| let code = (if ($it | describe | str starts-with "record") { $it | get --optional code | default "" } else { "" }); not (($code | describe) == "string" and ($code | str starts-with "# _starbase_hook apply")) }
     ))
 }

@@ -9,8 +9,8 @@ export-env {
     # too: the handler may have staged a fresh activation on this very prompt,
     # and left alone it would resurrect the environment right after teardown
     $env.config = ($env.config | upsert hooks.pre_prompt (
-        (($env.config | get --optional hooks.pre_prompt) | default []) | where { |it|
-            $it != $entry and (not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "# ${{ function }} apply")))
-        }
+        (($env.config | get --optional hooks.pre_prompt) | default [])
+            | where { |it| $it != $entry }
+            | where ${{ filter }}
     ))
 }
