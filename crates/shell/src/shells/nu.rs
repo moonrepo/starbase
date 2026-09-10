@@ -18,6 +18,35 @@ impl Nu {
         Self
     }
 
+    /// The file a hook function writes its statements to. Keyed by pid, so
+    /// concurrent sessions cannot read each other's statements, and by
+    /// function, so two tools cannot clobber each other.
+    fn staged_file(function: &str) -> String {
+        format!(r#"$"($nu.temp-dir)/{function}-($nu.pid).nu""#)
+    }
+
+    /// The `pre_prompt` entry that applies the statements a hook function
+    /// wrote. `source` requires a parse time constant path (a runtime path
+    /// fails with `nu::shell::not_a_constant`), so the name is baked in.
+    ///
+    /// The entry is built from nothing but the function name, so every site
+    /// that has to find it in the hook list can rebuild it and compare whole
+    /// records. That comparison is type safe: nushell lets an entry be a
+    /// string, a closure, or a record holding either, and `==` between
+    /// mismatched types is simply false, whereas inspecting an entry's `code`
+    /// is a hard error for the shapes that have none.
+    fn apply_entry(function: &str) -> String {
+        let file = Self::staged_file(function);
+        let file_const = format!("{function}_file");
+
+        // The file is emptied rather than removed once it has run, so the
+        // entry can stay put and be re-parsed harmlessly on every prompt.
+        // Removing itself would require the entry to contain its own text
+        format!(
+            "{{ code: '# {function} apply\nconst {file_const} = {file}\nsource ${file_const}\n\"\" | save --force ${file_const}' }}"
+        )
+    }
+
     fn join_path(&self, value: impl AsRef<str>) -> Option<String> {
         let parts = value
             .as_ref()
@@ -197,33 +226,16 @@ impl Shell for Nu {
         // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
             Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
-                // The statements are applied by a `source` entry staged on the
-                // next prompt, which finds them at this path
-                let file = format!(r#"$"($nu.temp-dir)/{function}-($nu.pid).nu""#);
-                let file_const = format!("{function}_file");
-
-                // Identifies the staged entry by its first line, so that a
-                // second write replaces it, and so that it can remove itself
-                let marker = format!("# {function} apply");
-
-                // Removes the staged entry once it has run, which is what
-                // makes it a one shot
-                let cleanup = format!(
-                    r#"$env.config = ($env.config | upsert hooks.pre_prompt ((($env.config | get --optional hooks.pre_prompt) | default []) | where {{ |it| not (($it | describe | str starts-with "record") and (($it | get --optional code | default "") | str starts-with "{marker}")) }}))"#
-                );
-
-                let staged = format!(
-                    "'{marker}\nconst {file_const} = {file}\nsource ${file_const}\nrm --force --permanent ${file_const}\n{cleanup}'"
-                );
+                let file = Self::staged_file(&function);
+                let apply = Self::apply_entry(&function);
 
                 render_template(
                     include_str!("hooks/function/nu.nu"),
                     &[
+                        ("apply", &apply),
                         ("command", &command),
                         ("file", &file),
                         ("function", &function),
-                        ("marker", &marker),
-                        ("staged", &staged),
                     ],
                 )
             }
@@ -231,10 +243,14 @@ impl Shell for Nu {
                 include_str!("hooks/register/nu.nu"),
                 &[("function", &function)],
             ),
-            Hook::UnregisterHandlers { function } => render_template(
-                include_str!("hooks/unregister/nu.nu"),
-                &[("function", &function)],
-            ),
+            Hook::UnregisterHandlers { function } => {
+                let apply = Self::apply_entry(&function);
+
+                render_template(
+                    include_str!("hooks/unregister/nu.nu"),
+                    &[("apply", &apply), ("function", &function)],
+                )
+            }
         }))
     }
 

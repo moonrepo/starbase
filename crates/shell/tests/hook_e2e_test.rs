@@ -357,8 +357,8 @@ fn nu_activates_and_deactivates() {
     // Sourcing the same file twice dedupes the `export def`s at parse time, but
     // re-runs `export-env`, so the second source exercises the registration
     // dedup guard. Each function writes its statements to a file of its own and
-    // stages a one shot entry to apply them, so calling one adds an entry to
-    // `pre_prompt` rather than changing what is registered.
+    // keeps an entry in `pre_prompt` that applies them, so calling one adds an
+    // entry there rather than changing what is registered.
     sandbox.create_file(
         "test.nu",
         format!(
@@ -408,8 +408,8 @@ print $"teardown=(statements $sb_deactivate) hooks=(registered)"
 source "./unhook.nu"
 
 # 0,1: the registration is gone from both triggers, and so is the activate
-# function's staged entry, which would otherwise re-apply after teardown. The
-# deactivate function's staged entry remains, still holding work to do.
+# function's apply entry, which would otherwise re-apply after teardown. The
+# deactivate function's apply entry remains, still holding work to do.
 print $"unhooked=(registered)"
 "#
         ),
@@ -426,6 +426,65 @@ print $"unhooked=(registered)"
              teardown=hide-env --ignore-errors E2E_FOO,hide e2e_ll hooks=1,3\n\
              unhooked=0,1\n"
                 .replace("PATH_KEY", path_key)
+        );
+    }
+}
+
+// A `pre_prompt` entry may be a string, a closure, or a record whose `code`
+// is either, optionally with a `condition`. The hook functions filter that
+// list to find their own apply entry, and must not choke on any of the other
+// shapes, nor drop them (https://github.com/moonrepo/starbase/issues/221).
+#[test]
+fn nu_leaves_other_hook_entries_alone() {
+    let hook = format_hook(
+        ShellType::Nu,
+        r#"echo "$env.E2E_FOO = '123'""#,
+        r#"echo "hide-env --ignore-errors E2E_FOO""#,
+    );
+
+    let sandbox = create_empty_sandbox();
+    sandbox.create_file("hook.nu", &hook);
+    sandbox.create_file("unhook.nu", format_unhook(ShellType::Nu));
+
+    sandbox.create_file(
+        "test.nu",
+        r#"$env.config = ($env.config | upsert hooks.pre_prompt [
+    "print string-hook"
+    {|| print closure-hook }
+    { code: "print record-string-hook" }
+    { code: {|| print record-closure-hook } }
+    { code: {|| print conditional-hook }, condition: {|| true } }
+    { condition: {|| true } }
+])
+
+def shapes [] {
+    ($env.config | get --optional hooks.pre_prompt) | default [] | each { |it| $it | describe } | str join ","
+}
+
+source "./hook.nu"
+
+# Activating twice stages one entry, and that is the only addition: the six
+# entries the user had, then the registered function, then the apply entry
+_starbase_activate
+_starbase_activate
+
+print $"activated=(shapes)"
+
+# Unregistering removes the function and its apply entry, and nothing else
+source "./unhook.nu"
+
+print $"unhooked=(shapes)"
+"#,
+    );
+
+    if let Some(output) = run_script(&sandbox, "nu", &["./test.nu"]) {
+        assert_eq!(
+            stdout(&output),
+            "activated=string,closure,record<code: string>,record<code: closure>,\
+             record<code: closure, condition: closure>,record<condition: closure>,\
+             record<code: string>,record<code: string>\n\
+             unhooked=string,closure,record<code: string>,record<code: closure>,\
+             record<code: closure, condition: closure>,record<condition: closure>\n"
         );
     }
 }
