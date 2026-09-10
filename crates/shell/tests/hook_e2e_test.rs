@@ -357,8 +357,8 @@ fn nu_activates_and_deactivates() {
     // Sourcing the same file twice dedupes the `export def`s at parse time, but
     // re-runs `export-env`, so the second source exercises the registration
     // dedup guard. Each function writes its statements to a file of its own and
-    // stages a one shot entry to apply them, so calling one adds an entry to
-    // `pre_prompt` rather than changing what is registered.
+    // keeps an entry in `pre_prompt` that applies them, so calling one adds an
+    // entry there rather than changing what is registered.
     sandbox.create_file(
         "test.nu",
         format!(
@@ -408,8 +408,8 @@ print $"teardown=(statements $sb_deactivate) hooks=(registered)"
 source "./unhook.nu"
 
 # 0,1: the registration is gone from both triggers, and so is the activate
-# function's staged entry, which would otherwise re-apply after teardown. The
-# deactivate function's staged entry remains, still holding work to do.
+# function's apply entry, which would otherwise re-apply after teardown. The
+# deactivate function's apply entry remains, still holding work to do.
 print $"unhooked=(registered)"
 "#
         ),
@@ -432,7 +432,7 @@ print $"unhooked=(registered)"
 
 // A `pre_prompt` entry may be a string, a closure, or a record whose `code`
 // is either, optionally with a `condition`. The hook functions filter that
-// list to find their own staged entry, and must not choke on any of the other
+// list to find their own apply entry, and must not choke on any of the other
 // shapes, nor drop them (https://github.com/moonrepo/starbase/issues/221).
 #[test]
 fn nu_leaves_other_hook_entries_alone() {
@@ -464,13 +464,13 @@ def shapes [] {
 source "./hook.nu"
 
 # Activating twice stages one entry, and that is the only addition: the six
-# entries the user had, then the registered function, then the staged entry
+# entries the user had, then the registered function, then the apply entry
 _starbase_activate
 _starbase_activate
 
 print $"activated=(shapes)"
 
-# Unregistering removes the function and its staged entry, and nothing else
+# Unregistering removes the function and its apply entry, and nothing else
 source "./unhook.nu"
 
 print $"unhooked=(shapes)"

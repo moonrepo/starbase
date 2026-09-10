@@ -186,20 +186,27 @@ workaround defines the whole activate/deactivate mechanism:
 - The activate function writes the command's output to a temp file —
   `$nu.temp-dir/<function>-<pid>.nu`, keyed by pid so concurrent sessions
   cannot cross-read, and by function so two tools cannot clobber each other —
-  and stages a **one-shot `pre_prompt` entry** that `source`s the file and
-  removes itself. Only a hook entry defined as a *string* is parsed in the
-  scope that triggered it, which is what lets the sourced statements take
-  effect in the session.
+  and keeps an **apply entry in `pre_prompt`** that `source`s the file and
+  then empties it. Only a hook entry defined as a *string* is parsed in the
+  scope that triggered it, and it is re-parsed each time it runs, which is
+  what lets the sourced statements take effect in the session. Sourcing the
+  emptied file on later prompts is a no-op.
 - `source` requires a parse-time constant path, so the path is baked into the
-  staged entry as a `const`.
+  apply entry as a `const`.
 - Consequences: statements land at the **next prompt**, not at the call; and
   a failing command stages nothing rather than aborting the prompt.
-- **Unregistration purges pending staged entries too** (matched by their
-  `# <function> apply` first line). Without this there is a resurrection
-  race: on the prompt where a staged deactivation applies, the
-  still-registered handler has already staged a fresh activation, which would
-  re-apply one prompt after teardown. This was observed as a flaky test
-  before the purge existed.
+- The apply entry is built from the function name alone, so the function and
+  the unregistration hook **find it by whole-record equality**, never by
+  inspecting its fields. A `pre_prompt` entry may be a string, a closure, or a
+  record whose `code` is either, and `==` across those types is simply false,
+  whereas reading `code` from one is a hard error (issue #221). The entry
+  cannot remove itself, as that would require it to contain its own text,
+  which is why it stays and empties the file instead.
+- **Unregistration purges the apply entry too.** Without this there is a
+  resurrection race: on the prompt where a staged deactivation applies, the
+  still-registered handler has already written a fresh activation, which
+  would re-apply one prompt after teardown. This was observed as a flaky
+  test before the purge existed.
 - Nu **cannot undefine commands**. Deactivated functions survive; calling one
   writes a staged file that the next activation overwrites before it can
   apply, so it is harmless. `UnsetFunction` renders `hide`, which makes the
@@ -321,8 +328,8 @@ rendered by `render_template` in `helpers.rs`:
   and asserts no `${{` survives. That test demonstrably catches a
   single-character placeholder typo.
 - Nu is the one shell whose template takes computed values (`file`,
-  `marker`, `staged`, …) built in `nu.rs`, since parts of its staged entry
-  are themselves generated.
+  `apply`) built in `nu.rs`, since its apply entry is itself generated, and
+  is rebuilt identically wherever it has to be found by equality.
 - A literal `$` immediately before a placeholder is fine: sh renders
   `$${{ function }}_output` → `$_activate_output`.
 

@@ -18,21 +18,32 @@ impl Nu {
         Self
     }
 
-    /// The first line of the entry a hook function stages in `pre_prompt`,
-    /// which is how that entry is told apart from every other one.
-    fn staged_marker(function: &str) -> String {
-        format!("# {function} apply")
+    /// The file a hook function writes its statements to. Keyed by pid, so
+    /// concurrent sessions cannot read each other's statements, and by
+    /// function, so two tools cannot clobber each other.
+    fn staged_file(function: &str) -> String {
+        format!(r#"$"($nu.temp-dir)/{function}-($nu.pid).nu""#)
     }
 
-    /// A `where` predicate that drops the entry a hook function staged, and
-    /// keeps everything else. Nushell lets a `pre_prompt` entry be a string, a
-    /// closure, or a record whose `code` is a string or a closure (with an
-    /// optional `condition`), so the entry is only inspected as a record, and
-    /// its `code` only compared as a string: piping a closure into
-    /// `str starts-with` is a hard error that aborts the whole hook.
-    fn staged_filter(marker: &str) -> String {
+    /// The `pre_prompt` entry that applies the statements a hook function
+    /// wrote. `source` requires a parse time constant path (a runtime path
+    /// fails with `nu::shell::not_a_constant`), so the name is baked in.
+    ///
+    /// The entry is built from nothing but the function name, so every site
+    /// that has to find it in the hook list can rebuild it and compare whole
+    /// records. That comparison is type safe: nushell lets an entry be a
+    /// string, a closure, or a record holding either, and `==` between
+    /// mismatched types is simply false, whereas inspecting an entry's `code`
+    /// is a hard error for the shapes that have none.
+    fn apply_entry(function: &str) -> String {
+        let file = Self::staged_file(function);
+        let file_const = format!("{function}_file");
+
+        // The file is emptied rather than removed once it has run, so the
+        // entry can stay put and be re-parsed harmlessly on every prompt.
+        // Removing itself would require the entry to contain its own text
         format!(
-            r#"{{ |it| let code = (if ($it | describe | str starts-with "record") {{ $it | get --optional code | default "" }} else {{ "" }}); not (($code | describe) == "string" and ($code | str starts-with "{marker}")) }}"#
+            "{{ code: '# {function} apply\nconst {file_const} = {file}\nsource ${file_const}\n\"\" | save --force ${file_const}' }}"
         )
     }
 
@@ -215,35 +226,16 @@ impl Shell for Nu {
         // https://www.nushell.sh/book/hooks.html#adding-a-single-hook-to-existing-config
         Ok(normalize_newlines(match hook {
             Hook::Activate { command, function } | Hook::Deactivate { command, function } => {
-                // The statements are applied by a `source` entry staged on the
-                // next prompt, which finds them at this path
-                let file = format!(r#"$"($nu.temp-dir)/{function}-($nu.pid).nu""#);
-                let file_const = format!("{function}_file");
-
-                // Identifies the staged entry by its first line, so that a
-                // second write replaces it, and so that it can remove itself
-                let marker = Self::staged_marker(&function);
-                let filter = Self::staged_filter(&marker);
-
-                // Removes the staged entry once it has run, which is what
-                // makes it a one shot
-                let cleanup = format!(
-                    r#"$env.config = ($env.config | upsert hooks.pre_prompt ((($env.config | get --optional hooks.pre_prompt) | default []) | where {filter}))"#
-                );
-
-                let staged = format!(
-                    "'{marker}\nconst {file_const} = {file}\nsource ${file_const}\nrm --force --permanent ${file_const}\n{cleanup}'"
-                );
+                let file = Self::staged_file(&function);
+                let apply = Self::apply_entry(&function);
 
                 render_template(
                     include_str!("hooks/function/nu.nu"),
                     &[
+                        ("apply", &apply),
                         ("command", &command),
                         ("file", &file),
-                        ("filter", &filter),
                         ("function", &function),
-                        ("marker", &marker),
-                        ("staged", &staged),
                     ],
                 )
             }
@@ -252,11 +244,11 @@ impl Shell for Nu {
                 &[("function", &function)],
             ),
             Hook::UnregisterHandlers { function } => {
-                let filter = Self::staged_filter(&Self::staged_marker(&function));
+                let apply = Self::apply_entry(&function);
 
                 render_template(
                     include_str!("hooks/unregister/nu.nu"),
-                    &[("filter", &filter), ("function", &function)],
+                    &[("apply", &apply), ("function", &function)],
                 )
             }
         }))

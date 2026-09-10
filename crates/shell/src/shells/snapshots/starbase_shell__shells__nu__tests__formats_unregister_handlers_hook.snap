@@ -4,17 +4,19 @@ expression: "Nu.format_hook(Hook::UnregisterHandlers\n{ function: \"_starbase_ho
 ---
 export-env {
     let entry = { code: "_starbase_hook" }
+    let apply = { code: '# _starbase_hook apply
+const _starbase_hook_file = $"($nu.temp-dir)/_starbase_hook-($nu.pid).nu"
+source $_starbase_hook_file
+"" | save --force $_starbase_hook_file' }
 
     $env.config = ($env.config | upsert hooks.env_change.PWD (
         (($env.config | get --optional hooks.env_change.PWD) | default []) | where { |it| $it != $entry }
     ))
 
-    # Statements the function staged but that have not applied yet are dropped
-    # too: the handler may have staged a fresh activation on this very prompt,
-    # and left alone it would resurrect the environment right after teardown
+    # The entry that applies the function's statements goes too: the handler
+    # may have written a fresh activation on this very prompt, and left alone
+    # it would resurrect the environment right after teardown
     $env.config = ($env.config | upsert hooks.pre_prompt (
-        (($env.config | get --optional hooks.pre_prompt) | default [])
-            | where { |it| $it != $entry }
-            | where { |it| let code = (if ($it | describe | str starts-with "record") { $it | get --optional code | default "" } else { "" }); not (($code | describe) == "string" and ($code | str starts-with "# _starbase_hook apply")) }
+        (($env.config | get --optional hooks.pre_prompt) | default []) | where { |it| $it != $entry and $it != $apply }
     ))
 }
