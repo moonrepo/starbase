@@ -1,7 +1,10 @@
 #![cfg(unix)]
 
 use starbase_process::{ProcessRegistry, SignalType};
+use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 
 fn spawn_sleep() -> Child {
@@ -148,6 +151,38 @@ mod process_registry {
         assert_eq!(
             child.wait().await.unwrap(),
             starbase_process::ChildExit::Terminated(15)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_second_signal_force_kills_without_waiting_for_the_threshold() {
+        let registry = ProcessRegistry::new(5000);
+        let child = registry
+            .add_running(
+                Command::new("sh")
+                    .args(["-c", "trap '' TERM; echo ready; exec sleep 30"])
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .unwrap(),
+            )
+            .await;
+
+        let mut ready = String::new();
+        BufReader::new(child.take_stdout().await.unwrap())
+            .read_line(&mut ready)
+            .await
+            .unwrap();
+        assert_eq!(ready, "ready\n");
+
+        registry.terminate_running();
+        registry.terminate_running();
+
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(1), child.wait())
+                .await
+                .expect("second signal did not bypass the shutdown threshold")
+                .unwrap(),
+            starbase_process::ChildExit::Killed
         );
     }
 

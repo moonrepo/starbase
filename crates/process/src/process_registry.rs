@@ -25,7 +25,8 @@ pub struct ProcessRegistry {
 
     /// Milliseconds to wait for running processes to shut down gracefully
     /// after a termination signal, before force killing them. `0` waits
-    /// on them indefinitely instead of force killing.
+    /// on them indefinitely instead of force killing. A second signal
+    /// skips this wait while any child from the first shutdown is running.
     pub threshold: u32,
 
     running: RunningProcessesMap,
@@ -217,24 +218,42 @@ async fn shutdown_processes_from_signal(
     processes: RunningProcessesMap,
     threshold: u32,
 ) {
+    let mut pending_signal = None;
+
     loop {
-        let signal = match receiver.recv().await {
-            Ok(signal) => signal,
-            Err(broadcast::error::RecvError::Lagged(_)) => SignalType::Kill,
-            Err(broadcast::error::RecvError::Closed) => break,
+        let signal = match pending_signal.take() {
+            Some(signal) => signal,
+            None => match receiver.recv().await {
+                Ok(signal) => signal,
+                Err(broadcast::error::RecvError::Lagged(_)) => SignalType::Kill,
+                Err(broadcast::error::RecvError::Closed) => break,
+            },
         };
 
-        shutdown_processes(signal, processes.clone(), threshold).await;
+        pending_signal =
+            shutdown_processes(signal, processes.clone(), &mut receiver, threshold).await;
     }
 }
 
-async fn shutdown_processes(signal: SignalType, processes: RunningProcessesMap, threshold: u32) {
+async fn receive_repeated_signal(receiver: &mut Receiver<SignalType>) -> SignalType {
+    match receiver.recv().await {
+        Ok(signal) => signal,
+        Err(_) => SignalType::Kill,
+    }
+}
+
+async fn shutdown_processes(
+    signal: SignalType,
+    processes: RunningProcessesMap,
+    receiver: &mut Receiver<SignalType>,
+    threshold: u32,
+) -> Option<SignalType> {
     // Clone the children, otherwise we encounter a deadlock when the
     // tasks try to acquire a write lock while it is being read
     let children = { processes.read().await.clone() };
 
     if children.is_empty() {
-        return;
+        return None;
     }
 
     // Attempt to gracefully shutdown running processes
@@ -281,23 +300,52 @@ async fn shutdown_processes(signal: SignalType, processes: RunningProcessesMap, 
         });
     }
 
-    // Otherwise force kill running processes after the threshold
-    let running = processes.clone();
+    let repeated_signal = if matches!(signal, SignalType::Kill) {
+        Some(signal)
+    } else if threshold == 0 {
+        Some(receive_repeated_signal(receiver).await)
+    } else {
+        tokio::select! {
+            _ = sleep(Duration::from_millis(threshold as u64)) => None,
+            signal = receive_repeated_signal(receiver) => Some(signal),
+        }
+    };
 
-    set.spawn(async move {
-        if threshold > 0 {
-            sleep(Duration::from_millis(threshold as u64)).await;
+    let mut force_children = force_children;
 
-            kill_processes(running, force_children.clone()).await;
+    if let Some(repeated_signal) = repeated_signal {
+        let running = processes.read().await.clone();
 
+        // Once every child from the first shutdown has exited, this is
+        // a new shutdown request rather than an escalation of the old one.
+        if !force_children.keys().any(|pid| running.contains_key(pid)) {
             for child in force_children.values() {
                 child.stop_output();
             }
+
+            return Some(repeated_signal);
         }
-    });
+
+        debug!(
+            signal = ?repeated_signal,
+            "Received another signal during shutdown; force killing children"
+        );
+
+        // The repeated signal applies to the entire registry, including
+        // children that were registered after shutdown began.
+        force_children.extend(running);
+    }
+
+    kill_processes(processes, force_children.clone()).await;
+
+    for child in force_children.values() {
+        child.stop_output();
+    }
 
     // Wait for things to finish
     set.join_all().await;
+
+    None
 }
 
 async fn kill_processes(processes: RunningProcessesMap, children: FxHashMap<u32, SharedChild>) {
