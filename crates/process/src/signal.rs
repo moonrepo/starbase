@@ -6,7 +6,7 @@ use tokio::sync::broadcast::Sender;
 use tracing::debug;
 
 /// A signal that can be sent to a running child process.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SignalType {
     /// Request the process interrupt itself (`SIGINT`, `CTRL-C`).
     Interrupt,
@@ -82,6 +82,27 @@ mod unix {
         }
 
         Ok(())
+    }
+
+    /// Send a signal to a process group. A group that no longer exists is
+    /// treated as already dead. macOS may report this state as `EPERM` when
+    /// only the zombie group leader remains.
+    pub(crate) fn kill_process_group(pgid: u32, signal: SignalType) -> io::Result<()> {
+        let pgid = i32::try_from(pgid).map_err(io::Error::other)?;
+        let result = unsafe { libc::kill(-pgid, signal.get_code()) };
+
+        if result == 0 {
+            return Ok(());
+        }
+
+        let error = io::Error::last_os_error();
+
+        match error.raw_os_error() {
+            Some(libc::ESRCH) => Ok(()),
+            #[cfg(target_vendor = "apple")]
+            Some(libc::EPERM) => Ok(()),
+            _ => Err(error),
+        }
     }
 }
 
