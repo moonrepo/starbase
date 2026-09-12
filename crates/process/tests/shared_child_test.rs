@@ -60,6 +60,56 @@ mod shared_child {
         let _ = child.kill().await;
     }
 
+    async fn assert_kill_while_waiting(capture_output: bool) {
+        use std::future::{Future, poll_fn};
+        use std::task::Poll;
+        use std::time::Duration;
+
+        let child = SharedChild::new(
+            Command::new("sleep")
+                .arg("30")
+                .stdout(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()
+                .unwrap(),
+        );
+        let waiter = child.clone();
+        let wait = async {
+            if capture_output {
+                waiter.wait_with_output().await.map(|output| output.exit)
+            } else {
+                waiter.wait().await
+            }
+        };
+        tokio::pin!(wait);
+
+        // Poll once so the waiter definitely owns the child lock before kill.
+        poll_fn(|cx| {
+            assert!(wait.as_mut().poll(cx).is_pending());
+            Poll::Ready(())
+        })
+        .await;
+
+        let (exit, killed) = tokio::time::timeout(Duration::from_secs(2), async {
+            tokio::join!(wait, child.kill())
+        })
+        .await
+        .expect("kill blocked behind the child waiter");
+
+        assert_eq!(exit.unwrap(), ChildExit::Killed);
+        assert_eq!(killed.unwrap(), ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn kill_while_waiting_for_exit() {
+        assert_kill_while_waiting(false).await;
+    }
+
+    #[tokio::test]
+    async fn kill_while_waiting_for_output() {
+        assert_kill_while_waiting(true).await;
+    }
+
     #[tokio::test]
     async fn kill_reports_killed() {
         assert_eq!(spawn_sleep().kill().await.unwrap(), ChildExit::Killed);
@@ -250,6 +300,27 @@ mod wait_with_output {
         assert!(!output.success());
         assert_eq!(output.code(), Some(2));
         assert_eq!(output.stderr.as_ref(), b"boom");
+    }
+
+    #[tokio::test]
+    async fn preserves_success_when_child_handles_termination_signal() {
+        use tokio::io::AsyncReadExt;
+
+        let child = spawn_printing("trap 'exit 0' TERM; printf ready; while :; do :; done");
+        let mut stdout = child.take_stdout().await.unwrap();
+        let mut ready = [0; 5];
+
+        stdout.read_exact(&mut ready).await.unwrap();
+        assert_eq!(&ready, b"ready");
+
+        assert!(matches!(
+            child.kill_with_signal(SignalType::Terminate).await.unwrap(),
+            ChildExit::Completed(status) if status.success()
+        ));
+        assert!(matches!(
+            child.wait_with_output().await.unwrap().exit,
+            ChildExit::Completed(status) if status.success()
+        ));
     }
 
     #[tokio::test]

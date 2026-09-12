@@ -1,7 +1,8 @@
 #![cfg(unix)]
 
 use starbase_console::{Console, EmptyReporter};
-use starbase_process::{ChildExit, Command, ProcessError, ShellType};
+use starbase_process::{ChildExit, Command, ProcessError, ProcessRegistry, ShellType, SignalType};
+use std::time::Duration;
 
 fn create_command(script: &str) -> Command<EmptyReporter> {
     let mut command = Command::new("bash");
@@ -77,6 +78,23 @@ mod exec_capture_output {
     }
 
     #[tokio::test]
+    async fn drains_output_while_writing_stdin() {
+        const SIZE: usize = 128 * 1024;
+
+        // The child fills stdout before reading stdin. Writing all input
+        // before draining stdout would block both sides on their pipe buffer.
+        let mut command = create_command(&format!("head -c {SIZE} /dev/zero; cat"));
+        command.input(["x".repeat(SIZE)]);
+
+        let output = tokio::time::timeout(Duration::from_secs(5), command.exec_capture_output())
+            .await
+            .expect("command deadlocked")
+            .unwrap();
+
+        assert_eq!(output.stdout.len(), SIZE * 2);
+    }
+
+    #[tokio::test]
     async fn reports_killed_children() {
         let mut command = create_command("kill -9 $$");
         command.set_error_on_nonzero(false);
@@ -100,7 +118,18 @@ mod exec_capture_continuous_output {
         let output = command.exec_capture_output().await.unwrap();
 
         assert!(output.success());
-        assert_eq!(output.stdout.as_ref(), b"one\ntwo");
+        assert_eq!(output.stdout.as_ref(), b"one\ntwo\n");
+    }
+
+    #[tokio::test]
+    async fn preserves_non_utf8_bytes_and_line_endings() {
+        let mut command = create_command(r"printf 'one\r\ntwo\xff\n'; printf 'err\r\n\xff' 1>&2");
+        command.set_continuous_pipe(true);
+
+        let output = command.exec_capture_output().await.unwrap();
+
+        assert_eq!(output.stdout.as_ref(), b"one\r\ntwo\xff\n");
+        assert_eq!(output.stderr.as_ref(), b"err\r\n\xff");
     }
 
     #[tokio::test]
@@ -146,6 +175,136 @@ mod exec_stream_output {
             error.downcast_ref::<ProcessError>().unwrap(),
             ProcessError::ExitNonZero { .. }
         ));
+    }
+}
+
+mod cancellation {
+    use super::*;
+
+    async fn force_kill_unblocks_inherited_stdin(continuous_pipe: bool) {
+        let marker = std::env::temp_dir().join(format!(
+            "starbase-process-stdin-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_file(&marker);
+
+        // The background process inherits stdin but never reads it. Once the
+        // direct shell is killed, the input writer must stop instead of waiting
+        // for this process to exit and close its inherited pipe.
+        let mut command = create_command(&format!(
+            "sleep 30 <&0 & echo \"$$ $!\" > '{}'; wait",
+            marker.display()
+        ));
+        command.set_continuous_pipe(continuous_pipe);
+        command.set_error_on_nonzero(false);
+        command.input(vec!["x".repeat(1024); 2048]);
+
+        let mut task = tokio::spawn(async move { command.exec_capture_output().await });
+        let registry = ProcessRegistry::instance();
+
+        let (child, descendant) = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if let Ok(pids) = std::fs::read_to_string(&marker) {
+                    let mut pids = pids
+                        .split_whitespace()
+                        .filter_map(|pid| pid.parse::<u32>().ok());
+
+                    if let (Some(pid), Some(descendant)) = (pids.next(), pids.next())
+                        && let Some(child) = registry.get_running_by_pid(pid).await
+                    {
+                        break (child, descendant);
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("child was not registered");
+
+        child.kill_with_signal(SignalType::Kill).await.unwrap();
+
+        let result = tokio::time::timeout(Duration::from_secs(1), &mut task).await;
+
+        starbase_process::kill(descendant, SignalType::Kill).unwrap();
+        std::fs::remove_file(marker).unwrap();
+
+        let output = match result {
+            Ok(result) => result.unwrap().unwrap(),
+            Err(_) => {
+                task.abort();
+                let _ = task.await;
+                panic!("force-killed command remained blocked writing stdin");
+            }
+        };
+
+        assert_eq!(output.exit, ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn aborting_execution_kills_and_unregisters_the_child() {
+        let marker = std::env::temp_dir().join(format!(
+            "starbase-process-cancel-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_file(&marker);
+
+        // `exec` keeps the recorded pid as the direct child, avoiding a
+        // background shell process that would outlive this test.
+        let mut command =
+            create_command(&format!("echo $$ > '{}'; exec sleep 30", marker.display()));
+        let task = tokio::spawn(async move { command.exec_capture_output().await });
+        let registry = ProcessRegistry::instance();
+
+        let pid = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if let Ok(pid) = std::fs::read_to_string(&marker)
+                    && let Ok(pid) = pid.trim().parse()
+                    && registry.get_running_by_pid(pid).await.is_some()
+                {
+                    break pid;
+                }
+
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("child was not registered");
+
+        let child = registry.get_running_by_pid(pid).await.unwrap();
+
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while registry.get_running_by_pid(pid).await.is_some() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+
+            assert_eq!(child.wait().await.unwrap(), ChildExit::Killed);
+        })
+        .await
+        .expect("cancelled child remained registered");
+
+        std::fs::remove_file(marker).unwrap();
+    }
+
+    #[tokio::test]
+    async fn force_kill_unblocks_buffered_input_with_inherited_stdin() {
+        force_kill_unblocks_inherited_stdin(false).await;
+    }
+
+    #[tokio::test]
+    async fn force_kill_unblocks_continuous_input_with_inherited_stdin() {
+        force_kill_unblocks_inherited_stdin(true).await;
     }
 }
 
@@ -306,6 +465,45 @@ mod caching {
             .unwrap();
 
         assert_eq!(first.stdout, second.stdout);
+    }
+
+    #[tokio::test]
+    async fn cached_nonzero_output_respects_error_policy() {
+        let mut allowed = create_command("exit 3");
+        allowed.set_cache(true).set_error_on_nonzero(false);
+
+        let output = allowed.exec_capture_output().await.unwrap();
+        assert_eq!(output.code(), Some(3));
+
+        let mut required = create_command("exit 3");
+        required.set_cache(true);
+
+        assert!(matches!(
+            required
+                .exec_capture_output()
+                .await
+                .unwrap_err()
+                .downcast_ref::<ProcessError>(),
+            Some(ProcessError::ExitNonZeroWithOutput { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn keeps_capture_modes_in_separate_cache_entries() {
+        let mut capture = create_command(r"printf 'one\rtwo'");
+        capture.set_cache(true);
+
+        let output = capture.exec_capture_output().await.unwrap();
+        assert_eq!(output.stdout.as_ref(), b"one\rtwo");
+
+        let mut stream_capture = create_command(r"printf 'one\rtwo'");
+        stream_capture.set_cache(true);
+
+        let output = stream_capture
+            .exec_stream_and_capture_output()
+            .await
+            .unwrap();
+        assert_eq!(output.stdout.as_ref(), b"two");
     }
 }
 
