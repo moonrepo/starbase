@@ -15,7 +15,7 @@ mod helpers;
 mod output;
 mod process_error;
 mod process_registry;
-pub mod process_registry_new;
+pub mod registry;
 mod shared_child;
 mod signal;
 
@@ -27,6 +27,8 @@ pub use helpers::*;
 pub use output::*;
 pub use process_error::*;
 pub use process_registry::*;
+/// Compatibility alias for the opt-in registry module.
+pub use registry as process_registry_new;
 pub use shared_child::*;
 pub use signal::*;
 pub use starbase_shell::{BoxedShell, ShellType};
