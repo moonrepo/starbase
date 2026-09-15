@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::process::Command as StdCommand;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
-use tokio::process::{Child, Command as TokioCommand};
+use tokio::process::Command as TokioCommand;
 use tracing::{debug, enabled};
 
 impl<R: Reporter> Command<R> {
@@ -120,6 +120,12 @@ impl<R: Reporter> Command<R> {
         Ok(())
     }
 
+    pub(crate) fn handle_cached_output(&mut self, output: Output) -> miette::Result<Output> {
+        self.handle_nonzero_status(&output, true)?;
+
+        Ok(output)
+    }
+
     pub(crate) fn pre_log_command(&self, child: &SharedChild) {
         let root_dir = match &self.debug.root_dir_env_key {
             Some(base_key) => {
@@ -200,13 +206,24 @@ impl<R: Reporter> Command<R> {
         debug!(pid = child.id(), "Ran command in {:?}", instant.elapsed());
     }
 
-    pub(crate) async fn write_input_to_child(&self, child: &mut Child) -> miette::Result<()> {
-        let mut stdin = child.stdin.take().expect("Unable to write stdin!");
+    pub(crate) async fn write_input_to_stdin(&self, child: &SharedChild) -> miette::Result<()> {
+        if !self.should_pass_stdin() {
+            return Ok(());
+        }
 
-        if let Err(error) = stdin
-            .write_all(self.input.join(OsStr::new(" ")).as_encoded_bytes())
-            .await
-        {
+        let Some(mut stdin) = child.take_stdin().await else {
+            return Ok(());
+        };
+
+        let input = self.input.join(OsStr::new(" "));
+
+        let write_result = tokio::select! {
+            biased;
+            _ = child.wait_till_output_stopped() => return Ok(()),
+            result = stdin.write_all(input.as_encoded_bytes()) => result,
+        };
+
+        if let Err(error) = write_result {
             // The child exited, or closed its stdin, before consuming all
             // input. Not a failure in itself: the child's exit status is
             // the outcome.

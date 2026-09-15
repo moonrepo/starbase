@@ -3,7 +3,6 @@ use crate::output::Output;
 use crate::process_error::ProcessError;
 use crate::process_registry::ProcessRegistry;
 use bytes::Bytes;
-use scc::hash_cache::Entry;
 use starbase_console::{ConsoleStream, Reporter};
 use std::io;
 use std::process::Stdio;
@@ -29,16 +28,12 @@ impl<R: Reporter> Command<R> {
             .stderr(Stdio::piped())
             .stdout(Stdio::piped());
 
-        let mut child = command
+        let child = command
             .spawn()
             .map_err(|error| ProcessError::StreamCapture {
                 bin: self.get_bin_name(),
                 error: Box::new(error),
             })?;
-
-        if self.should_pass_stdin() {
-            self.write_input_to_child(&mut child).await?;
-        }
 
         let shared_child = registry.add_running(child).await;
 
@@ -55,38 +50,45 @@ impl<R: Reporter> Command<R> {
             console.stderr(),
             prefix.clone(),
             "stderr",
+            shared_child.clone(),
         );
         let stdout_handle = spawn_stream_capture_bytes(
             shared_child.take_stdout().await,
             console.stdout(),
             prefix,
             "stdout",
+            shared_child.clone(),
         );
 
-        // Wait for the pipes to hit EOF before waiting on the child,
-        // otherwise output may be lost
-        let captured_stderr = stderr_handle.await.unwrap_or_default();
-        let captured_stdout = stdout_handle.await.unwrap_or_default();
+        let (input_result, result) =
+            tokio::join!(self.write_input_to_stdin(&shared_child), async {
+                // Wait for the pipes to hit EOF before waiting on the child,
+                // otherwise output may be lost.
+                let captured_stderr = stderr_handle.await.unwrap_or_default();
+                let captured_stdout = stdout_handle.await.unwrap_or_default();
 
-        // Attempt to create the child output
-        let result = shared_child
-            .wait()
-            .await
-            .map_err(|error| ProcessError::StreamCapture {
-                bin: self.get_bin_name(),
-                error: Box::new(error),
+                let exit =
+                    shared_child
+                        .wait()
+                        .await
+                        .map_err(|error| ProcessError::StreamCapture {
+                            bin: self.get_bin_name(),
+                            error: Box::new(error),
+                        })?;
+
+                Ok::<_, miette::Report>(Output {
+                    exit,
+                    stdout: Bytes::from(captured_stdout),
+                    stderr: Bytes::from(captured_stderr),
+                })
             });
 
         self.post_log_command(&shared_child, instant);
 
         registry.remove_running(shared_child).await;
 
-        let exit = result?;
-        let output = Output {
-            exit,
-            stdout: Bytes::from(captured_stdout),
-            stderr: Bytes::from(captured_stderr),
-        };
+        input_result?;
+        let output = result?;
 
         self.handle_nonzero_status(&output, true)?;
 
@@ -100,7 +102,8 @@ impl<R: Reporter> Command<R> {
     /// frames are collapsed in the captured bytes so a cached replay only
     /// renders the final frame. If [`Self::cache`] is enabled, a prior
     /// identical run's output is returned instead of spawning again, in
-    /// which case nothing is streamed to the console.
+    /// which case nothing is streamed to the console. Force-killing stops
+    /// capture readers and may truncate unread output.
     pub async fn exec_stream_and_capture_output(&mut self) -> miette::Result<Output> {
         let registry = ProcessRegistry::instance();
 
@@ -110,18 +113,19 @@ impl<R: Reporter> Command<R> {
                 .await;
         }
 
-        match registry.cache.entry_async(self.get_cache_key()).await {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let output = self
-                    .internal_exec_stream_and_capture_output(&registry)
-                    .await?;
+        let key = self.get_output_cache_key("stream-capture");
 
-                entry.put_entry(output.clone());
-
-                Ok(output)
-            }
+        if let Some(output) = registry.get_cached_output(&key).await? {
+            return Ok(output);
         }
+
+        let output = self
+            .internal_exec_stream_and_capture_output(&registry)
+            .await?;
+
+        registry.cache_output(key, output.clone()).await;
+
+        Ok(output)
     }
 }
 
@@ -130,6 +134,7 @@ fn spawn_stream_capture_bytes<R>(
     stream: ConsoleStream,
     prefix: Option<String>,
     label: &'static str,
+    child: crate::SharedChild,
 ) -> JoinHandle<Vec<u8>>
 where
     R: AsyncRead + Unpin + Send + 'static,
@@ -143,9 +148,18 @@ where
 
         let mut buf = [0u8; 8192];
         let mut at_line_start = true;
+        let stopped = child.wait_till_output_stopped();
+
+        tokio::pin!(stopped);
 
         loop {
-            match reader.read(&mut buf).await {
+            let result = tokio::select! {
+                biased;
+                _ = &mut stopped => break,
+                result = reader.read(&mut buf) => result,
+            };
+
+            match result {
                 // EOF
                 Ok(0) => break,
                 Ok(read) => {

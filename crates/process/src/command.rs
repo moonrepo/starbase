@@ -11,6 +11,7 @@ use std::collections::VecDeque;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::hash::Hasher;
+use std::sync::OnceLock;
 
 /// Debugging and environment-detection flags for a [`Command`], typically
 /// set by the host application rather than by end users.
@@ -373,23 +374,42 @@ impl<R: Reporter> Command<R> {
     }
 
     /// Compute a stable hash identifying this command's executable,
-    /// arguments, environment, working directory, and input. Two commands
-    /// with the same key are expected to produce the same output.
+    /// arguments, environment, working directory, input, shell, and lookup
+    /// paths. The system environment is snapshotted once and the current
+    /// working directory is included because they affect commands without
+    /// explicit configuration. Two commands with the same key are expected to
+    /// produce the same output.
     pub fn get_cache_key(&self) -> String {
         let mut hasher = FxHasher::default();
 
-        // Length-prefix each field, otherwise consecutive values hash
-        // ambiguously, like ("ab", "c") and ("a", "bc")
+        // Prefix values and collections so that fields cannot bleed into one
+        // another, like `args: [""]` and `cwd: Some("")`.
         fn write(hasher: &mut FxHasher, value: &OsStr) {
             let bytes = value.as_encoded_bytes();
             hasher.write_usize(bytes.len());
             hasher.write(bytes);
         }
 
+        fn write_optional(hasher: &mut FxHasher, value: Option<&OsStr>) {
+            match value {
+                Some(value) => {
+                    hasher.write_u8(1);
+                    write(hasher, value);
+                }
+                None => hasher.write_u8(0),
+            }
+        }
+
+        fn write_arg(hasher: &mut FxHasher, arg: &Arg) {
+            write(hasher, &arg.value);
+            write_optional(hasher, arg.quoted_value.as_deref());
+        }
+
         // Sort env vars, as map iteration order is not guaranteed,
         // and the key must be stable for identical commands
         let mut env = self.env.iter().collect::<Vec<_>>();
         env.sort_by(|a, b| a.0.cmp(b.0));
+        hasher.write_usize(env.len());
 
         for (key, value) in env {
             write(&mut hasher, key);
@@ -409,28 +429,57 @@ impl<R: Reporter> Command<R> {
             };
         }
 
+        hasher.write_u64(get_system_env_cache_key());
+
         match &self.exe {
             Executable::Binary(exe) => {
-                write(&mut hasher, &exe.value);
+                hasher.write_u8(0);
+                write_arg(&mut hasher, exe);
             }
             Executable::Script(exe) => {
+                hasher.write_u8(1);
                 write(&mut hasher, exe);
             }
         };
 
+        hasher.write_usize(self.args.len());
         for arg in &self.args {
-            write(&mut hasher, &arg.value);
+            write_arg(&mut hasher, arg);
         }
 
-        if let Some(cwd) = &self.cwd {
-            write(&mut hasher, cwd);
+        write_optional(&mut hasher, self.cwd.as_deref());
+
+        // `current_dir` is still relevant when `cwd` is absent, and when a
+        // relative `cwd` is resolved by the spawned command.
+        let inherited_cwd = env::current_dir().ok();
+        write_optional(
+            &mut hasher,
+            inherited_cwd.as_ref().map(|cwd| cwd.as_os_str()),
+        );
+
+        hasher.write_usize(self.input.len());
+        for input in &self.input {
+            write(&mut hasher, input);
         }
 
-        for arg in &self.input {
-            write(&mut hasher, arg);
+        hasher.write_usize(self.paths.len());
+        for path in &self.paths {
+            write(&mut hasher, path);
+        }
+
+        match self.shell {
+            Some(shell) => {
+                hasher.write_u8(1);
+                write(&mut hasher, OsStr::new(shell.to_string().as_str()));
+            }
+            None => hasher.write_u8(0),
         }
 
         hasher.finish().to_string()
+    }
+
+    pub(crate) fn get_output_cache_key(&self, mode: &str) -> String {
+        format!("{mode}:{}", self.get_cache_key())
     }
 
     /// Render this command as a single line for display, e.g. in logs.
@@ -609,4 +658,27 @@ impl<R: Reporter> Command<R> {
             console: Some(console),
         }
     }
+}
+
+fn get_system_env_cache_key() -> u64 {
+    static SYSTEM_ENV_CACHE_KEY: OnceLock<u64> = OnceLock::new();
+
+    *SYSTEM_ENV_CACHE_KEY.get_or_init(|| {
+        let mut hasher = FxHasher::default();
+        let mut env = env::vars_os().collect::<Vec<_>>();
+
+        env.sort_by(|a, b| a.0.cmp(&b.0));
+
+        hasher.write_usize(env.len());
+
+        for (key, value) in env {
+            for value in [&key, &value] {
+                let bytes = value.as_encoded_bytes();
+                hasher.write_usize(bytes.len());
+                hasher.write(bytes);
+            }
+        }
+
+        hasher.finish()
+    })
 }

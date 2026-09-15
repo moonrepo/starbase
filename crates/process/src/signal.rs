@@ -48,20 +48,26 @@ mod unix {
         let mut signal_interrupt = signal(SignalKind::interrupt()).unwrap();
         let mut signal_quit = signal(SignalKind::quit()).unwrap();
 
-        let _ = tokio::select! {
-            _ = signal_terminate.recv() => {
-                debug!("Received SIGTERM signal");
-                sender.send(SignalType::Terminate)
-            },
-            _ = signal_interrupt.recv() => {
-                debug!("Received SIGINT signal");
-                sender.send(SignalType::Interrupt)
-            },
-            _ = signal_quit.recv() => {
-                debug!("Received SIGQUIT signal");
-                sender.send(SignalType::Quit)
-            },
-        };
+        loop {
+            let result = tokio::select! {
+                _ = signal_terminate.recv() => {
+                    debug!("Received SIGTERM signal");
+                    sender.send(SignalType::Terminate)
+                },
+                _ = signal_interrupt.recv() => {
+                    debug!("Received SIGINT signal");
+                    sender.send(SignalType::Interrupt)
+                },
+                _ = signal_quit.recv() => {
+                    debug!("Received SIGQUIT signal");
+                    sender.send(SignalType::Quit)
+                },
+            };
+
+            if result.is_err() {
+                break;
+            }
+        }
     }
 
     /// Send a signal to a process by pid. A process that no longer exists
@@ -108,24 +114,30 @@ mod windows {
         let mut signal_close = windows::ctrl_close().unwrap();
         let mut signal_shutdown = windows::ctrl_shutdown().unwrap();
 
-        let _ = tokio::select! {
-            _ = signal_c.recv() => {
-                debug!("Received CTRL-C signal");
-                sender.send(SignalType::Interrupt)
-            },
-            _ = signal_break.recv() => {
-                debug!("Received CTRL-BREAK signal");
-                sender.send(SignalType::Interrupt)
-            },
-            _ = signal_close.recv() => {
-                debug!("Received CTRL-CLOSE signal");
-                sender.send(SignalType::Quit)
-            },
-            _ = signal_shutdown.recv() => {
-                debug!("Received CTRL-SHUTDOWN signal");
-                sender.send(SignalType::Terminate)
-            },
-        };
+        loop {
+            let result = tokio::select! {
+                _ = signal_c.recv() => {
+                    debug!("Received CTRL-C signal");
+                    sender.send(SignalType::Interrupt)
+                },
+                _ = signal_break.recv() => {
+                    debug!("Received CTRL-BREAK signal");
+                    sender.send(SignalType::Interrupt)
+                },
+                _ = signal_close.recv() => {
+                    debug!("Received CTRL-CLOSE signal");
+                    sender.send(SignalType::Quit)
+                },
+                _ = signal_shutdown.recv() => {
+                    debug!("Received CTRL-SHUTDOWN signal");
+                    sender.send(SignalType::Terminate)
+                },
+            };
+
+            if result.is_err() {
+                break;
+            }
+        }
     }
 
     /// A `Send` + `Sync` wrapper around a raw Windows process handle.

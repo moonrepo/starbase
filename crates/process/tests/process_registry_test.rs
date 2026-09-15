@@ -1,7 +1,10 @@
 #![cfg(unix)]
 
 use starbase_process::{ProcessRegistry, SignalType};
+use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 
 fn spawn_sleep() -> Child {
@@ -70,6 +73,117 @@ mod process_registry {
         registry.wait_for_running_to_shutdown().await;
 
         assert!(registry.get_running_by_pid(pid).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_signal_received_with_no_children_does_not_stop_shutdown_handling() {
+        let registry = create_registry();
+
+        registry.terminate_running();
+        tokio::task::yield_now().await;
+
+        let shared = registry.add_running(spawn_sleep()).await;
+        let pid = shared.id();
+
+        registry.terminate_running();
+        registry.wait_for_running_to_shutdown().await;
+
+        assert!(registry.get_running_by_pid(pid).await.is_none());
+        assert_eq!(
+            shared.wait().await.unwrap(),
+            starbase_process::ChildExit::Terminated(15)
+        );
+    }
+
+    #[tokio::test]
+    async fn shutdown_handling_continues_for_later_children() {
+        let registry = create_registry();
+
+        let first = registry.add_running(spawn_sleep()).await;
+        registry.terminate_running();
+        registry.wait_for_running_to_shutdown().await;
+        assert_eq!(
+            first.wait().await.unwrap(),
+            starbase_process::ChildExit::Terminated(15)
+        );
+
+        let second = registry.add_running(spawn_sleep()).await;
+        registry.terminate_running();
+        registry.wait_for_running_to_shutdown().await;
+        assert_eq!(
+            second.wait().await.unwrap(),
+            starbase_process::ChildExit::Terminated(15)
+        );
+    }
+
+    #[tokio::test]
+    async fn dropping_registry_kills_tracked_children() {
+        let registry = create_registry();
+        let child = registry.add_running(spawn_sleep()).await;
+
+        drop(registry);
+
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), child.wait())
+                .await
+                .unwrap()
+                .unwrap(),
+            starbase_process::ChildExit::Killed
+        );
+    }
+
+    #[tokio::test]
+    async fn zero_threshold_still_signals_before_waiting() {
+        let registry = ProcessRegistry::new(0);
+        let child = registry.add_running(spawn_sleep()).await;
+
+        registry.terminate_running();
+
+        assert_eq!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(1),
+                registry.wait_for_running_to_shutdown()
+            )
+            .await
+            .unwrap(),
+            ()
+        );
+        assert_eq!(
+            child.wait().await.unwrap(),
+            starbase_process::ChildExit::Terminated(15)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_second_signal_force_kills_without_waiting_for_the_threshold() {
+        let registry = ProcessRegistry::new(5000);
+        let child = registry
+            .add_running(
+                Command::new("sh")
+                    .args(["-c", "trap '' TERM; echo ready; exec sleep 30"])
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .unwrap(),
+            )
+            .await;
+
+        let mut ready = String::new();
+        BufReader::new(child.take_stdout().await.unwrap())
+            .read_line(&mut ready)
+            .await
+            .unwrap();
+        assert_eq!(ready, "ready\n");
+
+        registry.terminate_running();
+        registry.terminate_running();
+
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(1), child.wait())
+                .await
+                .expect("second signal did not bypass the shutdown threshold")
+                .unwrap(),
+            starbase_process::ChildExit::Killed
+        );
     }
 
     #[tokio::test]

@@ -4,12 +4,11 @@ use crate::process_error::ProcessError;
 use crate::process_registry::ProcessRegistry;
 use bytes::Bytes;
 use miette::IntoDiagnostic;
-use scc::hash_cache::Entry;
 use starbase_console::Reporter;
 use std::io;
 use std::process::Stdio;
 use std::time::Instant;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::task::{self, JoinHandle};
 use tracing::debug;
 
@@ -19,47 +18,40 @@ impl<R: Reporter> Command<R> {
         registry: &ProcessRegistry,
     ) -> miette::Result<Output> {
         let instant = Instant::now();
+        let should_pass_stdin = self.should_pass_stdin();
         let mut command = self.create_async_command()?;
 
-        let child = if self.should_pass_stdin() {
-            command
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
+        command.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-            let mut child = command.spawn().map_err(|error| ProcessError::Capture {
-                bin: self.get_bin_name(),
-                error: Box::new(error),
-            })?;
+        if should_pass_stdin {
+            command.stdin(Stdio::piped());
+        }
 
-            self.write_input_to_child(&mut child).await?;
-
-            child
-        } else {
-            command.stdout(Stdio::piped()).stderr(Stdio::piped());
-
-            command.spawn().map_err(|error| ProcessError::Capture {
-                bin: self.get_bin_name(),
-                error: Box::new(error),
-            })?
-        };
+        let child = command.spawn().map_err(|error| ProcessError::Capture {
+            bin: self.get_bin_name(),
+            error: Box::new(error),
+        })?;
 
         let shared_child = registry.add_running(child).await;
 
         self.pre_log_command(&shared_child);
 
-        let result = shared_child
-            .wait_with_output()
-            .await
-            .map_err(|error| ProcessError::Capture {
-                bin: self.get_bin_name(),
-                error: Box::new(error),
+        let (input_result, result) =
+            tokio::join!(self.write_input_to_stdin(&shared_child), async {
+                shared_child
+                    .wait_with_output()
+                    .await
+                    .map_err(|error| ProcessError::Capture {
+                        bin: self.get_bin_name(),
+                        error: Box::new(error),
+                    })
             });
 
         self.post_log_command(&shared_child, instant);
 
         registry.remove_running(shared_child).await;
 
+        input_result?;
         let output = result?;
 
         self.handle_nonzero_status(&output, true)?;
@@ -82,22 +74,24 @@ impl<R: Reporter> Command<R> {
             return self.internal_exec_capture_output(&registry).await;
         }
 
-        match registry.cache.entry_async(self.get_cache_key()).await {
-            Entry::Occupied(entry) => Ok(entry.get().clone()),
-            Entry::Vacant(entry) => {
-                let output = self.internal_exec_capture_output(&registry).await?;
+        let key = self.get_output_cache_key("capture");
 
-                entry.put_entry(output.clone());
-
-                Ok(output)
-            }
+        if let Some(output) = registry.get_cached_output(&key).await? {
+            return self.handle_cached_output(output);
         }
+
+        let output = self.internal_exec_capture_output(&registry).await?;
+
+        registry.cache_output(key, output.clone()).await;
+
+        Ok(output)
     }
 
     /// A variant of [`Self::exec_capture_output`] that streams buffered
     /// input to the child's stdin as it runs, rather than writing it all
-    /// upfront, and reads stdout/stderr line by line rather than to
-    /// completion. Used when [`Self::continuous_pipe`] is enabled.
+    /// upfront, while capturing stdout and stderr as raw bytes. Used when
+    /// [`Self::continuous_pipe`] is enabled. Force-killing stops capture
+    /// readers and may truncate unread output.
     pub async fn exec_capture_continuous_output(&mut self) -> miette::Result<Output> {
         let registry = ProcessRegistry::instance();
         let instant = Instant::now();
@@ -123,10 +117,20 @@ impl<R: Reporter> Command<R> {
         let items = std::mem::take(&mut self.input);
         let bin_name = self.get_bin_name();
 
+        let stdin_child = shared_child.clone();
         let stdin_handle: JoinHandle<miette::Result<()>> = task::spawn(async move {
             if let Some(mut stdin) = stdin {
+                let stopped = stdin_child.wait_till_output_stopped();
+                tokio::pin!(stopped);
+
                 for item in items {
-                    if let Err(error) = stdin.write_all(item.as_encoded_bytes()).await {
+                    let write_result = tokio::select! {
+                        biased;
+                        _ = &mut stopped => break,
+                        result = stdin.write_all(item.as_encoded_bytes()) => result,
+                    };
+
+                    if let Err(error) = write_result {
                         // The child exited, or closed its stdin, before
                         // consuming all input (e.g. `git hash-object`
                         // erroring on a missing file). Not a failure in
@@ -154,8 +158,8 @@ impl<R: Reporter> Command<R> {
             Ok(())
         });
 
-        let stdout_handle = spawn_capture_lines(stdout, "stdout");
-        let stderr_handle = spawn_capture_lines(stderr, "stderr");
+        let stdout_handle = spawn_capture_bytes(stdout, "stdout", shared_child.clone());
+        let stderr_handle = spawn_capture_bytes(stderr, "stderr", shared_child.clone());
 
         // Attempt to create the child output
         let result = shared_child
@@ -168,17 +172,24 @@ impl<R: Reporter> Command<R> {
 
         self.post_log_command(&shared_child, instant);
 
+        // Keep the child registered until its readers finish, so shutdown
+        // can still stop pipes inherited by descendants after the child exits.
+        let output_result: miette::Result<Output> = async {
+            let exit = result?;
+
+            stdin_handle.await.into_diagnostic()??;
+
+            Ok(Output {
+                exit,
+                stdout: Bytes::from(stdout_handle.await.into_diagnostic()?),
+                stderr: Bytes::from(stderr_handle.await.into_diagnostic()?),
+            })
+        }
+        .await;
+
         registry.remove_running(shared_child).await;
 
-        let exit = result?;
-
-        stdin_handle.await.into_diagnostic()??;
-
-        let output = Output {
-            exit,
-            stdout: Bytes::from(stdout_handle.await.into_diagnostic()?.join("\n")),
-            stderr: Bytes::from(stderr_handle.await.into_diagnostic()?.join("\n")),
-        };
+        let output = output_result?;
 
         self.handle_nonzero_status(&output, true)?;
 
@@ -186,30 +197,43 @@ impl<R: Reporter> Command<R> {
     }
 }
 
-fn spawn_capture_lines<R>(reader: Option<R>, label: &'static str) -> JoinHandle<Vec<String>>
+fn spawn_capture_bytes<R>(
+    reader: Option<R>,
+    label: &'static str,
+    child: crate::SharedChild,
+) -> JoinHandle<Vec<u8>>
 where
     R: AsyncRead + Unpin + Send + 'static,
 {
     task::spawn(async move {
-        let mut logs = vec![];
-
-        let Some(reader) = reader else {
-            return logs;
+        let Some(mut reader) = reader else {
+            return vec![];
         };
 
-        let mut lines = BufReader::new(reader).lines();
+        let mut output = vec![];
+        let mut buffer = [0; 8192];
+        let stopped = child.wait_till_output_stopped();
+
+        tokio::pin!(stopped);
 
         loop {
-            match lines.next_line().await {
-                Ok(Some(line)) => logs.push(line),
-                Ok(None) => break,
+            let result = tokio::select! {
+                biased;
+                _ = &mut stopped => break,
+                result = reader.read(&mut buffer) => result,
+            };
+
+            match result {
+                Ok(0) => break,
+                Ok(size) => output.extend_from_slice(&buffer[..size]),
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                 Err(error) => {
-                    debug!("Failed to read {label} line: {error}");
+                    debug!("Failed to read {label} bytes: {error}");
                     break;
                 }
             }
         }
 
-        logs
+        output
     })
 }
