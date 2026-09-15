@@ -1,6 +1,6 @@
 #![cfg(unix)]
 
-use starbase_process::process_registry_new::{
+use starbase_process::registry::{
     ChildState, ProcessEvent, ProcessRegistry, ProcessRegistryOptions,
 };
 use starbase_process::{ChildExit, Output, SharedChild, SignalType};
