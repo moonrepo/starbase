@@ -54,6 +54,7 @@ pub struct SharedChild {
     waiter: Arc<AsyncMutex<()>>,
 
     output_stop: watch::Sender<bool>,
+    exited: watch::Sender<bool>,
     cleanup: Arc<AtomicBool>,
     cleanup_sender: Option<UnboundedSender<SharedChild>>,
 }
@@ -67,6 +68,7 @@ impl SharedChild {
             signal: Arc::new(OnceLock::new()),
             waiter: Arc::new(AsyncMutex::new(())),
             output_stop: watch::channel(false).0,
+            exited: watch::channel(false).0,
             cleanup: Arc::new(AtomicBool::new(true)),
             cleanup_sender: None,
         }
@@ -158,7 +160,7 @@ impl SharedChild {
         child: &mut Child,
         signal: SignalType,
     ) -> io::Result<Option<ExitStatus>> {
-        if let Some(status) = child.try_wait()? {
+        if let Some(status) = self.try_wait_locked(child)? {
             if matches!(signal, SignalType::Kill) {
                 self.stop_output();
             }
@@ -201,6 +203,29 @@ impl SharedChild {
         Ok(None)
     }
 
+    /// Check whether the child has exited without blocking or signalling
+    /// it. Returns `None` while it is still running. Unlike [`Self::wait`],
+    /// this does not close the child's stdin, so it is safe to call while
+    /// input is still being written.
+    pub fn try_wait(&self) -> io::Result<Option<ChildExit>> {
+        let status = self.try_wait_locked(&mut self.inner.lock().unwrap())?;
+
+        Ok(status.map(|status| convert_exit_status(status, self.signal.get().copied())))
+    }
+
+    /// Reaping through `try_wait` makes tokio drop its `SIGCHLD` listener
+    /// for the child, which a concurrent [`Self::wait`] relies on to be
+    /// woken. Record the exit so those waiters can be woken instead.
+    fn try_wait_locked(&self, child: &mut Child) -> io::Result<Option<ExitStatus>> {
+        let status = child.try_wait()?;
+
+        if status.is_some() {
+            self.exited.send_replace(true);
+        }
+
+        Ok(status)
+    }
+
     /// Disable the original handle's cleanup on drop. This can be called
     /// through any clone when the child is explicitly unregistered.
     pub fn stop_cleanup(&self) {
@@ -224,12 +249,25 @@ impl SharedChild {
         // Tokio supports one waiter. Serialize wait futures, but hold the
         // child lock only during each poll so signals can still be delivered.
         let _waiter = self.waiter.lock().await;
+        let mut exited = self.exited.subscribe();
 
-        let status = poll_fn(|cx| {
-            let mut child = self.inner.lock().unwrap();
-            pin!(child.wait()).poll(cx)
-        })
-        .await?;
+        let status = tokio::select! {
+            biased;
+            status = poll_fn(|cx| {
+                let mut child = self.inner.lock().unwrap();
+                pin!(child.wait()).poll(cx)
+            }) => status?,
+            // The child was reaped by a `try_wait` while we were waiting,
+            // taking tokio's `SIGCHLD` listener with it, so the wait above
+            // would never be woken. The exit status is retained though.
+            _ = exited.wait_for(|exited| *exited) => {
+                self.inner
+                    .lock()
+                    .unwrap()
+                    .try_wait()?
+                    .ok_or_else(|| io::Error::other("Child process was marked exited but has no status"))?
+            }
+        };
 
         Ok(convert_exit_status(status, self.signal.get().copied()))
     }
@@ -307,6 +345,7 @@ impl Clone for SharedChild {
             pid: self.pid,
             waiter: Arc::clone(&self.waiter),
             output_stop: self.output_stop.clone(),
+            exited: self.exited.clone(),
             cleanup: Arc::clone(&self.cleanup),
             // Only the original instance has access to the sender!
             cleanup_sender: None,

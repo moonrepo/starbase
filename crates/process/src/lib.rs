@@ -15,6 +15,7 @@ mod helpers;
 mod output;
 mod process_error;
 mod process_registry;
+pub mod registry;
 mod shared_child;
 mod signal;
 
