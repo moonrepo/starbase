@@ -23,7 +23,7 @@ impl<R: Reporter> Command<R> {
             .stdin(if self.should_pass_stdin() {
                 Stdio::piped()
             } else {
-                Stdio::inherit()
+                self.stdin.to_stdio()
             })
             .stderr(Stdio::piped())
             .stdout(Stdio::piped());

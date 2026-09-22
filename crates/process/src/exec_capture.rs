@@ -21,11 +21,14 @@ impl<R: Reporter> Command<R> {
         let should_pass_stdin = self.should_pass_stdin();
         let mut command = self.create_async_command()?;
 
-        command.stdout(Stdio::piped()).stderr(Stdio::piped());
-
-        if should_pass_stdin {
-            command.stdin(Stdio::piped());
-        }
+        command
+            .stdin(if should_pass_stdin {
+                Stdio::piped()
+            } else {
+                self.stdin.to_stdio()
+            })
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
         let child = command.spawn().map_err(|error| ProcessError::Capture {
             bin: self.get_bin_name(),
