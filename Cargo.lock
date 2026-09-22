@@ -3097,7 +3097,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.14.5"
+version = "0.14.6"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -3117,7 +3117,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_args"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "pest",
  "pest_derive",
@@ -3237,7 +3237,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.14.5"
+version = "0.14.6"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
