@@ -6,7 +6,7 @@ members = ["crates/*", "examples/*"]
 async-trait = "0.1.92"
 base64 = "0.23.1"
 bytes = "1.12.1"
-clap = { version = "4.6.6", default-features = false, features = [
+clap = { version = "4.6.7", default-features = false, features = [
     "derive",
     "std",
 ] }
@@ -23,13 +23,13 @@ relative-path = "2.0.1"
 reqwest = { version = "0.13.5", default-features = false }
 rustc-hash = "2.1.3"
 scc = "3.8.8"
-schematic = { version = "0.20.3", default-features = false }
+schematic = { version = "0.20.6", default-features = false }
 serial_test = "4.0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 serde_norway = "0.9"
 sha2 = "0.11.0"
-system_env = "0.10.3"
+system_env = "0.10.4"
 thiserror = "2.0.20"
 tokio = { version = "1.53.1", default-features = false, features = [
     "io-util",
