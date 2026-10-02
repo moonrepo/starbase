@@ -1,7 +1,9 @@
 #![cfg(unix)]
 
 use starbase_console::{Console, EmptyReporter};
-use starbase_process::{ChildExit, Command, ProcessError, ProcessRegistry, ShellType, SignalType};
+use starbase_process::{
+    ChildExit, Command, ProcessError, ProcessRegistry, ShellType, SignalType, StdinMode,
+};
 use std::time::Duration;
 
 fn create_command(script: &str) -> Command<EmptyReporter> {
@@ -175,6 +177,58 @@ mod exec_stream_output {
             error.downcast_ref::<ProcessError>().unwrap(),
             ProcessError::ExitNonZero { .. }
         ));
+    }
+}
+
+mod stdin_mode {
+    use super::*;
+
+    // Inheriting is the default, and is not tested here, as the child
+    // would read from the test runner's own stdin and could block
+
+    #[tokio::test]
+    async fn null_reads_eof_when_capturing() {
+        let mut command = create_command("cat");
+        command.set_stdin(StdinMode::Null);
+
+        let output = command.exec_capture_output().await.unwrap();
+
+        assert!(output.success());
+        assert_eq!(output.stdout.as_ref(), b"");
+    }
+
+    #[tokio::test]
+    async fn null_reads_eof_when_streaming() {
+        let mut command = create_command("cat");
+        command.set_stdin(StdinMode::Null);
+
+        let output = command.exec_stream_output().await.unwrap();
+
+        assert!(output.success());
+    }
+
+    #[tokio::test]
+    async fn null_reads_eof_when_streaming_and_capturing() {
+        let mut command = create_command("cat");
+        command.set_stdin(StdinMode::Null);
+
+        let output = command.exec_stream_and_capture_output().await.unwrap();
+
+        assert!(output.success());
+        assert_eq!(output.stdout.as_ref(), b"");
+    }
+
+    // Buffered input still takes precedence over the mode
+    #[tokio::test]
+    async fn input_overrides_null() {
+        let mut command = create_command("cat");
+        command.set_stdin(StdinMode::Null);
+        command.input(["hello"]);
+
+        let output = command.exec_capture_output().await.unwrap();
+
+        assert!(output.success());
+        assert_eq!(output.stdout.as_ref(), b"hello");
     }
 }
 

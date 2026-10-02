@@ -11,7 +11,33 @@ use std::collections::VecDeque;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::hash::Hasher;
+use std::process::Stdio;
 use std::sync::OnceLock;
+
+/// How to connect the child process's stdin, when there's no buffered
+/// [`Command::input`] to write.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum StdinMode {
+    /// Inherit the parent's stdin, so that the child can read from the
+    /// terminal (or whatever the parent's stdin is connected to). Only
+    /// one child should inherit at a time, as concurrent children read
+    /// from the same descriptor and would steal each other's input.
+    Inherit,
+
+    /// Provide no stdin at all, so that reads return end-of-file
+    /// immediately.
+    #[default]
+    Null,
+}
+
+impl StdinMode {
+    pub fn to_stdio(&self) -> Stdio {
+        match self {
+            Self::Inherit => Stdio::inherit(),
+            Self::Null => Stdio::null(),
+        }
+    }
+}
 
 /// Debugging and environment-detection flags for a [`Command`], typically
 /// set by the host application rather than by end users.
@@ -87,6 +113,9 @@ pub struct Command<R: Reporter> {
     /// Shell to wrap executing commands in
     pub shell: Option<ShellType>,
 
+    /// How to connect stdin when there's no [`Self::input`] to write
+    pub stdin: StdinMode,
+
     /// Console to write output to
     pub console: Option<Console<R>>,
 }
@@ -111,6 +140,7 @@ impl<R: Reporter> Command<R> {
             prefix: None,
             print_command: false,
             shell: Some(get_default_shell()),
+            stdin: StdinMode::default(),
             console: None,
         }
     }
@@ -592,6 +622,13 @@ impl<R: Reporter> Command<R> {
         self
     }
 
+    /// Set how to connect stdin when there's no [`Self::input`] to
+    /// write. See [`StdinMode`].
+    pub fn set_stdin(&mut self, mode: StdinMode) -> &mut Self {
+        self.stdin = mode;
+        self
+    }
+
     /// Set the prefix to prepend to all log lines.
     pub fn set_prefix(&mut self, prefix: &str) -> &mut Self {
         self.prefix = Some(prefix.to_owned());
@@ -655,6 +692,7 @@ impl<R: Reporter> Command<R> {
             prefix: self.prefix,
             print_command: self.print_command,
             shell: self.shell,
+            stdin: self.stdin,
             console: Some(console),
         }
     }
