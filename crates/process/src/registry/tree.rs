@@ -186,11 +186,14 @@ mod imp {
 #[cfg(windows)]
 mod imp {
     use super::*;
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, STILL_ACTIVE};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, PROCESSENTRY32, Process32First, Process32Next, TH32CS_SNAPPROCESS,
     };
-    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_TERMINATE, TerminateProcess};
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
+        TerminateProcess,
+    };
 
     const ERROR_ACCESS_DENIED: i32 = 5;
     const ERROR_INVALID_PARAMETER: i32 = 87;
@@ -221,13 +224,21 @@ mod imp {
 
     /// `Interrupt` is a no-op, as `CTRL-C` can't be targeted at a
     /// process; everything else terminates it. A process that no longer
-    /// exists is treated as already dead.
+    /// exists, or has already exited, is treated as already dead.
     pub fn kill(pid: u32, signal: SignalType) -> io::Result<()> {
         if matches!(signal, SignalType::Interrupt) {
             return Ok(());
         }
 
-        let handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+        // The query right is only needed to tell a process that has exited
+        // apart from one that we aren't allowed to terminate
+        let handle = unsafe {
+            OpenProcess(
+                PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION,
+                0,
+                pid,
+            )
+        };
 
         if handle.is_null() {
             let error = io::Error::last_os_error();
@@ -239,15 +250,31 @@ mod imp {
             };
         }
 
-        let result = unsafe { TerminateProcess(handle, 1) };
-        let error = io::Error::last_os_error();
+        let result = if unsafe { TerminateProcess(handle, 1) } != 0 {
+            Ok(())
+        } else {
+            let error = io::Error::last_os_error();
+
+            // Access is denied for a process that has already exited, but
+            // also for a live one that we have no right to terminate, and
+            // only the former is not a failure
+            if error.raw_os_error() == Some(ERROR_ACCESS_DENIED) && has_exited(handle) {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        };
 
         unsafe { CloseHandle(handle) };
 
-        if result == 0 && error.raw_os_error() != Some(ERROR_ACCESS_DENIED) {
-            return Err(error);
-        }
+        result
+    }
 
-        Ok(())
+    /// A process that exited with the code 259 is indistinguishable from
+    /// one that is still active, and is reported as active to be safe.
+    fn has_exited(handle: HANDLE) -> bool {
+        let mut code = 0;
+
+        unsafe { GetExitCodeProcess(handle, &mut code) != 0 && code != STILL_ACTIVE as u32 }
     }
 }
