@@ -81,9 +81,17 @@ impl ProcessRegistry {
     /// Initialize the process-wide singleton with custom options. Returns
     /// false, and changes nothing, if the singleton already exists.
     pub fn register(options: ProcessRegistryOptions) -> bool {
-        INSTANCE
-            .set(Arc::new(ProcessRegistry::with_options(options)))
-            .is_ok()
+        let mut registered = false;
+
+        // Only build a registry when it will be kept, as building one
+        // starts its background tasks
+        INSTANCE.get_or_init(|| {
+            registered = true;
+
+            Arc::new(ProcessRegistry::with_options(options))
+        });
+
+        registered
     }
 
     /// Return the process-wide singleton, creating it with default options

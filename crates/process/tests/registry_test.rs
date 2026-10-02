@@ -89,6 +89,18 @@ mod lifecycle {
     }
 
     #[tokio::test]
+    async fn register_does_not_replace_the_singleton() {
+        let instance = ProcessRegistry::instance();
+
+        assert!(!ProcessRegistry::register(options()));
+        assert!(Arc::ptr_eq(&instance, &ProcessRegistry::instance()));
+        assert!(Arc::ptr_eq(
+            &instance,
+            &ProcessRegistry::try_instance().unwrap()
+        ));
+    }
+
+    #[tokio::test]
     async fn starts_inside_a_runtime() {
         let registry = create_registry();
 
@@ -948,6 +960,45 @@ mod cache {
             .await;
 
         assert_eq!(output, Ok(fake_output()));
+        assert_eq!(runs.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn exec_cached_recovers_from_a_cancelled_run() {
+        let registry = Arc::new(create_registry());
+
+        // A run that is dropped part way through
+        let cancelled = timeout(
+            Duration::from_millis(50),
+            registry.exec_cached("key", std::future::pending::<Result<Output, ()>>()),
+        )
+        .await;
+
+        assert!(cancelled.is_err());
+
+        // Later calls must still share a single run
+        let runs = Arc::new(AtomicUsize::new(0));
+        let mut handles = vec![];
+
+        for _ in 0..5 {
+            let registry = Arc::clone(&registry);
+            let runs = Arc::clone(&runs);
+
+            handles.push(tokio::spawn(async move {
+                registry
+                    .exec_cached("key", async {
+                        runs.fetch_add(1, Ordering::SeqCst);
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        Ok::<_, ()>(fake_output())
+                    })
+                    .await
+            }));
+        }
+
+        for handle in handles {
+            assert_eq!(handle.await.unwrap(), Ok(fake_output()));
+        }
+
         assert_eq!(runs.load(Ordering::SeqCst), 1);
     }
 

@@ -21,6 +21,9 @@ const FORCE_KILL_WAIT: Duration = Duration::from_secs(5);
 
 pub(super) type Children = FxHashMap<u32, TrackedChild>;
 
+/// Runs that are in progress, by cache key, for callers to wait on.
+pub(super) type Inflight = scc::HashMap<String, watch::Receiver<Option<Output>>>;
+
 /// The state shared between the registry and its background tasks. It
 /// outlives a [`ProcessRegistry::stop`], so tracked children, the cache,
 /// and subscribers survive a restart.
@@ -30,7 +33,7 @@ pub(super) struct RegistryState {
     /// It must never be held across an await.
     pub(super) children: RwLock<Children>,
     pub(super) cache: scc::HashCache<String, Output>,
-    pub(super) inflight: scc::HashMap<String, watch::Receiver<Option<Output>>>,
+    pub(super) inflight: Inflight,
     pub(super) events: broadcast::Sender<ProcessEvent>,
     pub(super) signals: broadcast::Sender<SignalType>,
     pub(super) running: watch::Sender<usize>,
