@@ -3,7 +3,7 @@ use super::event::ProcessEvent;
 use super::options::ProcessRegistryOptions;
 use super::state::RegistryState;
 use super::tasks::{Tasks, run_reaper, run_shutdown_coordinator};
-use super::tree::{self, kill_descendants};
+use super::tree;
 use crate::shared_child::{ChildExit, SharedChild};
 use crate::signal::{SignalType, wait_for_signal};
 use rustc_hash::FxHashMap;
@@ -13,7 +13,7 @@ use std::time::Instant;
 use tokio::process::{Child, Command as TokioCommand};
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex as AsyncMutex, Notify, broadcast, mpsc, watch};
-use tracing::{trace, warn};
+use tracing::trace;
 
 static INSTANCE: OnceLock<Arc<ProcessRegistry>> = OnceLock::new();
 
@@ -312,11 +312,9 @@ impl ProcessRegistry {
     /// configured, without waiting or escalating. Use [`Self::shutdown`]
     /// for a graceful shutdown with escalation.
     pub async fn signal_running(&self, signal: SignalType) {
-        for tracked in self.list_running().await {
-            if let Err(error) = self.state.signal_tree(&tracked.child, signal).await {
-                warn!(pid = tracked.pid(), %error, "Failed to signal child process");
-            }
-        }
+        self.state
+            .signal_all(&self.state.running_children(), signal)
+            .await;
     }
 
     /// Force kill a tracked child, selected by pid or by handle, and its
@@ -340,23 +338,46 @@ impl ProcessRegistry {
     /// Shut down every running child: signal them (and their descendants),
     /// give them [`ProcessRegistryOptions::shutdown_threshold`] to exit, then
     /// force kill whatever remains, and return once they have all exited.
-    /// Children stay tracked until released. When the background tasks are
-    /// running, this is the same path an OS signal takes; otherwise the
-    /// shutdown runs inline.
+    /// Children stay tracked until released.
+    ///
+    /// When the background tasks are running, this takes the same path as
+    /// an OS signal. Like a repeated OS signal, calling this while another
+    /// shutdown is in its grace period escalates that shutdown to a force
+    /// kill. Otherwise the shutdown runs inline.
     pub async fn shutdown(&self, signal: SignalType) {
         if self.is_started() {
+            let pids = self
+                .state
+                .running_children()
+                .iter()
+                .map(|tracked| tracked.pid())
+                .collect::<Vec<_>>();
+
             let mut events = self.state.events.subscribe();
 
             // The coordinator subscribes when started, so a send only fails
             // if it has died, in which case run the shutdown ourselves.
             if self.state.signals.send(signal).is_ok() {
+                // Whether the signal starts a shutdown or escalates one in
+                // progress, it ends with these children gone, so wait on
+                // them rather than on a shutdown that may not be ours. The
+                // exception is a child that survives a force kill, where
+                // the coordinator gives up, so a forced shutdown that
+                // finishes ends the wait too.
+                let exited = self.state.wait_until_exited(Some(&pids));
+                let mut forced = false;
+
+                tokio::pin!(exited);
+
                 loop {
-                    match events.recv().await {
-                        Ok(ProcessEvent::ShutdownFinished)
-                        | Err(broadcast::error::RecvError::Closed) => {
-                            return;
-                        }
-                        Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    tokio::select! {
+                        _ = &mut exited => return,
+                        event = events.recv() => match event {
+                            Ok(ProcessEvent::ShutdownForced { .. }) => forced = true,
+                            Ok(ProcessEvent::ShutdownFinished) if forced => return,
+                            Err(broadcast::error::RecvError::Closed) => return,
+                            _ => {}
+                        },
                     }
                 }
             }
@@ -378,28 +399,24 @@ impl Drop for ProcessRegistry {
     fn drop(&mut self) {
         self.stop();
 
-        // Nothing can await here, so signal synchronously. Children that
-        // are already dead are skipped, and readers of every tracked child
-        // are stopped so nothing waits on a pipe held by a descendant.
-        for tracked in self.state.read_children().values() {
-            let pid = tracked.pid();
+        // Nothing can await here, so signal synchronously. The children are
+        // snapshotted first, so that the lock isn't held while the process
+        // table is read.
+        let running = self.state.running_children();
 
-            if tracked.is_running() {
-                let descendants = if self.state.options.signal_descendants {
-                    tree::descendants(pid)
-                } else {
-                    vec![]
-                };
+        let trees = if self.state.options.signal_descendants {
+            let pids = running.iter().map(|c| c.pid()).collect::<Vec<_>>();
 
-                if let Err(error) = tracked.child.send_signal(SignalType::Kill) {
-                    warn!(pid, %error, "Failed to kill child process while dropping registry");
-                }
+            tree::descendants_of(&pids)
+        } else {
+            vec![]
+        };
 
-                kill_descendants(&descendants, SignalType::Kill);
-            }
+        self.state.send_signals(&running, trees, SignalType::Kill);
 
-            tracked.child.stop_output();
-        }
+        // Stop the readers of every tracked child, exited ones included,
+        // so nothing waits on a pipe held by a descendant
+        self.state.stop_all_output();
     }
 }
 

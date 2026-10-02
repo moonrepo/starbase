@@ -8,10 +8,16 @@ use crate::signal::SignalType;
 use rustc_hash::FxHashMap;
 use std::io;
 use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::time::Duration;
 use tokio::sync::{Mutex as AsyncMutex, Notify, broadcast, mpsc, watch};
 use tokio::task::spawn_blocking;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tracing::{debug, trace, warn};
+
+/// How long to wait for children to exit after they have been force
+/// killed. A process that survives this is stuck in the kernel, and
+/// waiting any longer would only hang the shutdown.
+const FORCE_KILL_WAIT: Duration = Duration::from_secs(5);
 
 pub(super) type Children = FxHashMap<u32, TrackedChild>;
 
@@ -216,13 +222,11 @@ impl RegistryState {
     ) -> io::Result<()> {
         let pid = child.id();
 
-        let descendants = if self.options.signal_descendants {
-            spawn_blocking(move || tree::descendants(pid))
-                .await
-                .unwrap_or_default()
-        } else {
-            vec![]
-        };
+        let descendants = self
+            .find_descendants(vec![pid])
+            .await
+            .pop()
+            .unwrap_or_default();
 
         trace!(pid, ?signal, ?descendants, "Signalling child process");
 
@@ -231,6 +235,53 @@ impl RegistryState {
         kill_descendants(&descendants, signal);
 
         Ok(())
+    }
+
+    /// Signal many children and, when configured, their descendants. Every
+    /// tree is resolved from one snapshot of the process table, taken
+    /// before any child is signalled.
+    pub(super) async fn signal_all(&self, children: &[TrackedChild], signal: SignalType) {
+        let pids = children.iter().map(|c| c.pid()).collect();
+        let trees = self.find_descendants(pids).await;
+
+        self.send_signals(children, trees, signal);
+    }
+
+    /// Signal each child, then the descendants that were found for it.
+    /// `trees` is parallel to `children`, and may be empty when descendants
+    /// aren't signalled. Never blocks, so it's usable from `Drop`.
+    pub(super) fn send_signals(
+        &self,
+        children: &[TrackedChild],
+        trees: Vec<Vec<u32>>,
+        signal: SignalType,
+    ) {
+        let mut trees = trees.into_iter();
+
+        for tracked in children {
+            let pid = tracked.pid();
+            let descendants = trees.next().unwrap_or_default();
+
+            trace!(pid, ?signal, ?descendants, "Signalling child process");
+
+            if let Err(error) = tracked.child.send_signal(signal) {
+                warn!(pid, ?signal, %error, "Failed to signal child process");
+            }
+
+            kill_descendants(&descendants, signal);
+        }
+    }
+
+    /// Return the descendants of each pid, or nothing when descendants
+    /// aren't signalled. Reads the process table once, off the runtime.
+    async fn find_descendants(&self, pids: Vec<u32>) -> Vec<Vec<u32>> {
+        if !self.options.signal_descendants {
+            return vec![];
+        }
+
+        spawn_blocking(move || tree::descendants_of(&pids))
+            .await
+            .unwrap_or_default()
     }
 
     /// Shut down the running children. Returns a signal that arrived after
@@ -268,11 +319,7 @@ impl RegistryState {
             pids: pids.clone(),
         });
 
-        for tracked in &targets {
-            if let Err(error) = self.signal_tree(&tracked.child, signal).await {
-                warn!(pid = tracked.pid(), %error, "Failed to signal child process");
-            }
-        }
+        self.signal_all(&targets, signal).await;
 
         let mut pending = None;
 
@@ -313,14 +360,25 @@ impl RegistryState {
 
             self.emit(ProcessEvent::ShutdownForced { pids: pids.clone() });
 
-            for tracked in &remaining {
-                if let Err(error) = self.signal_tree(&tracked.child, SignalType::Kill).await {
-                    warn!(pid = tracked.pid(), %error, "Failed to kill child process");
-                }
-            }
-
+            self.signal_all(&remaining, SignalType::Kill).await;
             self.stop_all_output();
-            self.wait_until_exited(Some(&pids)).await;
+
+            if timeout(FORCE_KILL_WAIT, self.wait_until_exited(Some(&pids)))
+                .await
+                .is_err()
+            {
+                let pids = self
+                    .running_children()
+                    .iter()
+                    .map(|c| c.pid())
+                    .filter(|pid| pids.contains(pid))
+                    .collect::<Vec<_>>();
+
+                warn!(
+                    ?pids,
+                    "Child processes did not exit after being force killed"
+                );
+            }
         }
 
         debug!("Shutdown of child processes finished");
@@ -332,7 +390,7 @@ impl RegistryState {
 
     /// Stop the output readers of every tracked child, running or exited,
     /// so nothing waits on a pipe inherited by a descendant.
-    fn stop_all_output(&self) {
+    pub(super) fn stop_all_output(&self) {
         for tracked in self.read_children().values() {
             tracked.child.stop_output();
         }

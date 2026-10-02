@@ -407,6 +407,22 @@ mod tracking {
     }
 
     #[tokio::test]
+    async fn dropping_the_registry_kills_descendants() {
+        let registry = create_registry();
+        let first = registry.track(spawn_wrapper()).await;
+        let second = registry.track(spawn_wrapper()).await;
+        let first_grandchild: u32 = read_line(&first).await.parse().unwrap();
+        let second_grandchild: u32 = read_line(&second).await.parse().unwrap();
+
+        drop(registry);
+
+        assert_eq!(first.wait().await.unwrap(), ChildExit::Killed);
+        assert_eq!(second.wait().await.unwrap(), ChildExit::Killed);
+
+        wait_until(async || !is_alive(first_grandchild) && !is_alive(second_grandchild)).await;
+    }
+
+    #[tokio::test]
     async fn dropping_the_registry_kills_tracked_children() {
         let registry = create_registry();
         let child = registry.track(spawn_sleep()).await;
@@ -671,6 +687,88 @@ mod shutdown {
     }
 
     #[tokio::test]
+    async fn shutdown_signals_descendants_of_every_child() {
+        let registry = create_registry();
+        let first = registry.track(spawn_wrapper()).await;
+        let second = registry.track(spawn_wrapper()).await;
+        let first_grandchild: u32 = read_line(&first).await.parse().unwrap();
+        let second_grandchild: u32 = read_line(&second).await.parse().unwrap();
+
+        timeout(
+            Duration::from_secs(3),
+            registry.shutdown(SignalType::Terminate),
+        )
+        .await
+        .unwrap();
+
+        wait_until(async || !is_alive(first_grandchild) && !is_alive(second_grandchild)).await;
+    }
+
+    #[tokio::test]
+    async fn shutdown_during_a_shutdown_escalates_and_waits() {
+        let registry = ProcessRegistry::with_options(ProcessRegistryOptions {
+            shutdown_threshold: Duration::from_secs(30),
+            ..options()
+        });
+        let child = registry.track(spawn_stubborn()).await;
+
+        assert_eq!(read_line(&child).await, "ready");
+
+        // Starts a graceful shutdown that the child ignores
+        registry.terminate_running();
+
+        timeout(
+            Duration::from_secs(3),
+            registry.shutdown(SignalType::Terminate),
+        )
+        .await
+        .expect("shutdown did not escalate the one in progress");
+
+        assert_eq!(registry.running_count(), 0);
+        assert_eq!(child.wait().await.unwrap(), ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn shutdown_waits_for_children_tracked_during_a_shutdown() {
+        let registry = create_registry();
+        let first = registry.track(spawn_sleep()).await;
+
+        registry.terminate_running();
+
+        // Not part of the shutdown above, which may finish first
+        let second = registry.track(spawn_sleep()).await;
+
+        timeout(
+            Duration::from_secs(3),
+            registry.shutdown(SignalType::Terminate),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(registry.running_count(), 0);
+        assert!(registry.get_running(&first).await.is_none());
+        assert!(registry.get_running(&second).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn concurrent_shutdowns_wait_for_children() {
+        let registry = create_registry();
+        let _first = registry.track(spawn_sleep()).await;
+        let _second = registry.track(spawn_sleep()).await;
+
+        timeout(Duration::from_secs(3), async {
+            tokio::join!(
+                registry.shutdown(SignalType::Terminate),
+                registry.shutdown(SignalType::Terminate)
+            )
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(registry.running_count(), 0);
+    }
+
+    #[tokio::test]
     async fn shutdown_runs_inline_while_stopped() {
         let registry = create_registry();
         let child = registry.track(spawn_stubborn()).await;
@@ -699,11 +797,24 @@ mod shutdown {
 
         registry.shutdown(SignalType::Terminate).await;
 
+        // The shutdown returns once the children are gone, which can be
+        // just before the coordinator reports that it has finished
         let mut seen = vec![];
 
-        while let Ok(event) = events.try_recv() {
-            seen.push(event);
-        }
+        timeout(Duration::from_secs(3), async {
+            loop {
+                let event = events.recv().await.unwrap();
+                let finished = matches!(event, ProcessEvent::ShutdownFinished);
+
+                seen.push(event);
+
+                if finished {
+                    break;
+                }
+            }
+        })
+        .await
+        .unwrap();
 
         assert!(matches!(seen[0], ProcessEvent::Tracked { pid: p } if p == pid));
         assert!(matches!(

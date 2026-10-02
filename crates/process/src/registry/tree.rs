@@ -15,26 +15,35 @@ pub(super) fn kill_descendants(pids: &[u32], signal: SignalType) {
     }
 }
 
-/// Return every descendant of `pid` (children, grandchildren, and so
-/// on), parents before their children. Failures yield an empty list.
-pub fn descendants(pid: u32) -> Vec<u32> {
-    let mut children_of = imp::children_lookup();
-    let mut seen = FxHashSet::default();
-    let mut queue = vec![pid];
-    let mut found = vec![];
-
-    seen.insert(pid);
-
-    while let Some(parent) = queue.pop() {
-        for child in children_of(parent) {
-            if seen.insert(child) {
-                found.push(child);
-                queue.push(child);
-            }
-        }
+/// Return every descendant (children, grandchildren, and so on) of each
+/// pid, parents before their children, resolved from a single snapshot of
+/// the process table. The result is parallel to `pids`, and a process is
+/// only ever listed once. Failures yield empty lists.
+pub fn descendants_of(pids: &[u32]) -> Vec<Vec<u32>> {
+    if pids.is_empty() {
+        return vec![];
     }
 
-    found
+    let mut children_of = imp::children_lookup();
+    let mut seen = pids.iter().copied().collect::<FxHashSet<_>>();
+
+    pids.iter()
+        .map(|pid| {
+            let mut queue = vec![*pid];
+            let mut found = vec![];
+
+            while let Some(parent) = queue.pop() {
+                for child in children_of(parent) {
+                    if seen.insert(child) {
+                        found.push(child);
+                        queue.push(child);
+                    }
+                }
+            }
+
+            found
+        })
+        .collect()
 }
 
 /// Signal a process that isn't one of our children by pid.

@@ -30,6 +30,7 @@ pub enum ProcessEvent {
     /// children are being force killed.
     ShutdownForced { pids: Vec<u32> },
 
-    /// Every child of the shutdown has exited.
+    /// The shutdown is over. Every child has exited, unless one survived
+    /// being force killed, which is logged.
     ShutdownFinished,
 }
