@@ -39,3 +39,48 @@ impl TrackedChild {
         self.state == ChildState::Running
     }
 }
+
+/// Selects a tracked child, either by pid or by handle. Anything that takes
+/// a selector accepts a `u32` pid or a `&SharedChild` directly.
+///
+/// A pid selects whichever child is currently tracked under it. A handle
+/// selects only that exact child, so a stale handle never selects a newer
+/// child that the OS gave the same pid. Prefer a handle when you have one.
+#[derive(Clone, Copy)]
+pub enum ChildSelector<'a> {
+    /// The child currently tracked under this pid.
+    Pid(u32),
+
+    /// The child this handle, or any clone of it, refers to.
+    Handle(&'a SharedChild),
+}
+
+impl ChildSelector<'_> {
+    /// Return the pid of the selected child.
+    pub fn pid(&self) -> u32 {
+        match self {
+            Self::Pid(pid) => *pid,
+            Self::Handle(child) => child.id(),
+        }
+    }
+
+    /// Return true if this selects the given tracked child.
+    pub fn matches(&self, tracked: &TrackedChild) -> bool {
+        match self {
+            Self::Pid(pid) => tracked.pid() == *pid,
+            Self::Handle(child) => tracked.child.same_child(child),
+        }
+    }
+}
+
+impl From<u32> for ChildSelector<'_> {
+    fn from(pid: u32) -> Self {
+        Self::Pid(pid)
+    }
+}
+
+impl<'a> From<&'a SharedChild> for ChildSelector<'a> {
+    fn from(child: &'a SharedChild) -> Self {
+        Self::Handle(child)
+    }
+}

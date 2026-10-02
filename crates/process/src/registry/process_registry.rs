@@ -1,4 +1,4 @@
-use super::child::{ChildState, TrackedChild};
+use super::child::{ChildSelector, ChildState, TrackedChild};
 use super::event::ProcessEvent;
 use super::options::ProcessRegistryOptions;
 use super::state::RegistryState;
@@ -198,10 +198,10 @@ impl ProcessRegistry {
         let shared = SharedChild::new_with_cleanup(child, self.state.cleanup_sender.clone());
         let pid = shared.id();
 
-        {
+        let replaced = {
             let mut children = self.state.write_children();
 
-            children.insert(
+            let replaced = children.insert(
                 pid,
                 TrackedChild {
                     child: shared.clone(),
@@ -212,6 +212,15 @@ impl ProcessRegistry {
             );
 
             self.state.sync_running_count(&children);
+            replaced
+        };
+
+        // The OS gave this child the pid of one that has exited but was
+        // still tracked. Its handle no longer selects anything.
+        if replaced.is_some() {
+            trace!(pid, "Released stale child process with a reused pid");
+
+            self.state.emit(ProcessEvent::Released { pid });
         }
 
         trace!(pid, "Tracking child process");
@@ -224,45 +233,27 @@ impl ProcessRegistry {
         shared
     }
 
-    /// Stop tracking a child. Does not signal it, and disables the kill
-    /// on drop of its original handle. Returns the tracked entry, if any.
-    pub async fn release(&self, child: &SharedChild) -> Option<TrackedChild> {
-        self.release_by_pid(child.id()).await
+    /// Stop tracking a child, selected by pid or by handle (see
+    /// [`ChildSelector`]). Does not signal it, and disables the kill on
+    /// drop of its original handle. Returns the tracked entry, if any.
+    pub async fn release<'a>(&self, child: impl Into<ChildSelector<'a>>) -> Option<TrackedChild> {
+        self.state.release(child.into())
     }
 
-    /// Stop tracking a child by pid. See [`Self::release`].
-    pub async fn release_by_pid(&self, pid: u32) -> Option<TrackedChild> {
-        let removed = {
-            let mut children = self.state.write_children();
-            let removed = children.remove(&pid);
-
-            self.state.sync_running_count(&children);
-            removed
-        };
-
-        if let Some(tracked) = &removed {
-            tracked.child.stop_cleanup();
-
-            trace!(pid, "Released child process");
-
-            self.state.emit(ProcessEvent::Released { pid });
-        }
-
-        removed
+    /// Look up a tracked child by pid or by handle, running or exited.
+    pub async fn get<'a>(&self, child: impl Into<ChildSelector<'a>>) -> Option<TrackedChild> {
+        self.state.find(child.into())
     }
 
-    /// Look up a tracked child by pid, running or exited.
-    pub async fn get(&self, pid: u32) -> Option<TrackedChild> {
-        self.state.read_children().get(&pid).cloned()
-    }
-
-    /// Look up a child by pid, only if it is still running.
-    pub async fn get_running_by_pid(&self, pid: u32) -> Option<SharedChild> {
+    /// Look up a child by pid or by handle, only if it is still running.
+    pub async fn get_running<'a>(
+        &self,
+        child: impl Into<ChildSelector<'a>>,
+    ) -> Option<SharedChild> {
         self.state
-            .read_children()
-            .get(&pid)
+            .find(child.into())
             .filter(|tracked| tracked.is_running())
-            .map(|tracked| tracked.child.clone())
+            .map(|tracked| tracked.child)
     }
 
     /// Return every tracked child, running or exited.
@@ -299,12 +290,16 @@ impl ProcessRegistry {
         self.state.events.subscribe()
     }
 
-    /// Send a signal to a tracked child, and its descendants when
-    /// [`ProcessRegistryOptions::signal_descendants`] is set, without
-    /// waiting for it to exit. Returns false if the pid is not tracked
-    /// or has already exited.
-    pub async fn signal(&self, pid: u32, signal: SignalType) -> io::Result<bool> {
-        let Some(child) = self.get_running_by_pid(pid).await else {
+    /// Send a signal to a tracked child, selected by pid or by handle, and
+    /// its descendants when [`ProcessRegistryOptions::signal_descendants`]
+    /// is set, without waiting for it to exit. Returns false if the child
+    /// is not tracked or has already exited.
+    pub async fn signal<'a>(
+        &self,
+        child: impl Into<ChildSelector<'a>>,
+        signal: SignalType,
+    ) -> io::Result<bool> {
+        let Some(child) = self.get_running(child).await else {
             return Ok(false);
         };
 
@@ -324,10 +319,14 @@ impl ProcessRegistry {
         }
     }
 
-    /// Force kill a tracked child and its descendants, and wait for it to
-    /// exit. Returns `None` if the pid is not tracked.
-    pub async fn kill(&self, pid: u32) -> io::Result<Option<ChildExit>> {
-        let Some(tracked) = self.get(pid).await else {
+    /// Force kill a tracked child, selected by pid or by handle, and its
+    /// descendants, and wait for it to exit. Returns `None` if the child
+    /// is not tracked.
+    pub async fn kill<'a>(
+        &self,
+        child: impl Into<ChildSelector<'a>>,
+    ) -> io::Result<Option<ChildExit>> {
+        let Some(tracked) = self.get(child).await else {
             return Ok(None);
         };
 

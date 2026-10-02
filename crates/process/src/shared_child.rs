@@ -88,6 +88,13 @@ impl SharedChild {
         self.pid
     }
 
+    /// Return true if both handles refer to the same child process. Unlike
+    /// comparing pids, this can't be fooled by the OS giving a new process
+    /// the pid of one that has already exited.
+    pub fn same_child(&self, other: &SharedChild) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
     /// Take the child's stdin pipe, if it was piped and not already taken.
     ///
     /// Dropping the returned handle closes the pipe, which the child sees

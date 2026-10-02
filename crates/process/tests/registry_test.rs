@@ -1,7 +1,7 @@
 #![cfg(unix)]
 
 use starbase_process::registry::{
-    ChildState, ProcessEvent, ProcessRegistry, ProcessRegistryOptions,
+    ChildSelector, ChildState, ProcessEvent, ProcessRegistry, ProcessRegistryOptions,
 };
 use starbase_process::{ChildExit, Output, SharedChild, SignalType};
 use std::process::Stdio;
@@ -125,13 +125,13 @@ mod lifecycle {
 
         assert!(registry.restart());
         assert!(registry.is_started());
-        assert!(registry.get_running_by_pid(pid).await.is_some());
+        assert!(registry.get_running(pid).await.is_some());
         assert!(registry.get_cached_output("key").await.is_some());
 
         // Exits are still detected after the restart
         child.kill().await.unwrap();
 
-        wait_until(async || registry.get_running_by_pid(pid).await.is_none()).await;
+        wait_until(async || registry.get_running(pid).await.is_none()).await;
     }
 
     #[tokio::test]
@@ -163,7 +163,7 @@ mod tracking {
         let pid = child.id();
 
         assert!(registry.get(pid).await.is_some_and(|c| c.is_running()));
-        assert!(registry.get_running_by_pid(pid).await.is_some());
+        assert!(registry.get_running(pid).await.is_some());
         assert_eq!(registry.running_count(), 1);
         assert_eq!(registry.list().await.len(), 1);
 
@@ -177,6 +177,50 @@ mod tracking {
         assert!(is_alive(pid));
 
         child.kill().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn selects_children_by_pid_or_handle() {
+        let registry = create_registry();
+        let child = registry.track(spawn_sleep()).await;
+        let pid = child.id();
+
+        assert!(registry.get(pid).await.is_some());
+        assert!(registry.get(&child).await.is_some());
+        assert!(registry.get(&child.clone()).await.is_some());
+        assert!(registry.get_running(pid).await.is_some());
+        assert!(registry.get_running(&child).await.is_some());
+
+        assert!(registry.release(pid).await.is_some());
+        assert!(registry.get(&child).await.is_none());
+
+        child.kill().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn handles_only_select_their_own_child() {
+        let registry = create_registry();
+        let child = registry.track(spawn_sleep()).await;
+        let other = SharedChild::new(spawn_sleep());
+        let tracked = registry.get(&child).await.unwrap();
+
+        // By pid, by handle, and by a clone of the handle
+        assert!(ChildSelector::from(child.id()).matches(&tracked));
+        assert!(ChildSelector::from(&child).matches(&tracked));
+        assert!(ChildSelector::from(&child.clone()).matches(&tracked));
+
+        // A handle to another child never selects it, which is what
+        // protects a child that reuses a pid from a stale handle
+        assert!(!ChildSelector::from(&other).matches(&tracked));
+        assert!(registry.get(&other).await.is_none());
+        assert!(registry.release(&other).await.is_none());
+        assert!(registry.kill(&other).await.unwrap().is_none());
+        assert!(!registry.signal(&other, SignalType::Kill).await.unwrap());
+
+        assert!(registry.get_running(&child).await.is_some());
+
+        child.kill().await.unwrap();
+        other.kill().await.unwrap();
     }
 
     #[tokio::test]
@@ -212,8 +256,8 @@ mod tracking {
         let registry = create_registry();
 
         assert!(registry.get(0).await.is_none());
-        assert!(registry.get_running_by_pid(0).await.is_none());
-        assert!(registry.release_by_pid(0).await.is_none());
+        assert!(registry.get_running(0).await.is_none());
+        assert!(registry.release(0).await.is_none());
         assert!(registry.kill(0).await.unwrap().is_none());
         assert!(!registry.signal(0, SignalType::Terminate).await.unwrap());
     }
@@ -225,7 +269,7 @@ mod tracking {
         let child = registry.track(Command::new("true").spawn().unwrap()).await;
         let pid = child.id();
 
-        wait_until(async || registry.get_running_by_pid(pid).await.is_none()).await;
+        wait_until(async || registry.get_running(pid).await.is_none()).await;
 
         // Stays tracked, as exited, until released
         let tracked = registry.get(pid).await.unwrap();
@@ -305,7 +349,7 @@ mod tracking {
             .await
             .unwrap();
 
-        assert!(registry.get_running_by_pid(child.id()).await.is_none());
+        assert!(registry.get_running(child.id()).await.is_none());
     }
 
     #[tokio::test]
@@ -320,7 +364,7 @@ mod tracking {
 
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        assert!(registry.get_running_by_pid(pid).await.is_some());
+        assert!(registry.get_running(pid).await.is_some());
 
         drop(child);
 
@@ -403,6 +447,26 @@ mod signals {
 
         assert_eq!(
             registry.kill(child.id()).await.unwrap(),
+            Some(ChildExit::Killed)
+        );
+    }
+
+    #[tokio::test]
+    async fn signals_and_kills_by_handle() {
+        let registry = create_registry();
+        let first = registry.track(spawn_sleep()).await;
+        let second = registry.track(spawn_sleep()).await;
+
+        assert!(
+            registry
+                .signal(&first, SignalType::Terminate)
+                .await
+                .unwrap()
+        );
+        assert_eq!(first.wait().await.unwrap(), ChildExit::Terminated(15));
+
+        assert_eq!(
+            registry.kill(&second).await.unwrap(),
             Some(ChildExit::Killed)
         );
     }

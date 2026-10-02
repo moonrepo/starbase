@@ -1,4 +1,4 @@
-use super::child::{ChildState, TrackedChild};
+use super::child::{ChildSelector, ChildState, TrackedChild};
 use super::event::ProcessEvent;
 use super::options::ProcessRegistryOptions;
 use super::tree::{self, kill_descendants};
@@ -50,6 +50,45 @@ impl RegistryState {
         self.children
             .write()
             .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Look up the child the selector refers to.
+    pub(super) fn find(&self, selector: ChildSelector<'_>) -> Option<TrackedChild> {
+        self.read_children()
+            .get(&selector.pid())
+            .filter(|tracked| selector.matches(tracked))
+            .cloned()
+    }
+
+    /// Stop tracking the child the selector refers to. The match and the
+    /// removal happen under one lock, so a child that reuses the pid can't
+    /// slip in between and be removed instead.
+    pub(super) fn release(&self, selector: ChildSelector<'_>) -> Option<TrackedChild> {
+        let pid = selector.pid();
+
+        let removed = {
+            let mut children = self.write_children();
+
+            if !children
+                .get(&pid)
+                .is_some_and(|tracked| selector.matches(tracked))
+            {
+                return None;
+            }
+
+            let removed = children.remove(&pid)?;
+
+            self.sync_running_count(&children);
+            removed
+        };
+
+        removed.child.stop_cleanup();
+
+        trace!(pid, "Released child process");
+
+        self.emit(ProcessEvent::Released { pid });
+
+        Some(removed)
     }
 
     /// Return a snapshot of every child that is still running.
@@ -144,8 +183,10 @@ impl RegistryState {
     /// still running has been cancelled, so kill it, then release it.
     pub(super) async fn cleanup_dropped(self: Arc<Self>, child: SharedChild) {
         let pid = child.id();
+        let selector = ChildSelector::Handle(&child);
 
-        let Some(tracked) = self.read_children().get(&pid).cloned() else {
+        // Select by handle, as the pid may belong to a newer child by now
+        let Some(tracked) = self.find(selector) else {
             return;
         };
 
@@ -161,19 +202,7 @@ impl RegistryState {
             }
         }
 
-        let removed = {
-            let mut children = self.write_children();
-            let removed = children.remove(&pid).is_some();
-
-            self.sync_running_count(&children);
-            removed
-        };
-
-        if removed {
-            trace!(pid, "Released dropped child process");
-
-            self.emit(ProcessEvent::Released { pid });
-        }
+        self.release(selector);
     }
 
     /// Signal a child and, when configured, its descendants. The tree is
