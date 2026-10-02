@@ -1,22 +1,100 @@
-#![cfg(unix)]
-
 use starbase_process::registry::{
-    ChildSelector, ChildState, ProcessEvent, ProcessRegistry, ProcessRegistryOptions,
+    ChildState, ProcessEvent, ProcessRegistry, ProcessRegistryOptions,
 };
 use starbase_process::{ChildExit, Output, SharedChild, SignalType};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
+use tokio::io::AsyncReadExt;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStdout, Command};
 use tokio::time::timeout;
 
+// Runs for 30 seconds unless it is stopped.
 fn spawn_sleep() -> Child {
-    Command::new("sleep").arg("30").spawn().unwrap()
+    #[cfg(unix)]
+    let mut command = {
+        let mut command = Command::new("sleep");
+        command.arg("30");
+        command
+    };
+    #[cfg(windows)]
+    let mut command = {
+        let mut command = Command::new("ping");
+        command
+            .args(["-n", "30", "127.0.0.1"])
+            .stdout(Stdio::null());
+        command
+    };
+
+    command.spawn().unwrap()
+}
+
+// Exits successfully right away.
+fn spawn_exit() -> Child {
+    #[cfg(unix)]
+    let mut command = Command::new("true");
+    #[cfg(windows)]
+    let mut command = {
+        let mut command = Command::new("cmd.exe");
+        command.args(["/D", "/C", "exit 0"]);
+        command
+    };
+
+    command.spawn().unwrap()
+}
+
+// A wrapper whose work runs in a grandchild that inherits its stdout pipe.
+// Something is written to the pipe once the grandchild is running, and it
+// only reaches end of file once neither process holds it open any more.
+fn spawn_piped_wrapper() -> Child {
+    #[cfg(unix)]
+    let mut command = {
+        let mut command = Command::new("sh");
+        command.args(["-c", "sleep 30 & echo ready; wait"]);
+        command
+    };
+    #[cfg(windows)]
+    let mut command = {
+        let mut command = Command::new("cmd.exe");
+        command.args(["/D", "/C", "ping -n 30 127.0.0.1"]);
+        command
+    };
+
+    command.stdout(Stdio::piped()).spawn().unwrap()
+}
+
+// Wait for the grandchild of a piped wrapper to be running, and return the
+// pipe that it holds open.
+async fn wait_for_grandchild(child: &SharedChild) -> ChildStdout {
+    let mut stdout = child.take_stdout().await.unwrap();
+    let mut buffer = [0; 64];
+
+    let read = timeout(Duration::from_secs(10), stdout.read(&mut buffer))
+        .await
+        .expect("grandchild did not start")
+        .unwrap();
+
+    assert!(read > 0);
+
+    stdout
+}
+
+// Passes once every process holding the pipe has gone, which is how these
+// tests observe that a descendant was terminated without knowing its pid.
+async fn assert_pipe_closes(mut stdout: ChildStdout) {
+    let mut rest = vec![];
+
+    // Only the end of file matters, not how it is reported
+    let _ = timeout(Duration::from_secs(5), stdout.read_to_end(&mut rest))
+        .await
+        .expect("a descendant survived, and still holds the pipe open");
 }
 
 // Prints "ready" once the child is running, then ignores `SIGTERM`.
+#[cfg(unix)]
 fn spawn_stubborn() -> Child {
     Command::new("sh")
         .args(["-c", "trap '' TERM; echo ready; exec sleep 30"])
@@ -27,6 +105,7 @@ fn spawn_stubborn() -> Child {
 
 // A shell wrapper whose work runs in a grandchild. Prints the grandchild
 // pid once it is running.
+#[cfg(unix)]
 fn spawn_wrapper() -> Child {
     Command::new("sh")
         .args(["-c", "sleep 30 & echo $!; wait"])
@@ -35,6 +114,7 @@ fn spawn_wrapper() -> Child {
         .unwrap()
 }
 
+#[cfg(unix)]
 async fn read_line(child: &SharedChild) -> String {
     let mut line = String::new();
 
@@ -49,6 +129,7 @@ async fn read_line(child: &SharedChild) -> String {
     line.trim().to_owned()
 }
 
+#[cfg(unix)]
 fn is_alive(pid: u32) -> bool {
     unsafe { libc::kill(pid as i32, 0) == 0 }
 }
@@ -165,8 +246,11 @@ mod lifecycle {
     }
 }
 
+// These rely on pids, signals a child can ignore, and Unix commands.
+#[cfg(unix)]
 mod tracking {
     use super::*;
+    use starbase_process::registry::ChildSelector;
 
     #[tokio::test]
     async fn tracks_and_releases_children() {
@@ -451,6 +535,7 @@ mod tracking {
     }
 }
 
+#[cfg(unix)]
 mod signals {
     use super::*;
 
@@ -565,6 +650,7 @@ mod signals {
     }
 }
 
+#[cfg(unix)]
 mod shutdown {
     use super::*;
 
@@ -898,6 +984,159 @@ mod shutdown {
     }
 }
 
+// These run everywhere, Windows included, so they keep to what both
+// platforms can express: no grandchild pids, and no signals that a child
+// can ignore. A descendant is observed through a pipe that it inherits.
+mod cross_platform {
+    use super::*;
+
+    #[tokio::test]
+    async fn tracks_and_releases_children() {
+        let registry = create_registry();
+        let child = registry.track(spawn_sleep()).await;
+        let pid = child.id();
+
+        assert!(registry.get(pid).await.is_some_and(|c| c.is_running()));
+        assert!(registry.get_running(&child).await.is_some());
+        assert_eq!(registry.running_count(), 1);
+
+        assert!(registry.release(&child).await.is_some());
+
+        assert!(registry.get(pid).await.is_none());
+        assert_eq!(registry.running_count(), 0);
+
+        // Releasing doesn't kill, so this is the first signal it receives
+        assert_eq!(child.kill().await.unwrap(), ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn reaps_exited_children_in_the_background() {
+        let registry = create_registry();
+        let child = registry.track(spawn_exit()).await;
+
+        wait_until(async || registry.get_running(&child).await.is_none()).await;
+
+        // Stays tracked, as exited, until released
+        let tracked = registry.get(&child).await.unwrap();
+
+        assert!(matches!(
+            tracked.state,
+            ChildState::Exited(ChildExit::Completed(status)) if status.success()
+        ));
+        assert_eq!(registry.running_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn kills_a_child_and_waits() {
+        let registry = create_registry();
+        let child = registry.track(spawn_sleep()).await;
+
+        assert_eq!(
+            registry.kill(&child).await.unwrap(),
+            Some(ChildExit::Killed)
+        );
+
+        wait_until(async || registry.get_running(&child).await.is_none()).await;
+    }
+
+    #[tokio::test]
+    async fn dropping_a_running_handle_kills_the_child() {
+        let registry = create_registry();
+        let child = registry.track(spawn_sleep()).await;
+
+        // Clones never trigger cleanup, but can observe it
+        let clone = child.clone();
+
+        drop(child);
+
+        assert_eq!(
+            timeout(Duration::from_secs(3), clone.wait())
+                .await
+                .unwrap()
+                .unwrap(),
+            ChildExit::Killed
+        );
+
+        wait_until(async || registry.get(&clone).await.is_none()).await;
+    }
+
+    #[tokio::test]
+    async fn shuts_down_running_children() {
+        let registry = create_registry();
+        let first = registry.track(spawn_sleep()).await;
+        let second = registry.track(spawn_sleep()).await;
+
+        timeout(
+            Duration::from_secs(5),
+            registry.shutdown(SignalType::Terminate),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(registry.running_count(), 0);
+        assert_eq!(first.wait().await.unwrap(), ChildExit::Terminated(15));
+        assert_eq!(second.wait().await.unwrap(), ChildExit::Terminated(15));
+    }
+
+    #[tokio::test]
+    async fn force_shuts_down_running_children() {
+        let registry = create_registry();
+        let first = registry.track(spawn_sleep()).await;
+        let second = registry.track(spawn_sleep()).await;
+
+        timeout(Duration::from_secs(5), registry.shutdown(SignalType::Kill))
+            .await
+            .unwrap();
+
+        assert_eq!(registry.running_count(), 0);
+        assert_eq!(first.wait().await.unwrap(), ChildExit::Killed);
+        assert_eq!(second.wait().await.unwrap(), ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn kill_terminates_descendants() {
+        let registry = create_registry();
+        let child = registry.track(spawn_piped_wrapper()).await;
+        let stdout = wait_for_grandchild(&child).await;
+
+        assert_eq!(
+            registry.kill(&child).await.unwrap(),
+            Some(ChildExit::Killed)
+        );
+
+        assert_pipe_closes(stdout).await;
+    }
+
+    #[tokio::test]
+    async fn shutdown_terminates_descendants_of_every_child() {
+        let registry = create_registry();
+        let first = registry.track(spawn_piped_wrapper()).await;
+        let second = registry.track(spawn_piped_wrapper()).await;
+        let first_stdout = wait_for_grandchild(&first).await;
+        let second_stdout = wait_for_grandchild(&second).await;
+
+        timeout(Duration::from_secs(5), registry.shutdown(SignalType::Kill))
+            .await
+            .unwrap();
+
+        assert_pipe_closes(first_stdout).await;
+        assert_pipe_closes(second_stdout).await;
+    }
+
+    #[tokio::test]
+    async fn dropping_the_registry_kills_descendants() {
+        let registry = create_registry();
+        let child = registry.track(spawn_piped_wrapper()).await;
+        let stdout = wait_for_grandchild(&child).await;
+
+        drop(registry);
+
+        assert_eq!(child.wait().await.unwrap(), ChildExit::Killed);
+
+        assert_pipe_closes(stdout).await;
+    }
+}
+
 mod cache {
     use super::*;
 
@@ -1047,8 +1286,43 @@ mod cache {
     }
 }
 
+// Never called, as compiling it is the test. The registry guards its
+// children with a synchronous lock, and a guard held across an await would
+// make a future unable to move between threads, which nothing else in the
+// crate would notice for the methods that it doesn't spawn itself.
+#[allow(dead_code)]
+fn public_futures_are_send(
+    registry: &ProcessRegistry,
+    command: &mut Command,
+    child: Child,
+    shared: &SharedChild,
+) {
+    fn assert_send<T: Send>(_future: T) {}
+
+    assert_send(registry.spawn(command));
+    assert_send(registry.track(child));
+    assert_send(registry.release(shared));
+    assert_send(registry.get(shared));
+    assert_send(registry.get_running(shared));
+    assert_send(registry.list());
+    assert_send(registry.list_running());
+    assert_send(registry.wait_for_idle());
+    assert_send(registry.signal(shared, SignalType::Kill));
+    assert_send(registry.signal_running(SignalType::Kill));
+    assert_send(registry.kill(shared));
+    assert_send(registry.shutdown(SignalType::Kill));
+    assert_send(registry.get_cached_output("key"));
+    assert_send(registry.cache_output("key", fake_output()));
+    assert_send(registry.remove_cached_output("key"));
+    assert_send(registry.clear_cache());
+    assert_send(registry.exec_cached("key", async { Ok::<_, ()>(fake_output()) }));
+}
+
 fn fake_output() -> Output {
+    #[cfg(unix)]
     use std::os::unix::process::ExitStatusExt;
+    #[cfg(windows)]
+    use std::os::windows::process::ExitStatusExt;
     use std::process::ExitStatus;
 
     Output {
