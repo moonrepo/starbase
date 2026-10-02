@@ -8,11 +8,11 @@ use crate::shared_child::{ChildExit, SharedChild};
 use crate::signal::{SignalType, wait_for_signal};
 use rustc_hash::FxHashMap;
 use std::io;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::Instant;
 use tokio::process::{Child, Command as TokioCommand};
 use tokio::runtime::Handle;
-use tokio::sync::{Mutex as AsyncMutex, Notify, RwLock, broadcast, mpsc, watch};
+use tokio::sync::{Mutex as AsyncMutex, Notify, broadcast, mpsc, watch};
 use tracing::{trace, warn};
 
 static INSTANCE: OnceLock<Arc<ProcessRegistry>> = OnceLock::new();
@@ -199,7 +199,7 @@ impl ProcessRegistry {
         let pid = shared.id();
 
         {
-            let mut children = self.state.children.write().await;
+            let mut children = self.state.write_children();
 
             children.insert(
                 pid,
@@ -233,7 +233,7 @@ impl ProcessRegistry {
     /// Stop tracking a child by pid. See [`Self::release`].
     pub async fn release_by_pid(&self, pid: u32) -> Option<TrackedChild> {
         let removed = {
-            let mut children = self.state.children.write().await;
+            let mut children = self.state.write_children();
             let removed = children.remove(&pid);
 
             self.state.sync_running_count(&children);
@@ -253,15 +253,13 @@ impl ProcessRegistry {
 
     /// Look up a tracked child by pid, running or exited.
     pub async fn get(&self, pid: u32) -> Option<TrackedChild> {
-        self.state.children.read().await.get(&pid).cloned()
+        self.state.read_children().get(&pid).cloned()
     }
 
     /// Look up a child by pid, only if it is still running.
     pub async fn get_running_by_pid(&self, pid: u32) -> Option<SharedChild> {
         self.state
-            .children
-            .read()
-            .await
+            .read_children()
             .get(&pid)
             .filter(|tracked| tracked.is_running())
             .map(|tracked| tracked.child.clone())
@@ -269,19 +267,12 @@ impl ProcessRegistry {
 
     /// Return every tracked child, running or exited.
     pub async fn list(&self) -> Vec<TrackedChild> {
-        self.state.children.read().await.values().cloned().collect()
+        self.state.read_children().values().cloned().collect()
     }
 
     /// Return every child that is still running.
     pub async fn list_running(&self) -> Vec<TrackedChild> {
-        self.state
-            .children
-            .read()
-            .await
-            .values()
-            .filter(|tracked| tracked.is_running())
-            .cloned()
-            .collect()
+        self.state.running_children()
     }
 
     /// Return the number of children that are still running.
@@ -391,26 +382,24 @@ impl Drop for ProcessRegistry {
         // Nothing can await here, so signal synchronously. Children that
         // are already dead are skipped, and readers of every tracked child
         // are stopped so nothing waits on a pipe held by a descendant.
-        if let Ok(children) = self.state.children.try_read() {
-            for tracked in children.values() {
-                let pid = tracked.pid();
+        for tracked in self.state.read_children().values() {
+            let pid = tracked.pid();
 
-                if tracked.is_running() {
-                    let descendants = if self.state.options.signal_descendants {
-                        tree::descendants(pid)
-                    } else {
-                        vec![]
-                    };
+            if tracked.is_running() {
+                let descendants = if self.state.options.signal_descendants {
+                    tree::descendants(pid)
+                } else {
+                    vec![]
+                };
 
-                    if let Err(error) = tracked.child.send_signal(SignalType::Kill) {
-                        warn!(pid, %error, "Failed to kill child process while dropping registry");
-                    }
-
-                    kill_descendants(&descendants, SignalType::Kill);
+                if let Err(error) = tracked.child.send_signal(SignalType::Kill) {
+                    warn!(pid, %error, "Failed to kill child process while dropping registry");
                 }
 
-                tracked.child.stop_output();
+                kill_descendants(&descendants, SignalType::Kill);
             }
+
+            tracked.child.stop_output();
         }
     }
 }

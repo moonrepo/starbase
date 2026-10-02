@@ -27,7 +27,7 @@ pub(super) async fn run_reaper(state: Arc<RegistryState>) {
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     // Children may have exited while we weren't running
-    state.reap_exited().await;
+    state.reap_exited();
 
     loop {
         tokio::select! {
@@ -36,9 +36,9 @@ pub(super) async fn run_reaper(state: Arc<RegistryState>) {
                 // reaper on it
                 tokio::spawn(Arc::clone(&state).cleanup_dropped(child));
             },
-            _ = state.reap.notified() => state.reap_exited().await,
-            _ = interval.tick() => state.reap_exited().await,
-            _ = wait_for_sigchld(&mut sigchld) => state.reap_exited().await,
+            _ = state.reap.notified() => state.reap_exited(),
+            _ = interval.tick() => state.reap_exited(),
+            _ = wait_for_sigchld(&mut sigchld) => state.reap_exited(),
         }
     }
 }

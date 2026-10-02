@@ -7,18 +7,22 @@ use crate::shared_child::SharedChild;
 use crate::signal::SignalType;
 use rustc_hash::FxHashMap;
 use std::io;
-use std::sync::Arc;
-use tokio::sync::{Mutex as AsyncMutex, Notify, RwLock, broadcast, mpsc, watch};
+use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use tokio::sync::{Mutex as AsyncMutex, Notify, broadcast, mpsc, watch};
 use tokio::task::spawn_blocking;
 use tokio::time::sleep;
 use tracing::{debug, trace, warn};
+
+pub(super) type Children = FxHashMap<u32, TrackedChild>;
 
 /// The state shared between the registry and its background tasks. It
 /// outlives a [`ProcessRegistry::stop`], so tracked children, the cache,
 /// and subscribers survive a restart.
 pub(super) struct RegistryState {
     pub(super) options: ProcessRegistryOptions,
-    pub(super) children: RwLock<FxHashMap<u32, TrackedChild>>,
+    /// A synchronous lock, so that `Drop` can always reach the children.
+    /// It must never be held across an await.
+    pub(super) children: RwLock<Children>,
     pub(super) cache: scc::HashCache<String, Output>,
     pub(super) inflight: scc::HashMap<String, watch::Receiver<Option<Output>>>,
     pub(super) events: broadcast::Sender<ProcessEvent>,
@@ -34,18 +38,49 @@ impl RegistryState {
         let _ = self.events.send(event);
     }
 
+    /// Lock the children for reading. Every critical section is a single
+    /// map operation, so the map is still consistent after a panic, and a
+    /// poisoned lock is safe to recover.
+    pub(super) fn read_children(&self) -> RwLockReadGuard<'_, Children> {
+        self.children.read().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Lock the children for writing. See [`Self::read_children`].
+    pub(super) fn write_children(&self) -> RwLockWriteGuard<'_, Children> {
+        self.children
+            .write()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Return a snapshot of every child that is still running.
+    pub(super) fn running_children(&self) -> Vec<TrackedChild> {
+        self.read_children()
+            .values()
+            .filter(|tracked| tracked.is_running())
+            .cloned()
+            .collect()
+    }
+
+    /// Return true if any of these pids is tracked and still running.
+    pub(super) fn any_running(&self, pids: &[u32]) -> bool {
+        let children = self.read_children();
+
+        pids.iter()
+            .any(|pid| children.get(pid).is_some_and(|c| c.is_running()))
+    }
+
     /// Publish the running count. Called with the write lock held, so a
     /// waiter woken by the change observes the new state.
-    pub(super) fn sync_running_count(&self, children: &FxHashMap<u32, TrackedChild>) {
+    pub(super) fn sync_running_count(&self, children: &Children) {
         let count = children.values().filter(|c| c.is_running()).count();
 
         self.running.send_replace(count);
     }
 
     /// Check every running child for exit, and update those that have.
-    pub(super) async fn reap_exited(&self) {
+    pub(super) fn reap_exited(&self) {
         let exited = {
-            let children = self.children.read().await;
+            let children = self.read_children();
 
             children
                 .values()
@@ -65,7 +100,7 @@ impl RegistryState {
             return;
         }
 
-        let mut children = self.children.write().await;
+        let mut children = self.write_children();
 
         for (pid, exit) in exited {
             // It may have been released while we weren't holding the lock
@@ -87,17 +122,11 @@ impl RegistryState {
         let mut running = self.running.subscribe();
 
         loop {
-            self.reap_exited().await;
+            self.reap_exited();
 
-            let done = {
-                let children = self.children.read().await;
-
-                match pids {
-                    Some(pids) => !pids
-                        .iter()
-                        .any(|pid| children.get(pid).is_some_and(|c| c.is_running())),
-                    None => !children.values().any(|c| c.is_running()),
-                }
+            let done = match pids {
+                Some(pids) => !self.any_running(pids),
+                None => !self.read_children().values().any(|c| c.is_running()),
             };
 
             if done {
@@ -116,7 +145,7 @@ impl RegistryState {
     pub(super) async fn cleanup_dropped(self: Arc<Self>, child: SharedChild) {
         let pid = child.id();
 
-        let Some(tracked) = self.children.read().await.get(&pid).cloned() else {
+        let Some(tracked) = self.read_children().get(&pid).cloned() else {
             return;
         };
 
@@ -133,7 +162,7 @@ impl RegistryState {
         }
 
         let removed = {
-            let mut children = self.children.write().await;
+            let mut children = self.write_children();
             let removed = children.remove(&pid).is_some();
 
             self.sync_running_count(&children);
@@ -182,21 +211,13 @@ impl RegistryState {
         signal: SignalType,
         mut receiver: Option<&mut broadcast::Receiver<SignalType>>,
     ) -> Option<SignalType> {
-        let targets = {
-            let children = self.children.read().await;
-
-            children
-                .values()
-                .filter(|c| c.is_running())
-                .cloned()
-                .collect::<Vec<_>>()
-        };
+        let targets = self.running_children();
 
         if targets.is_empty() {
             // Readers may still be draining pipes held open by the
             // descendants of an exited child
             if matches!(signal, SignalType::Kill) {
-                self.stop_all_output().await;
+                self.stop_all_output();
             }
 
             self.emit(ProcessEvent::ShutdownFinished);
@@ -240,14 +261,9 @@ impl RegistryState {
                 repeated = receive_repeated_signal(&mut receiver), if receiver.is_some() => {
                     self.emit(ProcessEvent::Signal(repeated));
 
-                    let still_running = {
-                        let children = self.children.read().await;
-                        pids.iter().any(|pid| children.get(pid).is_some_and(|c| c.is_running()))
-                    };
-
                     // Every child of this shutdown has already exited, so
                     // this is a new request rather than an escalation
-                    if still_running {
+                    if self.any_running(&pids) {
                         debug!(signal = ?repeated, "Received another signal during shutdown");
                         true
                     } else {
@@ -260,15 +276,7 @@ impl RegistryState {
 
         if force {
             // Includes children tracked after the shutdown began
-            let remaining = {
-                let children = self.children.read().await;
-
-                children
-                    .values()
-                    .filter(|c| c.is_running())
-                    .cloned()
-                    .collect::<Vec<_>>()
-            };
+            let remaining = self.running_children();
 
             let pids = remaining.iter().map(|c| c.pid()).collect::<Vec<_>>();
 
@@ -282,7 +290,7 @@ impl RegistryState {
                 }
             }
 
-            self.stop_all_output().await;
+            self.stop_all_output();
             self.wait_until_exited(Some(&pids)).await;
         }
 
@@ -295,8 +303,8 @@ impl RegistryState {
 
     /// Stop the output readers of every tracked child, running or exited,
     /// so nothing waits on a pipe inherited by a descendant.
-    async fn stop_all_output(&self) {
-        for tracked in self.children.read().await.values() {
+    fn stop_all_output(&self) {
+        for tracked in self.read_children().values() {
             tracked.child.stop_output();
         }
     }
