@@ -21,6 +21,19 @@ mod shared_child {
     }
 
     #[tokio::test]
+    async fn identifies_the_same_child() {
+        let child = spawn_sleep();
+        let other = spawn_sleep();
+
+        assert!(child.same_child(&child));
+        assert!(child.same_child(&child.clone()));
+        assert!(!child.same_child(&other));
+
+        let _ = child.kill().await;
+        let _ = other.kill().await;
+    }
+
+    #[tokio::test]
     async fn takes_pipes_only_once() {
         let mut command = Command::new("sleep");
         command.arg("30").stdout(Stdio::piped());
