@@ -1,9 +1,10 @@
 use reflink_copy::reflink_or_copy;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fmt::Debug;
 use std::fs::{self, DirEntry, File, FileType, OpenOptions};
 use std::io::{ErrorKind, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime};
 use tracing::{instrument, trace};
 
@@ -856,4 +857,97 @@ pub fn write_file<D: AsRef<[u8]>>(path: impl AsRef<Path> + Debug, data: D) -> Re
         path: path.to_path_buf(),
         error: Box::new(error),
     })
+}
+
+/// Write a file with the provided data to the provided path atomically, by writing
+/// to a temporary file in the same directory, syncing it to disk, and renaming it
+/// over the destination. Readers will observe either the old or new content, never
+/// a partial write. If the parent directory does not exist, it will be created.
+///
+/// If the destination is a symlink, the symlink itself is replaced, not its target.
+/// Since the destination is replaced with a new file, hard links to the previous
+/// file are broken, and only its permissions are preserved.
+#[inline]
+#[instrument(skip(data))]
+pub fn write_file_atomic<D: AsRef<[u8]>>(
+    path: impl AsRef<Path> + Debug,
+    data: D,
+) -> Result<(), FsError> {
+    static TEMP_ID: AtomicUsize = AtomicUsize::new(0);
+
+    let path = path.as_ref();
+    let parent = match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+
+    create_dir_all(parent)?;
+
+    // The temporary file must be in the same directory as the destination,
+    // as renames across file systems are not supported
+    let mut temp_name = OsString::from(".");
+    temp_name.push(path.file_name().unwrap_or_default());
+    temp_name.push(format!(
+        ".{}.{}.tmp",
+        std::process::id(),
+        TEMP_ID.fetch_add(1, Ordering::Relaxed)
+    ));
+
+    let temp_path = parent.join(temp_name);
+
+    trace!(file = ?path, temp_file = ?temp_path, "Writing file atomically");
+
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp_path)
+            .map_err(|error| FsError::Create {
+                path: path.to_path_buf(),
+                error: Box::new(error),
+            })?;
+
+        file.write_all(data.as_ref())
+            .map_err(|error| FsError::Write {
+                path: path.to_path_buf(),
+                error: Box::new(error),
+            })?;
+
+        // Preserve the permissions of the file being replaced
+        if let Ok(meta) = fs::symlink_metadata(path)
+            && meta.is_file()
+        {
+            file.set_permissions(meta.permissions())
+                .map_err(|error| FsError::Perms {
+                    path: path.to_path_buf(),
+                    error: Box::new(error),
+                })?;
+        }
+
+        // Sync before renaming, otherwise a crash may leave an empty file
+        file.sync_all().map_err(|error| FsError::Write {
+            path: path.to_path_buf(),
+            error: Box::new(error),
+        })?;
+
+        fs::rename(&temp_path, path).map_err(|error| FsError::Rename {
+            from: temp_path.clone(),
+            to: path.to_path_buf(),
+            error: Box::new(error),
+        })
+    })();
+
+    if result.is_err() {
+        let _ = fs::remove_file(&temp_path);
+    }
+
+    result?;
+
+    // Sync the directory so that the rename itself persists
+    #[cfg(unix)]
+    if let Ok(dir) = File::open(parent) {
+        let _ = dir.sync_all();
+    }
+
+    Ok(())
 }

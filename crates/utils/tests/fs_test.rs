@@ -342,6 +342,90 @@ mod fs_base {
         }
     }
 
+    mod write_file_atomic {
+        use super::*;
+
+        fn list_dir(dir: &std::path::Path) -> Vec<String> {
+            let mut names = std_fs::read_dir(dir)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+                .collect::<Vec<_>>();
+            names.sort();
+            names
+        }
+
+        #[test]
+        fn writes_a_new_file_and_creates_parents() {
+            let sandbox = create_empty_sandbox();
+            let file = sandbox.path().join("a/b/file.txt");
+
+            fs::write_file_atomic(&file, "content").unwrap();
+
+            assert_eq!(fs::read_file(&file).unwrap(), "content");
+            assert_eq!(list_dir(&sandbox.path().join("a/b")), ["file.txt"]);
+        }
+
+        #[test]
+        fn overwrites_an_existing_file() {
+            let sandbox = create_empty_sandbox();
+            sandbox.create_file("file.txt", "old content that is longer");
+
+            let file = sandbox.path().join("file.txt");
+
+            fs::write_file_atomic(&file, "new").unwrap();
+
+            assert_eq!(fs::read_file(&file).unwrap(), "new");
+            assert_eq!(list_dir(sandbox.path()), ["file.txt"]);
+        }
+
+        #[cfg(unix)]
+        #[test]
+        fn preserves_permissions() {
+            use std::os::unix::fs::PermissionsExt;
+
+            let sandbox = create_empty_sandbox();
+            sandbox.create_file("file.sh", "old");
+
+            let file = sandbox.path().join("file.sh");
+
+            fs::update_perms(&file, Some(0o755)).unwrap();
+            fs::write_file_atomic(&file, "new").unwrap();
+
+            assert_eq!(
+                fs::metadata(&file).unwrap().permissions().mode() & 0o777,
+                0o755
+            );
+        }
+
+        #[test]
+        fn replaces_a_symlink_instead_of_target() {
+            let sandbox = create_empty_sandbox();
+            sandbox.create_file("source", "source");
+
+            let src = sandbox.path().join("source");
+            let link = sandbox.path().join("link");
+
+            std::fs::soft_link(&src, &link).unwrap();
+
+            fs::write_file_atomic(&link, "link").unwrap();
+
+            assert_eq!(fs::read_file(&src).unwrap(), "source");
+            assert_eq!(fs::read_file(&link).unwrap(), "link");
+            assert!(link.symlink_metadata().unwrap().is_file());
+        }
+
+        #[test]
+        fn removes_temp_file_on_failure() {
+            let sandbox = create_empty_sandbox();
+            sandbox.create_file("dir/nested.txt", "");
+
+            let result = fs::write_file_atomic(sandbox.path().join("dir"), "content");
+
+            assert!(result.is_err());
+            assert_eq!(list_dir(sandbox.path()), ["dir"]);
+        }
+    }
+
     mod detect_indent {
         use super::*;
 
