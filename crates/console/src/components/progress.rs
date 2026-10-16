@@ -8,10 +8,11 @@ use std::time::{Duration, Instant};
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::time::sleep;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum ProgressDisplay {
+    #[default]
     Bar,
     Loader,
 }

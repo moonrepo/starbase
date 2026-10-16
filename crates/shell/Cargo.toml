@@ -33,7 +33,7 @@ serial_test = { workspace = true }
 
 # Interactive E2E tests drive a real shell through a pty
 [target."cfg(unix)".dev-dependencies]
-libc = "0.2"
+libc = { workspace = true }
 
 [features]
 default = []
