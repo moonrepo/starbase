@@ -83,6 +83,48 @@ mod globset {
         assert!(set.matches("packages/foo/node_modules/bar.js"));
         assert!(set.matches("apps/web/node_modules/dep/index.js"));
     }
+
+    #[test]
+    fn errors_with_the_invalid_pattern() {
+        for result in [
+            GlobSet::new(["files/*", "a:b"]).err(),
+            GlobSet::new(["files/*", "!a:b"]).err(),
+            GlobSet::new_owned(["files/*", "a:b"]).err(),
+        ] {
+            match result {
+                Some(GlobError::Create { glob, .. }) => assert_eq!(glob, "a:b"),
+                other => panic!("expected a create error, got {other:?}"),
+            }
+        }
+    }
+
+    #[cfg(feature = "glob-cache")]
+    #[test]
+    fn reuses_cached_sets() {
+        let list = ["!**/*.ts".to_string(), "files/*".to_string()];
+        let a = GlobSet::new_cached(["files/*", "!**/*.ts"]).unwrap();
+        let b = GlobSet::new_cached(&list).unwrap();
+        let c = GlobSet::new_cached(["files/*"]).unwrap();
+
+        assert!(std::sync::Arc::ptr_eq(&a, &b));
+        assert!(!std::sync::Arc::ptr_eq(&a, &c));
+
+        assert!(a.matches("files/test.js"));
+        assert!(!a.matches("files/test.ts"));
+        assert!(c.matches("files/test.ts"));
+    }
+
+    #[cfg(feature = "glob-cache")]
+    #[test]
+    fn reuses_cached_split_sets() {
+        let a = GlobSet::new_split_cached(["files/*"], ["**/*.ts"]).unwrap();
+        let b = GlobSet::new_cached(["!**/*.ts", "files/*"]).unwrap();
+
+        assert!(std::sync::Arc::ptr_eq(&a, &b));
+
+        assert!(a.matches("files/test.js"));
+        assert!(!a.matches("files/test.ts"));
+    }
 }
 
 mod is_glob {
@@ -299,6 +341,47 @@ mod walk_fast {
         paths.sort();
 
         assert_eq!(paths, vec![sandbox.path().join("src/a.js")]);
+    }
+
+    #[test]
+    fn caches_results_per_options() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("file.txt", "");
+        sandbox.create_file("dir/nested.txt", "");
+
+        let files = walk_fast_with_options(
+            sandbox.path(),
+            ["*"],
+            GlobWalkOptions::default().cache().files(),
+        )
+        .unwrap();
+        let dirs = walk_fast_with_options(
+            sandbox.path(),
+            ["*"],
+            GlobWalkOptions::default().cache().dirs(),
+        )
+        .unwrap();
+
+        assert_eq!(files, vec![sandbox.path().join("file.txt")]);
+        assert_eq!(dirs, vec![sandbox.path().join("dir")]);
+    }
+
+    #[test]
+    fn doesnt_duplicate_paths_from_overlapping_buckets() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("a/b/x.tsx", "");
+        sandbox.create_file("a/y.tsx", "");
+
+        let mut paths = walk_fast(sandbox.path(), ["a/b/*", "a/**/*.tsx"]).unwrap();
+        paths.sort();
+
+        assert_eq!(
+            paths,
+            vec![
+                sandbox.path().join("a/b/x.tsx"),
+                sandbox.path().join("a/y.tsx")
+            ]
+        );
     }
 
     #[test]

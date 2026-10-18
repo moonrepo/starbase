@@ -1,10 +1,10 @@
 use crate::fs;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::fs::FileType;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::Instant;
 use tracing::{instrument, trace};
 use wax::{
@@ -28,6 +28,9 @@ where
 {
     let mut negations = GLOBAL_NEGATIONS.write().unwrap();
     negations.extend(patterns);
+    drop(negations);
+
+    reset_cache();
 }
 
 /// Set global negated patterns to be used by all glob sets and walking operations.
@@ -39,6 +42,16 @@ where
     let mut negations = GLOBAL_NEGATIONS.write().unwrap();
     negations.clear();
     negations.extend(patterns);
+    drop(negations);
+
+    reset_cache();
+}
+
+// Cached sets and results include the previous global negations, so are now stale.
+// The lock must be released first, as building a cached set reads the negations.
+fn reset_cache() {
+    #[cfg(feature = "glob-cache")]
+    GlobCache::instance().reset();
 }
 
 /// Match values against a set of glob patterns.
@@ -73,6 +86,20 @@ impl GlobSet<'_> {
         GlobSet::new_split_owned(expressions, negations)
     }
 
+    /// Create a new owned/static glob set from the list of patterns, and cache it
+    /// globally, so that subsequent calls with the same patterns reuse it.
+    /// Negated patterns must start with `!`.
+    #[cfg(feature = "glob-cache")]
+    pub fn new_cached<'new, I, V>(patterns: I) -> Result<Arc<GlobSet<'static>>, GlobError>
+    where
+        I: IntoIterator<Item = &'new V> + Debug,
+        V: AsRef<str> + 'new + ?Sized,
+    {
+        let (expressions, negations) = split_patterns(patterns);
+
+        GlobSet::new_split_cached(expressions, negations)
+    }
+
     /// Create a new glob set with explicitly separate expressions and negations.
     /// Negated patterns must not start with `!`.
     pub fn new_split<'new, I1, V1, I2, V2>(
@@ -85,31 +112,21 @@ impl GlobSet<'_> {
         I2: IntoIterator<Item = &'new V2>,
         V2: AsRef<str> + 'new + ?Sized,
     {
-        let mut ex = vec![];
-        let mut ng = vec![];
-        let mut count = 0;
+        let ex = expressions
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
+        let mut ng = negations
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
 
-        for pattern in expressions.into_iter() {
-            ex.push(create_glob(pattern.as_ref())?);
-            count += 1;
-        }
-
-        for pattern in negations.into_iter() {
-            ng.push(create_glob(pattern.as_ref())?);
-            count += 1;
-        }
-
-        let global_negations = GLOBAL_NEGATIONS.read().unwrap();
-
-        for pattern in global_negations.iter() {
-            ng.push(create_glob(pattern)?);
-            count += 1;
-        }
+        ng.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
         Ok(GlobSet {
-            expressions: any_glob(ex, "<expressions>")?,
-            negations: any_glob(ng, "<negations>")?,
-            enabled: count > 0,
+            expressions: any_pattern(&ex, "<expressions>")?,
+            negations: any_pattern(&ng, "<negations>")?,
+            enabled: !ex.is_empty() || !ng.is_empty(),
         })
     }
 
@@ -153,6 +170,38 @@ impl GlobSet<'_> {
         })
     }
 
+    /// Create a new owned/static glob set with explicitly separate expressions and negations,
+    /// and cache it globally, so that subsequent calls with the same patterns reuse it.
+    /// Negated patterns must not start with `!`.
+    #[cfg(feature = "glob-cache")]
+    pub fn new_split_cached<'new, I1, V1, I2, V2>(
+        expressions: I1,
+        negations: I2,
+    ) -> Result<Arc<GlobSet<'static>>, GlobError>
+    where
+        I1: IntoIterator<Item = &'new V1>,
+        V1: AsRef<str> + 'new + ?Sized,
+        I2: IntoIterator<Item = &'new V2>,
+        V2: AsRef<str> + 'new + ?Sized,
+    {
+        let mut expressions = expressions
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
+        let mut negations = negations
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
+
+        // Order doesn't affect matching, so sort for a deterministic cache key
+        expressions.sort();
+        negations.sort();
+
+        GlobCache::instance().cache_set(&expressions, &negations, |ex, ng| {
+            GlobSet::new_split_owned(ex, ng)
+        })
+    }
+
     /// Return true if the path matches the negated patterns.
     pub fn is_excluded<P: AsRef<OsStr>>(&self, path: P) -> bool {
         self.negations.is_match(path.as_ref())
@@ -172,11 +221,9 @@ impl GlobSet<'_> {
 
         let path = path.as_ref();
 
-        if self.is_excluded(path) {
-            return false;
-        }
-
-        self.is_included(path)
+        // Most paths don't match the expressions, so checking them
+        // first avoids also checking the negations for those paths
+        self.is_included(path) && !self.is_excluded(path)
     }
 }
 
@@ -200,6 +247,21 @@ where
     wax::any(globs).map_err(|error| GlobError::Create {
         glob: desc.to_owned(),
         error: Box::new(error),
+    })
+}
+
+// Unlike `any_glob`, borrowed patterns are only parsed, instead of also compiling
+// each pattern on its own, which more than doubles the cost
+fn any_pattern<'a>(patterns: &[&'a str], desc: &str) -> Result<Any<'a>, GlobError> {
+    wax::any(patterns.iter().copied()).map_err(|error| {
+        // The error doesn't include the pattern, so find it to report it
+        patterns
+            .iter()
+            .find_map(|pattern| create_glob(pattern).err())
+            .unwrap_or_else(|| GlobError::Create {
+                glob: desc.to_owned(),
+                error: Box::new(error),
+            })
     })
 }
 
@@ -454,16 +516,27 @@ where
     V: AsRef<str> + 'glob + ?Sized,
 {
     let mut paths = vec![];
+    let partitions = partition_patterns(base_dir, patterns);
+    let overlap = buckets_overlap(&partitions);
 
-    for (dir, mut patterns) in partition_patterns(base_dir, patterns) {
+    for (dir, mut patterns) in partitions {
         patterns.sort();
 
         // Only run if the feature is enabled
         #[cfg(feature = "glob-cache")]
         if options.cache && !crate::envx::is_test() {
-            paths.extend(GlobCache::instance().cache(&dir, &patterns, |d, p| {
-                internal_walk_with_retry(d, p, &options)
-            })?);
+            let filters = (
+                options.only_dirs,
+                options.only_files,
+                options.ignore_dot_dirs,
+                options.ignore_dot_files,
+            );
+
+            paths.extend(
+                GlobCache::instance().cache_walk(&dir, &patterns, filters, |d, p| {
+                    internal_walk_with_retry(d, p, &options)
+                })?,
+            );
 
             continue;
         }
@@ -471,7 +544,42 @@ where
         paths.extend(internal_walk_with_retry(&dir, &patterns, &options)?);
     }
 
+    if overlap {
+        let mut seen = HashSet::with_capacity(paths.len());
+
+        paths.retain(|path| seen.insert(path.clone()));
+    }
+
     Ok(paths)
+}
+
+/// Return true if a bucket may match paths within a nested bucket, like `**/*.ts`
+/// and `src/*`, in which case both walks return those paths. Buckets aren't merged
+/// instead, as global negations and hidden root dirs apply relative to each bucket.
+fn buckets_overlap(partitions: &BTreeMap<PathBuf, Vec<String>>) -> bool {
+    partitions.iter().any(|(dir, patterns)| {
+        // An upper bound of how deep the matches can be, without compiling
+        let max_depth = patterns
+            .iter()
+            .filter(|pattern| !pattern.starts_with('!'))
+            .map(|pattern| {
+                if pattern.contains("**") || pattern.contains('<') {
+                    usize::MAX
+                } else {
+                    pattern.split('/').count()
+                }
+            })
+            .max()
+            .unwrap_or(0);
+
+        // Matches within a nested bucket are deeper than its relative depth
+        partitions.keys().any(|other| {
+            other != dir
+                && other
+                    .strip_prefix(dir)
+                    .is_ok_and(|rel| rel.components().count() < max_depth)
+        })
+    })
 }
 
 fn internal_walk_with_retry(
@@ -505,8 +613,15 @@ fn internal_walk(
     trace!(dir = ?dir, globs = ?patterns, "Finding files");
 
     let instant = Instant::now();
-    let max_depth = max_traversal_depth(patterns)?;
+
+    // Compiling the set often costs more than the walk itself,
+    // so reuse it across walks with the same patterns
+    #[cfg(feature = "glob-cache")]
+    let globset = GlobSet::new_cached(patterns)?;
+    #[cfg(not(feature = "glob-cache"))]
     let globset = GlobSet::new(patterns)?;
+
+    let max_depth = max_traversal_depth(&globset);
     let mut paths = vec![];
 
     let mut add_path =
@@ -797,13 +912,27 @@ fn subtree_negation_dir(pattern: &str) -> Option<&str> {
 /// as every path within them is excluded by a negated pattern. Without this,
 /// negations only filter results *after* the walk has descended into them,
 /// making an excluded directory just as expensive as an included one.
-fn create_prune_set(patterns: &[String]) -> Result<Option<Any<'static>>, GlobError> {
+fn create_prune_set(patterns: &[String]) -> Result<Option<Arc<Any<'static>>>, GlobError> {
     let (_, negations) = split_patterns(patterns);
+
+    #[cfg(feature = "glob-cache")]
+    {
+        GlobCache::instance().cache_prune_set(&negations, compile_prune_set)
+    }
+
+    #[cfg(not(feature = "glob-cache"))]
+    {
+        compile_prune_set(&negations).map(|set| set.map(Arc::new))
+    }
+}
+
+fn compile_prune_set(negations: &[&str]) -> Result<Option<Any<'static>>, GlobError> {
     let global_negations = GLOBAL_NEGATIONS.read().unwrap();
     let mut globs = vec![];
 
     for pattern in negations
-        .into_iter()
+        .iter()
+        .copied()
         .chain(global_negations.iter().copied())
     {
         if let Some(dir) = subtree_negation_dir(pattern) {
@@ -818,38 +947,16 @@ fn create_prune_set(patterns: &[String]) -> Result<Option<Any<'static>>, GlobErr
     any_glob(globs, "<negations>").map(Some)
 }
 
-fn max_traversal_depth(patterns: &[String]) -> Result<Option<usize>, GlobError> {
-    let mut max_depth = 1;
-
-    if patterns
-        .iter()
-        .filter(|pattern| !pattern.starts_with('!'))
-        .all(|pattern| !pattern.contains('/') && !pattern.contains("**"))
-    {
-        return Ok(Some(max_depth));
+// Derived from the already compiled expressions, as compiling
+// each pattern again just for its depth is expensive
+fn max_traversal_depth(globset: &GlobSet<'_>) -> Option<usize> {
+    match globset.expressions.depth() {
+        Variance::Invariant(depth) => Some(depth.max(1)),
+        Variance::Variant(range) => match range.upper() {
+            Boundedness::Bounded(depth) => Some(depth.get()),
+            Boundedness::Unbounded => None,
+        },
     }
-
-    for pattern in patterns {
-        if pattern.starts_with('!') {
-            continue;
-        }
-
-        match create_glob(pattern)?.depth() {
-            Variance::Invariant(depth) => {
-                max_depth = max_depth.max(depth);
-            }
-            Variance::Variant(range) => match range.upper() {
-                Boundedness::Bounded(depth) => {
-                    max_depth = max_depth.max(depth.get());
-                }
-                Boundedness::Unbounded => {
-                    return Ok(None);
-                }
-            },
-        }
-    }
-
-    Ok(Some(max_depth))
 }
 
 fn is_hidden_dot(path: &Path) -> bool {
@@ -866,30 +973,42 @@ mod tests {
         values.iter().map(|value| value.to_string()).collect()
     }
 
+    fn depth(values: &[&str]) -> Option<usize> {
+        max_traversal_depth(&GlobSet::new(values).unwrap())
+    }
+
     #[test]
     fn detects_bounded_traversal_depth() {
-        assert_eq!(max_traversal_depth(&patterns(&["*"])).unwrap(), Some(1));
-        assert_eq!(
-            max_traversal_depth(&patterns(&["*/moon.yml"])).unwrap(),
-            Some(2)
-        );
-        assert_eq!(
-            max_traversal_depth(&patterns(&["a/*/file.txt"])).unwrap(),
-            Some(3)
-        );
-        assert_eq!(
-            max_traversal_depth(&patterns(&["*/moon.yml", "a/*/file.txt"])).unwrap(),
-            Some(3)
-        );
+        assert_eq!(depth(&["*"]), Some(1));
+        assert_eq!(depth(&["*/moon.yml"]), Some(2));
+        assert_eq!(depth(&["a/*/file.txt"]), Some(3));
+        assert_eq!(depth(&["*/moon.yml", "a/*/file.txt"]), Some(3));
+        assert_eq!(depth(&["{a,b/c}/*.ts"]), Some(3));
     }
 
     #[test]
     fn detects_unbounded_traversal_depth() {
-        assert_eq!(max_traversal_depth(&patterns(&["**/*"])).unwrap(), None);
-        assert_eq!(
-            max_traversal_depth(&patterns(&["*/moon.yml", "**/*.rs"])).unwrap(),
-            None
-        );
+        assert_eq!(depth(&["**/*"]), None);
+        assert_eq!(depth(&["*/moon.yml", "**/*.rs"]), None);
+    }
+
+    #[test]
+    fn detects_overlapping_buckets() {
+        let overlap = |values: &[&str]| buckets_overlap(&partition_patterns("/root", values));
+
+        // Ancestor walks without a depth limit
+        assert!(overlap(&["a/b/*", "a/**/*.tsx"]));
+        assert!(overlap(&["**/file.txt", "dir/sub/**/*"]));
+
+        // Ancestor's depth reaches into the nested bucket
+        assert!(overlap(&["*/*.ts", "a/file.json"]));
+
+        // Ancestor's depth stops before the nested bucket
+        assert!(!overlap(&["package.json", "src/**/*"]));
+        assert!(!overlap(&["*.json", "a/b/**/*"]));
+
+        // Siblings
+        assert!(!overlap(&["foo/**/*", "bar/**/*"]));
     }
 
     #[test]
@@ -941,9 +1060,6 @@ mod tests {
 
     #[test]
     fn ignores_negations_for_traversal_depth() {
-        assert_eq!(
-            max_traversal_depth(&patterns(&["*", "!**/target/**"])).unwrap(),
-            Some(1)
-        );
+        assert_eq!(depth(&["*", "!**/target/**"]), Some(1));
     }
 }
