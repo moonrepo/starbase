@@ -231,11 +231,9 @@ impl GlobSet<'_> {
 
         let path = path.as_ref();
 
-        if self.is_excluded(path) {
-            return false;
-        }
-
-        self.is_included(path)
+        // Most paths don't match the expressions, so checking them
+        // first avoids also checking the negations for those paths
+        self.is_included(path) && !self.is_excluded(path)
     }
 }
 
