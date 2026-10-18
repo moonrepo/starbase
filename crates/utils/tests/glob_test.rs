@@ -344,6 +344,24 @@ mod walk_fast {
     }
 
     #[test]
+    fn doesnt_duplicate_paths_from_overlapping_buckets() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("a/b/x.tsx", "");
+        sandbox.create_file("a/y.tsx", "");
+
+        let mut paths = walk_fast(sandbox.path(), ["a/b/*", "a/**/*.tsx"]).unwrap();
+        paths.sort();
+
+        assert_eq!(
+            paths,
+            vec![
+                sandbox.path().join("a/b/x.tsx"),
+                sandbox.path().join("a/y.tsx")
+            ]
+        );
+    }
+
+    #[test]
     fn ignores_entries_that_cant_be_read() {
         let sandbox = create_empty_sandbox();
 

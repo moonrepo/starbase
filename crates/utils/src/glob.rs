@@ -1,5 +1,5 @@
 use crate::fs;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::fs::FileType;
@@ -516,8 +516,10 @@ where
     V: AsRef<str> + 'glob + ?Sized,
 {
     let mut paths = vec![];
+    let partitions = partition_patterns(base_dir, patterns);
+    let overlap = buckets_overlap(&partitions);
 
-    for (dir, mut patterns) in partition_patterns(base_dir, patterns) {
+    for (dir, mut patterns) in partitions {
         patterns.sort();
 
         // Only run if the feature is enabled
@@ -533,7 +535,42 @@ where
         paths.extend(internal_walk_with_retry(&dir, &patterns, &options)?);
     }
 
+    if overlap {
+        let mut seen = HashSet::with_capacity(paths.len());
+
+        paths.retain(|path| seen.insert(path.clone()));
+    }
+
     Ok(paths)
+}
+
+/// Return true if a bucket may match paths within a nested bucket, like `**/*.ts`
+/// and `src/*`, in which case both walks return those paths. Buckets aren't merged
+/// instead, as global negations and hidden root dirs apply relative to each bucket.
+fn buckets_overlap(partitions: &BTreeMap<PathBuf, Vec<String>>) -> bool {
+    partitions.iter().any(|(dir, patterns)| {
+        // An upper bound of how deep the matches can be, without compiling
+        let max_depth = patterns
+            .iter()
+            .filter(|pattern| !pattern.starts_with('!'))
+            .map(|pattern| {
+                if pattern.contains("**") || pattern.contains('<') {
+                    usize::MAX
+                } else {
+                    pattern.split('/').count()
+                }
+            })
+            .max()
+            .unwrap_or(0);
+
+        // Matches within a nested bucket are deeper than its relative depth
+        partitions.keys().any(|other| {
+            other != dir
+                && other
+                    .strip_prefix(dir)
+                    .is_ok_and(|rel| rel.components().count() < max_depth)
+        })
+    })
 }
 
 fn internal_walk_with_retry(
@@ -944,6 +981,25 @@ mod tests {
     fn detects_unbounded_traversal_depth() {
         assert_eq!(depth(&["**/*"]), None);
         assert_eq!(depth(&["*/moon.yml", "**/*.rs"]), None);
+    }
+
+    #[test]
+    fn detects_overlapping_buckets() {
+        let overlap = |values: &[&str]| buckets_overlap(&partition_patterns("/root", values));
+
+        // Ancestor walks without a depth limit
+        assert!(overlap(&["a/b/*", "a/**/*.tsx"]));
+        assert!(overlap(&["**/file.txt", "dir/sub/**/*"]));
+
+        // Ancestor's depth reaches into the nested bucket
+        assert!(overlap(&["*/*.ts", "a/file.json"]));
+
+        // Ancestor's depth stops before the nested bucket
+        assert!(!overlap(&["package.json", "src/**/*"]));
+        assert!(!overlap(&["*.json", "a/b/**/*"]));
+
+        // Siblings
+        assert!(!overlap(&["foo/**/*", "bar/**/*"]));
     }
 
     #[test]
