@@ -84,6 +84,20 @@ mod globset {
         assert!(set.matches("apps/web/node_modules/dep/index.js"));
     }
 
+    #[test]
+    fn errors_with_the_invalid_pattern() {
+        for result in [
+            GlobSet::new(["files/*", "a:b"]).err(),
+            GlobSet::new(["files/*", "!a:b"]).err(),
+            GlobSet::new_owned(["files/*", "a:b"]).err(),
+        ] {
+            match result {
+                Some(GlobError::Create { glob, .. }) => assert_eq!(glob, "a:b"),
+                other => panic!("expected a create error, got {other:?}"),
+            }
+        }
+    }
+
     #[cfg(feature = "glob-cache")]
     #[test]
     fn reuses_cached_sets() {

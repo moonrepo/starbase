@@ -112,31 +112,21 @@ impl GlobSet<'_> {
         I2: IntoIterator<Item = &'new V2>,
         V2: AsRef<str> + 'new + ?Sized,
     {
-        let mut ex = vec![];
-        let mut ng = vec![];
-        let mut count = 0;
+        let ex = expressions
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
+        let mut ng = negations
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
 
-        for pattern in expressions.into_iter() {
-            ex.push(create_glob(pattern.as_ref())?);
-            count += 1;
-        }
-
-        for pattern in negations.into_iter() {
-            ng.push(create_glob(pattern.as_ref())?);
-            count += 1;
-        }
-
-        let global_negations = GLOBAL_NEGATIONS.read().unwrap();
-
-        for pattern in global_negations.iter() {
-            ng.push(create_glob(pattern)?);
-            count += 1;
-        }
+        ng.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
         Ok(GlobSet {
-            expressions: any_glob(ex, "<expressions>")?,
-            negations: any_glob(ng, "<negations>")?,
-            enabled: count > 0,
+            expressions: any_pattern(&ex, "<expressions>")?,
+            negations: any_pattern(&ng, "<negations>")?,
+            enabled: !ex.is_empty() || !ng.is_empty(),
         })
     }
 
@@ -257,6 +247,21 @@ where
     wax::any(globs).map_err(|error| GlobError::Create {
         glob: desc.to_owned(),
         error: Box::new(error),
+    })
+}
+
+// Unlike `any_glob`, borrowed patterns are only parsed, instead of also compiling
+// each pattern on its own, which more than doubles the cost
+fn any_pattern<'a>(patterns: &[&'a str], desc: &str) -> Result<Any<'a>, GlobError> {
+    wax::any(patterns.iter().copied()).map_err(|error| {
+        // The error doesn't include the pattern, so find it to report it
+        patterns
+            .iter()
+            .find_map(|pattern| create_glob(pattern).err())
+            .unwrap_or_else(|| GlobError::Create {
+                glob: desc.to_owned(),
+                error: Box::new(error),
+            })
     })
 }
 
