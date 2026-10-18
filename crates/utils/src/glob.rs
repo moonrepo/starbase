@@ -525,9 +525,18 @@ where
         // Only run if the feature is enabled
         #[cfg(feature = "glob-cache")]
         if options.cache && !crate::envx::is_test() {
-            paths.extend(GlobCache::instance().cache(&dir, &patterns, |d, p| {
-                internal_walk_with_retry(d, p, &options)
-            })?);
+            let filters = (
+                options.only_dirs,
+                options.only_files,
+                options.ignore_dot_dirs,
+                options.ignore_dot_files,
+            );
+
+            paths.extend(
+                GlobCache::instance().cache_walk(&dir, &patterns, filters, |d, p| {
+                    internal_walk_with_retry(d, p, &options)
+                })?,
+            );
 
             continue;
         }

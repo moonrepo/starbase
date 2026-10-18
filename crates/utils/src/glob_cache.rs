@@ -35,8 +35,38 @@ impl GlobCache {
     where
         F: FnOnce(&Path, &[String]) -> Result<Vec<PathBuf>, GlobError>,
     {
-        let key = self.create_key(dir, globs);
+        self.cache_with_key(self.create_key(dir, globs), dir, globs, op)
+    }
 
+    // Walk results also depend on the options that filter them
+    pub(crate) fn cache_walk<F>(
+        &self,
+        dir: &Path,
+        globs: &[String],
+        filters: impl Hash,
+        op: F,
+    ) -> Result<Vec<PathBuf>, GlobError>
+    where
+        F: FnOnce(&Path, &[String]) -> Result<Vec<PathBuf>, GlobError>,
+    {
+        let mut hash = DefaultHasher::default();
+
+        self.create_key(dir, globs).hash(&mut hash);
+        filters.hash(&mut hash);
+
+        self.cache_with_key(hash.finish(), dir, globs, op)
+    }
+
+    fn cache_with_key<F>(
+        &self,
+        key: u64,
+        dir: &Path,
+        globs: &[String],
+        op: F,
+    ) -> Result<Vec<PathBuf>, GlobError>
+    where
+        F: FnOnce(&Path, &[String]) -> Result<Vec<PathBuf>, GlobError>,
+    {
         // If the cache already exists, allow for parallel reads
         if let Some(value) = self.cache.read_sync(&key, |_, list| list.to_vec()) {
             trace!(

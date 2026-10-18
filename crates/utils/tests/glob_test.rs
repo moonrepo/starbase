@@ -344,6 +344,29 @@ mod walk_fast {
     }
 
     #[test]
+    fn caches_results_per_options() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("file.txt", "");
+        sandbox.create_file("dir/nested.txt", "");
+
+        let files = walk_fast_with_options(
+            sandbox.path(),
+            ["*"],
+            GlobWalkOptions::default().cache().files(),
+        )
+        .unwrap();
+        let dirs = walk_fast_with_options(
+            sandbox.path(),
+            ["*"],
+            GlobWalkOptions::default().cache().dirs(),
+        )
+        .unwrap();
+
+        assert_eq!(files, vec![sandbox.path().join("file.txt")]);
+        assert_eq!(dirs, vec![sandbox.path().join("dir")]);
+    }
+
+    #[test]
     fn doesnt_duplicate_paths_from_overlapping_buckets() {
         let sandbox = create_empty_sandbox();
         sandbox.create_file("a/b/x.tsx", "");
