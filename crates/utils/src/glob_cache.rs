@@ -22,12 +22,9 @@ impl GlobCache {
     pub fn create_key(&self, dir: &Path, globs: &[String]) -> u64 {
         let mut hash = DefaultHasher::default();
 
-        hash.write(dir.as_os_str().as_encoded_bytes());
-
-        for glob in globs {
-            hash.write(b":");
-            hash.write(glob.as_bytes());
-        }
+        // Both are length prefixed, so the dir and globs can't collide
+        dir.as_os_str().hash(&mut hash);
+        globs.hash(&mut hash);
 
         hash.finish()
     }
@@ -154,6 +151,20 @@ mod tests {
             .unwrap();
 
         assert_eq!(result, vec![PathBuf::from("/root/file")]);
+    }
+
+    #[test]
+    fn separates_dir_from_globs() {
+        let cache = GlobCache::default();
+        let key = |dir: &str, globs: &[&str]| {
+            cache.create_key(
+                Path::new(dir),
+                &globs.iter().map(|g| g.to_string()).collect::<Vec<_>>(),
+            )
+        };
+
+        assert_ne!(key("/root", &["a"]), key("/root:a", &[]));
+        assert_ne!(key("/root", &["a:b"]), key("/root", &["a", "b"]));
     }
 
     #[test]
