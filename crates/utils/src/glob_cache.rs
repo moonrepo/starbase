@@ -4,6 +4,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use tracing::trace;
+use wax::Any;
 
 static INSTANCE: OnceLock<Arc<GlobCache>> = OnceLock::new();
 
@@ -12,6 +13,7 @@ static INSTANCE: OnceLock<Arc<GlobCache>> = OnceLock::new();
 pub struct GlobCache {
     cache: scc::HashMap<u64, Vec<PathBuf>>,
     sets: scc::HashMap<u64, Arc<GlobSet<'static>>>,
+    prune_sets: scc::HashMap<u64, Option<Arc<Any<'static>>>>,
 }
 
 impl GlobCache {
@@ -94,35 +96,63 @@ impl GlobCache {
         expressions.hash(&mut hash);
         negations.hash(&mut hash);
 
-        let key = hash.finish();
+        read_or_insert(&self.sets, hash.finish(), || {
+            let set = op(expressions, negations)?;
 
-        // If the cache already exists, allow for parallel reads
-        if let Some(value) = self.sets.read_sync(&key, |_, set| Arc::clone(set)) {
-            return Ok(value);
-        }
+            trace!(
+                expressions = ?expressions,
+                negations = ?negations,
+                "Writing glob set to cache"
+            );
 
-        // Otherwise use an entry so that it creates a lock that avoids parallel writes
-        match self.sets.entry_sync(key) {
-            Entry::Occupied(entry) => Ok(Arc::clone(entry.get())),
-            Entry::Vacant(entry) => {
-                let value = Arc::new(op(expressions, negations)?);
+            Ok(Arc::new(set))
+        })
+    }
 
-                trace!(
-                    expressions = ?expressions,
-                    negations = ?negations,
-                    "Writing glob set to cache"
-                );
+    pub(crate) fn cache_prune_set<F>(
+        &self,
+        negations: &[&str],
+        op: F,
+    ) -> Result<Option<Arc<Any<'static>>>, GlobError>
+    where
+        F: FnOnce(&[&str]) -> Result<Option<Any<'static>>, GlobError>,
+    {
+        let mut hash = DefaultHasher::default();
 
-                entry.insert_entry(Arc::clone(&value));
+        negations.hash(&mut hash);
 
-                Ok(value)
-            }
-        }
+        read_or_insert(&self.prune_sets, hash.finish(), || {
+            Ok(op(negations)?.map(Arc::new))
+        })
     }
 
     pub fn reset(&self) {
         self.cache.clear_sync();
         self.sets.clear_sync();
+        self.prune_sets.clear_sync();
+    }
+}
+
+fn read_or_insert<V: Clone + 'static>(
+    map: &scc::HashMap<u64, V>,
+    key: u64,
+    op: impl FnOnce() -> Result<V, GlobError>,
+) -> Result<V, GlobError> {
+    // If the cache already exists, allow for parallel reads
+    if let Some(value) = map.read_sync(&key, |_, value| value.clone()) {
+        return Ok(value);
+    }
+
+    // Otherwise use an entry so that it creates a lock that avoids parallel writes
+    match map.entry_sync(key) {
+        Entry::Occupied(entry) => Ok(entry.get().clone()),
+        Entry::Vacant(entry) => {
+            let value = op()?;
+
+            entry.insert_entry(value.clone());
+
+            Ok(value)
+        }
     }
 }
 

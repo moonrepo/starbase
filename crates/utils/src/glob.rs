@@ -4,9 +4,7 @@ use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::fs::FileType;
 use std::path::{Path, PathBuf};
-#[cfg(feature = "glob-cache")]
-use std::sync::Arc;
-use std::sync::{LazyLock, RwLock};
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::Instant;
 use tracing::{instrument, trace};
 use wax::{
@@ -30,6 +28,9 @@ where
 {
     let mut negations = GLOBAL_NEGATIONS.write().unwrap();
     negations.extend(patterns);
+    drop(negations);
+
+    reset_cache();
 }
 
 /// Set global negated patterns to be used by all glob sets and walking operations.
@@ -41,6 +42,16 @@ where
     let mut negations = GLOBAL_NEGATIONS.write().unwrap();
     negations.clear();
     negations.extend(patterns);
+    drop(negations);
+
+    reset_cache();
+}
+
+// Cached sets and results include the previous global negations, so are now stale.
+// The lock must be released first, as building a cached set reads the negations.
+fn reset_cache() {
+    #[cfg(feature = "glob-cache")]
+    GlobCache::instance().reset();
 }
 
 /// Match values against a set of glob patterns.
@@ -553,8 +564,15 @@ fn internal_walk(
     trace!(dir = ?dir, globs = ?patterns, "Finding files");
 
     let instant = Instant::now();
-    let max_depth = max_traversal_depth(patterns)?;
+
+    // Compiling the set often costs more than the walk itself,
+    // so reuse it across walks with the same patterns
+    #[cfg(feature = "glob-cache")]
+    let globset = GlobSet::new_cached(patterns)?;
+    #[cfg(not(feature = "glob-cache"))]
     let globset = GlobSet::new(patterns)?;
+
+    let max_depth = max_traversal_depth(&globset);
     let mut paths = vec![];
 
     let mut add_path =
@@ -845,13 +863,27 @@ fn subtree_negation_dir(pattern: &str) -> Option<&str> {
 /// as every path within them is excluded by a negated pattern. Without this,
 /// negations only filter results *after* the walk has descended into them,
 /// making an excluded directory just as expensive as an included one.
-fn create_prune_set(patterns: &[String]) -> Result<Option<Any<'static>>, GlobError> {
+fn create_prune_set(patterns: &[String]) -> Result<Option<Arc<Any<'static>>>, GlobError> {
     let (_, negations) = split_patterns(patterns);
+
+    #[cfg(feature = "glob-cache")]
+    {
+        GlobCache::instance().cache_prune_set(&negations, compile_prune_set)
+    }
+
+    #[cfg(not(feature = "glob-cache"))]
+    {
+        compile_prune_set(&negations).map(|set| set.map(Arc::new))
+    }
+}
+
+fn compile_prune_set(negations: &[&str]) -> Result<Option<Any<'static>>, GlobError> {
     let global_negations = GLOBAL_NEGATIONS.read().unwrap();
     let mut globs = vec![];
 
     for pattern in negations
-        .into_iter()
+        .iter()
+        .copied()
         .chain(global_negations.iter().copied())
     {
         if let Some(dir) = subtree_negation_dir(pattern) {
@@ -866,38 +898,16 @@ fn create_prune_set(patterns: &[String]) -> Result<Option<Any<'static>>, GlobErr
     any_glob(globs, "<negations>").map(Some)
 }
 
-fn max_traversal_depth(patterns: &[String]) -> Result<Option<usize>, GlobError> {
-    let mut max_depth = 1;
-
-    if patterns
-        .iter()
-        .filter(|pattern| !pattern.starts_with('!'))
-        .all(|pattern| !pattern.contains('/') && !pattern.contains("**"))
-    {
-        return Ok(Some(max_depth));
+// Derived from the already compiled expressions, as compiling
+// each pattern again just for its depth is expensive
+fn max_traversal_depth(globset: &GlobSet<'_>) -> Option<usize> {
+    match globset.expressions.depth() {
+        Variance::Invariant(depth) => Some(depth.max(1)),
+        Variance::Variant(range) => match range.upper() {
+            Boundedness::Bounded(depth) => Some(depth.get()),
+            Boundedness::Unbounded => None,
+        },
     }
-
-    for pattern in patterns {
-        if pattern.starts_with('!') {
-            continue;
-        }
-
-        match create_glob(pattern)?.depth() {
-            Variance::Invariant(depth) => {
-                max_depth = max_depth.max(depth);
-            }
-            Variance::Variant(range) => match range.upper() {
-                Boundedness::Bounded(depth) => {
-                    max_depth = max_depth.max(depth.get());
-                }
-                Boundedness::Unbounded => {
-                    return Ok(None);
-                }
-            },
-        }
-    }
-
-    Ok(Some(max_depth))
 }
 
 fn is_hidden_dot(path: &Path) -> bool {
@@ -914,30 +924,23 @@ mod tests {
         values.iter().map(|value| value.to_string()).collect()
     }
 
+    fn depth(values: &[&str]) -> Option<usize> {
+        max_traversal_depth(&GlobSet::new(values).unwrap())
+    }
+
     #[test]
     fn detects_bounded_traversal_depth() {
-        assert_eq!(max_traversal_depth(&patterns(&["*"])).unwrap(), Some(1));
-        assert_eq!(
-            max_traversal_depth(&patterns(&["*/moon.yml"])).unwrap(),
-            Some(2)
-        );
-        assert_eq!(
-            max_traversal_depth(&patterns(&["a/*/file.txt"])).unwrap(),
-            Some(3)
-        );
-        assert_eq!(
-            max_traversal_depth(&patterns(&["*/moon.yml", "a/*/file.txt"])).unwrap(),
-            Some(3)
-        );
+        assert_eq!(depth(&["*"]), Some(1));
+        assert_eq!(depth(&["*/moon.yml"]), Some(2));
+        assert_eq!(depth(&["a/*/file.txt"]), Some(3));
+        assert_eq!(depth(&["*/moon.yml", "a/*/file.txt"]), Some(3));
+        assert_eq!(depth(&["{a,b/c}/*.ts"]), Some(3));
     }
 
     #[test]
     fn detects_unbounded_traversal_depth() {
-        assert_eq!(max_traversal_depth(&patterns(&["**/*"])).unwrap(), None);
-        assert_eq!(
-            max_traversal_depth(&patterns(&["*/moon.yml", "**/*.rs"])).unwrap(),
-            None
-        );
+        assert_eq!(depth(&["**/*"]), None);
+        assert_eq!(depth(&["*/moon.yml", "**/*.rs"]), None);
     }
 
     #[test]
@@ -989,9 +992,6 @@ mod tests {
 
     #[test]
     fn ignores_negations_for_traversal_depth() {
-        assert_eq!(
-            max_traversal_depth(&patterns(&["*", "!**/target/**"])).unwrap(),
-            Some(1)
-        );
+        assert_eq!(depth(&["*", "!**/target/**"]), Some(1));
     }
 }
