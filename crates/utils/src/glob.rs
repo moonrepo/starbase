@@ -84,10 +84,13 @@ impl GlobSet<'_> {
         I: IntoIterator<Item = &'new V> + Debug,
         V: AsRef<str> + 'new + ?Sized,
     {
-        let patterns = patterns
+        let mut patterns = patterns
             .into_iter()
             .map(|pattern| pattern.as_ref())
             .collect::<Vec<_>>();
+
+        // Order doesn't affect matching, so sort for a deterministic cache key
+        patterns.sort();
 
         GlobCache::instance().cache_set(&patterns, |p| GlobSet::new_owned(p))
     }

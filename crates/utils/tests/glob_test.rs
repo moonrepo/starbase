@@ -87,7 +87,7 @@ mod globset {
     #[cfg(feature = "glob-cache")]
     #[test]
     fn reuses_cached_sets() {
-        let list = ["files/*".to_string(), "!**/*.ts".to_string()];
+        let list = ["!**/*.ts".to_string(), "files/*".to_string()];
         let a = GlobSet::new_cached(["files/*", "!**/*.ts"]).unwrap();
         let b = GlobSet::new_cached(&list).unwrap();
         let c = GlobSet::new_cached(["files/*"]).unwrap();
