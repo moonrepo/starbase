@@ -4,6 +4,8 @@ use std::ffi::OsStr;
 use std::fmt::Debug;
 use std::fs::FileType;
 use std::path::{Path, PathBuf};
+#[cfg(feature = "glob-cache")]
+use std::sync::Arc;
 use std::sync::{LazyLock, RwLock};
 use std::time::Instant;
 use tracing::{instrument, trace};
@@ -71,6 +73,23 @@ impl GlobSet<'_> {
         let (expressions, negations) = split_patterns(patterns);
 
         GlobSet::new_split_owned(expressions, negations)
+    }
+
+    /// Create a new owned/static glob set from the list of patterns, and cache it
+    /// globally, so that subsequent calls with the same patterns reuse it.
+    /// Negated patterns must start with `!`.
+    #[cfg(feature = "glob-cache")]
+    pub fn new_cached<'new, I, V>(patterns: I) -> Result<Arc<GlobSet<'static>>, GlobError>
+    where
+        I: IntoIterator<Item = &'new V> + Debug,
+        V: AsRef<str> + 'new + ?Sized,
+    {
+        let patterns = patterns
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
+
+        GlobCache::instance().cache_set(&patterns, |p| GlobSet::new_owned(p))
     }
 
     /// Create a new glob set with explicitly separate expressions and negations.

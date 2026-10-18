@@ -83,6 +83,22 @@ mod globset {
         assert!(set.matches("packages/foo/node_modules/bar.js"));
         assert!(set.matches("apps/web/node_modules/dep/index.js"));
     }
+
+    #[cfg(feature = "glob-cache")]
+    #[test]
+    fn reuses_cached_sets() {
+        let list = ["files/*".to_string(), "!**/*.ts".to_string()];
+        let a = GlobSet::new_cached(["files/*", "!**/*.ts"]).unwrap();
+        let b = GlobSet::new_cached(&list).unwrap();
+        let c = GlobSet::new_cached(["files/*"]).unwrap();
+
+        assert!(std::sync::Arc::ptr_eq(&a, &b));
+        assert!(!std::sync::Arc::ptr_eq(&a, &c));
+
+        assert!(a.matches("files/test.js"));
+        assert!(!a.matches("files/test.ts"));
+        assert!(c.matches("files/test.ts"));
+    }
 }
 
 mod is_glob {

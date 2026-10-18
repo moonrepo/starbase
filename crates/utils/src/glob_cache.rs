@@ -1,4 +1,4 @@
-use crate::glob::GlobError;
+use crate::glob::{GlobError, GlobSet};
 use scc::hash_map::Entry;
 use std::hash::{DefaultHasher, Hasher};
 use std::path::{Path, PathBuf};
@@ -11,6 +11,7 @@ static INSTANCE: OnceLock<Arc<GlobCache>> = OnceLock::new();
 #[derive(Default)]
 pub struct GlobCache {
     cache: scc::HashMap<u64, Vec<PathBuf>>,
+    sets: scc::HashMap<u64, Arc<GlobSet<'static>>>,
 }
 
 impl GlobCache {
@@ -81,8 +82,42 @@ impl GlobCache {
         }
     }
 
+    pub fn cache_set<F>(&self, globs: &[&str], op: F) -> Result<Arc<GlobSet<'static>>, GlobError>
+    where
+        F: FnOnce(&[&str]) -> Result<GlobSet<'static>, GlobError>,
+    {
+        let mut hash = DefaultHasher::default();
+
+        for glob in globs {
+            hash.write(b":");
+            hash.write(glob.as_bytes());
+        }
+
+        let key = hash.finish();
+
+        // If the cache already exists, allow for parallel reads
+        if let Some(value) = self.sets.read_sync(&key, |_, set| Arc::clone(set)) {
+            return Ok(value);
+        }
+
+        // Otherwise use an entry so that it creates a lock that avoids parallel writes
+        match self.sets.entry_sync(key) {
+            Entry::Occupied(entry) => Ok(Arc::clone(entry.get())),
+            Entry::Vacant(entry) => {
+                let value = Arc::new(op(globs)?);
+
+                trace!(globs = ?globs, "Writing glob set to cache");
+
+                entry.insert_entry(Arc::clone(&value));
+
+                Ok(value)
+            }
+        }
+    }
+
     pub fn reset(&self) {
         self.cache.clear_sync();
+        self.sets.clear_sync();
     }
 }
 
@@ -111,5 +146,26 @@ mod tests {
             .unwrap();
 
         assert_eq!(result, vec![PathBuf::from("/root/file")]);
+    }
+
+    #[test]
+    fn doesnt_cache_failed_sets() {
+        let cache = GlobCache::default();
+        let globs = ["**/*"];
+
+        let result = cache.cache_set(&globs, |_| {
+            Err(GlobError::InvalidPath {
+                path: "/fail".into(),
+            })
+        });
+
+        assert!(result.is_err());
+
+        let a = cache.cache_set(&globs, |p| GlobSet::new_owned(p)).unwrap();
+        let b = cache
+            .cache_set(&globs, |_| panic!("should be cached"))
+            .unwrap();
+
+        assert!(Arc::ptr_eq(&a, &b));
     }
 }
