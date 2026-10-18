@@ -1,6 +1,6 @@
 use crate::glob::{GlobError, GlobSet};
 use scc::hash_map::Entry;
-use std::hash::{DefaultHasher, Hasher};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use tracing::trace;
@@ -82,16 +82,20 @@ impl GlobCache {
         }
     }
 
-    pub fn cache_set<F>(&self, globs: &[&str], op: F) -> Result<Arc<GlobSet<'static>>, GlobError>
+    pub fn cache_set<F>(
+        &self,
+        expressions: &[&str],
+        negations: &[&str],
+        op: F,
+    ) -> Result<Arc<GlobSet<'static>>, GlobError>
     where
-        F: FnOnce(&[&str]) -> Result<GlobSet<'static>, GlobError>,
+        F: FnOnce(&[&str], &[&str]) -> Result<GlobSet<'static>, GlobError>,
     {
         let mut hash = DefaultHasher::default();
 
-        for glob in globs {
-            hash.write(b":");
-            hash.write(glob.as_bytes());
-        }
+        // Slices are length prefixed, so expressions and negations can't collide
+        expressions.hash(&mut hash);
+        negations.hash(&mut hash);
 
         let key = hash.finish();
 
@@ -104,9 +108,13 @@ impl GlobCache {
         match self.sets.entry_sync(key) {
             Entry::Occupied(entry) => Ok(Arc::clone(entry.get())),
             Entry::Vacant(entry) => {
-                let value = Arc::new(op(globs)?);
+                let value = Arc::new(op(expressions, negations)?);
 
-                trace!(globs = ?globs, "Writing glob set to cache");
+                trace!(
+                    expressions = ?expressions,
+                    negations = ?negations,
+                    "Writing glob set to cache"
+                );
 
                 entry.insert_entry(Arc::clone(&value));
 
@@ -153,7 +161,7 @@ mod tests {
         let cache = GlobCache::default();
         let globs = ["**/*"];
 
-        let result = cache.cache_set(&globs, |_| {
+        let result = cache.cache_set(&globs, &[], |_, _| {
             Err(GlobError::InvalidPath {
                 path: "/fail".into(),
             })
@@ -161,11 +169,27 @@ mod tests {
 
         assert!(result.is_err());
 
-        let a = cache.cache_set(&globs, |p| GlobSet::new_owned(p)).unwrap();
+        let a = cache
+            .cache_set(&globs, &[], |ex, ng| GlobSet::new_split_owned(ex, ng))
+            .unwrap();
         let b = cache
-            .cache_set(&globs, |_| panic!("should be cached"))
+            .cache_set(&globs, &[], |_, _| panic!("should be cached"))
             .unwrap();
 
         assert!(Arc::ptr_eq(&a, &b));
+    }
+
+    #[test]
+    fn separates_expressions_from_negations() {
+        let cache = GlobCache::default();
+        let build = |_: &[&str], _: &[&str]| GlobSet::new_owned(["*"]);
+
+        let a = cache.cache_set(&["a"], &[], build).unwrap();
+        let b = cache.cache_set(&[], &["a"], build).unwrap();
+        let c = cache.cache_set(&["a:b"], &[], build).unwrap();
+        let d = cache.cache_set(&["a", "b"], &[], build).unwrap();
+
+        assert!(!Arc::ptr_eq(&a, &b));
+        assert!(!Arc::ptr_eq(&c, &d));
     }
 }

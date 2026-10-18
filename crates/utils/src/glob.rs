@@ -84,15 +84,9 @@ impl GlobSet<'_> {
         I: IntoIterator<Item = &'new V> + Debug,
         V: AsRef<str> + 'new + ?Sized,
     {
-        let mut patterns = patterns
-            .into_iter()
-            .map(|pattern| pattern.as_ref())
-            .collect::<Vec<_>>();
+        let (expressions, negations) = split_patterns(patterns);
 
-        // Order doesn't affect matching, so sort for a deterministic cache key
-        patterns.sort();
-
-        GlobCache::instance().cache_set(&patterns, |p| GlobSet::new_owned(p))
+        GlobSet::new_split_cached(expressions, negations)
     }
 
     /// Create a new glob set with explicitly separate expressions and negations.
@@ -172,6 +166,38 @@ impl GlobSet<'_> {
             expressions: any_glob(ex, "<expressions>")?,
             negations: any_glob(ng, "<negations>")?,
             enabled: count > 0,
+        })
+    }
+
+    /// Create a new owned/static glob set with explicitly separate expressions and negations,
+    /// and cache it globally, so that subsequent calls with the same patterns reuse it.
+    /// Negated patterns must not start with `!`.
+    #[cfg(feature = "glob-cache")]
+    pub fn new_split_cached<'new, I1, V1, I2, V2>(
+        expressions: I1,
+        negations: I2,
+    ) -> Result<Arc<GlobSet<'static>>, GlobError>
+    where
+        I1: IntoIterator<Item = &'new V1>,
+        V1: AsRef<str> + 'new + ?Sized,
+        I2: IntoIterator<Item = &'new V2>,
+        V2: AsRef<str> + 'new + ?Sized,
+    {
+        let mut expressions = expressions
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
+        let mut negations = negations
+            .into_iter()
+            .map(|pattern| pattern.as_ref())
+            .collect::<Vec<_>>();
+
+        // Order doesn't affect matching, so sort for a deterministic cache key
+        expressions.sort();
+        negations.sort();
+
+        GlobCache::instance().cache_set(&expressions, &negations, |ex, ng| {
+            GlobSet::new_split_owned(ex, ng)
         })
     }
 

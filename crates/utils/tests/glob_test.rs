@@ -99,6 +99,18 @@ mod globset {
         assert!(!a.matches("files/test.ts"));
         assert!(c.matches("files/test.ts"));
     }
+
+    #[cfg(feature = "glob-cache")]
+    #[test]
+    fn reuses_cached_split_sets() {
+        let a = GlobSet::new_split_cached(["files/*"], ["**/*.ts"]).unwrap();
+        let b = GlobSet::new_cached(["!**/*.ts", "files/*"]).unwrap();
+
+        assert!(std::sync::Arc::ptr_eq(&a, &b));
+
+        assert!(a.matches("files/test.js"));
+        assert!(!a.matches("files/test.ts"));
+    }
 }
 
 mod is_glob {
