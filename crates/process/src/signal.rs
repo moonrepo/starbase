@@ -8,13 +8,17 @@ use tracing::debug;
 /// A signal that can be sent to a running child process.
 #[derive(Clone, Copy, Debug)]
 pub enum SignalType {
+    /// Notify the process that its controlling terminal or console window
+    /// was closed (`SIGHUP`, `CTRL-CLOSE`).
+    Hangup,
+
     /// Request the process interrupt itself (`SIGINT`, `CTRL-C`).
     Interrupt,
 
     /// Force the process to stop immediately (`SIGKILL`, force terminate).
     Kill,
 
-    /// Request the process quit and dump core (`SIGQUIT`, `CTRL-C`).
+    /// Request the process quit and dump core (`SIGQUIT`).
     Quit,
 
     /// Request the process terminate gracefully (`SIGTERM`, `CTRL-SHUTDOWN`).
@@ -25,6 +29,7 @@ impl SignalType {
     /// Return the Unix signal number for this signal.
     pub fn get_code(&self) -> i32 {
         match self {
+            SignalType::Hangup => 1,     // SIGHUP
             SignalType::Interrupt => 2,  // SIGINT
             SignalType::Quit => 3,       // SIGQUIT
             SignalType::Kill => 9,       // SIGKILL
@@ -37,22 +42,29 @@ impl SignalType {
 mod unix {
     use super::*;
 
-    /// Listen for `SIGINT`, `SIGQUIT`, and `SIGTERM`, and broadcast the
-    /// first one received to `sender`. Runs until a signal arrives.
+    /// Listen for `SIGHUP`, `SIGINT`, `SIGQUIT`, and `SIGTERM`, and broadcast
+    /// each one received to `sender`. Runs until all receivers are dropped.
     pub async fn wait_for_signal(sender: Sender<SignalType>) {
         use tokio::signal::unix::{SignalKind, signal};
 
-        debug!("Listening for SIGINT, SIGQUIT, and SIGTERM signals");
+        debug!("Listening for SIGHUP, SIGINT, SIGQUIT, and SIGTERM signals");
 
+        // A signal without a listener uses its default action, which for
+        // all of these is to exit immediately, orphaning running children
         let mut signal_terminate = signal(SignalKind::terminate()).unwrap();
         let mut signal_interrupt = signal(SignalKind::interrupt()).unwrap();
         let mut signal_quit = signal(SignalKind::quit()).unwrap();
+        let mut signal_hangup = signal(SignalKind::hangup()).unwrap();
 
         loop {
             let result = tokio::select! {
                 _ = signal_terminate.recv() => {
                     debug!("Received SIGTERM signal");
                     sender.send(SignalType::Terminate)
+                },
+                _ = signal_hangup.recv() => {
+                    debug!("Received SIGHUP signal");
+                    sender.send(SignalType::Hangup)
                 },
                 _ = signal_interrupt.recv() => {
                     debug!("Received SIGINT signal");
@@ -102,8 +114,8 @@ mod windows {
     use windows_sys::Win32::System::Threading::TerminateProcess;
 
     /// Listen for `CTRL-C`, `CTRL-BREAK`, `CTRL-CLOSE`, and
-    /// `CTRL-SHUTDOWN`, and broadcast the first one received to `sender`.
-    /// Runs until a signal arrives.
+    /// `CTRL-SHUTDOWN`, and broadcast each one received to `sender`.
+    /// Runs until all receivers are dropped.
     pub async fn wait_for_signal(sender: Sender<SignalType>) {
         use tokio::signal::windows;
 
@@ -124,9 +136,10 @@ mod windows {
                     debug!("Received CTRL-BREAK signal");
                     sender.send(SignalType::Interrupt)
                 },
+                // The console window was closed, the equivalent of `SIGHUP`
                 _ = signal_close.recv() => {
                     debug!("Received CTRL-CLOSE signal");
-                    sender.send(SignalType::Quit)
+                    sender.send(SignalType::Hangup)
                 },
                 _ = signal_shutdown.recv() => {
                     debug!("Received CTRL-SHUTDOWN signal");
