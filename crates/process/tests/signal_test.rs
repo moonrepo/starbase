@@ -5,6 +5,7 @@ mod signal_type {
 
     #[test]
     fn maps_to_unix_codes() {
+        assert_eq!(SignalType::Hangup.get_code(), 1);
         assert_eq!(SignalType::Interrupt.get_code(), 2);
         assert_eq!(SignalType::Quit.get_code(), 3);
         assert_eq!(SignalType::Kill.get_code(), 9);
