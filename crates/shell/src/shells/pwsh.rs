@@ -4,7 +4,6 @@ use crate::helpers::{ProfileSet, normalize_newlines, render_template};
 use crate::hooks::*;
 use crate::quoter::*;
 use shell_quote::Quotable;
-use std::env;
 use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -88,8 +87,16 @@ impl Shell for Pwsh {
         let mut profiles = ProfileSet::default();
 
         // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_automatic_variables?view=powershell-7.4#profile
-        if let Some(profile) = env::var_os("PROFILE") {
-            profiles = profiles.insert(PathBuf::from(profile), 10);
+        if let Ok(output) = Command::new("pwsh")
+            .args(["-NoLogo", "-Command", "$PROFILE.CurrentUserAllHosts"])
+            .output()
+            && output.status.success()
+        {
+            let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+
+            if !profile.is_empty() {
+                profiles = profiles.insert(PathBuf::from(profile), 1);
+            }
         }
 
         #[cfg(windows)]
@@ -97,7 +104,7 @@ impl Shell for Pwsh {
             let docs_dir = home_dir.join("Documents");
 
             profiles = profiles
-                .insert(docs_dir.join("PowerShell").join("Profile.ps1"), 1)
+                .insert(docs_dir.join("PowerShell").join("Profile.ps1"), 2)
                 .insert(
                     docs_dir
                         .join("PowerShell")
@@ -115,27 +122,27 @@ impl Shell for Pwsh {
                     get_config_dir(home_dir)
                         .join("powershell")
                         .join("profile.ps1"),
-                    1,
+                    2,
                 )
                 .insert(
                     home_dir
                         .join(".config")
                         .join("powershell")
                         .join("profile.ps1"),
-                    2,
+                    3,
                 )
                 .insert(
                     get_config_dir(home_dir)
                         .join("powershell")
                         .join("Microsoft.PowerShell_profile.ps1"),
-                    3,
+                    4,
                 )
                 .insert(
                     home_dir
                         .join(".config")
                         .join("powershell")
                         .join("Microsoft.PowerShell_profile.ps1"),
-                    4,
+                    5,
                 );
         }
 
