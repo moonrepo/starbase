@@ -8,6 +8,10 @@ use tracing::debug;
 /// A signal that can be sent to a running child process.
 #[derive(Clone, Copy, Debug)]
 pub enum SignalType {
+    /// Notify the process that its controlling terminal or console window
+    /// was closed (`SIGHUP`, `CTRL-CLOSE`).
+    Hangup,
+
     /// Request the process interrupt itself (`SIGINT`, `CTRL-C`).
     Interrupt,
 
@@ -25,6 +29,7 @@ impl SignalType {
     /// Return the Unix signal number for this signal.
     pub fn get_code(&self) -> i32 {
         match self {
+            SignalType::Hangup => 1,     // SIGHUP
             SignalType::Interrupt => 2,  // SIGINT
             SignalType::Quit => 3,       // SIGQUIT
             SignalType::Kill => 9,       // SIGKILL
@@ -42,16 +47,21 @@ mod unix {
     pub async fn wait_for_signal(sender: Sender<SignalType>) {
         use tokio::signal::unix::{SignalKind, signal};
 
-        debug!("Listening for SIGINT, SIGQUIT, and SIGTERM signals");
+        debug!("Listening for SIGHUP, SIGINT, SIGQUIT, and SIGTERM signals");
 
         let mut signal_terminate = signal(SignalKind::terminate()).unwrap();
         let mut signal_interrupt = signal(SignalKind::interrupt()).unwrap();
         let mut signal_quit = signal(SignalKind::quit()).unwrap();
+        let mut signal_hangup = signal(SignalKind::hangup()).unwrap();
 
         let _ = tokio::select! {
             _ = signal_terminate.recv() => {
                 debug!("Received SIGTERM signal");
                 sender.send(SignalType::Terminate)
+            },
+            _ = signal_hangup.recv() => {
+                debug!("Received SIGHUP signal");
+                sender.send(SignalType::Hangup)
             },
             _ = signal_interrupt.recv() => {
                 debug!("Received SIGINT signal");
@@ -119,7 +129,7 @@ mod windows {
             },
             _ = signal_close.recv() => {
                 debug!("Received CTRL-CLOSE signal");
-                sender.send(SignalType::Quit)
+                sender.send(SignalType::Hangup)
             },
             _ = signal_shutdown.recv() => {
                 debug!("Received CTRL-SHUTDOWN signal");
