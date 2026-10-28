@@ -21,6 +21,8 @@ pub use wax::{self, Glob};
 static GLOBAL_NEGATIONS: LazyLock<RwLock<Vec<&'static str>>> =
     LazyLock::new(|| RwLock::new(vec!["**/.{git,svn}/**", "**/.DS_Store", "node_modules/**"]));
 
+const PARENT_TRAVERSAL: &str = "...";
+
 /// Add global negated patterns to all glob sets and walking operations.
 pub fn add_global_negations<I>(patterns: I)
 where
@@ -121,6 +123,15 @@ impl GlobSet<'_> {
             .map(|pattern| pattern.as_ref())
             .collect::<Vec<_>>();
 
+        // Expanded patterns are owned, so can't be borrowed by the set
+        if ex
+            .iter()
+            .chain(&ng)
+            .any(|pattern| has_parent_traversal(pattern))
+        {
+            return GlobSet::new_split_owned(&ex, &ng);
+        }
+
         ng.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
 
         Ok(GlobSet {
@@ -147,13 +158,17 @@ impl GlobSet<'_> {
         let mut count = 0;
 
         for pattern in expressions.into_iter() {
-            ex.push(create_glob(pattern.as_ref())?.into_owned());
-            count += 1;
+            for pattern in expand_parent_traversal(pattern.as_ref())? {
+                ex.push(create_glob(&pattern)?.into_owned());
+                count += 1;
+            }
         }
 
         for pattern in negations.into_iter() {
-            ng.push(create_glob(pattern.as_ref())?.into_owned());
-            count += 1;
+            for pattern in expand_parent_traversal(pattern.as_ref())? {
+                ng.push(create_glob(&pattern)?.into_owned());
+                count += 1;
+            }
         }
 
         let global_negations = GLOBAL_NEGATIONS.read().unwrap();
@@ -271,7 +286,7 @@ fn any_pattern<'a>(patterns: &[&'a str], desc: &str) -> Result<Any<'a>, GlobErro
 pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
     let value = value.as_ref();
 
-    if value.contains("**") || value.starts_with('!') {
+    if value.contains("**") || value.starts_with('!') || has_parent_traversal(value) {
         return true;
     }
 
@@ -298,6 +313,85 @@ pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
     }
 
     false
+}
+
+/// Return true if the pattern contains a `...` parent traversal segment.
+#[inline]
+pub fn has_parent_traversal(pattern: &str) -> bool {
+    split_leading(pattern)
+        .1
+        .split('/')
+        .any(|part| part == PARENT_TRAVERSAL)
+}
+
+/// Expand a `...` parent traversal segment into a pattern for its prefix, and one for each
+/// parent directory of the prefix, up to the root that the pattern is relative to. For example,
+/// `a/b/.../*.json` expands to `a/b/*.json`, `a/*.json`, and `*.json`. A leading `!`, `/`, or `./`
+/// is kept on each pattern. If the pattern has no `...` segment, it's returned as-is.
+///
+/// Only 1 `...` segment is allowed, and it must be followed by a path that doesn't contain `**`,
+/// as that would match nested and outside paths. Otherwise a [`GlobError`] is returned.
+pub fn expand_parent_traversal(pattern: &str) -> Result<Vec<String>, GlobError> {
+    let (leading, body) = split_leading(pattern);
+    let parts = body.split('/').collect::<Vec<_>>();
+
+    let Some(index) = parts.iter().position(|part| *part == PARENT_TRAVERSAL) else {
+        return Ok(vec![pattern.to_owned()]);
+    };
+
+    let error = |reason: &str| GlobError::InvalidParentTraversal {
+        glob: pattern.to_owned(),
+        reason: reason.to_owned(),
+    };
+
+    let (prefix, tail) = (&parts[..index], &parts[index + 1..]);
+
+    if tail.contains(&PARENT_TRAVERSAL) {
+        return Err(error("only 1 is allowed per pattern"));
+    }
+
+    if tail.iter().all(|part| part.is_empty()) {
+        return Err(error("a path is required after it"));
+    }
+
+    let tail = tail.join("/");
+
+    if tail.contains("**") {
+        return Err(error("globstars are not allowed after it"));
+    }
+
+    Ok((0..=prefix.len())
+        .rev()
+        .map(|depth| {
+            if depth == 0 {
+                format!("{leading}{tail}")
+            } else {
+                format!("{leading}{}/{tail}", prefix[..depth].join("/"))
+            }
+        })
+        .collect())
+}
+
+// A leading `!`, `/`, or `./` isn't a path segment, as in `split_patterns`
+fn split_leading(pattern: &str) -> (&str, &str) {
+    let body = pattern
+        .trim_start_matches(['!', '/'])
+        .trim_start_matches("./");
+
+    (&pattern[..pattern.len() - body.len()], body)
+}
+
+fn expand_parent_traversals<'a, I>(patterns: I) -> Result<Vec<String>, GlobError>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let mut expanded = vec![];
+
+    for pattern in patterns {
+        expanded.extend(expand_parent_traversal(pattern)?);
+    }
+
+    Ok(expanded)
 }
 
 /// Normalize a glob-based file path to use forward slashes. If the path contains
@@ -385,17 +479,26 @@ where
 
     trace!(dir = ?base_dir, globs = ?patterns, "Finding files");
 
-    let (expressions, mut negations) = split_patterns(patterns);
-    negations.extend(GLOBAL_NEGATIONS.read().unwrap().iter());
+    let (expressions, negations) = split_patterns(patterns);
+    let expressions = expand_parent_traversals(expressions)?;
+    let mut negations = expand_parent_traversals(negations)?;
+    negations.extend(
+        GLOBAL_NEGATIONS
+            .read()
+            .unwrap()
+            .iter()
+            .map(|pattern| pattern.to_string()),
+    );
 
     // An invalid negation pattern must surface as an error rather than panic.
     let negations_desc = negations.join(", ");
-    let negations_set = wax::any(negations).map_err(|error| GlobError::Create {
-        glob: negations_desc.clone(),
-        error: Box::new(error),
-    })?;
+    let negations_set =
+        wax::any(negations.iter().map(String::as_str)).map_err(|error| GlobError::Create {
+            glob: negations_desc.clone(),
+            error: Box::new(error),
+        })?;
 
-    for expression in expressions {
+    for expression in &expressions {
         let walker = create_glob(expression)?
             .walk_with_behavior(base_dir, LinkBehavior::ReadFile)
             .not(negations_set.clone())
@@ -516,7 +619,19 @@ where
     V: AsRef<str> + 'glob + ?Sized,
 {
     let mut paths = vec![];
-    let partitions = partition_patterns(base_dir, patterns);
+    let patterns = patterns
+        .into_iter()
+        .map(|pattern| pattern.as_ref())
+        .collect::<Vec<_>>();
+
+    // Partitioning expands parent traversals, but can't return errors
+    for pattern in &patterns {
+        if has_parent_traversal(pattern) {
+            expand_parent_traversal(pattern)?;
+        }
+    }
+
+    let partitions = partition_patterns(base_dir, &patterns);
     let overlap = buckets_overlap(&partitions);
 
     for (dir, mut patterns) in partitions {
@@ -749,11 +864,26 @@ where
 {
     let base_dir = base_dir.as_ref();
     let mut partitions = BTreeMap::new();
+    let mut regular = vec![];
+    let mut expanded = vec![];
+
+    for pattern in patterns {
+        let pattern = pattern.as_ref();
+
+        // Errors can't be returned here, so invalid patterns are kept
+        // as-is, and fail when they're compiled instead
+        if has_parent_traversal(pattern)
+            && let Ok(list) = expand_parent_traversal(pattern)
+        {
+            expanded.extend(list);
+        } else {
+            regular.push(pattern);
+        }
+    }
 
     // Sort patterns from smallest to longest glob,
     // so that we can create the necessary buckets correctly
-    let mut patterns = patterns.into_iter().map(|p| p.as_ref()).collect::<Vec<_>>();
-    patterns.sort_by_key(|a| a.len());
+    regular.sort_by_key(|a| a.len());
 
     // Negations restrict *every* bucket that could contain a match, not just the
     // one their literal prefix points at. Collect them up front (relative to the
@@ -761,8 +891,10 @@ where
     // re-relativized to that bucket. Routing a negation into its own bucket --
     // as this used to -- silently drops it from the broader buckets that its
     // positive counterpart actually walks.
-    let negations = patterns
+    let negations = regular
         .iter()
+        .copied()
+        .chain(expanded.iter().map(String::as_str))
         .filter_map(|pattern| {
             pattern
                 .strip_prefix('!')
@@ -770,7 +902,15 @@ where
         })
         .collect::<Vec<_>>();
 
-    for pattern in patterns {
+    // Expanded parent traversals are bucketed last, and never merged into an existing
+    // bucket, so each ancestor is a shallow bucket of its own, instead of deepening the
+    // walk of an ancestor bucket into every sibling directory
+    let patterns = regular
+        .into_iter()
+        .map(|pattern| (pattern, true))
+        .chain(expanded.iter().map(|pattern| (pattern.as_str(), false)));
+
+    for (pattern, mergeable) in patterns {
         // Negations are handled separately below.
         if pattern.starts_with('!') {
             continue;
@@ -797,7 +937,7 @@ where
             } else {
                 dir = dir.join(part);
 
-                if partitions.contains_key(&dir) {
+                if mergeable && partitions.contains_key(&dir) {
                     found = true;
                 }
             }
