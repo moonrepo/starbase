@@ -114,6 +114,99 @@ mod globset {
         assert!(c.matches("files/test.ts"));
     }
 
+    #[test]
+    fn matches_parent_traversal() {
+        let set = GlobSet::new(["packages/a/.../package.json"]).unwrap();
+
+        assert!(set.matches("packages/a/package.json"));
+        assert!(set.matches("packages/package.json"));
+        assert!(set.matches("package.json"));
+
+        // Siblings, nested, and outside
+        assert!(!set.matches("packages/b/package.json"));
+        assert!(!set.matches("packages/a/src/package.json"));
+        assert!(!set.matches("other/package.json"));
+    }
+
+    #[test]
+    fn matches_parent_traversal_from_root() {
+        let set = GlobSet::new(["/.../package.json"]).unwrap();
+
+        assert!(set.matches("package.json"));
+        assert!(!set.matches("packages/package.json"));
+    }
+
+    #[test]
+    fn matches_parent_traversal_with_globs() {
+        let set = GlobSet::new(["packages/*/.../*.lock"]).unwrap();
+
+        assert!(set.matches("packages/a/yarn.lock"));
+        assert!(set.matches("packages/b/Cargo.lock"));
+        assert!(set.matches("packages/yarn.lock"));
+        assert!(set.matches("yarn.lock"));
+
+        assert!(!set.matches("packages/a/src/yarn.lock"));
+        assert!(!set.matches("packages/a/yarn.json"));
+        assert!(!set.matches("other/yarn.lock"));
+    }
+
+    #[test]
+    fn matches_parent_traversal_with_multi_segment_tail() {
+        let set = GlobSet::new_owned(["a/b/.../config/app.json"]).unwrap();
+
+        assert!(set.matches("a/b/config/app.json"));
+        assert!(set.matches("a/config/app.json"));
+        assert!(set.matches("config/app.json"));
+
+        assert!(!set.matches("a/b/app.json"));
+        assert!(!set.matches("a/c/config/app.json"));
+    }
+
+    #[test]
+    fn doesnt_match_parent_traversal_negations() {
+        let sets = [
+            GlobSet::new(["**/*.json", "!packages/a/.../package.json"]).unwrap(),
+            GlobSet::new_owned(["**/*.json", "!packages/a/.../package.json"]).unwrap(),
+            GlobSet::new_split(["**/*.json"], ["packages/a/.../package.json"]).unwrap(),
+            GlobSet::new_split_owned(["**/*.json"], ["packages/a/.../package.json"]).unwrap(),
+        ];
+
+        for set in sets {
+            assert!(!set.matches("packages/a/package.json"));
+            assert!(!set.matches("packages/package.json"));
+            assert!(!set.matches("package.json"));
+
+            assert!(set.matches("packages/b/package.json"));
+            assert!(set.matches("packages/a/src/package.json"));
+            assert!(set.matches("packages/a/tsconfig.json"));
+        }
+    }
+
+    #[test]
+    fn errors_for_invalid_parent_traversal() {
+        for result in [
+            GlobSet::new(["files/*", "a/.../b/.../c"]).err(),
+            GlobSet::new(["files/*", "!a/..."]).err(),
+            GlobSet::new_owned(["files/*", "a/.../**/c"]).err(),
+            GlobSet::new_split(["files/*"], ["a/..."]).err(),
+        ] {
+            assert!(
+                matches!(result, Some(GlobError::InvalidParentTraversal { .. })),
+                "expected a parent traversal error, got {result:?}"
+            );
+        }
+    }
+
+    #[cfg(feature = "glob-cache")]
+    #[test]
+    fn matches_cached_parent_traversal() {
+        let set = GlobSet::new_cached(["packages/a/.../package.json"]).unwrap();
+
+        assert!(set.matches("packages/a/package.json"));
+        assert!(set.matches("package.json"));
+        assert!(!set.matches("packages/b/package.json"));
+    }
+
     #[cfg(feature = "glob-cache")]
     #[test]
     fn reuses_cached_split_sets() {
@@ -140,6 +233,9 @@ mod is_glob {
         assert!(is_glob("file.{js,ts}"));
         assert!(is_glob("file.[jstx]"));
         assert!(is_glob("file.tsx?"));
+        assert!(is_glob("..."));
+        assert!(is_glob(".../package.json"));
+        assert!(is_glob("dir/.../package.json"));
     }
 
     #[test]
@@ -149,6 +245,7 @@ mod is_glob {
         assert!(!is_glob("dir/file.ts"));
         assert!(!is_glob("dir/dir/file_test.rs"));
         assert!(!is_glob("dir/dirDir/file-ts.js"));
+        assert!(!is_glob("dir.../file...rs"));
     }
 
     #[test]
@@ -180,8 +277,203 @@ mod split_patterns {
     }
 }
 
+mod parent_traversal {
+    use super::*;
+
+    fn expand(pattern: &str) -> Vec<String> {
+        expand_parent_traversal(pattern).unwrap()
+    }
+
+    fn reason(pattern: &str) -> String {
+        match expand_parent_traversal(pattern) {
+            Err(GlobError::InvalidParentTraversal { glob, reason }) => {
+                assert_eq!(glob, pattern);
+                reason
+            }
+            other => panic!("expected a parent traversal error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn detects_segment() {
+        assert!(has_parent_traversal("..."));
+        assert!(has_parent_traversal(".../package.json"));
+        assert!(has_parent_traversal("a/.../package.json"));
+        assert!(has_parent_traversal("!a/.../package.json"));
+        assert!(has_parent_traversal("/.../package.json"));
+        assert!(has_parent_traversal("./.../package.json"));
+
+        assert!(!has_parent_traversal("a/package.json"));
+        assert!(!has_parent_traversal("a.../package.json"));
+        assert!(!has_parent_traversal("a/....json"));
+        assert!(!has_parent_traversal("../package.json"));
+    }
+
+    #[test]
+    fn returns_as_is_without_segment() {
+        assert_eq!(expand("src/**/*.ts"), ["src/**/*.ts"]);
+        assert_eq!(expand("!a.../file...rs"), ["!a.../file...rs"]);
+    }
+
+    #[test]
+    fn expands_to_each_parent() {
+        assert_eq!(
+            expand("packages/a/.../package.json"),
+            [
+                "packages/a/package.json",
+                "packages/package.json",
+                "package.json"
+            ]
+        );
+    }
+
+    #[test]
+    fn expands_from_root() {
+        assert_eq!(expand(".../package.json"), ["package.json"]);
+        assert_eq!(expand("/.../package.json"), ["/package.json"]);
+    }
+
+    #[test]
+    fn keeps_leading_markers() {
+        assert_eq!(expand("/a/.../x"), ["/a/x", "/x"]);
+        assert_eq!(expand("./a/.../x"), ["./a/x", "./x"]);
+        assert_eq!(expand("!a/b/.../x"), ["!a/b/x", "!a/x", "!x"]);
+    }
+
+    #[test]
+    fn expands_globs_in_prefix() {
+        assert_eq!(
+            expand("packages/*/.../x"),
+            ["packages/*/x", "packages/x", "x"]
+        );
+    }
+
+    #[test]
+    fn expands_globs_and_segments_in_tail() {
+        assert_eq!(expand("a/.../*.lock"), ["a/*.lock", "*.lock"]);
+        assert_eq!(
+            expand("a/.../config/app.json"),
+            ["a/config/app.json", "config/app.json"]
+        );
+        assert_eq!(
+            expand("a/.../{src,lib}/*.ts"),
+            ["a/{src,lib}/*.ts", "{src,lib}/*.ts"]
+        );
+    }
+
+    #[test]
+    fn errors_for_multiple_segments() {
+        assert_eq!(reason("a/.../b/.../c"), "only 1 is allowed per pattern");
+        assert_eq!(reason(".../..."), "only 1 is allowed per pattern");
+    }
+
+    #[test]
+    fn errors_for_missing_tail() {
+        assert_eq!(reason("..."), "a path is required after it");
+        assert_eq!(reason("foo/..."), "a path is required after it");
+        assert_eq!(reason("foo/.../"), "a path is required after it");
+        assert_eq!(reason("!foo/..."), "a path is required after it");
+    }
+
+    #[test]
+    fn errors_for_globstar_in_tail() {
+        assert_eq!(reason(".../**/x"), "globstars are not allowed after it");
+        assert_eq!(reason("a/.../src/**"), "globstars are not allowed after it");
+        assert_eq!(
+            reason("!a/.../**/*.ts"),
+            "globstars are not allowed after it"
+        );
+    }
+
+    #[test]
+    fn allows_globstar_in_prefix() {
+        assert_eq!(expand("a/**/.../x"), ["a/**/x", "a/x", "x"]);
+    }
+}
+
 mod walk {
     use super::*;
+    use starbase_sandbox::{Sandbox, create_empty_sandbox};
+    use std::path::PathBuf;
+
+    pub fn create_traversal_sandbox() -> Sandbox {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("package.json", "");
+        sandbox.create_file("packages/package.json", "");
+        sandbox.create_file("packages/a/package.json", "");
+        sandbox.create_file("packages/a/yarn.lock", "");
+        sandbox.create_file("packages/a/src/package.json", "");
+        sandbox.create_file("packages/b/package.json", "");
+        sandbox.create_file("packages/b/yarn.lock", "");
+        sandbox.create_file("yarn.lock", "");
+        sandbox
+    }
+
+    pub fn sorted(sandbox: &Sandbox, paths: Vec<PathBuf>) -> Vec<String> {
+        let mut paths = paths
+            .into_iter()
+            .map(|path| {
+                path.strip_prefix(sandbox.path())
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect::<Vec<_>>();
+        paths.sort();
+        paths
+    }
+
+    #[test]
+    fn matches_parent_traversal() {
+        let sandbox = create_traversal_sandbox();
+
+        let paths = walk(sandbox.path(), ["packages/a/.../package.json"]).unwrap();
+
+        assert_eq!(
+            sorted(&sandbox, paths),
+            [
+                "package.json",
+                "packages/a/package.json",
+                "packages/package.json"
+            ]
+        );
+    }
+
+    #[test]
+    fn matches_parent_traversal_with_negations() {
+        let sandbox = create_traversal_sandbox();
+
+        let paths = walk_files(
+            sandbox.path(),
+            ["packages/*/.../*.{json,lock}", "!packages/a/.../*.lock"],
+        )
+        .unwrap();
+
+        assert_eq!(
+            sorted(&sandbox, paths),
+            [
+                "package.json",
+                "packages/a/package.json",
+                "packages/b/package.json",
+                "packages/b/yarn.lock",
+                "packages/package.json",
+            ]
+        );
+    }
+
+    #[test]
+    fn errors_for_invalid_parent_traversal() {
+        let sandbox = create_traversal_sandbox();
+
+        assert!(matches!(
+            walk(sandbox.path(), ["a/.../**/x"]),
+            Err(GlobError::InvalidParentTraversal { .. })
+        ));
+        assert!(matches!(
+            walk_files(sandbox.path(), ["*", "!a/..."]),
+            Err(GlobError::InvalidParentTraversal { .. })
+        ));
+    }
 
     #[test]
     fn fast_and_slow_return_same_list() {
@@ -235,6 +527,7 @@ mod walk_files {
 }
 
 mod walk_fast {
+    use super::walk::{create_traversal_sandbox, sorted};
     use super::*;
     use starbase_sandbox::create_empty_sandbox;
 
@@ -421,6 +714,80 @@ mod walk_fast {
     }
 
     #[test]
+    fn matches_parent_traversal() {
+        let sandbox = create_traversal_sandbox();
+
+        let paths = walk_fast(sandbox.path(), ["packages/a/.../package.json"]).unwrap();
+
+        assert_eq!(
+            sorted(&sandbox, paths),
+            [
+                "package.json",
+                "packages/a/package.json",
+                "packages/package.json"
+            ]
+        );
+    }
+
+    #[test]
+    fn matches_parent_traversal_with_negations() {
+        let sandbox = create_traversal_sandbox();
+
+        let paths = walk_fast_with_options(
+            sandbox.path(),
+            ["packages/*/.../*.{json,lock}", "!packages/a/.../*.lock"],
+            GlobWalkOptions::default().files(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            sorted(&sandbox, paths),
+            [
+                "package.json",
+                "packages/a/package.json",
+                "packages/b/package.json",
+                "packages/b/yarn.lock",
+                "packages/package.json",
+            ]
+        );
+    }
+
+    #[test]
+    fn stops_parent_traversal_at_base_dir() {
+        let sandbox = create_traversal_sandbox();
+
+        let paths = walk_fast(sandbox.path().join("packages"), ["a/.../package.json"]).unwrap();
+
+        assert_eq!(
+            sorted(&sandbox, paths),
+            ["packages/a/package.json", "packages/package.json"]
+        );
+    }
+
+    #[test]
+    fn ignores_missing_parent_traversal_dirs() {
+        let sandbox = create_traversal_sandbox();
+
+        let paths = walk_fast(sandbox.path(), ["missing/dir/.../package.json"]).unwrap();
+
+        assert_eq!(paths, [sandbox.path().join("package.json")]);
+    }
+
+    #[test]
+    fn errors_for_invalid_parent_traversal() {
+        let sandbox = create_traversal_sandbox();
+
+        assert!(matches!(
+            walk_fast(sandbox.path(), ["a/.../**/x"]),
+            Err(GlobError::InvalidParentTraversal { .. })
+        ));
+        assert!(matches!(
+            walk_fast(sandbox.path(), ["*", "!a/..."]),
+            Err(GlobError::InvalidParentTraversal { .. })
+        ));
+    }
+
+    #[test]
     fn traverses_partially_excluded_dirs() {
         let sandbox = create_empty_sandbox();
         sandbox.create_file("dist/a.js", "");
@@ -584,6 +951,90 @@ mod partition_patterns {
                     ]
                 ),
             ])
+        );
+    }
+
+    #[test]
+    fn parent_traversal_buckets_each_parent() {
+        let map = partition_patterns("/root", ["packages/a/.../package.json"]);
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([
+                ("/root".into(), vec!["package.json".into()]),
+                ("/root/packages".into(), vec!["package.json".into()]),
+                ("/root/packages/a".into(), vec!["package.json".into()]),
+            ])
+        );
+    }
+
+    #[test]
+    fn parent_traversal_doesnt_merge_into_other_buckets() {
+        let map = partition_patterns("/root", ["packages/*", "packages/a/.../x"]);
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([
+                ("/root".into(), vec!["x".into()]),
+                ("/root/packages".into(), vec!["*".into(), "x".into()]),
+                ("/root/packages/a".into(), vec!["x".into()]),
+            ])
+        );
+    }
+
+    #[test]
+    fn parent_traversal_isnt_merged_into() {
+        // Otherwise the nested pattern would be merged into the `packages` bucket,
+        // and walk every package
+        let map = partition_patterns("/root", ["packages/a/.../x", "packages/a/src/**/*"]);
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([
+                ("/root".into(), vec!["x".into()]),
+                ("/root/packages".into(), vec!["x".into()]),
+                ("/root/packages/a".into(), vec!["x".into()]),
+                ("/root/packages/a/src".into(), vec!["**/*".into()]),
+            ])
+        );
+    }
+
+    #[test]
+    fn parent_traversal_with_globs_and_negations() {
+        let map = partition_patterns("/root", ["a/*/.../*.lock", "!a/b/.../yarn.lock"]);
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([
+                (
+                    "/root".into(),
+                    vec![
+                        "*.lock".into(),
+                        "!a/b/yarn.lock".into(),
+                        "!a/yarn.lock".into(),
+                        "!yarn.lock".into(),
+                    ]
+                ),
+                (
+                    "/root/a".into(),
+                    vec![
+                        "*/*.lock".into(),
+                        "*.lock".into(),
+                        "!b/yarn.lock".into(),
+                        "!yarn.lock".into(),
+                    ]
+                ),
+            ])
+        );
+    }
+
+    #[test]
+    fn parent_traversal_keeps_invalid_patterns() {
+        let map = partition_patterns("/root", ["a/.../**/x"]);
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([("/root/a".into(), vec![".../**/x".into()])])
         );
     }
 

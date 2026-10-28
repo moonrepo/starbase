@@ -21,6 +21,9 @@ pub enum GlobError {
     #[error("Failed to normalize glob path {}.", .path.style(Style::Path))]
     InvalidPath { path: PathBuf },
 
+    #[error("Failed to expand {} in glob {}, as {reason}.", "...".style(Style::Symbol), .glob.style(Style::File))]
+    InvalidParentTraversal { glob: String, reason: String },
+
     #[error("Failed to walk directory {}, as the walk was aborted before completing.\n{error}", .dir.style(Style::Path))]
     WalkAborted {
         dir: PathBuf,
@@ -47,6 +50,10 @@ pub enum GlobError {
     #[diagnostic(code(glob::invalid_path))]
     #[error("Failed to normalize glob path {}.", .path.style(Style::Path))]
     InvalidPath { path: PathBuf },
+
+    #[diagnostic(code(glob::invalid_parent_traversal))]
+    #[error("Failed to expand {} in glob {}, as {reason}.", "...".style(Style::Symbol), .glob.style(Style::File))]
+    InvalidParentTraversal { glob: String, reason: String },
 
     #[diagnostic(code(glob::walk_aborted))]
     #[error("Failed to walk directory {}, as the walk was aborted before completing.", .dir.style(Style::Path))]
