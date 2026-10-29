@@ -129,7 +129,16 @@ pub struct ProfileSet {
 
 impl ProfileSet {
     pub fn insert(mut self, path: PathBuf, order: u8) -> Self {
-        self.items.insert(path, order);
+        let exists = self.items.iter().any(|(existing_path, _)| {
+            // Compare paths case-insensitively by converting their string representations to lowercase
+            existing_path
+                .to_string_lossy()
+                .eq_ignore_ascii_case(&path.to_string_lossy())
+        });
+
+        if !exists {
+            self.items.insert(path, order);
+        }
 
         Self { items: self.items }
     }
