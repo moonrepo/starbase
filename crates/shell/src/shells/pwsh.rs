@@ -90,12 +90,13 @@ impl Shell for Pwsh {
         if let Ok(output) = Command::new("pwsh")
             .args(["-NoLogo", "-Command", "$PROFILE.CurrentUserAllHosts"])
             .output()
-            && output.status.success()
         {
-            let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            if output.status.success() {
+                let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
 
-            if !profile.is_empty() {
-                profiles = profiles.insert(PathBuf::from(profile), 1);
+                if !profile.is_empty() {
+                    profiles = profiles.insert(PathBuf::from(profile), 1);
+                }
             }
         }
 
@@ -244,7 +245,7 @@ mod tests {
                     home_dir
                         .join("Documents")
                         .join("PowerShell")
-                        .join("Profile.ps1"),
+                        .join("profile.ps1"),
                     home_dir
                         .join("Documents")
                         .join("PowerShell")

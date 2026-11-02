@@ -297,12 +297,13 @@ impl Shell for PowerShell {
         if let Ok(output) = Command::new("powershell")
             .args(["-NoLogo", "-Command", "$PROFILE.CurrentUserAllHosts"])
             .output()
-            && output.status.success()
         {
-            let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            if output.status.success() {
+                let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
 
-            if !profile.is_empty() {
-                profiles = profiles.insert(PathBuf::from(profile), 1);
+                if !profile.is_empty() {
+                    profiles = profiles.insert(PathBuf::from(profile), 1);
+                }
             }
         }
 
@@ -604,20 +605,39 @@ mod tests {
     fn test_profile_paths() {
         #[allow(deprecated)]
         let home_dir = std::env::home_dir().unwrap();
-
-        assert_eq!(
-            PowerShell::new().get_profile_paths(&home_dir),
-            vec![
-                home_dir
-                    .join("Documents")
-                    .join("WindowsPowerShell")
-                    .join("Profile.ps1"),
-                home_dir
-                    .join("Documents")
-                    .join("WindowsPowerShell")
-                    .join("Microsoft.PowerShell_profile.ps1"),
-            ]
-        );
+        if cfg!(windows) {
+            assert_eq!(
+                PowerShell::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                ]
+            );
+        } else {
+            assert_eq!(
+                PowerShell::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir
+                        .join(".config")
+                        .join("powershell")
+                        .join("profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                ]
+            );
+        }
     }
 
     #[test]
