@@ -619,6 +619,20 @@ mod tests {
                         .join("Microsoft.PowerShell_profile.ps1"),
                 ]
             );
+        } else if cfg!(target_os = "linux") {
+            assert_eq!(
+                PowerShell::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                ]
+            );
         } else {
             assert_eq!(
                 PowerShell::new().get_profile_paths(&home_dir),
@@ -630,7 +644,7 @@ mod tests {
                     home_dir
                         .join("Documents")
                         .join("WindowsPowerShell")
-                        .join("profile.ps1"),
+                        .join("Profile.ps1"),
                     home_dir
                         .join("Documents")
                         .join("WindowsPowerShell")
