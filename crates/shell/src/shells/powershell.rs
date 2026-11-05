@@ -7,7 +7,6 @@ use crate::hooks::*;
 use crate::quoter::*;
 use base64::Engine;
 use shell_quote::Quotable;
-use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -295,19 +294,28 @@ impl Shell for PowerShell {
         let mut profiles = ProfileSet::default();
 
         // https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_profiles?view=powershell-5.1#the-profile-variable
-        if let Some(profile) = env::var_os("PROFILE") {
-            profiles = profiles.insert(PathBuf::from(profile), 10);
+        if let Ok(output) = Command::new("powershell")
+            .args(["-NoLogo", "-Command", "$PROFILE.CurrentUserAllHosts"])
+            .output()
+        {
+            if output.status.success() {
+                let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+
+                if !profile.is_empty() {
+                    profiles = profiles.insert(PathBuf::from(profile), 1);
+                }
+            }
         }
 
         let docs_dir = home_dir.join("Documents");
 
         profiles = profiles
-            .insert(docs_dir.join("WindowsPowerShell").join("Profile.ps1"), 1)
+            .insert(docs_dir.join("WindowsPowerShell").join("Profile.ps1"), 2)
             .insert(
                 docs_dir
                     .join("WindowsPowerShell")
                     .join("Microsoft.PowerShell_profile.ps1"),
-                2,
+                3,
             );
 
         profiles.into_list()
@@ -597,20 +605,53 @@ mod tests {
     fn test_profile_paths() {
         #[allow(deprecated)]
         let home_dir = std::env::home_dir().unwrap();
-
-        assert_eq!(
-            PowerShell::new().get_profile_paths(&home_dir),
-            vec![
-                home_dir
-                    .join("Documents")
-                    .join("WindowsPowerShell")
-                    .join("Profile.ps1"),
-                home_dir
-                    .join("Documents")
-                    .join("WindowsPowerShell")
-                    .join("Microsoft.PowerShell_profile.ps1"),
-            ]
-        );
+        if cfg!(windows) {
+            assert_eq!(
+                PowerShell::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                ]
+            );
+        } else if cfg!(target_os = "linux") {
+            assert_eq!(
+                PowerShell::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                ]
+            );
+        } else {
+            assert_eq!(
+                PowerShell::new().get_profile_paths(&home_dir),
+                vec![
+                    home_dir
+                        .join(".config")
+                        .join("powershell")
+                        .join("profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Profile.ps1"),
+                    home_dir
+                        .join("Documents")
+                        .join("WindowsPowerShell")
+                        .join("Microsoft.PowerShell_profile.ps1"),
+                ]
+            );
+        }
     }
 
     #[test]
