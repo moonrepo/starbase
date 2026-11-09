@@ -2,6 +2,7 @@ use iocraft::prelude::{BorderStyle, Color};
 use starbase_styles::Style;
 use starbase_styles::theme::is_light_theme;
 use std::collections::HashMap;
+use std::env;
 
 pub fn style_to_color(style: Style) -> Color {
     Color::AnsiValue(style.ansi_color())
@@ -146,13 +147,13 @@ impl ConsoleTheme {
 
     pub fn dark() -> Self {
         let mut theme = Self::new(Color::White, Color::Black);
-        theme.bg_alt_color = Color::AnsiValue(234);
+        theme.bg_alt_color = alt_background(false, 234);
         theme
     }
 
     pub fn light() -> Self {
         let mut theme = Self::new(Color::Black, Color::White);
-        theme.bg_alt_color = Color::AnsiValue(254);
+        theme.bg_alt_color = alt_background(true, 254);
         theme
     }
 
@@ -237,3 +238,38 @@ pub(crate) fn pick_symbol<T>(unicode: bool, symbol: T, fallback: T) -> T {
 
 const DEFAULT_FRAMES: &[&str] = &["▏", "▎", "▍", "▌", "▋", "▊", "▉", "▊", "▋", "▌", "▍", "▎"];
 const ASCII_FRAMES: &[&str] = &["|", "/", "-", "\\"];
+
+// Text on this background keeps the terminal's default foreground, so
+// skip it when the terminal reports the opposite brightness to the theme.
+fn alt_background(light_theme: bool, ansi_value: u8) -> Color {
+    let conflicts = env::var("COLORFGBG")
+        .ok()
+        .and_then(|value| is_light_background(&value))
+        .is_some_and(|light| light != light_theme);
+
+    if conflicts {
+        Color::Reset
+    } else {
+        Color::AnsiValue(ansi_value)
+    }
+}
+
+fn is_light_background(color_fg_bg: &str) -> Option<bool> {
+    let background: u8 = color_fg_bg.rsplit(';').next()?.parse().ok()?;
+
+    Some(!matches!(background, 0..=6 | 8))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_background_from_colorfgbg() {
+        assert_eq!(is_light_background("15;0"), Some(false));
+        assert_eq!(is_light_background("0;15"), Some(true));
+        assert_eq!(is_light_background("0;default;15"), Some(true));
+        assert_eq!(is_light_background("15;default"), None);
+        assert_eq!(is_light_background(""), None);
+    }
+}

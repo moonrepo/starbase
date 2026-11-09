@@ -1,3 +1,4 @@
+use super::layout::use_render_width;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
@@ -70,7 +71,7 @@ pub fn Table<'a>(
     mut hooks: Hooks,
 ) -> impl Into<AnyElement<'a>> + use<'a> {
     let theme = hooks.use_context::<ConsoleTheme>();
-    let (term_width, _) = hooks.use_terminal_size();
+    let term_width = use_render_width(&mut hooks);
     let context = TableContext {
         col_data: props.headers.clone(),
         term_width,

@@ -10,6 +10,7 @@ rust-version = "1.85.0"
 [dependencies]
 starbase_styles = { version = "0.6.10", path = "../styles" }
 crossterm = { workspace = true, optional = true }
+futures-util = { version = "0.3.34", optional = true }
 iocraft = { workspace = true, optional = true, features = ["unstable-output-streams"] }
 miette = { workspace = true, optional = true }
 parking_lot = "0.13.0"
@@ -28,4 +29,4 @@ libc = { workspace = true }
 default = []
 miette = ["dep:miette"]
 serde = ["crossterm/serde", "dep:serde", "dep:serde_json"]
-ui = ["dep:crossterm", "dep:iocraft", "dep:supports-unicode", "dep:tokio"]
+ui = ["dep:crossterm", "dep:futures-util", "dep:iocraft", "dep:supports-unicode", "dep:tokio"]

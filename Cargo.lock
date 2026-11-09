@@ -3261,6 +3261,7 @@ name = "starbase_console"
 version = "0.7.0"
 dependencies = [
  "crossterm",
+ "futures-util",
  "iocraft",
  "libc",
  "miette",

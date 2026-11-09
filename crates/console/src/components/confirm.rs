@@ -30,6 +30,15 @@ impl Default for ConfirmProps<'_> {
     }
 }
 
+// Focus is otherwise shown only by the button's background color
+fn button_label(label: &str, focused: bool, supports_color: bool) -> String {
+    match (supports_color, focused) {
+        (true, _) => label.to_owned(),
+        (false, true) => format!("[{label}]"),
+        (false, false) => format!(" {label} "),
+    }
+}
+
 #[component]
 pub fn Confirm<'a>(
     props: &mut ConfirmProps<'a>,
@@ -137,7 +146,7 @@ pub fn Confirm<'a>(
                             theme.border_color
                         },
                     ) {
-                        Text(content: &props.yes_label)
+                        Text(content: button_label(&props.yes_label, focused == 0, theme.supports_color))
                     }
                 }
 
@@ -156,11 +165,35 @@ pub fn Confirm<'a>(
                             theme.border_color
                         },
                     ) {
-                        Text(content: &props.no_label)
+                        Text(content: button_label(&props.no_label, focused == 1, theme.supports_color))
                     }
                 }
             }
         }
     }
     .into_any()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn marks_focused_button_without_color() {
+        let theme = ConsoleTheme {
+            supports_color: false,
+            ..Default::default()
+        };
+
+        let output = element! {
+            ContextProvider(value: Context::owned(theme)) {
+                Confirm(label: "Continue?", yes_label: "Yes", no_label: "No")
+            }
+        }
+        .to_string();
+
+        assert!(output.contains("[Yes]"));
+        assert!(output.contains(" No "));
+        assert!(!output.contains("[No]"));
+    }
 }
