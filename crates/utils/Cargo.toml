@@ -44,7 +44,7 @@ json-strip-comments = { version = "3.1.2", optional = true }
 serde_json = { workspace = true, optional = true }
 
 # toml
-toml = { version = "1.1.8", optional = true }
+toml = { version = "1.2.1", optional = true }
 
 # yaml
 serde_norway = { workspace = true, optional = true }
@@ -76,7 +76,7 @@ windows-sys = { workspace = true, optional = true, features = [
 ] }
 
 [dev-dependencies]
-criterion2 = { version = "3.0.4", default-features = false }
+criterion2 = { version = "3.0.5", default-features = false }
 rayon = "1.12.0"
 reqwest = { workspace = true, features = ["rustls"] }
 starbase_sandbox = { path = "../sandbox" }

@@ -67,6 +67,10 @@ fn run_script(sandbox: &Sandbox, bin: &str, args: &[&str]) -> Option<Output> {
     match Command::new(bin)
         .args(args)
         .current_dir(sandbox.path())
+        // xonsh 0.14.4 (Ubuntu's apt package) returns an empty `$()` capture if
+        // its reader thread hasn't queued the output this many seconds after
+        // the command exits. The 100µs default randomly no-ops a hook on CI.
+        .env("XONSH_PROC_FREQUENCY", "0.25")
         .output()
     {
         Ok(output) => {
@@ -647,11 +651,6 @@ print("unhooked foo=" + ${{...}}.get('E2E_FOO', 'unset'))
         format!(
             "{hook}\n{hook}\n{}\n{hook}\n{}",
             r#"
-# apt's xonsh (0.14.4 on Ubuntu 24.04) has a race where an early `$()`
-# capture can return empty on Linux, which no-ops the first activation.
-# Fixed in later versions; warm the machinery up before asserting.
-_ = $(echo warm)
-
 def _counts():
     return "%d,%d" % (
         sum(1 for h in events.on_chdir if getattr(h, '__name__', '') == '_starbase_activate'),
@@ -702,8 +701,7 @@ fn xonsh_hook_functions_are_callable_after_execx() {
     sandbox.create_file(
         "test.xsh",
         format!(
-            r#"_ = $(echo warm)
-execx($(cat {}/hook.xsh))
+            r#"execx($(cat {}/hook.xsh))
 print("callable=" + str('_starbase_activate' in globals() and '_starbase_deactivate' in globals()))
 _starbase_activate()
 print("foo=" + ${{...}}.get('E2E_FOO', 'unset'))

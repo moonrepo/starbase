@@ -5,16 +5,18 @@ edition = "2024"
 license = "MIT"
 description = "Console reporting layer."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.85.0"
+rust-version = "1.95.0"
 
 [dependencies]
 starbase_styles = { version = "0.6.10", path = "../styles" }
 crossterm = { workspace = true, optional = true }
-iocraft = { workspace = true, optional = true }
+futures-util = { version = "0.3.34", optional = true }
+iocraft = { workspace = true, optional = true, features = ["unstable-output-streams"] }
 miette = { workspace = true, optional = true }
-parking_lot = "0.12.5"
+parking_lot = "0.13.0"
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+supports-unicode = { version = "3.0.0", optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true, features = ["sync", "time"] }
 tracing = { workspace = true }
@@ -27,4 +29,4 @@ libc = { workspace = true }
 default = []
 miette = ["dep:miette"]
 serde = ["crossterm/serde", "dep:serde", "dep:serde_json"]
-ui = ["dep:crossterm", "dep:iocraft", "dep:tokio"]
+ui = ["dep:crossterm", "dep:futures-util", "dep:iocraft", "dep:supports-unicode", "dep:tokio"]

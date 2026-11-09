@@ -40,7 +40,7 @@ pub fn Notice<'a>(
             flex_direction: FlexDirection::Column,
             border_color: color,
             border_edges: Edges::Left,
-            border_style: BorderStyle::Round,
+            border_style: theme.border_style(),
             margin_top: 1,
             margin_bottom: 1,
             padding_left: 1,

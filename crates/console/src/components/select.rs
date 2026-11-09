@@ -1,5 +1,6 @@
 use super::input_field::*;
 use super::layout::Group;
+use crate::theme::pick_symbol;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 use std::collections::HashSet;
@@ -247,9 +248,9 @@ pub fn Select<'a>(
             footer: props.legend.then(|| {
                 element! {
                     InputLegend(legend: vec![
-                        ("⎵".into(), "select".into()),
-                        ("↕".into(), "cycle".into()),
-                        ("↵".into(), "submit".into()),
+                        (pick_symbol("⎵", "space").into(), "select".into()),
+                        (pick_symbol("↕", "up/down").into(), "cycle".into()),
+                        (pick_symbol("↵", "enter").into(), "submit".into()),
                     ])
                 }.into_any()
             })
@@ -270,6 +271,9 @@ pub fn Select<'a>(
                     let index = start_index + iter_index;
                     let active = active_index.get() == index;
                     let selected = selected_index.read().contains(&index);
+                    let selected_symbol = props.selected_symbol.as_deref()
+                        .unwrap_or(&theme.input_selected_symbol);
+                    let label = opt.label.as_ref().unwrap_or(&opt.value);
 
                     element! {
                         Group(key: opt.value.clone(), gap: 1) {
@@ -281,11 +285,10 @@ pub fn Select<'a>(
                                         color: theme.input_prefix_color,
                                     )
                                 }
-                            } else if selected {
+                            } else if selected && theme.supports_color {
                                 element! {
                                     Text(
-                                        content: props.selected_symbol.as_ref()
-                                            .unwrap_or(&theme.input_selected_symbol),
+                                        content: selected_symbol,
                                         color: theme.input_selected_color
                                     )
                                 }
@@ -295,8 +298,19 @@ pub fn Select<'a>(
                                 }
                             })
 
+                            // Without color, the active row can't also show it's selected
+                            #((!theme.supports_color).then(|| {
+                                element! {
+                                    Text(content: if selected { selected_symbol } else { " " })
+                                }
+                            }))
+
                             Text(
-                                content: opt.label.as_ref().unwrap_or(&opt.value),
+                                content: if opt.disabled && !theme.supports_color {
+                                    format!("{label} (disabled)")
+                                } else {
+                                    label.clone()
+                                },
                                 color: if !theme.supports_color {
                                     None
                                 } else if opt.disabled {
@@ -355,4 +369,36 @@ fn calculate_indexes(active_index: usize, max_index: usize, limit: usize) -> (us
     };
 
     (start_index, end_index)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shows_states_without_color() {
+        let theme = ConsoleTheme {
+            supports_color: false,
+            ..Default::default()
+        };
+
+        let active_and_selected = format!(
+            "{} {} a",
+            theme.input_prefix_symbol, theme.input_selected_symbol
+        );
+
+        let output = element! {
+            ContextProvider(value: Context::owned(theme)) {
+                Select(
+                    label: "Pick one",
+                    default_index: 0usize,
+                    options: vec![SelectOption::new("a"), SelectOption::new("b").disabled()],
+                )
+            }
+        }
+        .to_string();
+
+        assert!(output.contains(&active_and_selected));
+        assert!(output.contains("b (disabled)"));
+    }
 }

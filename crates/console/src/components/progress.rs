@@ -4,9 +4,13 @@ use crate::ui::ConsoleTheme;
 use crate::utils::estimator::Estimator;
 use crate::utils::formats::*;
 use iocraft::prelude::*;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::time::sleep;
+
+const REPORTER_CAPACITY: usize = 1000;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -40,13 +44,20 @@ pub enum ProgressState {
 #[derive(Clone)]
 pub struct ProgressReporter {
     tx: Sender<ProgressState>,
+
+    // States set before the first subscriber, which can happen
+    // while waiting for the components to start rendering!
+    early: Arc<Mutex<Option<VecDeque<ProgressState>>>>,
 }
 
 impl Default for ProgressReporter {
     fn default() -> Self {
-        let (tx, _rx) = broadcast::channel::<ProgressState>(1000);
+        let (tx, _rx) = broadcast::channel::<ProgressState>(REPORTER_CAPACITY);
 
-        Self { tx }
+        Self {
+            tx,
+            early: Arc::new(Mutex::new(Some(VecDeque::new()))),
+        }
     }
 }
 
@@ -58,7 +69,14 @@ impl From<ProgressReporter> for Option<OwnedOrShared<ProgressReporter>> {
 
 impl ProgressReporter {
     pub fn subscribe(&self) -> Receiver<ProgressState> {
-        self.tx.subscribe()
+        let mut early = self.early.lock().unwrap_or_else(PoisonError::into_inner);
+        let receiver = self.tx.subscribe();
+
+        for state in early.take().into_iter().flatten() {
+            let _ = self.tx.send(state);
+        }
+
+        receiver
     }
 
     pub fn exit(&self) -> &Self {
@@ -70,9 +88,17 @@ impl ProgressReporter {
     }
 
     pub fn set(&self, state: ProgressState) -> &Self {
-        // Will panic if there are no receivers, which can happen
-        // while waiting for the components to start rendering!
-        let _ = self.tx.send(state);
+        let mut early = self.early.lock().unwrap_or_else(PoisonError::into_inner);
+
+        if let Some(queue) = early.as_mut() {
+            if queue.len() == REPORTER_CAPACITY {
+                queue.pop_front();
+            }
+
+            queue.push_back(state);
+        } else {
+            let _ = self.tx.send(state);
+        }
 
         self
     }
@@ -260,29 +286,29 @@ pub fn Progress<'a>(
             let bar_filled_width = (bar_total_width as f64 * (bar_percent / 100.0)) as u64;
             let mut bar_unfilled_width = bar_total_width - bar_filled_width;
 
+            let show_position = bar_percent > 0.0 && bar_percent < 100.0 && bar_unfilled_width > 0;
+
             // When theres a position to show, we need to reduce the unfilled bar by 1
-            if bar_percent > 0.0 && bar_percent < 100.0 {
+            if show_position {
                 bar_unfilled_width -= 1;
             }
 
             element! {
                 View {
-                    View(width: Size::Length(props.bar_width), margin_right: 1) {
+                    View(width: Size::Length(props.bar_width + 1), flex_shrink: 0.0, padding_right: 1) {
                         Text(
                             content: String::from(char_filled).repeat(bar_filled_width as usize),
                             color: bar_color,
                         )
 
-                        #(if bar_percent == 0.0 || bar_percent == 100.0 {
-                            None
-                        } else {
-                            Some(element! {
+                        #(show_position.then(|| {
+                            element! {
                                 Text(
                                     content: String::from(char_position),
                                     color: bar_color,
                                 )
-                            })
-                        })
+                            }
+                        }))
 
                         Text(
                             content: String::from(char_unfilled).repeat(bar_unfilled_width as usize),
@@ -330,7 +356,11 @@ pub fn Progress<'a>(
 }
 
 fn calculate_percent(value: u64, max: u64) -> f64 {
-    (max as f64 * (value as f64 / 100.0)).clamp(0.0, 100.0)
+    if max == 0 {
+        return 0.0;
+    }
+
+    (value as f64 / max as f64 * 100.0).clamp(0.0, 100.0)
 }
 
 struct MessageData<'a> {
@@ -431,4 +461,102 @@ fn get_message(data: MessageData) -> String {
     }
 
     message
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calculates_percent_relative_to_max() {
+        assert_eq!(calculate_percent(50, 100), 50.0);
+        assert_eq!(calculate_percent(50, 200), 25.0);
+        assert_eq!(calculate_percent(10, 1000), 1.0);
+        assert_eq!(calculate_percent(500, 100), 100.0);
+        assert_eq!(calculate_percent(5, 0), 0.0);
+    }
+
+    #[test]
+    fn replays_states_set_before_subscribing() {
+        let reporter = ProgressReporter::default();
+        reporter.set_value(1);
+        reporter.exit();
+
+        let mut receiver = reporter.subscribe();
+
+        assert!(matches!(receiver.try_recv(), Ok(ProgressState::Value(1))));
+        assert!(matches!(receiver.try_recv(), Ok(ProgressState::Exit)));
+    }
+
+    #[test]
+    fn keeps_newest_states_when_early_queue_is_full() {
+        let reporter = ProgressReporter::default();
+
+        for value in 0..=REPORTER_CAPACITY as u64 {
+            reporter.set_value(value);
+        }
+
+        let mut receiver = reporter.subscribe();
+
+        assert!(matches!(receiver.try_recv(), Ok(ProgressState::Value(1))));
+    }
+
+    #[test]
+    fn bar_keeps_its_width_when_message_wraps() {
+        let output = element! {
+            ContextProvider(value: Context::owned(ConsoleTheme::default())) {
+                Progress(
+                    bar_width: 30u32,
+                    bar_filled_char: '#',
+                    bar_position_char: '>',
+                    bar_unfilled_char: '-',
+                    default_max: 100u64,
+                    default_value: 50u64,
+                    default_message: "a fairly long message that has to wrap",
+                )
+            }
+        }
+        .render(Some(40))
+        .to_string();
+        let lines = output.lines().collect::<Vec<_>>();
+
+        assert!(lines[0].starts_with(&format!("{}>{}", "#".repeat(15), "-".repeat(14))));
+        assert!(!lines[1].contains('#'));
+    }
+
+    #[test]
+    fn short_message_stays_on_the_bar_line() {
+        let output = element! {
+            ContextProvider(value: Context::owned(ConsoleTheme::default())) {
+                Progress(
+                    bar_width: 30u32,
+                    default_max: 100u64,
+                    default_value: 50u64,
+                    default_message: "{percent}%",
+                )
+            }
+        }
+        .render(Some(70))
+        .to_string();
+
+        assert_eq!(output.trim_end().lines().count(), 1);
+        assert!(output.contains("50%"));
+    }
+
+    #[test]
+    fn zero_width_bar_does_not_underflow() {
+        let output = element! {
+            ContextProvider(value: Context::owned(ConsoleTheme::default())) {
+                Progress(
+                    bar_width: 0u32,
+                    default_max: 100u64,
+                    default_value: 50u64,
+                    default_message: "{percent}%",
+                )
+            }
+        }
+        .to_string();
+
+        assert!(output.contains("50%"));
+    }
 }

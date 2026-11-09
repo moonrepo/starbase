@@ -20,8 +20,8 @@ pub enum ConsoleStreamType {
 pub struct ConsoleStream {
     buffer: Arc<Mutex<Vec<u8>>>,
     channel: Option<mpsc::Sender<bool>>,
-    stream: ConsoleStreamType,
 
+    pub(crate) stream: ConsoleStreamType,
     pub(crate) closed: Arc<AtomicBool>,
     pub(crate) handle: Option<JoinHandle<()>>,
     pub(crate) quiet: Option<Arc<AtomicBool>>,

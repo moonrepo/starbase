@@ -3,6 +3,22 @@ use iocraft::prelude::*;
 use starbase_styles::Style;
 use std::env;
 
+/// Terminal width for one-shot renders, where iocraft has no terminal
+/// to report a size from.
+pub(crate) struct RenderWidth(pub u16);
+
+pub(crate) fn use_render_width(hooks: &mut Hooks) -> u16 {
+    let (width, _) = hooks.use_terminal_size();
+
+    if width > 0 {
+        width
+    } else {
+        hooks
+            .try_use_context::<RenderWidth>()
+            .map_or(0, |render_width| render_width.0)
+    }
+}
+
 #[derive(Default, Props)]
 pub struct ContainerProps<'a> {
     pub children: Vec<AnyElement<'a>>,
@@ -13,11 +29,14 @@ pub fn Container<'a>(
     props: &mut ContainerProps<'a>,
     mut hooks: Hooks,
 ) -> impl Into<AnyElement<'a>> + use<'a> {
-    let (mut width, _) = hooks.use_terminal_size();
+    let mut width = use_render_width(&mut hooks);
 
     // Non-TTY's like CI environments
     if width == 0 || env::var("STARBASE_TEST").is_ok() {
-        width = env::var("COLUMNS").unwrap_or("60".into()).parse().unwrap();
+        width = env::var("COLUMNS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(60);
     }
 
     element! {

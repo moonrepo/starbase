@@ -1,4 +1,5 @@
 use super::input_field::*;
+use crate::theme::pick_symbol;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
@@ -26,6 +27,15 @@ impl Default for ConfirmProps<'_> {
             yes_char: 'y',
             on_confirm: None,
         }
+    }
+}
+
+// Focus is otherwise shown only by the button's background color
+fn button_label(label: &str, focused: bool, supports_color: bool) -> String {
+    match (supports_color, focused) {
+        (true, _) => label.to_owned(),
+        (false, true) => format!("[{label}]"),
+        (false, false) => format!(" {label} "),
     }
 }
 
@@ -114,8 +124,8 @@ pub fn Confirm<'a>(
                 element! {
                     InputLegend(legend: vec![
                         (format!("{yes}/{no}"), "confirm".into()),
-                        ("↔".into(), "toggle".into()),
-                        ("↵".into(), "submit".into()),
+                        (pick_symbol("↔", "left/right").into(), "toggle".into()),
+                        (pick_symbol("↵", "enter").into(), "submit".into()),
                     ])
                 }.into_any()
             })
@@ -136,7 +146,7 @@ pub fn Confirm<'a>(
                             theme.border_color
                         },
                     ) {
-                        Text(content: &props.yes_label)
+                        Text(content: button_label(&props.yes_label, focused == 0, theme.supports_color))
                     }
                 }
 
@@ -155,11 +165,35 @@ pub fn Confirm<'a>(
                             theme.border_color
                         },
                     ) {
-                        Text(content: &props.no_label)
+                        Text(content: button_label(&props.no_label, focused == 1, theme.supports_color))
                     }
                 }
             }
         }
     }
     .into_any()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn marks_focused_button_without_color() {
+        let theme = ConsoleTheme {
+            supports_color: false,
+            ..Default::default()
+        };
+
+        let output = element! {
+            ContextProvider(value: Context::owned(theme)) {
+                Confirm(label: "Continue?", yes_label: "Yes", no_label: "No")
+            }
+        }
+        .to_string();
+
+        assert!(output.contains("[Yes]"));
+        assert!(output.contains(" No "));
+        assert!(!output.contains("[No]"));
+    }
 }

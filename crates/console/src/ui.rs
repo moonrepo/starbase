@@ -2,8 +2,9 @@ use crate::console::Console;
 use crate::console_error::ConsoleError;
 use crate::reporter::Reporter;
 use crate::stream::{ConsoleStream, ConsoleStreamType};
+use futures_util::stream::{self, BoxStream, StreamExt};
 use iocraft::prelude::*;
-use std::env;
+use std::{env, io};
 
 pub use crate::components::*;
 pub use crate::theme::*;
@@ -14,6 +15,32 @@ fn is_forced_tty() -> bool {
 
 fn is_ignoring_ctrl_c() -> bool {
     env::var("STARBASE_IGNORE_CTRL_C").is_ok_and(|value| !value.is_empty())
+}
+
+fn is_dumb_terminal() -> bool {
+    env::var("TERM").is_ok_and(|value| value == "dumb")
+}
+
+/// Runs a render loop without touching the terminal, so that components
+/// still run to completion on streams that can't display them.
+struct HeadlessBackend;
+
+impl TerminalBackend for HeadlessBackend {
+    fn clear_canvas(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn write_canvas(&mut self, _prev: Option<&Canvas>, _canvas: &Canvas) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn print_above(&mut self, _messages: &[Passthrough<'_>]) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn event_stream(&mut self) -> io::Result<BoxStream<'static, io::Result<TerminalEvent>>> {
+        Ok(stream::pending().boxed())
+    }
 }
 
 pub struct RenderOptions {
@@ -48,25 +75,33 @@ impl RenderOptions {
 }
 
 impl ConsoleStream {
+    fn is_ansi_terminal(&self) -> bool {
+        is_forced_tty() || (self.is_terminal() && !is_dumb_terminal())
+    }
+
     pub fn render<T: Component>(
         &self,
         element: Element<'_, T>,
         mut theme: ConsoleTheme,
     ) -> Result<(), ConsoleError> {
-        let is_tty = is_forced_tty() || self.is_terminal();
+        let is_tty = self.is_ansi_terminal();
 
         theme.supports_color = env::var("NO_COLOR").is_err() && is_tty;
 
-        let canvas = element! {
-            ContextProvider(value: Context::owned(theme)) {
-                #(element)
-            }
-        }
-        .render(if is_tty {
-            crossterm::terminal::size().ok().map(|size| size.0 as usize)
+        let width = if is_tty {
+            crossterm::terminal::size().ok().map(|size| size.0)
         } else {
             None
-        });
+        };
+
+        let canvas = element! {
+            ContextProvider(value: Context::owned(RenderWidth(width.unwrap_or(0)))) {
+                ContextProvider(value: Context::owned(theme)) {
+                    #(element)
+                }
+            }
+        }
+        .render(width.map(usize::from));
 
         let buffer = self.buffer();
 
@@ -95,7 +130,7 @@ impl ConsoleStream {
         theme: ConsoleTheme,
         options: RenderOptions,
     ) -> Result<(), ConsoleError> {
-        let is_tty = is_forced_tty() || self.is_terminal();
+        let is_tty = self.is_ansi_terminal();
 
         // If not a TTY, exit immediately
         if !is_tty {
@@ -111,7 +146,7 @@ impl ConsoleStream {
         mut theme: ConsoleTheme,
         options: RenderOptions,
     ) -> Result<(), ConsoleError> {
-        let is_tty = is_forced_tty() || self.is_terminal();
+        let is_tty = self.is_ansi_terminal();
 
         theme.supports_color = env::var("NO_COLOR").is_err() && is_tty;
 
@@ -133,7 +168,14 @@ impl ConsoleStream {
             .into_any();
         }
 
-        let mut renderer = element.render_loop();
+        let mut renderer = element.render_loop().output(match self.stream {
+            ConsoleStreamType::Stderr => Output::Stderr,
+            ConsoleStreamType::Stdout => Output::Stdout,
+        });
+
+        if !is_tty {
+            renderer = renderer.backend(HeadlessBackend);
+        }
 
         if options.fullscreen {
             renderer = renderer.fullscreen();

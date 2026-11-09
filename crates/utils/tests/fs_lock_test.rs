@@ -105,6 +105,34 @@ mod fs_lock {
     mod with_file {
         use super::*;
         use std::fs as std_fs;
+        use std::io::ErrorKind;
+        use std::path::Path;
+
+        // Windows denies opening a lock file whose removal is still pending.
+        // `FileLock::new` retries this itself, but a caller that opens its own
+        // handle has to as well.
+        fn open_lock_file(path: &Path) -> std_fs::File {
+            let start = Instant::now();
+
+            loop {
+                match std_fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .truncate(false)
+                    .open(path)
+                {
+                    Ok(file) => return file,
+                    Err(error)
+                        if error.kind() == ErrorKind::PermissionDenied
+                            && start.elapsed() < Duration::from_secs(60) =>
+                    {
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    Err(error) => panic!("Failed to open {}: {error}", path.display()),
+                }
+            }
+        }
 
         // Same churn shape as `lock_directory`, but entering through
         // `FileLock::with_file` with caller-opened handles, to exercise its
@@ -127,13 +155,7 @@ mod fs_lock {
 
                 handles.push(thread::spawn(move || {
                     for _ in 0..iterations {
-                        let file = std_fs::OpenOptions::new()
-                            .read(true)
-                            .write(true)
-                            .create(true)
-                            .truncate(false)
-                            .open(&lock_path)
-                            .unwrap();
+                        let file = open_lock_file(&lock_path);
 
                         let mut lock = fs::FileLock::with_file(lock_path.clone(), file).unwrap();
                         lock.remove_on_unlock();

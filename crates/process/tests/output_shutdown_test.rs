@@ -1,9 +1,7 @@
 #![cfg(unix)]
 
 use starbase_process::{ChildExit, ProcessRegistry, SharedChild, SignalType};
-use std::future::{Future, poll_fn};
 use std::process::Stdio;
-use std::task::Poll;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
@@ -56,11 +54,13 @@ async fn assert_capture_stops(registry: Option<&ProcessRegistry>, explicit_signa
     let capture = child.wait_with_output();
     tokio::pin!(capture);
     // Consume the already-written output, then block on the descendant's pipe.
-    poll_fn(|cx| {
-        assert!(capture.as_mut().poll(cx).is_pending());
-        Poll::Ready(())
-    })
-    .await;
+    // One poll isn't enough, as the pipe only reads once the reactor has
+    // reported it readable, and that may not have happened yet.
+    assert!(
+        timeout(Duration::from_millis(50), capture.as_mut())
+            .await
+            .is_err()
+    );
 
     if let Some(registry) = registry {
         registry.terminate_running();

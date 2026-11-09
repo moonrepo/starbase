@@ -1,7 +1,9 @@
-use iocraft::Color;
+use iocraft::prelude::{BorderStyle, Color};
 use starbase_styles::Style;
 use starbase_styles::theme::is_light_theme;
 use std::collections::HashMap;
+use std::env;
+use std::sync::OnceLock;
 
 pub fn style_to_color(style: Style) -> Color {
     Color::AnsiValue(style.ansi_color())
@@ -89,22 +91,25 @@ impl ConsoleTheme {
             border_color: style_to_color(Style::Muted),
             border_focus_color: style_to_color(Style::MutedLight),
             form_label_color: fg,
-            form_failure_symbol: "✘".into(),
-            form_success_symbol: "✔".into(),
+            form_failure_symbol: pick_symbol("✘", "x").into(),
+            form_success_symbol: pick_symbol("✔", "+").into(),
             input_active_color: style_to_color(Style::Path),
             input_prefix_color: fg,
-            input_prefix_symbol: "❯".into(),
+            input_prefix_symbol: pick_symbol("❯", ">").into(),
             input_selected_color: style_to_color(Style::File),
-            input_selected_symbol: "✔".into(),
-            layout_fallback_symbol: "—".into(),
+            input_selected_symbol: pick_symbol("✔", "*").into(),
+            layout_fallback_symbol: pick_symbol("—", "-").into(),
             layout_list_bullet: "-".into(),
             layout_map_separator: "=".into(),
             progress_bar_color: fg,
-            progress_bar_filled_char: '█',
-            progress_bar_position_char: '▒',
-            progress_bar_unfilled_char: '░',
+            progress_bar_filled_char: pick_symbol('█', '#'),
+            progress_bar_position_char: pick_symbol('▒', '>'),
+            progress_bar_unfilled_char: pick_symbol('░', '-'),
             progress_loader_color: fg,
-            progress_loader_frames: DEFAULT_FRAMES.iter().map(|f| f.to_string()).collect(),
+            progress_loader_frames: pick_symbol(DEFAULT_FRAMES, ASCII_FRAMES)
+                .iter()
+                .map(|f| f.to_string())
+                .collect(),
             style_caution_color: style_to_color(Style::Caution),
             style_failure_color: style_to_color(Style::Failure),
             style_info_color: style_to_color(Style::Label),
@@ -139,14 +144,18 @@ impl ConsoleTheme {
 
     pub fn dark() -> Self {
         let mut theme = Self::new(Color::White, Color::Black);
-        theme.bg_alt_color = Color::AnsiValue(234);
+        theme.bg_alt_color = alt_background(false, 234);
         theme
     }
 
     pub fn light() -> Self {
         let mut theme = Self::new(Color::Black, Color::White);
-        theme.bg_alt_color = Color::AnsiValue(254);
+        theme.bg_alt_color = alt_background(true, 254);
         theme
+    }
+
+    pub fn border_style(&self) -> BorderStyle {
+        pick_symbol(BorderStyle::Round, BorderStyle::Classic)
     }
 
     pub fn style_to_color(&self, style: &Style) -> Option<Color> {
@@ -216,4 +225,50 @@ pub enum Variant {
     Success,
 }
 
+pub(crate) fn pick_symbol<T>(symbol: T, fallback: T) -> T {
+    static SUPPORTS_UNICODE: OnceLock<bool> = OnceLock::new();
+
+    if *SUPPORTS_UNICODE.get_or_init(supports_unicode::supports_unicode) {
+        symbol
+    } else {
+        fallback
+    }
+}
+
 const DEFAULT_FRAMES: &[&str] = &["▏", "▎", "▍", "▌", "▋", "▊", "▉", "▊", "▋", "▌", "▍", "▎"];
+const ASCII_FRAMES: &[&str] = &["|", "/", "-", "\\"];
+
+// Text on this background keeps the terminal's default foreground, so
+// skip it when the terminal reports the opposite brightness to the theme.
+fn alt_background(light_theme: bool, ansi_value: u8) -> Color {
+    let conflicts = env::var("COLORFGBG")
+        .ok()
+        .and_then(|value| is_light_background(&value))
+        .is_some_and(|light| light != light_theme);
+
+    if conflicts {
+        Color::Reset
+    } else {
+        Color::AnsiValue(ansi_value)
+    }
+}
+
+fn is_light_background(color_fg_bg: &str) -> Option<bool> {
+    let background: u8 = color_fg_bg.rsplit(';').next()?.parse().ok()?;
+
+    Some(!matches!(background, 0..=6 | 8))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_background_from_colorfgbg() {
+        assert_eq!(is_light_background("15;0"), Some(false));
+        assert_eq!(is_light_background("0;15"), Some(true));
+        assert_eq!(is_light_background("0;default;15"), Some(true));
+        assert_eq!(is_light_background("15;default"), None);
+        assert_eq!(is_light_background(""), None);
+    }
+}

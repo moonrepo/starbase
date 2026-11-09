@@ -25,7 +25,7 @@ pub fn Section<'a>(
                 flex_direction: FlexDirection::Row,
                 border_color: theme.border_color,
                 border_edges: Edges::Top,
-                border_style: BorderStyle::Round,
+                border_style: theme.border_style(),
                 width: Size::Percent(40.0)
             ) {
                 View(margin_top: -1) {

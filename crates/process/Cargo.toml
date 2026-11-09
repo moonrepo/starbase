@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT"
 description = "Process utilities."
 repository = "https://github.com/moonrepo/starbase"
-rust-version = "1.89.0"
+rust-version = "1.95.0"
 
 [dependencies]
 starbase_console = { version = "0.7.0", path = "../console" }
