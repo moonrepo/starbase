@@ -1,5 +1,6 @@
 use super::input_field::*;
 use super::layout::Group;
+use crate::theme::pick_symbol;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 use std::collections::HashSet;
@@ -247,9 +248,9 @@ pub fn Select<'a>(
             footer: props.legend.then(|| {
                 element! {
                     InputLegend(legend: vec![
-                        ("⎵".into(), "select".into()),
-                        ("↕".into(), "cycle".into()),
-                        ("↵".into(), "submit".into()),
+                        (pick_symbol(theme.supports_unicode, "⎵", "space").into(), "select".into()),
+                        (pick_symbol(theme.supports_unicode, "↕", "up/down").into(), "cycle".into()),
+                        (pick_symbol(theme.supports_unicode, "↵", "enter").into(), "submit".into()),
                     ])
                 }.into_any()
             })

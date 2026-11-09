@@ -1,5 +1,6 @@
 use super::layout::Group;
 use super::styled_text::*;
+use crate::theme::pick_symbol;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
@@ -29,7 +30,7 @@ pub fn InputField<'a>(
                 theme.border_color
             },
             border_edges: Edges::Left,
-            border_style: BorderStyle::Round,
+            border_style: theme.border_style(),
             padding_left: 1,
             margin_top: 1,
             margin_bottom: 1,
@@ -129,14 +130,19 @@ pub struct InputLegendProps {
 }
 
 #[component]
-pub fn InputLegend<'a>(props: &InputLegendProps) -> impl Into<AnyElement<'a>> + use<'a> {
+pub fn InputLegend<'a>(
+    props: &InputLegendProps,
+    hooks: Hooks,
+) -> impl Into<AnyElement<'a>> + use<'a> {
+    let theme = hooks.use_context::<ConsoleTheme>();
+
     element! {
         StyledText(
             content: props.legend
                 .iter()
                 .map(|(key, label)| format!("<mutedlight>{key}</mutedlight> {label}"))
                 .collect::<Vec<_>>()
-                .join(" ⁃ "),
+                .join(pick_symbol(theme.supports_unicode, " ⁃ ", " - ")),
             style: Style::Muted
         )
     }

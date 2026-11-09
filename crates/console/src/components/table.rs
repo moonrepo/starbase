@@ -80,14 +80,14 @@ pub fn Table<'a>(
         ContextProvider(value: Context::owned(context)) {
             View(
                 border_color: theme.border_color,
-                border_style: BorderStyle::Round,
+                border_style: theme.border_style(),
                 flex_direction: FlexDirection::Column,
                 width: Size::Auto,
             ) {
                 View(
                     border_edges: Edges::Bottom,
                     border_color: theme.border_color,
-                    border_style: BorderStyle::Round,
+                    border_style: theme.border_style(),
                     gap: 2
                 ) {
                     #(props.headers.iter().enumerate().map(|(index, header)| {

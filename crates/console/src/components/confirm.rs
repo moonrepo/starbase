@@ -1,4 +1,5 @@
 use super::input_field::*;
+use crate::theme::pick_symbol;
 use crate::ui::ConsoleTheme;
 use iocraft::prelude::*;
 
@@ -114,8 +115,8 @@ pub fn Confirm<'a>(
                 element! {
                     InputLegend(legend: vec![
                         (format!("{yes}/{no}"), "confirm".into()),
-                        ("↔".into(), "toggle".into()),
-                        ("↵".into(), "submit".into()),
+                        (pick_symbol(theme.supports_unicode, "↔", "left/right").into(), "toggle".into()),
+                        (pick_symbol(theme.supports_unicode, "↵", "enter").into(), "submit".into()),
                     ])
                 }.into_any()
             })

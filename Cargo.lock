@@ -3189,6 +3189,7 @@ dependencies = [
  "serde_json",
  "starbase_console",
  "starbase_styles",
+ "supports-unicode",
  "thiserror",
  "tokio",
  "tracing",

@@ -1,4 +1,4 @@
-use iocraft::Color;
+use iocraft::prelude::{BorderStyle, Color};
 use starbase_styles::Style;
 use starbase_styles::theme::is_light_theme;
 use std::collections::HashMap;
@@ -68,6 +68,7 @@ pub struct ConsoleTheme {
 
     // Misc
     pub supports_color: bool,
+    pub supports_unicode: bool,
     pub custom_tags: HashMap<String, Color>,
 }
 
@@ -83,28 +84,33 @@ impl Default for ConsoleTheme {
 
 impl ConsoleTheme {
     pub fn new(fg: Color, bg: Color) -> Self {
+        let unicode = supports_unicode::supports_unicode();
+
         Self {
             brand_color: fg,
             bg_alt_color: bg,
             border_color: style_to_color(Style::Muted),
             border_focus_color: style_to_color(Style::MutedLight),
             form_label_color: fg,
-            form_failure_symbol: "✘".into(),
-            form_success_symbol: "✔".into(),
+            form_failure_symbol: pick_symbol(unicode, "✘", "x").into(),
+            form_success_symbol: pick_symbol(unicode, "✔", "+").into(),
             input_active_color: style_to_color(Style::Path),
             input_prefix_color: fg,
-            input_prefix_symbol: "❯".into(),
+            input_prefix_symbol: pick_symbol(unicode, "❯", ">").into(),
             input_selected_color: style_to_color(Style::File),
-            input_selected_symbol: "✔".into(),
-            layout_fallback_symbol: "—".into(),
+            input_selected_symbol: pick_symbol(unicode, "✔", "*").into(),
+            layout_fallback_symbol: pick_symbol(unicode, "—", "-").into(),
             layout_list_bullet: "-".into(),
             layout_map_separator: "=".into(),
             progress_bar_color: fg,
-            progress_bar_filled_char: '█',
-            progress_bar_position_char: '▒',
-            progress_bar_unfilled_char: '░',
+            progress_bar_filled_char: pick_symbol(unicode, '█', '#'),
+            progress_bar_position_char: pick_symbol(unicode, '▒', '>'),
+            progress_bar_unfilled_char: pick_symbol(unicode, '░', '-'),
             progress_loader_color: fg,
-            progress_loader_frames: DEFAULT_FRAMES.iter().map(|f| f.to_string()).collect(),
+            progress_loader_frames: pick_symbol(unicode, DEFAULT_FRAMES, ASCII_FRAMES)
+                .iter()
+                .map(|f| f.to_string())
+                .collect(),
             style_caution_color: style_to_color(Style::Caution),
             style_failure_color: style_to_color(Style::Failure),
             style_info_color: style_to_color(Style::Label),
@@ -123,6 +129,7 @@ impl ConsoleTheme {
             style_symbol_color: style_to_color(Style::Symbol),
             style_url_color: style_to_color(Style::Url),
             supports_color: true,
+            supports_unicode: unicode,
             custom_tags: HashMap::new(),
         }
     }
@@ -147,6 +154,14 @@ impl ConsoleTheme {
         let mut theme = Self::new(Color::Black, Color::White);
         theme.bg_alt_color = Color::AnsiValue(254);
         theme
+    }
+
+    pub fn border_style(&self) -> BorderStyle {
+        pick_symbol(
+            self.supports_unicode,
+            BorderStyle::Round,
+            BorderStyle::Classic,
+        )
     }
 
     pub fn style_to_color(&self, style: &Style) -> Option<Color> {
@@ -216,4 +231,9 @@ pub enum Variant {
     Success,
 }
 
+pub(crate) fn pick_symbol<T>(unicode: bool, symbol: T, fallback: T) -> T {
+    if unicode { symbol } else { fallback }
+}
+
 const DEFAULT_FRAMES: &[&str] = &["▏", "▎", "▍", "▌", "▋", "▊", "▉", "▊", "▋", "▌", "▍", "▎"];
+const ASCII_FRAMES: &[&str] = &["|", "/", "-", "\\"];
