@@ -326,7 +326,7 @@ mod os {
     use tracing::trace;
 
     pub fn detect() -> Option<ShellType> {
-        let mut system = System::new();
+        let mut system = System::new().ok()?;
         let mut pid = get_current_pid().ok();
         let mut depth = 0;
 
