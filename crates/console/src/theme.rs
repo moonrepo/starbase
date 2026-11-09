@@ -3,6 +3,7 @@ use starbase_styles::Style;
 use starbase_styles::theme::is_light_theme;
 use std::collections::HashMap;
 use std::env;
+use std::sync::OnceLock;
 
 pub fn style_to_color(style: Style) -> Color {
     Color::AnsiValue(style.ansi_color())
@@ -69,7 +70,6 @@ pub struct ConsoleTheme {
 
     // Misc
     pub supports_color: bool,
-    pub supports_unicode: bool,
     pub custom_tags: HashMap<String, Color>,
 }
 
@@ -85,30 +85,28 @@ impl Default for ConsoleTheme {
 
 impl ConsoleTheme {
     pub fn new(fg: Color, bg: Color) -> Self {
-        let unicode = supports_unicode::supports_unicode();
-
         Self {
             brand_color: fg,
             bg_alt_color: bg,
             border_color: style_to_color(Style::Muted),
             border_focus_color: style_to_color(Style::MutedLight),
             form_label_color: fg,
-            form_failure_symbol: pick_symbol(unicode, "✘", "x").into(),
-            form_success_symbol: pick_symbol(unicode, "✔", "+").into(),
+            form_failure_symbol: pick_symbol("✘", "x").into(),
+            form_success_symbol: pick_symbol("✔", "+").into(),
             input_active_color: style_to_color(Style::Path),
             input_prefix_color: fg,
-            input_prefix_symbol: pick_symbol(unicode, "❯", ">").into(),
+            input_prefix_symbol: pick_symbol("❯", ">").into(),
             input_selected_color: style_to_color(Style::File),
-            input_selected_symbol: pick_symbol(unicode, "✔", "*").into(),
-            layout_fallback_symbol: pick_symbol(unicode, "—", "-").into(),
+            input_selected_symbol: pick_symbol("✔", "*").into(),
+            layout_fallback_symbol: pick_symbol("—", "-").into(),
             layout_list_bullet: "-".into(),
             layout_map_separator: "=".into(),
             progress_bar_color: fg,
-            progress_bar_filled_char: pick_symbol(unicode, '█', '#'),
-            progress_bar_position_char: pick_symbol(unicode, '▒', '>'),
-            progress_bar_unfilled_char: pick_symbol(unicode, '░', '-'),
+            progress_bar_filled_char: pick_symbol('█', '#'),
+            progress_bar_position_char: pick_symbol('▒', '>'),
+            progress_bar_unfilled_char: pick_symbol('░', '-'),
             progress_loader_color: fg,
-            progress_loader_frames: pick_symbol(unicode, DEFAULT_FRAMES, ASCII_FRAMES)
+            progress_loader_frames: pick_symbol(DEFAULT_FRAMES, ASCII_FRAMES)
                 .iter()
                 .map(|f| f.to_string())
                 .collect(),
@@ -130,7 +128,6 @@ impl ConsoleTheme {
             style_symbol_color: style_to_color(Style::Symbol),
             style_url_color: style_to_color(Style::Url),
             supports_color: true,
-            supports_unicode: unicode,
             custom_tags: HashMap::new(),
         }
     }
@@ -158,11 +155,7 @@ impl ConsoleTheme {
     }
 
     pub fn border_style(&self) -> BorderStyle {
-        pick_symbol(
-            self.supports_unicode,
-            BorderStyle::Round,
-            BorderStyle::Classic,
-        )
+        pick_symbol(BorderStyle::Round, BorderStyle::Classic)
     }
 
     pub fn style_to_color(&self, style: &Style) -> Option<Color> {
@@ -232,8 +225,14 @@ pub enum Variant {
     Success,
 }
 
-pub(crate) fn pick_symbol<T>(unicode: bool, symbol: T, fallback: T) -> T {
-    if unicode { symbol } else { fallback }
+pub(crate) fn pick_symbol<T>(symbol: T, fallback: T) -> T {
+    static SUPPORTS_UNICODE: OnceLock<bool> = OnceLock::new();
+
+    if *SUPPORTS_UNICODE.get_or_init(supports_unicode::supports_unicode) {
+        symbol
+    } else {
+        fallback
+    }
 }
 
 const DEFAULT_FRAMES: &[&str] = &["▏", "▎", "▍", "▌", "▋", "▊", "▉", "▊", "▋", "▌", "▍", "▎"];

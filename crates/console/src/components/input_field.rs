@@ -130,19 +130,14 @@ pub struct InputLegendProps {
 }
 
 #[component]
-pub fn InputLegend<'a>(
-    props: &InputLegendProps,
-    hooks: Hooks,
-) -> impl Into<AnyElement<'a>> + use<'a> {
-    let theme = hooks.use_context::<ConsoleTheme>();
-
+pub fn InputLegend<'a>(props: &InputLegendProps) -> impl Into<AnyElement<'a>> + use<'a> {
     element! {
         StyledText(
             content: props.legend
                 .iter()
                 .map(|(key, label)| format!("<mutedlight>{key}</mutedlight> {label}"))
                 .collect::<Vec<_>>()
-                .join(pick_symbol(theme.supports_unicode, " ⁃ ", " - ")),
+                .join(pick_symbol(" ⁃ ", " - ")),
             style: Style::Muted
         )
     }

@@ -4,9 +4,8 @@ use crate::ui::ConsoleTheme;
 use crate::utils::estimator::Estimator;
 use crate::utils::formats::*;
 use iocraft::prelude::*;
-use parking_lot::Mutex;
 use std::collections::VecDeque;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::time::sleep;
@@ -70,7 +69,7 @@ impl From<ProgressReporter> for Option<OwnedOrShared<ProgressReporter>> {
 
 impl ProgressReporter {
     pub fn subscribe(&self) -> Receiver<ProgressState> {
-        let mut early = self.early.lock();
+        let mut early = self.early.lock().unwrap_or_else(PoisonError::into_inner);
         let receiver = self.tx.subscribe();
 
         for state in early.take().into_iter().flatten() {
@@ -89,7 +88,7 @@ impl ProgressReporter {
     }
 
     pub fn set(&self, state: ProgressState) -> &Self {
-        let mut early = self.early.lock();
+        let mut early = self.early.lock().unwrap_or_else(PoisonError::into_inner);
 
         if let Some(queue) = early.as_mut() {
             if queue.len() == REPORTER_CAPACITY {

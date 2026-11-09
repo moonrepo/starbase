@@ -248,9 +248,9 @@ pub fn Select<'a>(
             footer: props.legend.then(|| {
                 element! {
                     InputLegend(legend: vec![
-                        (pick_symbol(theme.supports_unicode, "⎵", "space").into(), "select".into()),
-                        (pick_symbol(theme.supports_unicode, "↕", "up/down").into(), "cycle".into()),
-                        (pick_symbol(theme.supports_unicode, "↵", "enter").into(), "submit".into()),
+                        (pick_symbol("⎵", "space").into(), "select".into()),
+                        (pick_symbol("↕", "up/down").into(), "cycle".into()),
+                        (pick_symbol("↵", "enter").into(), "submit".into()),
                     ])
                 }.into_any()
             })

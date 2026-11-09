@@ -124,8 +124,8 @@ pub fn Confirm<'a>(
                 element! {
                     InputLegend(legend: vec![
                         (format!("{yes}/{no}"), "confirm".into()),
-                        (pick_symbol(theme.supports_unicode, "↔", "left/right").into(), "toggle".into()),
-                        (pick_symbol(theme.supports_unicode, "↵", "enter").into(), "submit".into()),
+                        (pick_symbol("↔", "left/right").into(), "toggle".into()),
+                        (pick_symbol("↵", "enter").into(), "submit".into()),
                     ])
                 }.into_any()
             })
