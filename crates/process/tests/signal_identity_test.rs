@@ -52,17 +52,24 @@ async fn signalling_after_capture_preserves_reaped_status() {
 #[cfg(unix)]
 #[tokio::test]
 async fn signalling_after_unreaped_normal_exit_preserves_status() {
-    let child = SharedChild::new(
-        Command::new("sh")
-            .args(["-c", "sleep 0.05; exit 7"])
-            .spawn()
-            .unwrap(),
-    );
+    let child = SharedChild::new(Command::new("sh").args(["-c", "exit 7"]).spawn().unwrap());
 
-    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    wait_for_exit_without_reaping(child.id());
 
     assert!(matches!(
         child.kill_with_signal(SignalType::Terminate).await.unwrap(),
         ChildExit::Completed(status) if status.code() == Some(7)
     ));
+}
+
+#[cfg(unix)]
+fn wait_for_exit_without_reaping(pid: u32) {
+    // SAFETY: `info` is a valid, writable `siginfo_t` for the whole call
+    let result = unsafe {
+        let mut info = std::mem::zeroed::<libc::siginfo_t>();
+
+        libc::waitid(libc::P_PID, pid, &mut info, libc::WEXITED | libc::WNOWAIT)
+    };
+
+    assert_eq!(result, 0, "{}", std::io::Error::last_os_error());
 }

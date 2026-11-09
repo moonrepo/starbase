@@ -619,38 +619,35 @@ mod tests {
                         .join("Microsoft.PowerShell_profile.ps1"),
                 ]
             );
-        } else if cfg!(target_os = "linux") {
-            assert_eq!(
-                PowerShell::new().get_profile_paths(&home_dir),
-                vec![
-                    home_dir
-                        .join("Documents")
-                        .join("WindowsPowerShell")
-                        .join("Profile.ps1"),
-                    home_dir
-                        .join("Documents")
-                        .join("WindowsPowerShell")
-                        .join("Microsoft.PowerShell_profile.ps1"),
-                ]
-            );
         } else {
-            assert_eq!(
-                PowerShell::new().get_profile_paths(&home_dir),
-                vec![
+            let mut expected = vec![
+                home_dir
+                    .join("Documents")
+                    .join("WindowsPowerShell")
+                    .join("Profile.ps1"),
+                home_dir
+                    .join("Documents")
+                    .join("WindowsPowerShell")
+                    .join("Microsoft.PowerShell_profile.ps1"),
+            ];
+
+            // This profile is reported by the binary, which is often missing here
+            let installed = Command::new("powershell")
+                .args(["-NoLogo", "-Command", "exit"])
+                .output()
+                .is_ok_and(|output| output.status.success());
+
+            if installed {
+                expected.insert(
+                    0,
                     home_dir
                         .join(".config")
                         .join("powershell")
                         .join("profile.ps1"),
-                    home_dir
-                        .join("Documents")
-                        .join("WindowsPowerShell")
-                        .join("Profile.ps1"),
-                    home_dir
-                        .join("Documents")
-                        .join("WindowsPowerShell")
-                        .join("Microsoft.PowerShell_profile.ps1"),
-                ]
-            );
+                );
+            }
+
+            assert_eq!(PowerShell::new().get_profile_paths(&home_dir), expected);
         }
     }
 
