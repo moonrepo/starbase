@@ -262,7 +262,7 @@ pub fn Progress<'a>(
 
             // When theres a position to show, we need to reduce the unfilled bar by 1
             if bar_percent > 0.0 && bar_percent < 100.0 {
-                bar_unfilled_width -= 1;
+                bar_unfilled_width = bar_unfilled_width.saturating_sub(1);
             }
 
             element! {
@@ -330,7 +330,11 @@ pub fn Progress<'a>(
 }
 
 fn calculate_percent(value: u64, max: u64) -> f64 {
-    (max as f64 * (value as f64 / 100.0)).clamp(0.0, 100.0)
+    if max == 0 {
+        return 0.0;
+    }
+
+    (value as f64 / max as f64 * 100.0).clamp(0.0, 100.0)
 }
 
 struct MessageData<'a> {
@@ -431,4 +435,35 @@ fn get_message(data: MessageData) -> String {
     }
 
     message
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn calculates_percent_relative_to_max() {
+        assert_eq!(calculate_percent(50, 100), 50.0);
+        assert_eq!(calculate_percent(50, 200), 25.0);
+        assert_eq!(calculate_percent(10, 1000), 1.0);
+        assert_eq!(calculate_percent(500, 100), 100.0);
+        assert_eq!(calculate_percent(5, 0), 0.0);
+    }
+
+    #[test]
+    fn zero_width_bar_does_not_underflow() {
+        let output = element! {
+            ContextProvider(value: Context::owned(ConsoleTheme::default())) {
+                Progress(
+                    bar_width: 0u32,
+                    default_max: 100u64,
+                    default_value: 50u64,
+                    default_message: "{percent}%",
+                )
+            }
+        }
+        .to_string();
+
+        assert!(output.contains("50%"));
+    }
 }

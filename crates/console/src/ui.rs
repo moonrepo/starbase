@@ -133,7 +133,10 @@ impl ConsoleStream {
             .into_any();
         }
 
-        let mut renderer = element.render_loop();
+        let mut renderer = element.render_loop().output(match self.stream {
+            ConsoleStreamType::Stderr => Output::Stderr,
+            ConsoleStreamType::Stdout => Output::Stdout,
+        });
 
         if options.fullscreen {
             renderer = renderer.fullscreen();
