@@ -383,13 +383,11 @@ fn quotable_contains_syntax(data: &Quotable<'_>, syntaxes: &[Syntax]) -> bool {
                         if let Some(o) = bytes
                             .windows(obytes.len())
                             .position(|chunk| chunk == obytes)
-                        {
-                            if bytes[o..]
+                            && bytes[o..]
                                 .windows(cbytes.len())
                                 .any(|chunk| chunk == cbytes)
-                            {
-                                return true;
-                            }
+                        {
+                            return true;
                         }
                     }
                 };
@@ -402,10 +400,10 @@ fn quotable_contains_syntax(data: &Quotable<'_>, syntaxes: &[Syntax]) -> bool {
                         }
                     }
                     Syntax::Pair(open, close) => {
-                        if let Some(o) = text.find(open) {
-                            if text[o..].contains(close) {
-                                return true;
-                            }
+                        if let Some(o) = text.find(open)
+                            && text[o..].contains(close)
+                        {
+                            return true;
                         }
                     }
                 };

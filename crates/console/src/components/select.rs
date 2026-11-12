@@ -358,7 +358,7 @@ fn calculate_indexes(active_index: usize, max_index: usize, limit: usize) -> (us
     }
 
     let before_limit = limit / 2;
-    let after_limit = limit / 2 - (if limit % 2 == 0 { 1 } else { 0 });
+    let after_limit = limit / 2 - (if limit.is_multiple_of(2) { 1 } else { 0 });
 
     let (start_index, end_index) = if active_index <= before_limit {
         (0, limit - 1)

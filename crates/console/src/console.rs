@@ -114,10 +114,10 @@ impl<R: Reporter> Console<R> {
 
     #[cfg(feature = "ui")]
     pub fn set_theme(&mut self, theme: crate::theme::ConsoleTheme) {
-        if let Some(arc_reporter) = &mut self.reporter {
-            if let Some(reporter) = Arc::get_mut(arc_reporter) {
-                reporter.inherit_theme(theme.clone());
-            }
+        if let Some(arc_reporter) = &mut self.reporter
+            && let Some(reporter) = Arc::get_mut(arc_reporter)
+        {
+            reporter.inherit_theme(theme.clone());
         }
 
         self.theme = theme;

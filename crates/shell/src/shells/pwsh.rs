@@ -90,13 +90,12 @@ impl Shell for Pwsh {
         if let Ok(output) = Command::new("pwsh")
             .args(["-NoLogo", "-Command", "$PROFILE.CurrentUserAllHosts"])
             .output()
+            && output.status.success()
         {
-            if output.status.success() {
-                let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
 
-                if !profile.is_empty() {
-                    profiles = profiles.insert(PathBuf::from(profile), 1);
-                }
+            if !profile.is_empty() {
+                profiles = profiles.insert(PathBuf::from(profile), 1);
             }
         }
 

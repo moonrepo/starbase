@@ -80,18 +80,18 @@ impl ShellType {
     pub fn try_detect() -> Result<Self, ShellError> {
         debug!("Attempting to detect the current shell");
 
-        if let Ok(env_value) = env::var("SHELL") {
-            if !env_value.is_empty() {
-                debug!(
-                    env = &env_value,
-                    "Detecting from SHELL environment variable"
-                );
+        if let Ok(env_value) = env::var("SHELL")
+            && !env_value.is_empty()
+        {
+            debug!(
+                env = &env_value,
+                "Detecting from SHELL environment variable"
+            );
 
-                if let Some(shell) = parse_shell_from_file_path(&env_value) {
-                    debug!("Detected {} shell", shell);
+            if let Some(shell) = parse_shell_from_file_path(&env_value) {
+                debug!("Detected {} shell", shell);
 
-                    return Ok(shell);
-                }
+                return Ok(shell);
             }
         }
 

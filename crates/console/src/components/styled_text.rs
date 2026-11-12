@@ -27,8 +27,8 @@ pub fn StyledText<'a>(
         .map(|(text, tag)| {
             let mut content = MixedTextContent::new(text);
 
-            if theme.supports_color {
-                if let Some(color) = tag
+            if theme.supports_color
+                && let Some(color) = tag
                     .as_ref()
                     .and_then(|tag| theme.tag_to_color(tag))
                     .or_else(|| {
@@ -38,9 +38,8 @@ pub fn StyledText<'a>(
                             .and_then(|style| theme.style_to_color(style))
                     })
                     .or(props.color)
-                {
-                    content = content.color(color);
-                }
+            {
+                content = content.color(color);
             }
 
             if props.weight != Weight::Normal {

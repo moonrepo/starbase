@@ -29,13 +29,11 @@ pub fn SignalContainer<'a>(
                 modifiers,
                 ..
             }) = event
+                && kind != KeyEventKind::Release
+                && modifiers == KeyModifiers::CONTROL
+                && code == KeyCode::Char('c')
             {
-                if kind != KeyEventKind::Release
-                    && modifiers == KeyModifiers::CONTROL
-                    && code == KeyCode::Char('c')
-                {
-                    should_exit.set(true)
-                }
+                should_exit.set(true)
             }
         }
     });

@@ -297,13 +297,12 @@ impl Shell for PowerShell {
         if let Ok(output) = Command::new("powershell")
             .args(["-NoLogo", "-Command", "$PROFILE.CurrentUserAllHosts"])
             .output()
+            && output.status.success()
         {
-            if output.status.success() {
-                let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            let profile = String::from_utf8_lossy(&output.stdout).trim().to_owned();
 
-                if !profile.is_empty() {
-                    profiles = profiles.insert(PathBuf::from(profile), 1);
-                }
+            if !profile.is_empty() {
+                profiles = profiles.insert(PathBuf::from(profile), 1);
             }
         }
 
@@ -341,7 +340,9 @@ mod tests {
             .unwrap();
 
         let utf16: Vec<u16> = bytes
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
             .collect();
 
