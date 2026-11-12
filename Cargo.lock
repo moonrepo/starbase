@@ -3230,7 +3230,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_archive"
-version = "0.14.7"
+version = "0.14.8"
 dependencies = [
  "binstall-tar",
  "bzip2",
@@ -3258,7 +3258,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_console"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "crossterm",
  "futures-util",
@@ -3312,7 +3312,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_process"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "bytes",
  "libc",
@@ -3345,7 +3345,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_shell"
-version = "0.14.3"
+version = "0.14.4"
 dependencies = [
  "base64 0.23.1",
  "libc",
@@ -3372,7 +3372,7 @@ dependencies = [
 
 [[package]]
 name = "starbase_utils"
-version = "0.14.10"
+version = "0.14.11"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
