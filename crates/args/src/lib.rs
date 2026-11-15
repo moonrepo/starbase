@@ -436,40 +436,39 @@ fn handle_unquoted_value(pair: Pair<'_, Rule>) -> Value {
     Value::Unquoted(inner.into())
 }
 
+/// Remove a single start and end delimiter from a quoted value. Unlike
+/// `trim_start_matches` and `trim_end_matches`, this doesn't also remove
+/// delimiters that are part of the value, like an escaped quote before the
+/// closing quote.
+fn unquote<'a>(value: &'a str, start: &str, end: &str) -> &'a str {
+    let value = value.strip_prefix(start).unwrap_or(value);
+
+    value.strip_suffix(end).unwrap_or(value)
+}
+
 fn handle_value(pair: Pair<'_, Rule>) -> Value {
     let inner = pair.as_str().trim();
 
     match pair.as_rule() {
         Rule::value_unquoted => handle_unquoted_value(pair),
 
-        Rule::value_murex_brace_quote => {
-            Value::MurexBraceQuoted(inner.trim_start_matches("%(").trim_end_matches(")").into())
-        }
+        Rule::value_murex_brace_quote => Value::MurexBraceQuoted(unquote(inner, "%(", ")").into()),
 
-        Rule::value_nu_raw_quote => Value::NuRawQuoted(
-            inner
-                .trim_start_matches("r#'")
-                .trim_end_matches("'#")
-                .into(),
-        ),
+        Rule::value_nu_raw_quote => Value::NuRawQuoted(unquote(inner, "r#'", "'#").into()),
 
         Rule::value_double_quote => {
             if inner.starts_with('$') {
-                Value::SpecialDoubleQuoted(
-                    inner.trim_start_matches("$\"").trim_end_matches('"').into(),
-                )
+                Value::SpecialDoubleQuoted(unquote(inner, "$\"", "\"").into())
             } else {
-                Value::DoubleQuoted(inner.trim_matches('"').into())
+                Value::DoubleQuoted(unquote(inner, "\"", "\"").into())
             }
         }
 
         Rule::value_single_quote => {
             if inner.starts_with('$') {
-                Value::SpecialSingleQuoted(
-                    inner.trim_start_matches("$'").trim_end_matches('\'').into(),
-                )
+                Value::SpecialSingleQuoted(unquote(inner, "$'", "'").into())
             } else {
-                Value::SingleQuoted(inner.trim_matches('\'').into())
+                Value::SingleQuoted(unquote(inner, "'", "'").into())
             }
         }
 

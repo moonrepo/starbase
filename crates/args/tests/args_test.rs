@@ -1046,6 +1046,13 @@ mod value {
                 Argument::Value(Value::SingleQuoted("a\\'b".into()))
             ]
         );
+        test_args!(
+            "bin 'a\\''",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SingleQuoted("a\\'".into()))
+            ]
+        );
     }
 
     #[test]
@@ -1069,6 +1076,13 @@ mod value {
             [
                 Argument::Value(Value::Unquoted("bin".into())),
                 Argument::Value(Value::SpecialSingleQuoted("a b c".into()))
+            ]
+        );
+        test_args!(
+            "bin $'a\\''",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SpecialSingleQuoted("a\\'".into()))
             ]
         );
     }
@@ -1103,6 +1117,13 @@ mod value {
                 Argument::Value(Value::DoubleQuoted("a\\\"b".into()))
             ]
         );
+        test_args!(
+            "bin \"a\\\"\"",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::DoubleQuoted("a\\\"".into()))
+            ]
+        );
     }
 
     #[test]
@@ -1126,6 +1147,13 @@ mod value {
             [
                 Argument::Value(Value::Unquoted("bin".into())),
                 Argument::Value(Value::SpecialDoubleQuoted("a b c".into()))
+            ]
+        );
+        test_args!(
+            "bin $\"a\\\"\"",
+            [
+                Argument::Value(Value::Unquoted("bin".into())),
+                Argument::Value(Value::SpecialDoubleQuoted("a\\\"".into()))
             ]
         );
     }
@@ -1550,6 +1578,13 @@ mod shells {
                 Argument::Value(Value::MurexBraceQuoted("hello world".into())),
             ]
         );
+        test_args!(
+            "echo %(%(hello)",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::MurexBraceQuoted("%(hello".into())),
+            ]
+        );
     }
 
     #[test]
@@ -1582,6 +1617,13 @@ mod shells {
             [
                 Argument::Value(Value::Unquoted("echo".into())),
                 Argument::Value(Value::NuRawQuoted("hello world".into())),
+            ]
+        );
+        test_args!(
+            "echo r#'hello\\''#",
+            [
+                Argument::Value(Value::Unquoted("echo".into())),
+                Argument::Value(Value::NuRawQuoted("hello\\'".into())),
             ]
         );
     }
