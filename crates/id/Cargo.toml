@@ -11,7 +11,10 @@ rust-version = "1.85.0"
 compact_str = { workspace = true, features = ["serde"] }
 miette = { workspace = true, optional = true }
 regex = { workspace = true, features = ["unicode"] }
-schematic = { workspace = true, optional = true }
+schematic = { workspace = true, optional = true, features = [
+	"schema",
+	"type_compact_str",
+] }
 serde = { workspace = true }
 thiserror = { workspace = true }
 
