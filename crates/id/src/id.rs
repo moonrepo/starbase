@@ -14,7 +14,6 @@ use std::sync::Arc;
 /// underscore `_`, and dash `-`. A leading `@` is supported to support npm package names.
 #[derive(Clone, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(into = "String", try_from = "String")]
-#[cfg_attr(feature = "schematic", derive(schematic::Schematic))]
 pub struct Id(Arc<CompactString>);
 
 impl Id {
@@ -230,5 +229,16 @@ impl FromStr for Id {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::new(value)
+    }
+}
+
+#[cfg(feature = "schematic")]
+impl schematic::Schematic for Id {
+    fn schema_name() -> Option<String> {
+        Some("Id".into())
+    }
+
+    fn build_schema(mut schema: schematic::SchemaBuilder) -> schematic::Schema {
+        schema.string_default()
     }
 }
