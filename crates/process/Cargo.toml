@@ -14,6 +14,11 @@ starbase_styles = { version = "0.6.10", path = "../styles" }
 bytes = { workspace = true }
 miette = { workspace = true }
 parking_lot = { workspace = true }
+process-wrap = { version = "10.0.1", default-features = false, features = [
+	"job-object",
+	"process-group",
+	"tokio1",
+] }
 rustc-hash = { workspace = true }
 scc = { workspace = true }
 serde = { workspace = true }

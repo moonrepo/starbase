@@ -16,6 +16,12 @@ static STARTED: Once = Once::new();
 /// on a thread of its own, so it keeps listening after the runtime that
 /// started it shuts down.
 ///
+/// On Unix, children that aren't contained (see
+/// [`ProcessSet::spawn_contained`]) share our process group, so a
+/// terminal's `SIGHUP`, `SIGINT` or `SIGQUIT` already reached them, and it
+/// isn't sent again. If one of these signals came from somewhere else, they
+/// only get the force kill once the grace period ends.
+///
 /// The root is already shut down by the time subscribers hear of a signal,
 /// so shutting it down again in response force kills its children. Shut
 /// down only the nested sets you own, which doesn't signal their children
@@ -75,7 +81,7 @@ pub(crate) fn start() {
                         // force kills, although the OS delivers identical
                         // signals that arrive close together only once.
                         let shutdown =
-                            ProcessSet::try_root().map(|root| root.begin_shutdown(signal));
+                            ProcessSet::try_root().map(|root| root.begin_shutdown(signal, true));
 
                         // Having no subscribers right now is fine, as
                         // later subscribers still receive later signals

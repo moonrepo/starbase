@@ -1,5 +1,5 @@
 use starbase_console::EmptyReporter;
-use starbase_process::{Arg, Env, Executable, ShellType};
+use starbase_process::{Arg, Env, Executable, ShellType, StdinMode};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
@@ -379,6 +379,30 @@ mod flags {
     }
 
     #[test]
+    fn contains_the_tree_unless_turned_off() {
+        let mut command = Command::new("git");
+
+        assert!(command.should_contain_tree());
+
+        command.set_contain_tree(false);
+
+        assert!(!command.should_contain_tree());
+    }
+
+    #[test]
+    fn contains_the_tree_when_stdin_is_inherited_only_on_windows() {
+        let mut command = Command::new("git");
+        command.set_stdin(StdinMode::Inherit);
+
+        assert_eq!(command.should_contain_tree(), cfg!(windows));
+
+        // Buffered input is piped rather than inherited
+        command.input(["data"]);
+
+        assert!(command.should_contain_tree());
+    }
+
+    #[test]
     fn tracks_the_remaining_toggles() {
         let mut command = Command::new("git");
 
@@ -694,6 +718,7 @@ mod console {
         let mut command = Command::new("git");
         command.arg("status").env("KEY", "value").cwd("/tmp");
         command.set_process_set(starbase_process::ProcessSet::root().nested());
+        command.set_contain_tree(false);
 
         let mut console: Console<OtherReporter> = Console::new_testing();
         console.set_reporter(OtherReporter);
@@ -705,5 +730,6 @@ mod console {
         assert_eq!(converted.cwd, Some(OsString::from("/tmp")));
         assert!(converted.console.is_some());
         assert!(converted.process_set.is_some());
+        assert!(!converted.contain_tree);
     }
 }

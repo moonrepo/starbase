@@ -22,12 +22,12 @@ impl<R: Reporter> Command<R> {
             self.stdin.to_stdio()
         });
 
-        let shared_child = set
-            .spawn(&mut command)
-            .map_err(|error| ProcessError::Stream {
-                bin: self.get_bin_name(),
-                error: Box::new(error),
-            })?;
+        let shared_child =
+            self.spawn_child(&set, &mut command)
+                .map_err(|error| ProcessError::Stream {
+                    bin: self.get_bin_name(),
+                    error: Box::new(error),
+                })?;
 
         self.pre_log_command(&shared_child);
 

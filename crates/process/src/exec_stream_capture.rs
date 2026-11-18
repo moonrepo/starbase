@@ -30,7 +30,7 @@ impl<R: Reporter> Command<R> {
             .stdout(Stdio::piped());
 
         let shared_child =
-            set.spawn(&mut command)
+            self.spawn_child(set, &mut command)
                 .map_err(|error| ProcessError::StreamCapture {
                     bin: self.get_bin_name(),
                     error: Box::new(error),
