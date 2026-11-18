@@ -1,9 +1,9 @@
 #![cfg(unix)]
 
-// Signals are sent to this test process itself, which every registry in
-// the same binary would receive, so these tests live in their own binary.
+// Signals are sent to this test process itself, which shuts down every
+// process set in the same binary, so these tests live in their own binary.
 
-use starbase_process::{ChildExit, ProcessRegistry, SignalType, kill};
+use starbase_process::{ChildExit, ProcessSet, SignalListener, SignalType, kill};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::signal::unix::{SignalKind, signal};
@@ -13,18 +13,32 @@ mod signal_listener {
     use super::*;
 
     #[tokio::test]
+    async fn broadcasts_signals_once_subscribed() {
+        let mut receiver = SignalListener::subscribe();
+
+        // Handlers are installed once subscribing returns, so this signal
+        // is broadcast instead of exiting the test process
+        kill(std::process::id(), SignalType::Hangup).unwrap();
+
+        let received = timeout(Duration::from_secs(5), receiver.recv())
+            .await
+            .expect("SIGHUP was not broadcast")
+            .unwrap();
+
+        assert!(matches!(received, SignalType::Hangup));
+    }
+
+    #[tokio::test]
     async fn forwards_sighup_to_running_children() {
-        // Replace the default action (exit) before the registry listens
+        // Replace the default action (exit) before anything else listens
         let _hangup = signal(SignalKind::hangup()).unwrap();
 
-        let registry = ProcessRegistry::new(5000);
-        let mut receiver = registry.receive_signal();
-        let child = registry
-            .add_running(Command::new("sleep").arg("30").spawn().unwrap())
-            .await;
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(5));
+        let mut receiver = SignalListener::subscribe();
+        let child = set.spawn(Command::new("sleep").arg("30")).unwrap();
 
-        // The registry starts listening in the background, so a signal
-        // sent before then is missed; keep sending until it's received
+        // The root is shut down on the listener thread, so keep sending
+        // until the signal is seen, in case one is missed
         let received = timeout(Duration::from_secs(5), async {
             loop {
                 kill(std::process::id(), SignalType::Hangup).unwrap();

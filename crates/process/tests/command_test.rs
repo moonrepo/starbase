@@ -693,6 +693,7 @@ mod console {
     fn with_console_swaps_the_reporter_and_keeps_the_command() {
         let mut command = Command::new("git");
         command.arg("status").env("KEY", "value").cwd("/tmp");
+        command.set_process_set(starbase_process::ProcessSet::root().nested());
 
         let mut console: Console<OtherReporter> = Console::new_testing();
         console.set_reporter(OtherReporter);
@@ -703,5 +704,6 @@ mod console {
         assert!(converted.contains_env("KEY"));
         assert_eq!(converted.cwd, Some(OsString::from("/tmp")));
         assert!(converted.console.is_some());
+        assert!(converted.process_set.is_some());
     }
 }

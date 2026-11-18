@@ -1,7 +1,8 @@
 use crate::command::Command;
 use crate::output::Output;
+use crate::output_cache::OutputCache;
 use crate::process_error::ProcessError;
-use crate::process_registry::ProcessRegistry;
+use crate::process_set::ProcessSet;
 use bytes::Bytes;
 use starbase_console::{ConsoleStream, Reporter};
 use std::io;
@@ -14,7 +15,7 @@ use tracing::debug;
 impl<R: Reporter> Command<R> {
     async fn internal_exec_stream_and_capture_output(
         &mut self,
-        registry: &ProcessRegistry,
+        set: &ProcessSet,
     ) -> miette::Result<Output> {
         let instant = Instant::now();
         let mut command = self.create_async_command()?;
@@ -28,14 +29,12 @@ impl<R: Reporter> Command<R> {
             .stderr(Stdio::piped())
             .stdout(Stdio::piped());
 
-        let child = command
-            .spawn()
-            .map_err(|error| ProcessError::StreamCapture {
-                bin: self.get_bin_name(),
-                error: Box::new(error),
-            })?;
-
-        let shared_child = registry.add_running(child).await;
+        let shared_child =
+            set.spawn(&mut command)
+                .map_err(|error| ProcessError::StreamCapture {
+                    bin: self.get_bin_name(),
+                    error: Box::new(error),
+                })?;
 
         self.pre_log_command(&shared_child);
 
@@ -85,7 +84,8 @@ impl<R: Reporter> Command<R> {
 
         self.post_log_command(&shared_child, instant);
 
-        registry.remove_running(shared_child).await;
+        // Stop tracking the child, which also kills it if it is still running
+        drop(shared_child);
 
         input_result?;
         let output = result?;
@@ -105,25 +105,22 @@ impl<R: Reporter> Command<R> {
     /// which case nothing is streamed to the console. Force-killing stops
     /// capture readers and may truncate unread output.
     pub async fn exec_stream_and_capture_output(&mut self) -> miette::Result<Output> {
-        let registry = ProcessRegistry::instance();
+        let set = self.get_process_set();
 
         if !self.should_cache_output() {
-            return self
-                .internal_exec_stream_and_capture_output(&registry)
-                .await;
+            return self.internal_exec_stream_and_capture_output(&set).await;
         }
 
         let key = self.get_output_cache_key("stream-capture");
+        let cache = OutputCache::instance();
 
-        if let Some(output) = registry.get_cached_output(&key).await? {
+        if let Some(output) = cache.get(&key).await {
             return Ok(output);
         }
 
-        let output = self
-            .internal_exec_stream_and_capture_output(&registry)
-            .await?;
+        let output = self.internal_exec_stream_and_capture_output(&set).await?;
 
-        registry.cache_output(key, output.clone()).await;
+        cache.put(key, output.clone()).await;
 
         Ok(output)
     }

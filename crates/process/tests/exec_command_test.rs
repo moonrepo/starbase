@@ -2,7 +2,7 @@
 
 use starbase_console::{Console, EmptyReporter};
 use starbase_process::{
-    ChildExit, Command, ProcessError, ProcessRegistry, ShellType, SignalType, StdinMode,
+    ChildExit, Command, ProcessError, ProcessSet, ShellType, SignalType, StdinMode,
 };
 use std::time::Duration;
 
@@ -236,8 +236,10 @@ mod cancellation {
     use super::*;
 
     async fn force_kill_unblocks_inherited_stdin(continuous_pipe: bool) {
+        // Both variants run in parallel, and can start within the same clock
+        // tick, so the variant is part of the name to keep their files apart
         let marker = std::env::temp_dir().join(format!(
-            "starbase-process-stdin-{}-{}",
+            "starbase-process-stdin-{continuous_pipe}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -258,7 +260,7 @@ mod cancellation {
         command.input(vec!["x".repeat(1024); 2048]);
 
         let mut task = tokio::spawn(async move { command.exec_capture_output().await });
-        let registry = ProcessRegistry::instance();
+        let set = ProcessSet::root();
 
         let (child, descendant) = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
@@ -268,7 +270,7 @@ mod cancellation {
                         .filter_map(|pid| pid.parse::<u32>().ok());
 
                     if let (Some(pid), Some(descendant)) = (pids.next(), pids.next())
-                        && let Some(child) = registry.get_running_by_pid(pid).await
+                        && let Some(child) = set.get(pid)
                     {
                         break (child, descendant);
                     }
@@ -299,57 +301,91 @@ mod cancellation {
         assert_eq!(output.exit, ChildExit::Killed);
     }
 
-    // #[tokio::test]
-    // async fn aborting_execution_kills_and_unregisters_the_child() {
-    //     let marker = std::env::temp_dir().join(format!(
-    //         "starbase-process-cancel-{}-{}",
-    //         std::process::id(),
-    //         std::time::SystemTime::now()
-    //             .duration_since(std::time::UNIX_EPOCH)
-    //             .unwrap()
-    //             .as_nanos()
-    //     ));
-    //     let _ = std::fs::remove_file(&marker);
+    #[derive(Clone, Copy, Debug)]
+    enum Exec {
+        Capture,
+        Continuous,
+        Stream,
+        StreamAndCapture,
+    }
 
-    //     // `exec` keeps the recorded pid as the direct child, avoiding a
-    //     // background shell process that would outlive this test.
-    //     let mut command =
-    //         create_command(&format!("echo $$ > '{}'; exec sleep 30", marker.display()));
-    //     let task = tokio::spawn(async move { command.exec_capture_output().await });
-    //     let registry = ProcessRegistry::instance();
+    async fn assert_aborting_kills_and_untracks_the_child(exec: Exec) {
+        let marker = std::env::temp_dir().join(format!(
+            "starbase-process-cancel-{exec:?}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_file(&marker);
 
-    //     let pid = tokio::time::timeout(Duration::from_secs(3), async {
-    //         loop {
-    //             if let Ok(pid) = std::fs::read_to_string(&marker)
-    //                 && let Ok(pid) = pid.trim().parse()
-    //                 && registry.get_running_by_pid(pid).await.is_some()
-    //             {
-    //                 break pid;
-    //             }
+        // `exec` keeps the recorded pid as the direct child, avoiding a
+        // background shell process that would outlive this test.
+        let mut command =
+            create_command(&format!("echo $$ > '{}'; exec sleep 30", marker.display()));
+        let task = tokio::spawn(async move {
+            match exec {
+                Exec::Capture => command.exec_capture_output().await,
+                Exec::Continuous => command.exec_capture_continuous_output().await,
+                Exec::Stream => command.exec_stream_output().await,
+                Exec::StreamAndCapture => command.exec_stream_and_capture_output().await,
+            }
+        });
+        let set = ProcessSet::root();
 
-    //             tokio::time::sleep(Duration::from_millis(5)).await;
-    //         }
-    //     })
-    //     .await
-    //     .expect("child was not registered");
+        let pid = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if let Ok(pid) = std::fs::read_to_string(&marker)
+                    && let Ok(pid) = pid.trim().parse()
+                    && set.get(pid).is_some()
+                {
+                    break pid;
+                }
 
-    //     let child = registry.get_running_by_pid(pid).await.unwrap();
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("child was not registered");
 
-    //     task.abort();
-    //     assert!(task.await.unwrap_err().is_cancelled());
+        let child = set.get(pid).unwrap();
 
-    //     tokio::time::timeout(Duration::from_secs(1), async {
-    //         while registry.get_running_by_pid(pid).await.is_some() {
-    //             tokio::time::sleep(Duration::from_millis(5)).await;
-    //         }
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
 
-    //         assert_eq!(child.wait().await.unwrap(), ChildExit::Killed);
-    //     })
-    //     .await
-    //     .expect("cancelled child remained registered");
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while set.get(pid).is_some() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
 
-    //     std::fs::remove_file(marker).unwrap();
-    // }
+            assert_eq!(child.wait().await.unwrap(), ChildExit::Killed);
+        })
+        .await
+        .expect("cancelled child remained registered");
+
+        std::fs::remove_file(marker).unwrap();
+    }
+
+    #[tokio::test]
+    async fn aborting_capture_kills_and_untracks_the_child() {
+        assert_aborting_kills_and_untracks_the_child(Exec::Capture).await;
+    }
+
+    #[tokio::test]
+    async fn aborting_continuous_capture_kills_and_untracks_the_child() {
+        assert_aborting_kills_and_untracks_the_child(Exec::Continuous).await;
+    }
+
+    #[tokio::test]
+    async fn aborting_stream_kills_and_untracks_the_child() {
+        assert_aborting_kills_and_untracks_the_child(Exec::Stream).await;
+    }
+
+    #[tokio::test]
+    async fn aborting_stream_and_capture_kills_and_untracks_the_child() {
+        assert_aborting_kills_and_untracks_the_child(Exec::StreamAndCapture).await;
+    }
 
     #[tokio::test]
     async fn force_kill_unblocks_buffered_input_with_inherited_stdin() {

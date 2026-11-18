@@ -1,21 +1,21 @@
 #![cfg(unix)]
 
-use starbase_process::{ChildExit, ProcessRegistry, SharedChild, SignalType};
+use starbase_process::{ChildExit, ProcessSet, SharedChild, SignalType};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 use tokio::time::timeout;
 
 // The shell exits, but its background child keeps both output pipes open.
-fn shell() -> Child {
-    Command::new("sh")
+fn shell() -> Command {
+    let mut command = Command::new("sh");
+    command
         .args(["-c", "sleep 30 & echo $! >&2; printf ready; exit 7"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .unwrap()
+        .kill_on_drop(true);
+    command
 }
 
 struct Descendant(u32);
@@ -39,10 +39,10 @@ async fn descendant(child: &SharedChild) -> Descendant {
     Descendant(pid.trim().parse().unwrap())
 }
 
-async fn assert_capture_stops(registry: Option<&ProcessRegistry>, explicit_signal: bool) {
-    let child = match registry {
-        Some(registry) => registry.add_running(shell()).await,
-        None => SharedChild::new(shell()),
+async fn assert_capture_stops(set: Option<&ProcessSet>, explicit_signal: bool) {
+    let child = match set {
+        Some(set) => set.spawn(&mut shell()).unwrap(),
+        None => SharedChild::new(shell().spawn().unwrap()),
     };
     let _descendant = descendant(&child).await;
     let exit = timeout(Duration::from_secs(3), child.wait())
@@ -62,8 +62,11 @@ async fn assert_capture_stops(registry: Option<&ProcessRegistry>, explicit_signa
             .is_err()
     );
 
-    if let Some(registry) = registry {
-        registry.terminate_running();
+    if let Some(set) = set {
+        // The shutdown waits out the grace period, so run it in the background
+        let set = set.clone();
+
+        tokio::spawn(async move { set.shutdown(SignalType::Terminate).await });
     } else if explicit_signal {
         child.kill_with_signal(SignalType::Kill).await.unwrap();
     } else {
@@ -89,9 +92,9 @@ async fn kill_signal_stops_capture_even_after_parent_was_reaped() {
 }
 
 #[tokio::test]
-async fn registry_threshold_stops_capture_after_parent_was_removed() {
-    let registry = ProcessRegistry::new(50);
-    assert_capture_stops(Some(&registry), false).await;
+async fn shutdown_grace_period_stops_capture_after_parent_exited() {
+    let set = ProcessSet::root().nested_with_grace(Duration::from_millis(50));
+    assert_capture_stops(Some(&set), false).await;
 }
 
 async fn assert_streaming_capture_stops(continuous: bool) {
@@ -119,14 +122,14 @@ async fn assert_streaming_capture_stops(continuous: bool) {
             command.exec_stream_and_capture_output().await
         }
     });
-    let registry = ProcessRegistry::instance();
+    let set = ProcessSet::root();
     let found = timeout(Duration::from_secs(3), async {
         loop {
             if let Ok(pids) = std::fs::read_to_string(&marker) {
                 let pids = pids.split_whitespace().collect::<Vec<_>>();
 
                 if pids.len() == 2
-                    && let Some(child) = registry.get_running_by_pid(pids[0].parse().unwrap()).await
+                    && let Some(child) = set.get(pids[0].parse().unwrap())
                 {
                     break (child, Descendant(pids[1].parse().unwrap()));
                 }
@@ -154,7 +157,7 @@ async fn assert_streaming_capture_stops(continuous: bool) {
         .unwrap()
         .unwrap();
     assert_eq!(output.exit, exit);
-    assert!(registry.get_running_by_pid(child.id()).await.is_none());
+    assert!(set.get(child.id()).is_none());
     std::fs::remove_file(marker).unwrap();
 }
 
@@ -166,4 +169,90 @@ async fn force_kill_stops_stream_and_capture_readers() {
 #[tokio::test]
 async fn force_kill_stops_continuous_capture_readers() {
     assert_streaming_capture_stops(true).await;
+}
+
+// Spawn the shell into `set`, wait for it to exit, and return a capture that
+// is blocked on the pipes its background child still holds
+async fn blocked_capture(
+    set: &ProcessSet,
+) -> (
+    SharedChild,
+    Descendant,
+    std::pin::Pin<
+        Box<impl std::future::Future<Output = std::io::Result<starbase_process::Output>>>,
+    >,
+) {
+    let child = set.spawn(&mut shell()).unwrap();
+    let descendant = descendant(&child).await;
+
+    timeout(Duration::from_secs(3), child.wait())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let mut capture = Box::pin({
+        let child = child.clone();
+
+        async move { child.wait_with_output().await }
+    });
+
+    assert!(
+        timeout(Duration::from_millis(50), capture.as_mut())
+            .await
+            .is_err()
+    );
+
+    (child, descendant, capture)
+}
+
+#[tokio::test]
+async fn a_later_request_stops_capture_after_a_zero_grace_shutdown() {
+    let set = ProcessSet::root().nested_with_grace(Duration::ZERO);
+    let (_child, _descendant, mut capture) = blocked_capture(&set).await;
+
+    // With an unlimited grace period, nothing is force killed or stopped
+    set.shutdown(SignalType::Terminate).await;
+
+    assert!(
+        timeout(Duration::from_millis(50), capture.as_mut())
+            .await
+            .is_err()
+    );
+
+    // So the next request stops the capture
+    set.shutdown(SignalType::Terminate).await;
+
+    let output = timeout(Duration::from_secs(1), capture)
+        .await
+        .expect("capture waited on a descendant after a second request")
+        .unwrap();
+
+    assert_eq!(output.stdout.as_ref(), b"ready");
+}
+
+#[tokio::test]
+async fn a_parent_shutdown_stops_capture_for_a_nested_shutdowns_exited_child() {
+    let parent = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+    let nested = parent.nested_with_grace(Duration::from_secs(10));
+    let (_child, _descendant, capture) = blocked_capture(&nested).await;
+
+    // The nested shutdown sees its child exit, and waits out its grace period
+    tokio::spawn({
+        let nested = nested.clone();
+
+        async move { nested.shutdown(SignalType::Terminate).await }
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // A shutdown of the parent takes over, which stops the capture
+    tokio::spawn({
+        let parent = parent.clone();
+
+        async move { parent.shutdown(SignalType::Terminate).await }
+    });
+
+    timeout(Duration::from_secs(1), capture)
+        .await
+        .expect("capture waited out the nested shutdown's grace period")
+        .unwrap();
 }

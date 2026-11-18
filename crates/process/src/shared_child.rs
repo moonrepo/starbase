@@ -1,14 +1,16 @@
 use crate::output::Output;
+use crate::process_set::SetInner;
 use crate::signal::*;
 use bytes::Bytes;
+use parking_lot::Mutex;
 use std::future::{Future, poll_fn};
 use std::io;
 use std::pin::pin;
 use std::process::ExitStatus;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
-use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{Mutex as AsyncMutex, watch};
 use tracing::warn;
 
@@ -45,8 +47,14 @@ impl ChildExit {
 
 /// A cheaply cloneable handle to a running child process. Every clone
 /// shares the same underlying process, so signalling or waiting on one
-/// clone is visible to all others. Only the original handle created with
-/// [`Self::new_with_cleanup`] requests cleanup on drop; clones never do.
+/// clone is visible to all others.
+///
+/// Only the original handle returned by
+/// [`ProcessSet::spawn`](crate::ProcessSet::spawn) acts on drop; clones
+/// never do. Dropping it kills the child if it's still running, stops
+/// output readers on its clones, and stops tracking the child in its set.
+/// Call [`Self::stop_cleanup`] first to leave the child running and its
+/// output readers alone.
 pub struct SharedChild {
     inner: Arc<Mutex<Child>>,
     signal: Arc<OnceLock<SignalType>>,
@@ -54,8 +62,16 @@ pub struct SharedChild {
     waiter: Arc<AsyncMutex<()>>,
 
     output_stop: watch::Sender<bool>,
+    exited: watch::Sender<bool>,
     cleanup: Arc<AtomicBool>,
-    cleanup_sender: Option<UnboundedSender<SharedChild>>,
+
+    // How many shutdowns that are still waiting include this child
+    shutdowns: Arc<AtomicUsize>,
+
+    // The set tracking this child, held by the original handle only. It's
+    // a strong reference, so a set can't be dropped out from under children
+    // it still tracks, which would hide them from shutdowns.
+    set: Option<Arc<SetInner>>,
 }
 
 impl SharedChild {
@@ -67,17 +83,18 @@ impl SharedChild {
             signal: Arc::new(OnceLock::new()),
             waiter: Arc::new(AsyncMutex::new(())),
             output_stop: watch::channel(false).0,
+            exited: watch::channel(false).0,
             cleanup: Arc::new(AtomicBool::new(true)),
-            cleanup_sender: None,
+            shutdowns: Arc::new(AtomicUsize::new(0)),
+            set: None,
         }
     }
 
-    /// Wrap a spawned child so it can be shared across tasks, and register
-    /// a cleanup sender to be notified when this handle is dropped.
-    /// Clones do not inherit responsibility for cleanup.
-    pub fn new_with_cleanup(child: Child, cleanup_sender: UnboundedSender<SharedChild>) -> Self {
+    /// Wrap a spawned child as the owner tracked by `set`. Dropping it kills
+    /// the child if it's still running, and stops tracking it either way.
+    pub(crate) fn new_owned(child: Child, set: Arc<SetInner>) -> Self {
         let mut shared_child = Self::new(child);
-        shared_child.cleanup_sender = Some(cleanup_sender);
+        shared_child.set = Some(set);
         shared_child
     }
 
@@ -86,13 +103,44 @@ impl SharedChild {
         self.pid
     }
 
+    // Unlike comparing pids, this can't be fooled by the OS giving a new
+    // process the pid of one that has already exited
+    pub(crate) fn same_child(&self, other: &SharedChild) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
+    // Count a shutdown that waits on this child. Returns true for the first
+    // of any that overlap, which is the one to signal it.
+    pub(crate) fn join_shutdown(&self) -> bool {
+        self.shutdowns.fetch_add(1, Ordering::AcqRel) == 0
+    }
+
+    pub(crate) fn leave_shutdown(&self) {
+        self.shutdowns.fetch_sub(1, Ordering::AcqRel);
+    }
+
+    // Wait for a child that was just force killed to exit. This polls rather
+    // than queueing behind `wait`, whose holder may be on a runtime that
+    // isn't running.
+    pub(crate) async fn wait_after_kill(&self) {
+        loop {
+            let status = self.try_wait_locked(&mut self.inner.lock());
+
+            if !matches!(status, Ok(None)) {
+                return;
+            }
+
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }
+
     /// Take the child's stdin pipe, if it was piped and not already taken.
     ///
     /// Dropping the returned handle closes the pipe, which the child sees
     /// as end of input. That is usually what you want once all input has
     /// been written.
     pub async fn take_stdin(&self) -> Option<ChildStdin> {
-        self.inner.lock().unwrap().stdin.take()
+        self.inner.lock().stdin.take()
     }
 
     /// Take the child's stdout pipe, if it was piped and not already taken.
@@ -102,14 +150,14 @@ impl SharedChild {
     /// `SIGPIPE` on its next write, truncating its output partway through.
     /// [`Self::wait_with_output`] returns empty bytes for a pipe taken here.
     pub async fn take_stdout(&self) -> Option<ChildStdout> {
-        self.inner.lock().unwrap().stdout.take()
+        self.inner.lock().stdout.take()
     }
 
     /// Take the child's stderr pipe, if it was piped and not already taken.
     ///
     /// The same `SIGPIPE` caveat as [`Self::take_stdout`] applies.
     pub async fn take_stderr(&self) -> Option<ChildStderr> {
-        self.inner.lock().unwrap().stderr.take()
+        self.inner.lock().stderr.take()
     }
 
     /// Force kill the child immediately (`SIGKILL` on Unix, terminate on
@@ -127,7 +175,7 @@ impl SharedChild {
         let completed = {
             // Reaping and signal delivery use the same lock. Until reaped,
             // the child retains its PID/handle even if it has already exited.
-            let mut child = self.inner.lock().unwrap();
+            let mut child = self.inner.lock();
 
             self.send_signal_locked(&mut child, signal)?
                 .map(|status| convert_exit_status(status, None))
@@ -141,9 +189,9 @@ impl SharedChild {
     }
 
     /// Send a signal without waiting for the child. This is used by
-    /// synchronous cleanup paths, such as a registry being dropped.
+    /// synchronous cleanup paths, such as an owner being dropped.
     pub fn send_signal(&self, signal: SignalType) -> io::Result<()> {
-        let mut child = self.inner.lock().unwrap();
+        let mut child = self.inner.lock();
 
         self.send_signal_locked(&mut child, signal)?;
 
@@ -158,7 +206,7 @@ impl SharedChild {
         child: &mut Child,
         signal: SignalType,
     ) -> io::Result<Option<ExitStatus>> {
-        if let Some(status) = child.try_wait()? {
+        if let Some(status) = self.try_wait_locked(child)? {
             if matches!(signal, SignalType::Kill) {
                 self.stop_output();
             }
@@ -201,8 +249,23 @@ impl SharedChild {
         Ok(None)
     }
 
-    /// Disable the original handle's cleanup on drop. This can be called
-    /// through any clone when the child is explicitly unregistered.
+    /// Reaping through `try_wait` makes tokio drop its `SIGCHLD` listener
+    /// for the child, which a concurrent [`Self::wait`] relies on to be
+    /// woken. Record the exit so those waiters are woken instead.
+    fn try_wait_locked(&self, child: &mut Child) -> io::Result<Option<ExitStatus>> {
+        let status = child.try_wait()?;
+
+        if status.is_some() {
+            self.exited.send_replace(true);
+        }
+
+        Ok(status)
+    }
+
+    /// Stop the original handle from killing the child, or stopping output
+    /// readers, when it's dropped. Dropping it still stops tracking the
+    /// child, so shutdowns no longer reach it. This can be called through
+    /// any clone.
     pub fn stop_cleanup(&self) {
         self.cleanup.store(false, Ordering::Release);
     }
@@ -224,12 +287,25 @@ impl SharedChild {
         // Tokio supports one waiter. Serialize wait futures, but hold the
         // child lock only during each poll so signals can still be delivered.
         let _waiter = self.waiter.lock().await;
+        let mut exited = self.exited.subscribe();
 
-        let status = poll_fn(|cx| {
-            let mut child = self.inner.lock().unwrap();
-            pin!(child.wait()).poll(cx)
-        })
-        .await?;
+        let status = tokio::select! {
+            biased;
+            status = poll_fn(|cx| {
+                let mut child = self.inner.lock();
+                pin!(child.wait()).poll(cx)
+            }) => status?,
+            // The child was reaped by a `try_wait` elsewhere, taking tokio's
+            // `SIGCHLD` listener with it, so the wait above would never be
+            // woken. Its exit status is retained. The watch guard is dropped
+            // before locking the child, which `try_wait_locked` holds while
+            // it updates the watch.
+            _ = async { let _ = exited.wait_for(|exited| *exited).await; } => {
+                self.inner.lock().try_wait()?.ok_or_else(|| {
+                    io::Error::other("Child process was marked exited but has no status")
+                })?
+            }
+        };
 
         Ok(convert_exit_status(status, self.signal.get().copied()))
     }
@@ -272,7 +348,7 @@ impl SharedChild {
         }
 
         let (mut stdout_pipe, mut stderr_pipe) = {
-            let mut child = self.inner.lock().unwrap();
+            let mut child = self.inner.lock();
             (child.stdout.take(), child.stderr.take())
         };
 
@@ -307,29 +383,33 @@ impl Clone for SharedChild {
             pid: self.pid,
             waiter: Arc::clone(&self.waiter),
             output_stop: self.output_stop.clone(),
+            exited: self.exited.clone(),
             cleanup: Arc::clone(&self.cleanup),
-            // Only the original instance has access to the sender!
-            cleanup_sender: None,
+            shutdowns: Arc::clone(&self.shutdowns),
+            // Only the original instance has access to the set!
+            set: None,
         }
     }
 }
 
 impl Drop for SharedChild {
     fn drop(&mut self) {
-        if let Some(sender) = self.cleanup_sender.take()
-            && self.cleanup.swap(false, Ordering::AcqRel)
-            && let Err(error) = sender.send(self.clone())
-        {
-            let child = error.0;
-            let pid = child.id();
+        if let Some(set) = self.set.take() {
+            // A child still running when its owner goes away was cancelled,
+            // so kill it now rather than queueing that for later.
+            if self.cleanup.swap(false, Ordering::AcqRel) {
+                let mut child = self.inner.lock();
 
-            if let Err(error) = child.send_signal(SignalType::Kill) {
-                warn!(
-                    pid,
-                    %error,
-                    "Failed to kill cancelled child process after registry shutdown",
-                );
+                if let Err(error) = self.send_signal_locked(&mut child, SignalType::Kill) {
+                    warn!(
+                        pid = self.pid,
+                        %error,
+                        "Failed to kill cancelled child process"
+                    );
+                }
             }
+
+            set.remove(self);
         }
     }
 }

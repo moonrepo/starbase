@@ -21,6 +21,42 @@ mod shared_child {
     }
 
     #[tokio::test]
+    async fn a_wait_is_woken_when_another_handle_reaps_the_child() {
+        use std::time::Duration;
+        use tokio::time::timeout;
+
+        let child = SharedChild::new(
+            Command::new("sh")
+                .args(["-c", "read line; exit 0"])
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let stdin = child.take_stdin().await.unwrap();
+        let waiter = child.clone();
+        let waiting = tokio::spawn(async move { waiter.wait().await });
+
+        // Let the wait register with tokio's exit notification
+        tokio::task::yield_now().await;
+
+        // Let the child exit, blocking the runtime so tokio can't notice
+        drop(stdin);
+        std::thread::sleep(Duration::from_millis(200));
+
+        // This reaps the child, which drops the notification the wait was
+        // registered with, so the wait must be woken some other way
+        child.send_signal(SignalType::Terminate).unwrap();
+
+        let exit = timeout(Duration::from_secs(2), waiting)
+            .await
+            .expect("the wait was never woken")
+            .unwrap()
+            .unwrap();
+
+        assert!(matches!(exit, ChildExit::Completed(status) if status.success()));
+    }
+
+    #[tokio::test]
     async fn takes_pipes_only_once() {
         let mut command = Command::new("sleep");
         command.arg("30").stdout(Stdio::piped());

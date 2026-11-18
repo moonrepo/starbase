@@ -45,6 +45,16 @@ mod unix {
     /// Listen for `SIGHUP`, `SIGINT`, `SIGQUIT`, and `SIGTERM`, and broadcast
     /// each one received to `sender`. Runs until all receivers are dropped.
     pub async fn wait_for_signal(sender: Sender<SignalType>) {
+        listen(|| {}, |signal| sender.send(signal).is_ok()).await;
+    }
+
+    /// Listen for `SIGHUP`, `SIGINT`, `SIGQUIT`, and `SIGTERM`. Calls `ready`
+    /// once their handlers are installed, then `on_signal` for each one
+    /// received, until it returns false.
+    pub(crate) async fn listen(
+        ready: impl FnOnce(),
+        mut on_signal: impl FnMut(SignalType) -> bool,
+    ) {
         use tokio::signal::unix::{SignalKind, signal};
 
         debug!("Listening for SIGHUP, SIGINT, SIGQUIT, and SIGTERM signals");
@@ -56,27 +66,29 @@ mod unix {
         let mut signal_quit = signal(SignalKind::quit()).unwrap();
         let mut signal_hangup = signal(SignalKind::hangup()).unwrap();
 
+        ready();
+
         loop {
-            let result = tokio::select! {
+            let signal = tokio::select! {
                 _ = signal_terminate.recv() => {
                     debug!("Received SIGTERM signal");
-                    sender.send(SignalType::Terminate)
+                    SignalType::Terminate
                 },
                 _ = signal_hangup.recv() => {
                     debug!("Received SIGHUP signal");
-                    sender.send(SignalType::Hangup)
+                    SignalType::Hangup
                 },
                 _ = signal_interrupt.recv() => {
                     debug!("Received SIGINT signal");
-                    sender.send(SignalType::Interrupt)
+                    SignalType::Interrupt
                 },
                 _ = signal_quit.recv() => {
                     debug!("Received SIGQUIT signal");
-                    sender.send(SignalType::Quit)
+                    SignalType::Quit
                 },
             };
 
-            if result.is_err() {
+            if !on_signal(signal) {
                 break;
             }
         }
@@ -117,6 +129,16 @@ mod windows {
     /// `CTRL-SHUTDOWN`, and broadcast each one received to `sender`.
     /// Runs until all receivers are dropped.
     pub async fn wait_for_signal(sender: Sender<SignalType>) {
+        listen(|| {}, |signal| sender.send(signal).is_ok()).await;
+    }
+
+    /// Listen for `CTRL-C`, `CTRL-BREAK`, `CTRL-CLOSE`, and `CTRL-SHUTDOWN`.
+    /// Calls `ready` once their handlers are installed, then `on_signal`
+    /// for each one received, until it returns false.
+    pub(crate) async fn listen(
+        ready: impl FnOnce(),
+        mut on_signal: impl FnMut(SignalType) -> bool,
+    ) {
         use tokio::signal::windows;
 
         debug!("Listening for CTRL-C, BREAK, CLOSE, and SHUTDOWN signals");
@@ -126,28 +148,30 @@ mod windows {
         let mut signal_close = windows::ctrl_close().unwrap();
         let mut signal_shutdown = windows::ctrl_shutdown().unwrap();
 
+        ready();
+
         loop {
-            let result = tokio::select! {
+            let signal = tokio::select! {
                 _ = signal_c.recv() => {
                     debug!("Received CTRL-C signal");
-                    sender.send(SignalType::Interrupt)
+                    SignalType::Interrupt
                 },
                 _ = signal_break.recv() => {
                     debug!("Received CTRL-BREAK signal");
-                    sender.send(SignalType::Interrupt)
+                    SignalType::Interrupt
                 },
                 // The console window was closed, the equivalent of `SIGHUP`
                 _ = signal_close.recv() => {
                     debug!("Received CTRL-CLOSE signal");
-                    sender.send(SignalType::Hangup)
+                    SignalType::Hangup
                 },
                 _ = signal_shutdown.recv() => {
                     debug!("Received CTRL-SHUTDOWN signal");
-                    sender.send(SignalType::Terminate)
+                    SignalType::Terminate
                 },
             };
 
-            if result.is_err() {
+            if !on_signal(signal) {
                 break;
             }
         }
