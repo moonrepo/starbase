@@ -2,7 +2,9 @@
 
 use starbase_console::{Console, EmptyReporter};
 use starbase_process::{ChildExit, Command, ProcessSet, SharedChild, SignalType};
+use std::process::Stdio;
 use std::time::Duration;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 use tokio::time::timeout;
 
@@ -148,5 +150,110 @@ mod process_set {
             .unwrap();
 
         assert_eq!(output.exit, ChildExit::Terminated(15));
+    }
+
+    #[tokio::test]
+    async fn finds_tracked_children_by_pid() {
+        let set = create_set();
+        let child = spawn_sleep(&set);
+        let pid = child.id();
+
+        assert!(set.get(pid).is_some());
+        assert!(set.get(0).is_none());
+
+        drop(child);
+
+        assert!(set.get(pid).is_none());
+    }
+
+    #[tokio::test]
+    async fn shutdown_stops_tracking_exited_children() {
+        let set = create_set();
+        let child = spawn_sleep(&set);
+        let pid = child.id();
+
+        shutdown_in_background(&set);
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Terminated(15));
+        timeout(Duration::from_secs(1), set.wait_idle())
+            .await
+            .expect("exited child remained tracked");
+        assert!(set.get(pid).is_none());
+    }
+
+    #[tokio::test]
+    async fn a_shutdown_with_no_children_does_not_stop_later_ones() {
+        let set = create_set();
+
+        set.shutdown(SignalType::Terminate).await;
+
+        let child = spawn_sleep(&set);
+
+        shutdown_in_background(&set);
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Terminated(15));
+    }
+
+    #[tokio::test]
+    async fn later_shutdowns_reach_children_tracked_after_earlier_ones() {
+        let set = create_set();
+        let first = spawn_sleep(&set);
+
+        shutdown_in_background(&set);
+
+        assert_eq!(wait_for_exit(&first).await, ChildExit::Terminated(15));
+        timeout(Duration::from_secs(1), set.wait_idle())
+            .await
+            .expect("exited child remained tracked");
+
+        let second = spawn_sleep(&set);
+
+        shutdown_in_background(&set);
+
+        assert_eq!(wait_for_exit(&second).await, ChildExit::Terminated(15));
+    }
+
+    #[tokio::test]
+    async fn a_zero_grace_period_still_signals_before_waiting() {
+        let set = ProcessSet::root().nested_with_grace(Duration::ZERO);
+        let child = spawn_sleep(&set);
+
+        shutdown_in_background(&set);
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Terminated(15));
+        timeout(Duration::from_secs(1), set.wait_idle())
+            .await
+            .expect("exited child remained tracked");
+    }
+
+    #[tokio::test]
+    async fn a_second_shutdown_force_kills_without_waiting_for_the_grace_period() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(5));
+        let child = set
+            .spawn(
+                TokioCommand::new("sh")
+                    .args(["-c", "trap '' TERM; echo ready; exec sleep 30"])
+                    .stdout(Stdio::piped()),
+            )
+            .unwrap();
+
+        let mut ready = String::new();
+        BufReader::new(child.take_stdout().await.unwrap())
+            .read_line(&mut ready)
+            .await
+            .unwrap();
+        assert_eq!(ready, "ready\n");
+
+        shutdown_in_background(&set);
+        shutdown_in_background(&set);
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn waiting_for_idle_returns_at_once_when_empty() {
+        timeout(Duration::from_secs(1), create_set().wait_idle())
+            .await
+            .expect("empty set was not idle");
     }
 }

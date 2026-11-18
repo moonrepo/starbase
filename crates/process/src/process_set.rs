@@ -6,7 +6,7 @@ use std::fmt;
 use std::io;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
-use tokio::process::{Child, Command as TokioCommand};
+use tokio::process::Command as TokioCommand;
 use tokio::sync::{Notify, mpsc};
 use tokio::task::JoinSet;
 use tokio::time::sleep;
@@ -73,7 +73,9 @@ impl ProcessSet {
         self.nested_with_grace(self.grace())
     }
 
-    pub(crate) fn nested_with_grace(&self, grace: Duration) -> ProcessSet {
+    /// Create a set nested under this one, with its own grace period. A zero
+    /// duration waits indefinitely instead of force killing.
+    pub fn nested_with_grace(&self, grace: Duration) -> ProcessSet {
         let set = Self::create(grace, Arc::clone(&self.inner.idle));
         let mut state = self.inner.state.lock().unwrap();
 
@@ -103,11 +105,7 @@ impl ProcessSet {
     /// handle owns the child: dropping it while the child still runs kills
     /// the child, and dropping it after the child exits stops tracking it.
     pub fn spawn(&self, command: &mut TokioCommand) -> io::Result<SharedChild> {
-        Ok(self.track(command.spawn()?))
-    }
-
-    pub(crate) fn track(&self, child: Child) -> SharedChild {
-        let owner = SharedChild::new_owned(child, Arc::downgrade(&self.inner));
+        let owner = SharedChild::new_owned(command.spawn()?, Arc::downgrade(&self.inner));
 
         self.inner
             .state
@@ -116,22 +114,12 @@ impl ProcessSet {
             .children
             .insert(owner.id(), owner.clone());
 
-        owner
+        Ok(owner)
     }
 
-    pub(crate) fn get(&self, pid: u32) -> Option<SharedChild> {
+    /// Look up a child tracked in this set by pid. Nested sets aren't searched.
+    pub fn get(&self, pid: u32) -> Option<SharedChild> {
         self.inner.state.lock().unwrap().children.get(&pid).cloned()
-    }
-
-    /// Stop tracking a child without signalling it, and stop its owner
-    /// from killing it on drop.
-    pub(crate) fn release(&self, pid: u32) {
-        let removed = self.inner.state.lock().unwrap().children.remove(&pid);
-
-        if let Some(child) = removed {
-            child.stop_cleanup();
-            self.inner.idle.notify_waiters();
-        }
     }
 
     /// Send `signal` to every child in this set and its nested sets, wait

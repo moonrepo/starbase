@@ -1,15 +1,12 @@
 use crate::process_set::ProcessSet;
 use crate::signal::{SignalType, listen};
-use std::future::Future;
 use std::sync::{LazyLock, Once, OnceLock, mpsc};
 use std::thread;
-use tokio::runtime::Handle;
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tracing::warn;
 
 static SENDER: LazyLock<Sender<SignalType>> = LazyLock::new(|| broadcast::channel(10).0);
 static RECEIVED: OnceLock<SignalType> = OnceLock::new();
-static RUNTIME: OnceLock<Handle> = OnceLock::new();
 static STARTED: Once = Once::new();
 
 /// Listens for OS termination signals on behalf of the whole process
@@ -39,20 +36,6 @@ impl SignalListener {
     }
 }
 
-/// Run a future on the listener's runtime, which outlives any other.
-pub(crate) fn spawn(future: impl Future<Output = ()> + Send + 'static) {
-    start();
-
-    match RUNTIME.get() {
-        Some(runtime) => {
-            runtime.spawn(future);
-        }
-        None => {
-            warn!("The signal listener is not running, so a shutdown was skipped");
-        }
-    }
-}
-
 pub(crate) fn start() {
     STARTED.call_once(|| {
         let (ready_sender, ready_receiver) = mpsc::channel();
@@ -70,8 +53,6 @@ pub(crate) fn start() {
                         return;
                     }
                 };
-
-                let _ = RUNTIME.set(runtime.handle().clone());
 
                 runtime.block_on(listen(
                     || {

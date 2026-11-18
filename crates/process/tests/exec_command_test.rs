@@ -2,7 +2,7 @@
 
 use starbase_console::{Console, EmptyReporter};
 use starbase_process::{
-    ChildExit, Command, ProcessError, ProcessRegistry, ShellType, SignalType, StdinMode,
+    ChildExit, Command, ProcessError, ProcessSet, ShellType, SignalType, StdinMode,
 };
 use std::time::Duration;
 
@@ -260,7 +260,7 @@ mod cancellation {
         command.input(vec!["x".repeat(1024); 2048]);
 
         let mut task = tokio::spawn(async move { command.exec_capture_output().await });
-        let registry = ProcessRegistry::instance();
+        let set = ProcessSet::root();
 
         let (child, descendant) = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
@@ -270,7 +270,7 @@ mod cancellation {
                         .filter_map(|pid| pid.parse::<u32>().ok());
 
                     if let (Some(pid), Some(descendant)) = (pids.next(), pids.next())
-                        && let Some(child) = registry.get_running_by_pid(pid).await
+                        && let Some(child) = set.get(pid)
                     {
                         break (child, descendant);
                     }
@@ -318,13 +318,13 @@ mod cancellation {
         let mut command =
             create_command(&format!("echo $$ > '{}'; exec sleep 30", marker.display()));
         let task = tokio::spawn(async move { command.exec_capture_output().await });
-        let registry = ProcessRegistry::instance();
+        let set = ProcessSet::root();
 
         let pid = tokio::time::timeout(Duration::from_secs(3), async {
             loop {
                 if let Ok(pid) = std::fs::read_to_string(&marker)
                     && let Ok(pid) = pid.trim().parse()
-                    && registry.get_running_by_pid(pid).await.is_some()
+                    && set.get(pid).is_some()
                 {
                     break pid;
                 }
@@ -335,13 +335,13 @@ mod cancellation {
         .await
         .expect("child was not registered");
 
-        let child = registry.get_running_by_pid(pid).await.unwrap();
+        let child = set.get(pid).unwrap();
 
         task.abort();
         assert!(task.await.unwrap_err().is_cancelled());
 
         tokio::time::timeout(Duration::from_secs(1), async {
-            while registry.get_running_by_pid(pid).await.is_some() {
+            while set.get(pid).is_some() {
                 tokio::time::sleep(Duration::from_millis(5)).await;
             }
 
