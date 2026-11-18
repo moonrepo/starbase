@@ -170,3 +170,89 @@ async fn force_kill_stops_stream_and_capture_readers() {
 async fn force_kill_stops_continuous_capture_readers() {
     assert_streaming_capture_stops(true).await;
 }
+
+// Spawn the shell into `set`, wait for it to exit, and return a capture that
+// is blocked on the pipes its background child still holds
+async fn blocked_capture(
+    set: &ProcessSet,
+) -> (
+    SharedChild,
+    Descendant,
+    std::pin::Pin<
+        Box<impl std::future::Future<Output = std::io::Result<starbase_process::Output>>>,
+    >,
+) {
+    let child = set.spawn(&mut shell()).unwrap();
+    let descendant = descendant(&child).await;
+
+    timeout(Duration::from_secs(3), child.wait())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let mut capture = Box::pin({
+        let child = child.clone();
+
+        async move { child.wait_with_output().await }
+    });
+
+    assert!(
+        timeout(Duration::from_millis(50), capture.as_mut())
+            .await
+            .is_err()
+    );
+
+    (child, descendant, capture)
+}
+
+#[tokio::test]
+async fn a_later_request_stops_capture_after_a_zero_grace_shutdown() {
+    let set = ProcessSet::root().nested_with_grace(Duration::ZERO);
+    let (_child, _descendant, mut capture) = blocked_capture(&set).await;
+
+    // With an unlimited grace period, nothing is force killed or stopped
+    set.shutdown(SignalType::Terminate).await;
+
+    assert!(
+        timeout(Duration::from_millis(50), capture.as_mut())
+            .await
+            .is_err()
+    );
+
+    // So the next request stops the capture
+    set.shutdown(SignalType::Terminate).await;
+
+    let output = timeout(Duration::from_secs(1), capture)
+        .await
+        .expect("capture waited on a descendant after a second request")
+        .unwrap();
+
+    assert_eq!(output.stdout.as_ref(), b"ready");
+}
+
+#[tokio::test]
+async fn a_parent_shutdown_stops_capture_for_a_nested_shutdowns_exited_child() {
+    let parent = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+    let nested = parent.nested_with_grace(Duration::from_secs(10));
+    let (_child, _descendant, capture) = blocked_capture(&nested).await;
+
+    // The nested shutdown sees its child exit, and waits out its grace period
+    tokio::spawn({
+        let nested = nested.clone();
+
+        async move { nested.shutdown(SignalType::Terminate).await }
+    });
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // A shutdown of the parent takes over, which stops the capture
+    tokio::spawn({
+        let parent = parent.clone();
+
+        async move { parent.shutdown(SignalType::Terminate).await }
+    });
+
+    timeout(Duration::from_secs(1), capture)
+        .await
+        .expect("capture waited out the nested shutdown's grace period")
+        .unwrap();
+}

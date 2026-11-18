@@ -3,7 +3,8 @@ use crate::signal::SignalType;
 use crate::signal_listener;
 use std::fmt;
 use std::io;
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::mem;
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak};
 use std::time::Duration;
 use tokio::process::Command as TokioCommand;
 use tokio::sync::Notify;
@@ -30,6 +31,10 @@ pub(crate) struct SetInner {
     // when one of its nested sets goes idle
     idle: Arc<Notify>,
 
+    // Held while a shutdown of this set starts, so that requests arriving
+    // at the same time see each other
+    starting: Mutex<()>,
+
     state: Mutex<SetState>,
 }
 
@@ -42,14 +47,17 @@ struct SetState {
 
     // The shutdown of this set that is waiting out its grace period
     shutdown: Option<Arc<Round>>,
+
+    // Children of a zero grace shutdown that exited with their output
+    // readers left running, for the next request to stop
+    unstopped: Vec<SharedChild>,
 }
 
 // One shutdown of a set, covering every child in its subtree at the time
 struct Round {
     children: Vec<Tracked>,
 
-    // Woken when another request force kills the children, or starts a
-    // new shutdown after they all exited
+    // Woken when another request takes over this shutdown
     superseded: Notify,
 }
 
@@ -78,10 +86,11 @@ impl ProcessSet {
         ROOT.get().cloned()
     }
 
-    /// Set the root's grace period. Sets nested afterwards inherit it.
-    /// A zero duration waits indefinitely instead of force killing.
+    /// Set the root's grace period, which OS termination signals use for
+    /// every child. Sets nested afterwards inherit it. A zero duration
+    /// waits indefinitely instead of force killing.
     pub fn configure_root(grace: Duration) {
-        *Self::root().inner.grace.lock().unwrap() = grace;
+        *lock(&Self::root().inner.grace) = grace;
     }
 
     /// Create a set nested under this one, with the same grace period. It's
@@ -90,11 +99,13 @@ impl ProcessSet {
         self.nested_with_grace(self.grace())
     }
 
-    /// Create a set nested under this one, with its own grace period. A zero
-    /// duration waits indefinitely instead of force killing.
+    /// Create a set nested under this one, with its own grace period for
+    /// shutdowns of the set itself. A shutdown of an enclosing set uses
+    /// that set's grace period instead. A zero duration waits indefinitely
+    /// instead of force killing.
     pub fn nested_with_grace(&self, grace: Duration) -> ProcessSet {
         let set = Self::create(grace, Arc::clone(&self.inner.idle));
-        let mut state = self.inner.state.lock().unwrap();
+        let mut state = lock(&self.inner.state);
 
         state.nested.retain(|nested| nested.strong_count() > 0);
         state.nested.push(Arc::downgrade(&set.inner));
@@ -107,15 +118,17 @@ impl ProcessSet {
             inner: Arc::new(SetInner {
                 grace: Mutex::new(grace),
                 idle,
+                starting: Mutex::new(()),
                 state: Mutex::new(SetState::default()),
             }),
         }
     }
 
-    /// Return how long children get to exit after a shutdown signal before
-    /// they're force killed. Zero waits indefinitely instead.
+    /// Return how long children get to exit after a shutdown of this set
+    /// signals them, before they're force killed. Zero waits indefinitely
+    /// instead.
     pub fn grace(&self) -> Duration {
-        *self.inner.grace.lock().unwrap()
+        *lock(&self.inner.grace)
     }
 
     /// Spawn the command and track the child in this set. The returned
@@ -125,22 +138,14 @@ impl ProcessSet {
     pub fn spawn(&self, command: &mut TokioCommand) -> io::Result<SharedChild> {
         let owner = SharedChild::new_owned(command.spawn()?, Arc::clone(&self.inner));
 
-        self.inner
-            .state
-            .lock()
-            .unwrap()
-            .children
-            .push(owner.clone());
+        lock(&self.inner.state).children.push(owner.clone());
 
         Ok(owner)
     }
 
     /// Look up a child tracked in this set by pid. Nested sets aren't searched.
     pub fn get(&self, pid: u32) -> Option<SharedChild> {
-        self.inner
-            .state
-            .lock()
-            .unwrap()
+        lock(&self.inner.state)
             .children
             .iter()
             .rev()
@@ -149,10 +154,12 @@ impl ProcessSet {
     }
 
     /// Shut down every child in this set and its nested sets. Each one is
-    /// sent `signal`, unless it was already signalled (by a shutdown of an
-    /// enclosing set, say). After the grace period, the children of this
-    /// shutdown are force killed, which also stops their output readers.
-    /// With a zero grace period, it waits for them to exit instead.
+    /// sent `signal`, unless another shutdown is already waiting on it (a
+    /// force kill is always sent). After this set's grace period, the
+    /// children of this shutdown are force killed, which also stops their
+    /// output readers. With a zero grace period, it waits for them to exit
+    /// instead, and leaves their output readers for the next request to
+    /// stop.
     ///
     /// Calling this while a shutdown of this set, or of a set nested under
     /// it, is waiting out its grace period force kills everything still
@@ -160,8 +167,9 @@ impl ProcessSet {
     /// Once every child of that shutdown has exited, it starts a new
     /// shutdown instead.
     ///
-    /// This returns once the grace period has passed, or sooner when force
-    /// killed. Use [`Self::wait_idle`] to wait for the children themselves.
+    /// This returns once the grace period has passed, or once the children
+    /// it force killed have exited. Use [`Self::wait_idle`] to wait for the
+    /// children themselves.
     pub async fn shutdown(&self, signal: SignalType) {
         self.begin_shutdown(signal).finish().await;
     }
@@ -170,41 +178,43 @@ impl ProcessSet {
     /// return the rest of the shutdown to await. Nothing here waits, so the
     /// signal listener can do this before it tells subscribers.
     pub(crate) fn begin_shutdown(&self, signal: SignalType) -> Shutdown {
+        let _starting = lock(&self.inner.starting);
+        let sets = self.subtree();
         let mut killed = vec![];
 
-        if let Some(round) = self.current_shutdown() {
+        for (index, set) in sets.iter().enumerate() {
+            let unstopped = mem::take(&mut lock(&set.inner.state).unstopped);
+
+            for child in unstopped {
+                child.stop_output();
+            }
+
+            let Some(round) = set.current_shutdown() else {
+                continue;
+            };
+
             if round.has_running() {
-                killed.extend(self.force_kill(&round));
-
-                // That killed the children of nested shutdowns too, so let
-                // them finish rather than wait out their grace
-                for set in self.subtree().iter().skip(1) {
-                    if let Some(round) = set.current_shutdown() {
-                        round.superseded.notify_one();
-                    }
-                }
-
-                return Shutdown {
-                    killed,
-                    round: None,
-                };
-            }
-
-            // Every child of that shutdown has exited, so this request starts
-            // a new shutdown rather than escalating that one
-            for tracked in &round.children {
-                tracked.child.stop_output();
-            }
-
-            round.superseded.notify_one();
-        }
-
-        // Escalate shutdowns of nested sets that are waiting out their grace
-        for set in self.subtree().iter().skip(1) {
-            if let Some(round) = set.current_shutdown()
-                && round.has_running()
-            {
                 killed.extend(set.force_kill(&round));
+
+                // That covered everything under this set, so let the
+                // shutdowns of nested sets finish rather than wait
+                if index == 0 {
+                    for nested in &sets[1..] {
+                        if let Some(round) = nested.current_shutdown() {
+                            round.supersede();
+                        }
+                    }
+
+                    return Shutdown {
+                        killed,
+                        round: None,
+                    };
+                }
+            } else {
+                // Every child of that shutdown has exited, so this request
+                // starts a new shutdown rather than escalating that one
+                round.supersede();
+                set.clear_shutdown(&round);
             }
         }
 
@@ -236,9 +246,12 @@ impl ProcessSet {
         for tracked in &children {
             let child = &tracked.child;
 
-            // A child already shutting down isn't signalled again, as many
-            // programs treat a second interrupt as a request to quit at once
-            if (matches!(signal, SignalType::Kill) || !child.was_signalled())
+            // A child that another shutdown is still waiting on, such as one
+            // of an enclosing set, isn't signalled again, as many programs
+            // treat a second interrupt as a request to quit at once
+            let first = child.join_shutdown();
+
+            if (first || matches!(signal, SignalType::Kill))
                 && let Err(error) = child.send_signal(signal)
             {
                 warn!(
@@ -254,7 +267,7 @@ impl ProcessSet {
             superseded: Notify::new(),
         });
 
-        self.inner.state.lock().unwrap().shutdown = Some(Arc::clone(&round));
+        lock(&self.inner.state).shutdown = Some(Arc::clone(&round));
 
         Shutdown {
             killed,
@@ -290,7 +303,7 @@ impl ProcessSet {
             if self
                 .subtree()
                 .iter()
-                .all(|set| set.inner.state.lock().unwrap().children.is_empty())
+                .all(|set| lock(&set.inner.state).children.is_empty())
             {
                 return;
             }
@@ -300,7 +313,19 @@ impl ProcessSet {
     }
 
     fn current_shutdown(&self) -> Option<Arc<Round>> {
-        self.inner.state.lock().unwrap().shutdown.clone()
+        lock(&self.inner.state).shutdown.clone()
+    }
+
+    fn clear_shutdown(&self, round: &Arc<Round>) {
+        let mut state = lock(&self.inner.state);
+
+        if state
+            .shutdown
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, round))
+        {
+            state.shutdown = None;
+        }
     }
 
     // Force kill the children of a waiting shutdown, and everything running
@@ -329,7 +354,7 @@ impl ProcessSet {
     }
 
     fn nested_sets(&self) -> Vec<ProcessSet> {
-        let mut state = self.inner.state.lock().unwrap();
+        let mut state = lock(&self.inner.state);
 
         state.nested.retain(|nested| nested.strong_count() > 0);
         state
@@ -360,7 +385,7 @@ impl ProcessSet {
         self.subtree()
             .into_iter()
             .flat_map(|set| {
-                let children = set.inner.state.lock().unwrap().children.clone();
+                let children = lock(&set.inner.state).children.clone();
 
                 children.into_iter().map(move |child| Tracked {
                     set: Arc::clone(&set.inner),
@@ -372,7 +397,8 @@ impl ProcessSet {
 }
 
 /// The part of a shutdown that waits, returned by
-/// [`ProcessSet::begin_shutdown`].
+/// [`ProcessSet::begin_shutdown`]. Dropping it unfinished cancels the
+/// shutdown.
 pub(crate) struct Shutdown {
     killed: Vec<Tracked>,
     round: Option<ActiveRound>,
@@ -380,18 +406,25 @@ pub(crate) struct Shutdown {
 
 impl Shutdown {
     pub(crate) async fn finish(self) {
-        let mut waiting = JoinSet::new();
+        let Shutdown { killed, round } = self;
+        let mut killing = JoinSet::new();
 
-        for tracked in self.killed {
-            waiting.spawn(wait_and_remove(tracked));
+        for tracked in killed {
+            killing.spawn(wait_after_kill_and_remove(tracked));
         }
 
-        if let Some(round) = self.round {
+        if let Some(round) = round {
             round.run().await;
         }
 
-        waiting.join_all().await;
+        killing.join_all().await;
     }
+}
+
+enum End {
+    Superseded,
+    Exited,
+    TimedOut,
 }
 
 struct ActiveRound {
@@ -403,89 +436,99 @@ struct ActiveRound {
 
 impl ActiveRound {
     async fn run(self) {
-        let _guard = RoundGuard {
-            set: &self.set.inner,
-            round: &self.round,
-        };
-
         let mut waiting = JoinSet::new();
 
         for tracked in self.round.children.iter().cloned() {
             waiting.spawn(wait_and_remove(tracked));
         }
 
-        let timed_out = if matches!(self.signal, SignalType::Kill) {
-            true
+        let end = if matches!(self.signal, SignalType::Kill) {
+            End::TimedOut
         } else if self.grace.is_zero() {
-            // Wait indefinitely for the children to exit, without force
-            // killing, unless another request does
             tokio::select! {
-                _ = self.round.superseded.notified() => {},
-                _ = async { while waiting.join_next().await.is_some() {} } => {},
+                _ = self.round.superseded.notified() => End::Superseded,
+                _ = async { while waiting.join_next().await.is_some() {} } => End::Exited,
             }
-
-            false
         } else {
             tokio::select! {
-                _ = self.round.superseded.notified() => false,
-                _ = sleep(self.grace) => true,
+                _ = self.round.superseded.notified() => End::Superseded,
+                _ = sleep(self.grace) => End::TimedOut,
             }
         };
 
-        // Children that already exited are only stopped from holding up their
-        // output readers, which their descendants may still be keeping open
-        if timed_out {
-            debug!(
-                pids = ?self.round.children.iter().map(|tracked| tracked.child.id()).collect::<Vec<_>>(),
-                "Wait threshold exhausted, killing {} running child processes",
-                self.round.children.len()
-            );
+        match end {
+            // Whatever took over this shutdown has dealt with its children,
+            // and the waits still running here are dropped
+            End::Superseded => {}
 
-            for tracked in &self.round.children {
-                kill(&tracked.child);
+            // With no limit on the grace period, readers that descendants
+            // keep open stay running until another request stops them
+            End::Exited => {
+                lock(&self.set.inner.state).unstopped.extend(
+                    self.round
+                        .children
+                        .iter()
+                        .map(|tracked| tracked.child.clone()),
+                );
+            }
+
+            // Children that already exited are only stopped from holding up
+            // their output readers, which descendants may be keeping open
+            End::TimedOut => {
+                debug!(
+                    pids = ?self.round.children.iter().map(|tracked| tracked.child.id()).collect::<Vec<_>>(),
+                    "Wait threshold exhausted, killing {} running child processes",
+                    self.round.children.len()
+                );
+
+                drop(waiting);
+
+                let mut killing = JoinSet::new();
+
+                for tracked in self.round.children.iter().cloned() {
+                    kill(&tracked.child);
+                    killing.spawn(wait_after_kill_and_remove(tracked));
+                }
+
+                killing.join_all().await;
             }
         }
-
-        waiting.join_all().await;
     }
 }
 
-// Clears the set's shutdown when the round ends or is cancelled, unless a
-// newer one has replaced it
-struct RoundGuard<'a> {
-    set: &'a SetInner,
-    round: &'a Arc<Round>,
-}
-
-impl Drop for RoundGuard<'_> {
+// Runs whether the round finished, was cancelled, or never ran
+impl Drop for ActiveRound {
     fn drop(&mut self) {
-        let mut state = self.set.state.lock().unwrap();
-
-        if state
-            .shutdown
-            .as_ref()
-            .is_some_and(|current| Arc::ptr_eq(current, self.round))
-        {
-            state.shutdown = None;
+        for tracked in &self.round.children {
+            tracked.child.leave_shutdown();
         }
+
+        self.set.clear_shutdown(&self.round);
     }
 }
 
 impl Round {
     // Whether any child of this shutdown is still tracked, which it stops
-    // being once it has exited
+    // being once it has exited, or once it's released from its set
     fn has_running(&self) -> bool {
         self.children
             .iter()
             .any(|tracked| tracked.set.tracks(&tracked.child))
     }
+
+    // End this shutdown early, stopping its children's output readers
+    fn supersede(&self) {
+        for tracked in &self.children {
+            tracked.child.stop_output();
+        }
+
+        self.superseded.notify_one();
+    }
 }
 
 impl SetInner {
     fn tracks(&self, child: &SharedChild) -> bool {
-        self.state
-            .lock()
-            .unwrap()
+        lock(&self.state)
             .children
             .iter()
             .any(|tracked| tracked.same_child(child))
@@ -495,7 +538,7 @@ impl SetInner {
     /// that was given the same pid since is left alone.
     pub(crate) fn remove(&self, child: &SharedChild) {
         let removed = {
-            let mut state = self.state.lock().unwrap();
+            let mut state = lock(&self.state);
 
             state
                 .children
@@ -514,14 +557,25 @@ impl fmt::Debug for ProcessSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ProcessSet")
             .field("grace", &self.grace())
-            .field("children", &self.inner.state.lock().unwrap().children.len())
+            .field("children", &lock(&self.inner.state).children.len())
             .finish()
     }
+}
+
+// Nothing here can panic while holding a lock, but this also runs in
+// destructors, where a poisoned lock must not panic again
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 async fn wait_and_remove(tracked: Tracked) {
     let _ = tracked.child.wait().await;
 
+    tracked.set.remove(&tracked.child);
+}
+
+async fn wait_after_kill_and_remove(tracked: Tracked) {
+    tracked.child.wait_after_kill().await;
     tracked.set.remove(&tracked.child);
 }
 

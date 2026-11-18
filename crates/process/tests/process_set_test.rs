@@ -20,10 +20,17 @@ fn spawn_sleep(set: &ProcessSet) -> SharedChild {
 
 // A child that ignores the termination signal, so only a force kill stops it
 async fn spawn_ignoring_term(set: &ProcessSet) -> SharedChild {
+    spawn_ignoring(set, "TERM").await
+}
+
+async fn spawn_ignoring(set: &ProcessSet, signal: &str) -> SharedChild {
     let child = set
         .spawn(
             TokioCommand::new("sh")
-                .args(["-c", "trap '' TERM; echo ready; exec sleep 30"])
+                .args([
+                    "-c",
+                    &format!("trap '' {signal}; echo ready; exec sleep 30"),
+                ])
                 .stdout(Stdio::piped()),
         )
         .unwrap();
@@ -323,7 +330,7 @@ mod process_set {
                         let _ = timeout(Duration::from_millis(50), &mut shutdown).await;
 
                         started.send(()).unwrap();
-                        std::thread::sleep(Duration::from_millis(300));
+                        std::thread::sleep(Duration::from_millis(1500));
 
                         shutdown.await;
                     });
@@ -332,19 +339,14 @@ mod process_set {
 
         first_started.recv().unwrap();
 
-        timeout(Duration::from_secs(2), set.shutdown(SignalType::Terminate))
+        // It must not wait on the stalled runtime, which holds the wait on
+        // the child, to see it exit
+        timeout(Duration::from_secs(1), set.shutdown(SignalType::Terminate))
             .await
-            .expect("second shutdown did not finish");
+            .expect("second shutdown waited on the stalled runtime");
 
-        // Already reaped by the time the second shutdown returned, so this
-        // completes on its first poll
-        assert_eq!(
-            timeout(Duration::ZERO, child.wait())
-                .await
-                .expect("child was still running")
-                .unwrap(),
-            ChildExit::Killed
-        );
+        // Only untracked once it was seen to exit
+        assert!(set.get(child.id()).is_none(), "child was still running");
 
         first.join().unwrap();
     }
@@ -578,6 +580,120 @@ mod process_set {
                 .await
                 .is_err()
         );
+
+        child.kill().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_signal_sent_outside_a_shutdown_does_not_stop_it_signalling() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let child = spawn_ignoring(&set, "HUP").await;
+
+        // As an app does to have a server reload its config
+        child.send_signal(SignalType::Hangup).unwrap();
+
+        shutdown_in_background(&set);
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Terminated(15));
+    }
+
+    #[tokio::test]
+    async fn a_cancelled_shutdown_does_not_make_the_next_one_force_kill() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let child = spawn_ignoring_term(&set).await;
+
+        let _ = timeout(
+            Duration::from_millis(50),
+            set.shutdown(SignalType::Terminate),
+        )
+        .await;
+
+        // A new graceful shutdown, not an escalation of the cancelled one
+        shutdown_in_background(&set);
+
+        assert!(
+            timeout(Duration::from_millis(200), child.wait())
+                .await
+                .is_err(),
+            "the child was force killed"
+        );
+
+        child.kill().await.unwrap();
+    }
+
+    #[test]
+    fn shutdowns_requested_at_the_same_time_still_escalate() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        // Several children widen the window between one request checking for
+        // a shutdown in progress and starting its own
+        let children = runtime.block_on(async {
+            let mut children = vec![];
+
+            for _ in 0..10 {
+                children.push(spawn_ignoring_term(&set).await);
+            }
+
+            children
+        });
+
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let requests = (0..2)
+            .map(|_| {
+                let set = set.clone();
+                let barrier = std::sync::Arc::clone(&barrier);
+
+                std::thread::spawn(move || {
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap();
+
+                    barrier.wait();
+                    runtime.block_on(set.shutdown(SignalType::Terminate));
+                })
+            })
+            .collect::<Vec<_>>();
+
+        runtime.block_on(async {
+            for child in &children {
+                assert_eq!(wait_for_exit(child).await, ChildExit::Killed);
+            }
+        });
+
+        for request in requests {
+            request.join().unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn releasing_a_child_during_a_shutdown_does_not_hang_it() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(1));
+        let owner = spawn_ignoring_term(&set).await;
+        let child = owner.clone();
+
+        let first = tokio::spawn({
+            let set = set.clone();
+
+            async move { set.shutdown(SignalType::Terminate).await }
+        });
+
+        sleep(Duration::from_millis(50)).await;
+
+        // Released, so it keeps running but no longer counts as running here
+        owner.stop_cleanup();
+        drop(owner);
+
+        set.shutdown(SignalType::Terminate).await;
+
+        timeout(Duration::from_secs(3), first)
+            .await
+            .expect("the first shutdown never finished")
+            .unwrap();
 
         child.kill().await.unwrap();
     }

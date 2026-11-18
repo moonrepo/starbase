@@ -6,8 +6,9 @@ use std::future::{Future, poll_fn};
 use std::io;
 use std::pin::pin;
 use std::process::ExitStatus;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::time::Duration;
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::{Mutex as AsyncMutex, watch};
 use tracing::warn;
@@ -63,6 +64,9 @@ pub struct SharedChild {
     exited: watch::Sender<bool>,
     cleanup: Arc<AtomicBool>,
 
+    // How many shutdowns that are still waiting include this child
+    shutdowns: Arc<AtomicUsize>,
+
     // The set tracking this child, held by the original handle only. It's
     // a strong reference, so a set can't be dropped out from under children
     // it still tracks, which would hide them from shutdowns.
@@ -80,6 +84,7 @@ impl SharedChild {
             output_stop: watch::channel(false).0,
             exited: watch::channel(false).0,
             cleanup: Arc::new(AtomicBool::new(true)),
+            shutdowns: Arc::new(AtomicUsize::new(0)),
             set: None,
         }
     }
@@ -103,10 +108,29 @@ impl SharedChild {
         Arc::ptr_eq(&self.inner, &other.inner)
     }
 
-    // Whether a signal has been delivered to the child. On Windows an
-    // interrupt isn't recorded, as it can't be sent to a single process.
-    pub(crate) fn was_signalled(&self) -> bool {
-        self.signal.get().is_some()
+    // Count a shutdown that waits on this child. Returns true for the first
+    // of any that overlap, which is the one to signal it.
+    pub(crate) fn join_shutdown(&self) -> bool {
+        self.shutdowns.fetch_add(1, Ordering::AcqRel) == 0
+    }
+
+    pub(crate) fn leave_shutdown(&self) {
+        self.shutdowns.fetch_sub(1, Ordering::AcqRel);
+    }
+
+    // Wait for a child that was just force killed to exit. This polls rather
+    // than queueing behind `wait`, whose holder may be on a runtime that
+    // isn't running.
+    pub(crate) async fn wait_after_kill(&self) {
+        loop {
+            let status = self.try_wait_locked(&mut self.inner.lock().unwrap());
+
+            if !matches!(status, Ok(None)) {
+                return;
+            }
+
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
     }
 
     /// Take the child's stdin pipe, if it was piped and not already taken.
@@ -360,6 +384,7 @@ impl Clone for SharedChild {
             output_stop: self.output_stop.clone(),
             exited: self.exited.clone(),
             cleanup: Arc::clone(&self.cleanup),
+            shutdowns: Arc::clone(&self.shutdowns),
             // Only the original instance has access to the set!
             set: None,
         }
@@ -370,15 +395,18 @@ impl Drop for SharedChild {
     fn drop(&mut self) {
         if let Some(set) = self.set.take() {
             // A child still running when its owner goes away was cancelled,
-            // so kill it now rather than queueing that for later
-            if self.cleanup.swap(false, Ordering::AcqRel)
-                && let Err(error) = self.send_signal(SignalType::Kill)
-            {
-                warn!(
-                    pid = self.pid,
-                    %error,
-                    "Failed to kill cancelled child process"
-                );
+            // so kill it now rather than queueing that for later. A poisoned
+            // lock must not panic again while unwinding.
+            if self.cleanup.swap(false, Ordering::AcqRel) {
+                let mut child = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+
+                if let Err(error) = self.send_signal_locked(&mut child, SignalType::Kill) {
+                    warn!(
+                        pid = self.pid,
+                        %error,
+                        "Failed to kill cancelled child process"
+                    );
+                }
             }
 
             set.remove(self);
