@@ -236,8 +236,10 @@ mod cancellation {
     use super::*;
 
     async fn force_kill_unblocks_inherited_stdin(continuous_pipe: bool) {
+        // Both variants run in parallel, and can start within the same clock
+        // tick, so the variant is part of the name to keep their files apart
         let marker = std::env::temp_dir().join(format!(
-            "starbase-process-stdin-{}-{}",
+            "starbase-process-stdin-{continuous_pipe}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
