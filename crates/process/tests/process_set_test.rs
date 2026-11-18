@@ -15,7 +15,17 @@ fn create_set() -> ProcessSet {
 }
 
 fn spawn_sleep(set: &ProcessSet) -> SharedChild {
-    set.spawn(TokioCommand::new("sleep").arg("30")).unwrap()
+    let mut command = TokioCommand::new("sleep");
+    command.arg("30");
+
+    set.spawn(command).unwrap()
+}
+
+// A shell running `script`, with its stdout piped
+fn shell(script: &str) -> TokioCommand {
+    let mut command = TokioCommand::new("sh");
+    command.args(["-c", script]).stdout(Stdio::piped());
+    command
 }
 
 // A child that ignores the termination signal, so only a force kill stops it
@@ -25,14 +35,9 @@ async fn spawn_ignoring_term(set: &ProcessSet) -> SharedChild {
 
 async fn spawn_ignoring(set: &ProcessSet, signal: &str) -> SharedChild {
     let child = set
-        .spawn(
-            TokioCommand::new("sh")
-                .args([
-                    "-c",
-                    &format!("trap '' {signal}; echo ready; exec sleep 30"),
-                ])
-                .stdout(Stdio::piped()),
-        )
+        .spawn(shell(&format!(
+            "trap '' {signal}; echo ready; exec sleep 30"
+        )))
         .unwrap();
 
     let mut ready = String::new();
@@ -110,7 +115,7 @@ mod process_set {
     #[tokio::test]
     async fn dropping_the_owner_after_exit_only_stops_tracking() {
         let set = create_set();
-        let owner = set.spawn(&mut TokioCommand::new("true")).unwrap();
+        let owner = set.spawn(TokioCommand::new("true")).unwrap();
         let pid = owner.id();
 
         assert!(matches!(
@@ -280,11 +285,7 @@ mod process_set {
     async fn a_second_shutdown_force_kills_without_waiting_for_the_grace_period() {
         let set = ProcessSet::root().nested_with_grace(Duration::from_secs(5));
         let child = set
-            .spawn(
-                TokioCommand::new("sh")
-                    .args(["-c", "trap '' TERM; echo ready; exec sleep 30"])
-                    .stdout(Stdio::piped()),
-            )
+            .spawn(shell("trap '' TERM; echo ready; exec sleep 30"))
             .unwrap();
 
         let mut ready = String::new();
@@ -442,14 +443,9 @@ mod process_set {
 
         // Reports each termination signal and keeps running
         let child = nested
-            .spawn(
-                TokioCommand::new("sh")
-                    .args([
-                        "-c",
-                        "trap 'echo term' TERM; echo ready; while :; do sleep 0.05; done",
-                    ])
-                    .stdout(Stdio::piped()),
-            )
+            .spawn(shell(
+                "trap 'echo term' TERM; echo ready; while :; do sleep 0.05; done",
+            ))
             .unwrap();
         let mut stdout = BufReader::new(child.take_stdout().await.unwrap());
         let mut line = String::new();

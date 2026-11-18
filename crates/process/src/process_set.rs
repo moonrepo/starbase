@@ -137,7 +137,7 @@ impl ProcessSet {
     /// handle owns the child: dropping it while the child still runs kills
     /// the child, and dropping it after the child exits stops tracking it.
     /// The set stays alive while the handle does.
-    pub fn spawn(&self, command: &mut TokioCommand) -> io::Result<SharedChild> {
+    pub fn spawn(&self, mut command: TokioCommand) -> io::Result<SharedChild> {
         self.track(Box::new(command.spawn()?), false)
     }
 
@@ -154,8 +154,8 @@ impl ProcessSet {
     /// that inherits stdin.
     ///
     /// [`SignalListener`]: crate::SignalListener
-    pub fn spawn_contained(&self, command: &mut TokioCommand) -> io::Result<SharedChild> {
-        let mut wrap = CommandWrap::from(mem::replace(command, TokioCommand::new("")));
+    pub fn spawn_contained(&self, command: TokioCommand) -> io::Result<SharedChild> {
+        let mut wrap = CommandWrap::from(command);
 
         #[cfg(unix)]
         wrap.wrap(process_wrap::tokio::ProcessGroup::leader());
@@ -163,11 +163,7 @@ impl ProcessSet {
         #[cfg(windows)]
         wrap.wrap(process_wrap::tokio::JobObject);
 
-        let child = wrap.spawn();
-
-        *command = wrap.into_command();
-
-        self.track(child?, true)
+        self.track(wrap.spawn()?, true)
     }
 
     fn track(&self, child: Box<dyn ChildWrapper>, contained: bool) -> io::Result<SharedChild> {

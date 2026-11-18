@@ -114,7 +114,7 @@ impl<R: Reporter> Command<R> {
     pub(crate) fn spawn_child(
         &self,
         set: &ProcessSet,
-        command: &mut TokioCommand,
+        command: TokioCommand,
     ) -> io::Result<SharedChild> {
         if self.should_contain_tree() {
             set.spawn_contained(command)

@@ -23,7 +23,7 @@ impl<R: Reporter> Command<R> {
         });
 
         let shared_child =
-            self.spawn_child(&set, &mut command)
+            self.spawn_child(&set, command)
                 .map_err(|error| ProcessError::Stream {
                     bin: self.get_bin_name(),
                     error: Box::new(error),

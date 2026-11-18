@@ -35,17 +35,22 @@ impl Drop for Descendant {
     }
 }
 
+fn sleep_command() -> TokioCommand {
+    let mut command = TokioCommand::new("sleep");
+    command.arg("30");
+    command
+}
+
 // Spawn a shell running `script`, which prints the pid of a process it
 // starts in the background as its first line
 async fn spawn_shell(set: &ProcessSet, script: &str) -> (SharedChild, Descendant) {
-    let child = set
-        .spawn_contained(
-            TokioCommand::new("sh")
-                .args(["-c", script])
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped()),
-        )
-        .unwrap();
+    let mut command = TokioCommand::new("sh");
+    command
+        .args(["-c", script])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let child = set.spawn_contained(command).unwrap();
 
     let mut pid = String::new();
     timeout(
@@ -62,10 +67,8 @@ async fn spawn_shell(set: &ProcessSet, script: &str) -> (SharedChild, Descendant
 #[tokio::test]
 async fn contained_children_lead_their_own_process_group() {
     let set = ProcessSet::root().nested();
-    let contained = set
-        .spawn_contained(TokioCommand::new("sleep").arg("30"))
-        .unwrap();
-    let uncontained = set.spawn(TokioCommand::new("sleep").arg("30")).unwrap();
+    let contained = set.spawn_contained(sleep_command()).unwrap();
+    let uncontained = set.spawn(sleep_command()).unwrap();
 
     assert!(contained.is_contained());
     assert!(!uncontained.is_contained());

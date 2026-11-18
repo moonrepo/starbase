@@ -8,14 +8,18 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
+fn sleep_command() -> Command {
+    let mut command = Command::new("sleep");
+    command.arg("30");
+    command
+}
+
 #[tokio::test]
 async fn shuts_down_the_root_and_broadcasts_signals() {
     let mut receiver = SignalListener::subscribe();
     let set = ProcessSet::root().nested();
-    let contained = set
-        .spawn_contained(Command::new("sleep").arg("30"))
-        .unwrap();
-    let uncontained = set.spawn(Command::new("sleep").arg("30")).unwrap();
+    let contained = set.spawn_contained(sleep_command()).unwrap();
+    let uncontained = set.spawn(sleep_command()).unwrap();
 
     // Handlers are installed once subscribing returns, so this signal is
     // broadcast instead of exiting the test process

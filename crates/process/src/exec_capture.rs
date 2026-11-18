@@ -29,7 +29,7 @@ impl<R: Reporter> Command<R> {
             .stderr(Stdio::piped());
 
         let shared_child =
-            self.spawn_child(set, &mut command)
+            self.spawn_child(set, command)
                 .map_err(|error| ProcessError::Capture {
                     bin: self.get_bin_name(),
                     error: Box::new(error),
@@ -106,7 +106,7 @@ impl<R: Reporter> Command<R> {
             .stderr(Stdio::piped());
 
         let shared_child =
-            self.spawn_child(&set, &mut command)
+            self.spawn_child(&set, command)
                 .map_err(|error| ProcessError::Capture {
                     bin: self.get_bin_name(),
                     error: Box::new(error),
