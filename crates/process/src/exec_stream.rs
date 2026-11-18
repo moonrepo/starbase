@@ -1,7 +1,6 @@
 use crate::command::Command;
 use crate::output::Output;
 use crate::process_error::ProcessError;
-use crate::process_registry::ProcessRegistry;
 use bytes::Bytes;
 use starbase_console::Reporter;
 use std::process::Stdio;
@@ -12,7 +11,7 @@ impl<R: Reporter> Command<R> {
     /// streams directly to the terminal, and wait for it to exit. Nothing
     /// is captured; the returned [`Output`] always has empty streams.
     pub async fn exec_stream_output(&mut self) -> miette::Result<Output> {
-        let registry = ProcessRegistry::instance();
+        let set = self.get_process_set();
         let instant = Instant::now();
         let should_pass_stdin = self.should_pass_stdin();
         let mut command = self.create_async_command()?;
@@ -23,12 +22,12 @@ impl<R: Reporter> Command<R> {
             self.stdin.to_stdio()
         });
 
-        let child = command.spawn().map_err(|error| ProcessError::Stream {
-            bin: self.get_bin_name(),
-            error: Box::new(error),
-        })?;
-
-        let shared_child = registry.add_running(child).await;
+        let shared_child = set
+            .spawn(&mut command)
+            .map_err(|error| ProcessError::Stream {
+                bin: self.get_bin_name(),
+                error: Box::new(error),
+            })?;
 
         self.pre_log_command(&shared_child);
 
@@ -45,7 +44,8 @@ impl<R: Reporter> Command<R> {
 
         self.post_log_command(&shared_child, instant);
 
-        registry.remove_running(shared_child).await;
+        // Stop tracking the child, which also kills it if it is still running
+        drop(shared_child);
 
         input_result?;
 

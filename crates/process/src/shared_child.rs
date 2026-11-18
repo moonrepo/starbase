@@ -1,4 +1,5 @@
 use crate::output::Output;
+use crate::process_set::SetInner;
 use crate::signal::*;
 use bytes::Bytes;
 use std::future::{Future, poll_fn};
@@ -6,7 +7,7 @@ use std::io;
 use std::pin::pin;
 use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{Mutex as AsyncMutex, watch};
@@ -45,8 +46,10 @@ impl ChildExit {
 
 /// A cheaply cloneable handle to a running child process. Every clone
 /// shares the same underlying process, so signalling or waiting on one
-/// clone is visible to all others. Only the original handle created with
-/// [`Self::new_with_cleanup`] requests cleanup on drop; clones never do.
+/// clone is visible to all others. Only the original handle, created with
+/// [`Self::new_with_cleanup`] or returned by
+/// [`ProcessSet::spawn`](crate::ProcessSet::spawn), acts on drop; clones
+/// never do.
 pub struct SharedChild {
     inner: Arc<Mutex<Child>>,
     signal: Arc<OnceLock<SignalType>>,
@@ -54,8 +57,12 @@ pub struct SharedChild {
     waiter: Arc<AsyncMutex<()>>,
 
     output_stop: watch::Sender<bool>,
+    exited: watch::Sender<bool>,
     cleanup: Arc<AtomicBool>,
     cleanup_sender: Option<UnboundedSender<SharedChild>>,
+
+    // The set tracking this child, held by the original handle only
+    set: Option<Weak<SetInner>>,
 }
 
 impl SharedChild {
@@ -67,9 +74,19 @@ impl SharedChild {
             signal: Arc::new(OnceLock::new()),
             waiter: Arc::new(AsyncMutex::new(())),
             output_stop: watch::channel(false).0,
+            exited: watch::channel(false).0,
             cleanup: Arc::new(AtomicBool::new(true)),
             cleanup_sender: None,
+            set: None,
         }
+    }
+
+    /// Wrap a spawned child as the owner tracked by `set`. Dropping it kills
+    /// the child if it's still running, and stops tracking it either way.
+    pub(crate) fn new_owned(child: Child, set: Weak<SetInner>) -> Self {
+        let mut shared_child = Self::new(child);
+        shared_child.set = Some(set);
+        shared_child
     }
 
     /// Wrap a spawned child so it can be shared across tasks, and register
@@ -84,6 +101,12 @@ impl SharedChild {
     /// Return the child's process id.
     pub fn id(&self) -> u32 {
         self.pid
+    }
+
+    // Unlike comparing pids, this can't be fooled by the OS giving a new
+    // process the pid of one that has already exited
+    pub(crate) fn same_child(&self, other: &SharedChild) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
     }
 
     /// Take the child's stdin pipe, if it was piped and not already taken.
@@ -158,7 +181,7 @@ impl SharedChild {
         child: &mut Child,
         signal: SignalType,
     ) -> io::Result<Option<ExitStatus>> {
-        if let Some(status) = child.try_wait()? {
+        if let Some(status) = self.try_wait_locked(child)? {
             if matches!(signal, SignalType::Kill) {
                 self.stop_output();
             }
@@ -201,6 +224,19 @@ impl SharedChild {
         Ok(None)
     }
 
+    /// Reaping through `try_wait` makes tokio drop its `SIGCHLD` listener
+    /// for the child, which a concurrent [`Self::wait`] relies on to be
+    /// woken. Record the exit so those waiters are woken instead.
+    fn try_wait_locked(&self, child: &mut Child) -> io::Result<Option<ExitStatus>> {
+        let status = child.try_wait()?;
+
+        if status.is_some() {
+            self.exited.send_replace(true);
+        }
+
+        Ok(status)
+    }
+
     /// Disable the original handle's cleanup on drop. This can be called
     /// through any clone when the child is explicitly unregistered.
     pub fn stop_cleanup(&self) {
@@ -224,12 +260,25 @@ impl SharedChild {
         // Tokio supports one waiter. Serialize wait futures, but hold the
         // child lock only during each poll so signals can still be delivered.
         let _waiter = self.waiter.lock().await;
+        let mut exited = self.exited.subscribe();
 
-        let status = poll_fn(|cx| {
-            let mut child = self.inner.lock().unwrap();
-            pin!(child.wait()).poll(cx)
-        })
-        .await?;
+        let status = tokio::select! {
+            biased;
+            status = poll_fn(|cx| {
+                let mut child = self.inner.lock().unwrap();
+                pin!(child.wait()).poll(cx)
+            }) => status?,
+            // The child was reaped by a `try_wait` elsewhere, taking tokio's
+            // `SIGCHLD` listener with it, so the wait above would never be
+            // woken. Its exit status is retained. The watch guard is dropped
+            // before locking the child, which `try_wait_locked` holds while
+            // it updates the watch.
+            _ = async { let _ = exited.wait_for(|exited| *exited).await; } => {
+                self.inner.lock().unwrap().try_wait()?.ok_or_else(|| {
+                    io::Error::other("Child process was marked exited but has no status")
+                })?
+            }
+        };
 
         Ok(convert_exit_status(status, self.signal.get().copied()))
     }
@@ -307,9 +356,11 @@ impl Clone for SharedChild {
             pid: self.pid,
             waiter: Arc::clone(&self.waiter),
             output_stop: self.output_stop.clone(),
+            exited: self.exited.clone(),
             cleanup: Arc::clone(&self.cleanup),
-            // Only the original instance has access to the sender!
+            // Only the original instance has access to the sender and set!
             cleanup_sender: None,
+            set: None,
         }
     }
 }
@@ -329,6 +380,24 @@ impl Drop for SharedChild {
                     %error,
                     "Failed to kill cancelled child process after registry shutdown",
                 );
+            }
+        }
+
+        if let Some(set) = self.set.take() {
+            // A child still running when its owner goes away was cancelled,
+            // so kill it now rather than queueing that for later
+            if self.cleanup.swap(false, Ordering::AcqRel)
+                && let Err(error) = self.send_signal(SignalType::Kill)
+            {
+                warn!(
+                    pid = self.pid,
+                    %error,
+                    "Failed to kill cancelled child process"
+                );
+            }
+
+            if let Some(set) = set.upgrade() {
+                set.remove(self);
             }
         }
     }

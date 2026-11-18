@@ -2,7 +2,7 @@ use crate::command::Command;
 use crate::output::Output;
 use crate::output_cache::OutputCache;
 use crate::process_error::ProcessError;
-use crate::process_registry::ProcessRegistry;
+use crate::process_set::ProcessSet;
 use bytes::Bytes;
 use miette::IntoDiagnostic;
 use starbase_console::Reporter;
@@ -14,10 +14,7 @@ use tokio::task::{self, JoinHandle};
 use tracing::debug;
 
 impl<R: Reporter> Command<R> {
-    async fn internal_exec_capture_output(
-        &mut self,
-        registry: &ProcessRegistry,
-    ) -> miette::Result<Output> {
+    async fn internal_exec_capture_output(&mut self, set: &ProcessSet) -> miette::Result<Output> {
         let instant = Instant::now();
         let should_pass_stdin = self.should_pass_stdin();
         let mut command = self.create_async_command()?;
@@ -31,12 +28,12 @@ impl<R: Reporter> Command<R> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let child = command.spawn().map_err(|error| ProcessError::Capture {
-            bin: self.get_bin_name(),
-            error: Box::new(error),
-        })?;
-
-        let shared_child = registry.add_running(child).await;
+        let shared_child = set
+            .spawn(&mut command)
+            .map_err(|error| ProcessError::Capture {
+                bin: self.get_bin_name(),
+                error: Box::new(error),
+            })?;
 
         self.pre_log_command(&shared_child);
 
@@ -53,7 +50,8 @@ impl<R: Reporter> Command<R> {
 
         self.post_log_command(&shared_child, instant);
 
-        registry.remove_running(shared_child).await;
+        // Stop tracking the child, which also kills it if it is still running
+        drop(shared_child);
 
         input_result?;
         let output = result?;
@@ -72,10 +70,10 @@ impl<R: Reporter> Command<R> {
             return self.exec_capture_continuous_output().await;
         }
 
-        let registry = ProcessRegistry::instance();
+        let set = self.get_process_set();
 
         if !self.should_cache_output() {
-            return self.internal_exec_capture_output(&registry).await;
+            return self.internal_exec_capture_output(&set).await;
         }
 
         let key = self.get_output_cache_key("capture");
@@ -85,7 +83,7 @@ impl<R: Reporter> Command<R> {
             return self.handle_cached_output(output);
         }
 
-        let output = self.internal_exec_capture_output(&registry).await?;
+        let output = self.internal_exec_capture_output(&set).await?;
 
         cache.put(key, output.clone()).await;
 
@@ -98,7 +96,7 @@ impl<R: Reporter> Command<R> {
     /// [`Self::continuous_pipe`] is enabled. Force-killing stops capture
     /// readers and may truncate unread output.
     pub async fn exec_capture_continuous_output(&mut self) -> miette::Result<Output> {
-        let registry = ProcessRegistry::instance();
+        let set = self.get_process_set();
         let instant = Instant::now();
         let mut command = self.create_async_command()?;
 
@@ -107,12 +105,12 @@ impl<R: Reporter> Command<R> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let child = command.spawn().map_err(|error| ProcessError::Capture {
-            bin: self.get_bin_name(),
-            error: Box::new(error),
-        })?;
-
-        let shared_child = registry.add_running(child).await;
+        let shared_child = set
+            .spawn(&mut command)
+            .map_err(|error| ProcessError::Capture {
+                bin: self.get_bin_name(),
+                error: Box::new(error),
+            })?;
         let stdin = shared_child.take_stdin().await;
         let stdout = shared_child.take_stdout().await;
         let stderr = shared_child.take_stderr().await;
@@ -192,7 +190,8 @@ impl<R: Reporter> Command<R> {
         }
         .await;
 
-        registry.remove_running(shared_child).await;
+        // Stop tracking the child, which also kills it if it is still running
+        drop(shared_child);
 
         let output = output_result?;
 

@@ -2,6 +2,7 @@ use crate::arg::*;
 use crate::env::*;
 use crate::exe::*;
 use crate::helpers::get_default_shell;
+use crate::process_set::ProcessSet;
 use rustc_hash::{FxHashMap, FxHasher};
 use starbase_console::Console;
 use starbase_console::Reporter;
@@ -110,6 +111,10 @@ pub struct Command<R: Reporter> {
     /// Log the command to the terminal before running
     pub print_command: bool,
 
+    /// The set to track the running process in, or [`ProcessSet::root`]
+    /// when not set.
+    pub process_set: Option<ProcessSet>,
+
     /// Shell to wrap executing commands in
     pub shell: Option<ShellType>,
 
@@ -139,6 +144,7 @@ impl<R: Reporter> Command<R> {
             paths: VecDeque::new(),
             prefix: None,
             print_command: false,
+            process_set: None,
             shell: Some(get_default_shell()),
             stdin: StdinMode::default(),
             console: None,
@@ -571,6 +577,10 @@ impl<R: Reporter> Command<R> {
         self.prefix.as_deref()
     }
 
+    pub(crate) fn get_process_set(&self) -> ProcessSet {
+        self.process_set.clone().unwrap_or_else(ProcessSet::root)
+    }
+
     /// Return the binary name, or the full script if this command runs
     /// a script.
     pub fn get_script(&self) -> String {
@@ -642,6 +652,12 @@ impl<R: Reporter> Command<R> {
         self
     }
 
+    /// Track the running process in this set instead of [`ProcessSet::root`].
+    pub fn set_process_set(&mut self, set: ProcessSet) -> &mut Self {
+        self.process_set = Some(set);
+        self
+    }
+
     /// Replace the executable with a full shell script. Enables the
     /// default shell if none is set, as scripts always require one.
     pub fn set_script<T: AsRef<OsStr>>(&mut self, script: T) -> &mut Self {
@@ -691,6 +707,7 @@ impl<R: Reporter> Command<R> {
             paths: self.paths,
             prefix: self.prefix,
             print_command: self.print_command,
+            process_set: self.process_set,
             shell: self.shell,
             stdin: self.stdin,
             console: Some(console),

@@ -1,18 +1,23 @@
+use crate::process_set::ProcessSet;
 use crate::signal::{SignalType, listen};
+use std::future::Future;
 use std::sync::{LazyLock, Once, OnceLock, mpsc};
 use std::thread;
+use tokio::runtime::Handle;
 use tokio::sync::broadcast::{self, Receiver, Sender};
 use tracing::warn;
 
 static SENDER: LazyLock<Sender<SignalType>> = LazyLock::new(|| broadcast::channel(10).0);
 static RECEIVED: OnceLock<SignalType> = OnceLock::new();
+static RUNTIME: OnceLock<Handle> = OnceLock::new();
 static STARTED: Once = Once::new();
 
 /// Listens for OS termination signals on behalf of the whole process
 /// (`SIGHUP`, `SIGINT`, `SIGQUIT`, and `SIGTERM` on Unix; `CTRL-C`,
-/// `CTRL-BREAK`, `CTRL-CLOSE`, and `CTRL-SHUTDOWN` on Windows) and
-/// broadcasts each one. It runs on a thread of its own, so it keeps
-/// listening after the runtime that started it shuts down.
+/// `CTRL-BREAK`, `CTRL-CLOSE`, and `CTRL-SHUTDOWN` on Windows), broadcasts
+/// each one, and shuts down [`ProcessSet::root`] when one arrives. It runs
+/// on a thread of its own, so it keeps listening after the runtime that
+/// started it shuts down.
 pub struct SignalListener;
 
 impl SignalListener {
@@ -34,7 +39,21 @@ impl SignalListener {
     }
 }
 
-fn start() {
+/// Run a future on the listener's runtime, which outlives any other.
+pub(crate) fn spawn(future: impl Future<Output = ()> + Send + 'static) {
+    start();
+
+    match RUNTIME.get() {
+        Some(runtime) => {
+            runtime.spawn(future);
+        }
+        None => {
+            warn!("The signal listener is not running, so a shutdown was skipped");
+        }
+    }
+}
+
+pub(crate) fn start() {
     STARTED.call_once(|| {
         let (ready_sender, ready_receiver) = mpsc::channel();
 
@@ -52,6 +71,8 @@ fn start() {
                     }
                 };
 
+                let _ = RUNTIME.set(runtime.handle().clone());
+
                 runtime.block_on(listen(
                     || {
                         let _ = ready_sender.send(());
@@ -62,6 +83,11 @@ fn start() {
                         // Having no subscribers right now is fine, as
                         // later subscribers still receive later signals
                         let _ = SENDER.send(signal);
+
+                        // Another signal during this shutdown escalates it
+                        if let Some(root) = ProcessSet::try_root() {
+                            tokio::spawn(async move { root.shutdown(signal).await });
+                        }
 
                         true
                     },
