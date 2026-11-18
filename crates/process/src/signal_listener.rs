@@ -11,16 +11,24 @@ static STARTED: Once = Once::new();
 
 /// Listens for OS termination signals on behalf of the whole process
 /// (`SIGHUP`, `SIGINT`, `SIGQUIT`, and `SIGTERM` on Unix; `CTRL-C`,
-/// `CTRL-BREAK`, `CTRL-CLOSE`, and `CTRL-SHUTDOWN` on Windows), broadcasts
-/// each one, and shuts down [`ProcessSet::root`] when one arrives. It runs
+/// `CTRL-BREAK`, `CTRL-CLOSE`, and `CTRL-SHUTDOWN` on Windows), shuts down
+/// [`ProcessSet::root`] when one arrives, and then broadcasts it. It runs
 /// on a thread of its own, so it keeps listening after the runtime that
 /// started it shuts down.
+///
+/// The root is already shut down by the time subscribers hear of a signal,
+/// so shutting it down again in response force kills its children. Shut
+/// down only the nested sets you own, which doesn't signal their children
+/// a second time.
 pub struct SignalListener;
 
 impl SignalListener {
     /// Subscribe to OS termination signals, starting the listener if needed.
     /// Once this returns, those signals are broadcast instead of taking
-    /// their default action of exiting the process.
+    /// their default action of exiting the process. On Windows, the OS still
+    /// ends the process a few seconds after the console closes or the system
+    /// shuts down. If the listener can't start, a warning is logged and
+    /// signals keep their default action.
     pub fn subscribe() -> Receiver<SignalType> {
         let receiver = SENDER.subscribe();
 
@@ -61,13 +69,20 @@ pub(crate) fn start() {
                     |signal| {
                         let _ = RECEIVED.set(signal);
 
+                        // Signal the children before telling subscribers, so
+                        // the shutdown has begun by the time they hear of it.
+                        // Another signal while it waits out its grace period
+                        // force kills, although the OS delivers identical
+                        // signals that arrive close together only once.
+                        let shutdown =
+                            ProcessSet::try_root().map(|root| root.begin_shutdown(signal));
+
                         // Having no subscribers right now is fine, as
                         // later subscribers still receive later signals
                         let _ = SENDER.send(signal);
 
-                        // Another signal during this shutdown escalates it
-                        if let Some(root) = ProcessSet::try_root() {
-                            tokio::spawn(async move { root.shutdown(signal).await });
+                        if let Some(shutdown) = shutdown {
+                            tokio::spawn(shutdown.finish());
                         }
 
                         true

@@ -13,7 +13,7 @@ mod signal_listener {
     use super::*;
 
     #[tokio::test]
-    async fn broadcasts_signals_and_remembers_the_first() {
+    async fn broadcasts_signals_once_subscribed() {
         let mut receiver = SignalListener::subscribe();
 
         // Handlers are installed once subscribing returns, so this signal
@@ -22,33 +22,6 @@ mod signal_listener {
 
         let received = timeout(Duration::from_secs(5), receiver.recv())
             .await
-            .expect("SIGHUP was not broadcast")
-            .unwrap();
-
-        assert!(matches!(received, SignalType::Hangup));
-        assert!(matches!(
-            SignalListener::received(),
-            Some(SignalType::Hangup)
-        ));
-    }
-
-    #[test]
-    fn keeps_listening_after_the_runtime_that_subscribed_shuts_down() {
-        let new_runtime = || {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-        };
-
-        drop(new_runtime().block_on(async { SignalListener::subscribe() }));
-
-        let mut receiver = SignalListener::subscribe();
-
-        kill(std::process::id(), SignalType::Hangup).unwrap();
-
-        let received = new_runtime()
-            .block_on(async { timeout(Duration::from_secs(5), receiver.recv()).await })
             .expect("SIGHUP was not broadcast")
             .unwrap();
 

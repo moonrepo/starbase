@@ -301,10 +301,17 @@ mod cancellation {
         assert_eq!(output.exit, ChildExit::Killed);
     }
 
-    #[tokio::test]
-    async fn aborting_execution_kills_and_unregisters_the_child() {
+    #[derive(Clone, Copy, Debug)]
+    enum Exec {
+        Capture,
+        Continuous,
+        Stream,
+        StreamAndCapture,
+    }
+
+    async fn assert_aborting_kills_and_untracks_the_child(exec: Exec) {
         let marker = std::env::temp_dir().join(format!(
-            "starbase-process-cancel-{}-{}",
+            "starbase-process-cancel-{exec:?}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -317,7 +324,14 @@ mod cancellation {
         // background shell process that would outlive this test.
         let mut command =
             create_command(&format!("echo $$ > '{}'; exec sleep 30", marker.display()));
-        let task = tokio::spawn(async move { command.exec_capture_output().await });
+        let task = tokio::spawn(async move {
+            match exec {
+                Exec::Capture => command.exec_capture_output().await,
+                Exec::Continuous => command.exec_capture_continuous_output().await,
+                Exec::Stream => command.exec_stream_output().await,
+                Exec::StreamAndCapture => command.exec_stream_and_capture_output().await,
+            }
+        });
         let set = ProcessSet::root();
 
         let pid = tokio::time::timeout(Duration::from_secs(3), async {
@@ -351,6 +365,26 @@ mod cancellation {
         .expect("cancelled child remained registered");
 
         std::fs::remove_file(marker).unwrap();
+    }
+
+    #[tokio::test]
+    async fn aborting_capture_kills_and_untracks_the_child() {
+        assert_aborting_kills_and_untracks_the_child(Exec::Capture).await;
+    }
+
+    #[tokio::test]
+    async fn aborting_continuous_capture_kills_and_untracks_the_child() {
+        assert_aborting_kills_and_untracks_the_child(Exec::Continuous).await;
+    }
+
+    #[tokio::test]
+    async fn aborting_stream_kills_and_untracks_the_child() {
+        assert_aborting_kills_and_untracks_the_child(Exec::Stream).await;
+    }
+
+    #[tokio::test]
+    async fn aborting_stream_and_capture_kills_and_untracks_the_child() {
+        assert_aborting_kills_and_untracks_the_child(Exec::StreamAndCapture).await;
     }
 
     #[tokio::test]

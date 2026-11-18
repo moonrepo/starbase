@@ -7,7 +7,7 @@ use std::io;
 use std::pin::pin;
 use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::{Arc, Mutex, OnceLock};
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::{Mutex as AsyncMutex, watch};
 use tracing::warn;
@@ -45,9 +45,14 @@ impl ChildExit {
 
 /// A cheaply cloneable handle to a running child process. Every clone
 /// shares the same underlying process, so signalling or waiting on one
-/// clone is visible to all others. Only the original handle returned by
+/// clone is visible to all others.
+///
+/// Only the original handle returned by
 /// [`ProcessSet::spawn`](crate::ProcessSet::spawn) acts on drop; clones
-/// never do.
+/// never do. Dropping it kills the child if it's still running, stops
+/// output readers on its clones, and stops tracking the child in its set.
+/// Call [`Self::stop_cleanup`] first to leave the child running and its
+/// output readers alone.
 pub struct SharedChild {
     inner: Arc<Mutex<Child>>,
     signal: Arc<OnceLock<SignalType>>,
@@ -58,8 +63,10 @@ pub struct SharedChild {
     exited: watch::Sender<bool>,
     cleanup: Arc<AtomicBool>,
 
-    // The set tracking this child, held by the original handle only
-    set: Option<Weak<SetInner>>,
+    // The set tracking this child, held by the original handle only. It's
+    // a strong reference, so a set can't be dropped out from under children
+    // it still tracks, which would hide them from shutdowns.
+    set: Option<Arc<SetInner>>,
 }
 
 impl SharedChild {
@@ -79,7 +86,7 @@ impl SharedChild {
 
     /// Wrap a spawned child as the owner tracked by `set`. Dropping it kills
     /// the child if it's still running, and stops tracking it either way.
-    pub(crate) fn new_owned(child: Child, set: Weak<SetInner>) -> Self {
+    pub(crate) fn new_owned(child: Child, set: Arc<SetInner>) -> Self {
         let mut shared_child = Self::new(child);
         shared_child.set = Some(set);
         shared_child
@@ -94,6 +101,12 @@ impl SharedChild {
     // process the pid of one that has already exited
     pub(crate) fn same_child(&self, other: &SharedChild) -> bool {
         Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
+    // Whether a signal has been delivered to the child. On Windows an
+    // interrupt isn't recorded, as it can't be sent to a single process.
+    pub(crate) fn was_signalled(&self) -> bool {
+        self.signal.get().is_some()
     }
 
     /// Take the child's stdin pipe, if it was piped and not already taken.
@@ -151,7 +164,7 @@ impl SharedChild {
     }
 
     /// Send a signal without waiting for the child. This is used by
-    /// synchronous cleanup paths, such as a registry being dropped.
+    /// synchronous cleanup paths, such as an owner being dropped.
     pub fn send_signal(&self, signal: SignalType) -> io::Result<()> {
         let mut child = self.inner.lock().unwrap();
 
@@ -224,8 +237,10 @@ impl SharedChild {
         Ok(status)
     }
 
-    /// Stop the original handle from killing the child when it's dropped
-    /// while the child runs. This can be called through any clone.
+    /// Stop the original handle from killing the child, or stopping output
+    /// readers, when it's dropped. Dropping it still stops tracking the
+    /// child, so shutdowns no longer reach it. This can be called through
+    /// any clone.
     pub fn stop_cleanup(&self) {
         self.cleanup.store(false, Ordering::Release);
     }
@@ -366,9 +381,7 @@ impl Drop for SharedChild {
                 );
             }
 
-            if let Some(set) = set.upgrade() {
-                set.remove(self);
-            }
+            set.remove(self);
         }
     }
 }

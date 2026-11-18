@@ -6,7 +6,7 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 
 // Every test works in a set nested under the root, so tests running in
 // parallel never shut down each other's children
@@ -16,6 +16,26 @@ fn create_set() -> ProcessSet {
 
 fn spawn_sleep(set: &ProcessSet) -> SharedChild {
     set.spawn(TokioCommand::new("sleep").arg("30")).unwrap()
+}
+
+// A child that ignores the termination signal, so only a force kill stops it
+async fn spawn_ignoring_term(set: &ProcessSet) -> SharedChild {
+    let child = set
+        .spawn(
+            TokioCommand::new("sh")
+                .args(["-c", "trap '' TERM; echo ready; exec sleep 30"])
+                .stdout(Stdio::piped()),
+        )
+        .unwrap();
+
+    let mut ready = String::new();
+    BufReader::new(child.take_stdout().await.unwrap())
+        .read_line(&mut ready)
+        .await
+        .unwrap();
+    assert_eq!(ready, "ready\n");
+
+    child
 }
 
 // Shutdowns wait out the grace period, so run them in the background
@@ -84,11 +104,16 @@ mod process_set {
     async fn dropping_the_owner_after_exit_only_stops_tracking() {
         let set = create_set();
         let owner = set.spawn(&mut TokioCommand::new("true")).unwrap();
+        let pid = owner.id();
 
         assert!(matches!(
             wait_for_exit(&owner).await,
             ChildExit::Completed(status) if status.success()
         ));
+
+        // Still tracked, so a shutdown can stop output readers that
+        // outlive the child
+        assert!(set.get(pid).is_some());
 
         drop(owner);
 
@@ -214,16 +239,34 @@ mod process_set {
     }
 
     #[tokio::test]
-    async fn a_zero_grace_period_still_signals_before_waiting() {
+    async fn a_zero_grace_period_finishes_once_the_children_exit() {
         let set = ProcessSet::root().nested_with_grace(Duration::ZERO);
         let child = spawn_sleep(&set);
 
-        shutdown_in_background(&set);
+        timeout(Duration::from_secs(1), set.shutdown(SignalType::Terminate))
+            .await
+            .expect("shutdown did not finish once its children exited");
 
         assert_eq!(wait_for_exit(&child).await, ChildExit::Terminated(15));
         timeout(Duration::from_secs(1), set.wait_idle())
             .await
             .expect("exited child remained tracked");
+    }
+
+    #[tokio::test]
+    async fn shutting_down_a_parent_uses_its_grace_period_for_nested_sets() {
+        let parent = ProcessSet::root().nested_with_grace(Duration::from_millis(50));
+        let nested = parent.nested_with_grace(Duration::ZERO);
+        let child = spawn_sleep(&nested);
+
+        timeout(
+            Duration::from_secs(1),
+            parent.shutdown(SignalType::Terminate),
+        )
+        .await
+        .expect("a zero grace nested set held up its parent's shutdown");
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Terminated(15));
     }
 
     #[tokio::test]
@@ -255,5 +298,287 @@ mod process_set {
         timeout(Duration::from_secs(1), create_set().wait_idle())
             .await
             .expect("empty set was not idle");
+    }
+
+    #[tokio::test]
+    async fn a_second_shutdown_returns_once_it_has_force_killed() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let child = spawn_ignoring_term(&set).await;
+        let (started, first_started) = std::sync::mpsc::channel();
+
+        // Run the first shutdown on a runtime that then stops running tasks,
+        // so only the second request itself can force kill in the meantime
+        let first = std::thread::spawn({
+            let set = set.clone();
+
+            move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        let shutdown = set.shutdown(SignalType::Terminate);
+                        tokio::pin!(shutdown);
+
+                        let _ = timeout(Duration::from_millis(50), &mut shutdown).await;
+
+                        started.send(()).unwrap();
+                        std::thread::sleep(Duration::from_millis(300));
+
+                        shutdown.await;
+                    });
+            }
+        });
+
+        first_started.recv().unwrap();
+
+        timeout(Duration::from_secs(2), set.shutdown(SignalType::Terminate))
+            .await
+            .expect("second shutdown did not finish");
+
+        // Already reaped by the time the second shutdown returned, so this
+        // completes on its first poll
+        assert_eq!(
+            timeout(Duration::ZERO, child.wait())
+                .await
+                .expect("child was still running")
+                .unwrap(),
+            ChildExit::Killed
+        );
+
+        first.join().unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_shutdown_after_a_cancelled_one_still_acts() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let child = spawn_ignoring_term(&set).await;
+
+        // Inside a worker task, where the cancelled shutdown's cleanup and
+        // the next shutdown can be scheduled in either order
+        tokio::spawn({
+            let set = set.clone();
+
+            async move {
+                let _ = timeout(
+                    Duration::from_millis(100),
+                    set.shutdown(SignalType::Terminate),
+                )
+                .await;
+
+                set.shutdown(SignalType::Kill).await;
+            }
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn a_kill_shutdown_does_not_wait_for_the_grace_period() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let child = spawn_sleep(&set);
+
+        timeout(Duration::from_secs(1), set.shutdown(SignalType::Kill))
+            .await
+            .expect("kill shutdown waited for the grace period");
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn force_killing_reaches_children_tracked_after_the_first_shutdown() {
+        let parent = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let busy = parent.nested();
+        let empty = parent.nested();
+        let first = spawn_ignoring_term(&busy).await;
+
+        shutdown_in_background(&parent);
+        sleep(Duration::from_millis(50)).await;
+
+        // Tracked once the shutdown had begun: one in the set it was waiting
+        // on, and one in a sibling set that was empty when it began
+        let later = spawn_sleep(&busy);
+        let sibling = spawn_sleep(&empty);
+
+        timeout(
+            Duration::from_secs(1),
+            parent.shutdown(SignalType::Terminate),
+        )
+        .await
+        .expect("second shutdown did not finish");
+
+        assert_eq!(wait_for_exit(&first).await, ChildExit::Killed);
+        assert_eq!(wait_for_exit(&later).await, ChildExit::Killed);
+        assert_eq!(wait_for_exit(&sibling).await, ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn shutting_down_a_parent_force_kills_a_nested_shutdown_in_progress() {
+        let parent = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let nested = parent.nested();
+        let child = spawn_ignoring_term(&nested).await;
+
+        shutdown_in_background(&nested);
+        sleep(Duration::from_millis(50)).await;
+
+        timeout(
+            Duration::from_secs(1),
+            parent.shutdown(SignalType::Terminate),
+        )
+        .await
+        .expect("parent shutdown waited on a child it force killed");
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn a_nested_shutdown_after_its_parents_does_not_signal_again() {
+        let parent = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let nested = parent.nested();
+
+        // Reports each termination signal and keeps running
+        let child = nested
+            .spawn(
+                TokioCommand::new("sh")
+                    .args([
+                        "-c",
+                        "trap 'echo term' TERM; echo ready; while :; do sleep 0.05; done",
+                    ])
+                    .stdout(Stdio::piped()),
+            )
+            .unwrap();
+        let mut stdout = BufReader::new(child.take_stdout().await.unwrap());
+        let mut line = String::new();
+
+        stdout.read_line(&mut line).await.unwrap();
+        assert_eq!(line, "ready\n");
+
+        // As an app does when it shuts down its own set in reaction to the
+        // signal that shut down the root
+        shutdown_in_background(&parent);
+        sleep(Duration::from_millis(100)).await;
+        shutdown_in_background(&nested);
+
+        let mut signalled = 0;
+
+        while let Ok(Ok(read)) =
+            timeout(Duration::from_millis(400), stdout.read_line(&mut line)).await
+        {
+            if read == 0 {
+                break;
+            }
+
+            signalled += 1;
+        }
+
+        assert_eq!(signalled, 1);
+        assert!(
+            timeout(Duration::from_millis(100), child.wait())
+                .await
+                .is_err(),
+            "the nested shutdown force killed the child"
+        );
+    }
+
+    #[tokio::test]
+    async fn dropping_a_nested_set_keeps_its_children_reachable() {
+        let parent = create_set();
+
+        // The nested set's last handle is dropped straight away
+        let shut_down = spawn_sleep(&parent.nested());
+        let waited_on = spawn_sleep(&parent.nested());
+
+        let idle = tokio::spawn({
+            let parent = parent.clone();
+
+            async move { parent.wait_idle().await }
+        });
+
+        sleep(Duration::from_millis(50)).await;
+        drop(waited_on);
+        shutdown_in_background(&parent);
+
+        assert_eq!(wait_for_exit(&shut_down).await, ChildExit::Terminated(15));
+        drop(shut_down);
+
+        timeout(Duration::from_secs(1), idle)
+            .await
+            .expect("parent did not become idle")
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn killing_all_reaches_nested_sets() {
+        let parent = create_set();
+        let nested = parent.nested();
+        let child = spawn_sleep(&nested);
+
+        parent.kill_all();
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Killed);
+    }
+
+    #[tokio::test]
+    async fn dropping_the_owner_during_a_shutdown_lets_it_finish() {
+        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(10));
+        let owner = spawn_ignoring_term(&set).await;
+        let child = owner.clone();
+
+        shutdown_in_background(&set);
+        sleep(Duration::from_millis(50)).await;
+        drop(owner);
+
+        assert_eq!(wait_for_exit(&child).await, ChildExit::Killed);
+        timeout(Duration::from_secs(1), set.wait_idle())
+            .await
+            .expect("cancelled child remained tracked");
+
+        // Every child of the waiting shutdown has exited, so this starts a
+        // new one, which has nothing to wait on
+        timeout(Duration::from_secs(1), set.shutdown(SignalType::Terminate))
+            .await
+            .expect("new shutdown waited for the old grace period");
+    }
+
+    #[tokio::test]
+    async fn a_waiter_sees_the_owner_kill_the_child() {
+        let set = create_set();
+        let owner = spawn_sleep(&set);
+        let child = owner.clone();
+        let waiting = tokio::spawn(async move { child.wait().await });
+
+        tokio::task::yield_now().await;
+        drop(owner);
+
+        assert_eq!(
+            timeout(Duration::from_secs(1), waiting)
+                .await
+                .expect("waiter was not woken")
+                .unwrap()
+                .unwrap(),
+            ChildExit::Killed
+        );
+    }
+
+    #[tokio::test]
+    async fn stopping_cleanup_leaves_the_child_running_but_untracked() {
+        let set = create_set();
+        let owner = spawn_sleep(&set);
+        let child = owner.clone();
+        let pid = owner.id();
+
+        owner.stop_cleanup();
+        drop(owner);
+
+        assert!(set.get(pid).is_none());
+        assert!(
+            timeout(Duration::from_millis(100), child.wait())
+                .await
+                .is_err()
+        );
+
+        child.kill().await.unwrap();
     }
 }

@@ -1,13 +1,12 @@
 use crate::shared_child::SharedChild;
 use crate::signal::SignalType;
 use crate::signal_listener;
-use rustc_hash::FxHashMap;
 use std::fmt;
 use std::io;
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 use tokio::process::Command as TokioCommand;
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::Notify;
 use tokio::task::JoinSet;
 use tokio::time::sleep;
 use tracing::{debug, warn};
@@ -36,11 +35,29 @@ pub(crate) struct SetInner {
 
 #[derive(Default)]
 struct SetState {
-    children: FxHashMap<u32, SharedChild>,
+    // A list rather than a map keyed by pid, so a child given the pid of
+    // an exited one that is still tracked doesn't replace it
+    children: Vec<SharedChild>,
     nested: Vec<Weak<SetInner>>,
 
-    // Hands another shutdown request to the shutdown in progress
-    shutdown: Option<mpsc::UnboundedSender<SignalType>>,
+    // The shutdown of this set that is waiting out its grace period
+    shutdown: Option<Arc<Round>>,
+}
+
+// One shutdown of a set, covering every child in its subtree at the time
+struct Round {
+    children: Vec<Tracked>,
+
+    // Woken when another request force kills the children, or starts a
+    // new shutdown after they all exited
+    superseded: Notify,
+}
+
+// A child, and the set tracking it
+#[derive(Clone)]
+struct Tracked {
+    set: Arc<SetInner>,
+    child: SharedChild,
 }
 
 impl ProcessSet {
@@ -104,53 +121,164 @@ impl ProcessSet {
     /// Spawn the command and track the child in this set. The returned
     /// handle owns the child: dropping it while the child still runs kills
     /// the child, and dropping it after the child exits stops tracking it.
+    /// The set stays alive while the handle does.
     pub fn spawn(&self, command: &mut TokioCommand) -> io::Result<SharedChild> {
-        let owner = SharedChild::new_owned(command.spawn()?, Arc::downgrade(&self.inner));
+        let owner = SharedChild::new_owned(command.spawn()?, Arc::clone(&self.inner));
 
         self.inner
             .state
             .lock()
             .unwrap()
             .children
-            .insert(owner.id(), owner.clone());
+            .push(owner.clone());
 
         Ok(owner)
     }
 
     /// Look up a child tracked in this set by pid. Nested sets aren't searched.
     pub fn get(&self, pid: u32) -> Option<SharedChild> {
-        self.inner.state.lock().unwrap().children.get(&pid).cloned()
+        self.inner
+            .state
+            .lock()
+            .unwrap()
+            .children
+            .iter()
+            .rev()
+            .find(|child| child.id() == pid)
+            .cloned()
     }
 
-    /// Send `signal` to every child in this set and its nested sets, wait
-    /// the grace period, then force kill the children of this shutdown,
-    /// stopping their output readers. Calling this again while a shutdown
-    /// is waiting force kills every running child at once, unless the
-    /// children of that shutdown have all exited, in which case it starts
-    /// a new shutdown.
+    /// Shut down every child in this set and its nested sets. Each one is
+    /// sent `signal`, unless it was already signalled (by a shutdown of an
+    /// enclosing set, say). After the grace period, the children of this
+    /// shutdown are force killed, which also stops their output readers.
+    /// With a zero grace period, it waits for them to exit instead.
+    ///
+    /// Calling this while a shutdown of this set, or of a set nested under
+    /// it, is waiting out its grace period force kills everything still
+    /// running under that set, including children tracked since it began.
+    /// Once every child of that shutdown has exited, it starts a new
+    /// shutdown instead.
+    ///
+    /// This returns once the grace period has passed, or sooner when force
+    /// killed. Use [`Self::wait_idle`] to wait for the children themselves.
     pub async fn shutdown(&self, signal: SignalType) {
-        let mut shutdowns = JoinSet::new();
+        self.begin_shutdown(signal).finish().await;
+    }
 
-        for set in self.subtree() {
-            shutdowns.spawn(async move { set.shutdown_own(signal).await });
+    /// Signal the children, or force kill them for a repeated request, and
+    /// return the rest of the shutdown to await. Nothing here waits, so the
+    /// signal listener can do this before it tells subscribers.
+    pub(crate) fn begin_shutdown(&self, signal: SignalType) -> Shutdown {
+        let mut killed = vec![];
+
+        if let Some(round) = self.current_shutdown() {
+            if round.has_running() {
+                killed.extend(self.force_kill(&round));
+
+                // That killed the children of nested shutdowns too, so let
+                // them finish rather than wait out their grace
+                for set in self.subtree().iter().skip(1) {
+                    if let Some(round) = set.current_shutdown() {
+                        round.superseded.notify_one();
+                    }
+                }
+
+                return Shutdown {
+                    killed,
+                    round: None,
+                };
+            }
+
+            // Every child of that shutdown has exited, so this request starts
+            // a new shutdown rather than escalating that one
+            for tracked in &round.children {
+                tracked.child.stop_output();
+            }
+
+            round.superseded.notify_one();
         }
 
-        shutdowns.join_all().await;
+        // Escalate shutdowns of nested sets that are waiting out their grace
+        for set in self.subtree().iter().skip(1) {
+            if let Some(round) = set.current_shutdown()
+                && round.has_running()
+            {
+                killed.extend(set.force_kill(&round));
+            }
+        }
+
+        // Children force killed above are already taken care of
+        let children = self
+            .tracked()
+            .into_iter()
+            .filter(|tracked| {
+                !killed
+                    .iter()
+                    .any(|other| other.child.same_child(&tracked.child))
+            })
+            .collect::<Vec<_>>();
+
+        if children.is_empty() {
+            return Shutdown {
+                killed,
+                round: None,
+            };
+        }
+
+        debug!(
+            signal = ?signal,
+            pids = ?children.iter().map(|tracked| tracked.child.id()).collect::<Vec<_>>(),
+            "Shutting down {} running child processes",
+            children.len()
+        );
+
+        for tracked in &children {
+            let child = &tracked.child;
+
+            // A child already shutting down isn't signalled again, as many
+            // programs treat a second interrupt as a request to quit at once
+            if (matches!(signal, SignalType::Kill) || !child.was_signalled())
+                && let Err(error) = child.send_signal(signal)
+            {
+                warn!(
+                    pid = child.id(),
+                    %error,
+                    "Failed to shutdown child process"
+                );
+            }
+        }
+
+        let round = Arc::new(Round {
+            children,
+            superseded: Notify::new(),
+        });
+
+        self.inner.state.lock().unwrap().shutdown = Some(Arc::clone(&round));
+
+        Shutdown {
+            killed,
+            round: Some(ActiveRound {
+                set: self.clone(),
+                round,
+                signal,
+                grace: self.grace(),
+            }),
+        }
     }
 
     /// Force kill every child in this set and its nested sets, without
     /// waiting for them to exit.
     pub fn kill_all(&self) {
-        for set in self.subtree() {
-            for child in set.children() {
-                if let Err(error) = child.send_signal(SignalType::Kill) {
-                    warn!(pid = child.id(), %error, "Failed to kill child process");
-                }
-            }
+        for tracked in self.tracked() {
+            kill(&tracked.child);
         }
     }
 
-    /// Wait until no child is tracked in this set or its nested sets.
+    /// Wait until no child is tracked in this set or its nested sets. A
+    /// child stops being tracked once it has exited and its owner has been
+    /// dropped, or a shutdown has seen it exit. An owner dropped while its
+    /// child runs stops tracking it once it has sent the kill.
     pub async fn wait_idle(&self) {
         loop {
             let notified = self.inner.idle.notified();
@@ -171,15 +299,33 @@ impl ProcessSet {
         }
     }
 
-    fn children(&self) -> Vec<SharedChild> {
-        self.inner
-            .state
-            .lock()
-            .unwrap()
-            .children
-            .values()
-            .cloned()
-            .collect()
+    fn current_shutdown(&self) -> Option<Arc<Round>> {
+        self.inner.state.lock().unwrap().shutdown.clone()
+    }
+
+    // Force kill the children of a waiting shutdown, and everything running
+    // under this set since, then wake that shutdown so it can finish
+    fn force_kill(&self, round: &Round) -> Vec<Tracked> {
+        debug!("Received another signal during shutdown; force killing children");
+
+        let mut children = round.children.clone();
+
+        for tracked in self.tracked() {
+            if !children
+                .iter()
+                .any(|other| other.child.same_child(&tracked.child))
+            {
+                children.push(tracked);
+            }
+        }
+
+        for tracked in &children {
+            kill(&tracked.child);
+        }
+
+        round.superseded.notify_one();
+
+        children
     }
 
     fn nested_sets(&self) -> Vec<ProcessSet> {
@@ -209,205 +355,153 @@ impl ProcessSet {
         sets
     }
 
-    async fn shutdown_own(&self, signal: SignalType) {
-        let Some((mut requests, _guard)) = self.start_shutdown(signal) else {
-            return;
-        };
+    // Every child tracked in this set and its nested sets
+    fn tracked(&self) -> Vec<Tracked> {
+        self.subtree()
+            .into_iter()
+            .flat_map(|set| {
+                let children = set.inner.state.lock().unwrap().children.clone();
 
-        let mut next = Some(signal);
-
-        while let Some(signal) = next.take() {
-            next = self.shutdown_children(signal, &mut requests).await;
-
-            // A request that arrived as this shutdown finished starts another
-            if next.is_none() {
-                let mut state = self.inner.state.lock().unwrap();
-
-                next = requests.try_recv().ok();
-
-                if next.is_none() {
-                    state.shutdown = None;
-                }
-            }
-        }
+                children.into_iter().map(move |child| Tracked {
+                    set: Arc::clone(&set.inner),
+                    child,
+                })
+            })
+            .collect()
     }
+}
 
-    // Returns `None` when a shutdown is already in progress, which then
-    // takes this signal as another request
-    fn start_shutdown(
-        &self,
-        signal: SignalType,
-    ) -> Option<(mpsc::UnboundedReceiver<SignalType>, ShutdownGuard<'_>)> {
-        let mut state = self.inner.state.lock().unwrap();
+/// The part of a shutdown that waits, returned by
+/// [`ProcessSet::begin_shutdown`].
+pub(crate) struct Shutdown {
+    killed: Vec<Tracked>,
+    round: Option<ActiveRound>,
+}
 
-        // Sending fails when that shutdown was cancelled, so start over
-        if let Some(requests) = &state.shutdown
-            && requests.send(signal).is_ok()
-        {
-            return None;
-        }
-
-        let (sender, receiver) = mpsc::unbounded_channel();
-
-        state.shutdown = Some(sender.clone());
-
-        Some((
-            receiver,
-            ShutdownGuard {
-                inner: &self.inner,
-                requests: sender,
-            },
-        ))
-    }
-
-    async fn shutdown_children(
-        &self,
-        signal: SignalType,
-        requests: &mut mpsc::UnboundedReceiver<SignalType>,
-    ) -> Option<SignalType> {
-        let children = self.children();
-
-        if children.is_empty() {
-            return None;
-        }
-
-        let grace = self.grace();
-
-        debug!(
-            signal = ?signal,
-            pids = ?children.iter().map(SharedChild::id).collect::<Vec<_>>(),
-            "Shutting down {} running child processes",
-            children.len()
-        );
-
+impl Shutdown {
+    pub(crate) async fn finish(self) {
         let mut waiting = JoinSet::new();
 
-        for child in children.clone() {
-            let inner = Arc::clone(&self.inner);
-
-            waiting.spawn(async move {
-                let pid = child.id();
-
-                if grace.is_zero() {
-                    debug!(pid, "Signalling and waiting on child process");
-                } else {
-                    debug!(pid, "Shutting down child process");
-                }
-
-                if let Err(error) = child.kill_with_signal(signal).await {
-                    warn!(
-                        pid,
-                        error = error.to_string(),
-                        "Failed to shutdown child process"
-                    );
-                }
-
-                inner.remove(&child);
-            });
+        for tracked in self.killed {
+            waiting.spawn(wait_and_remove(tracked));
         }
 
-        let repeated = if matches!(signal, SignalType::Kill) {
-            Some(signal)
-        } else if grace.is_zero() {
-            Some(requests.recv().await.unwrap_or(SignalType::Kill))
-        } else {
-            tokio::select! {
-                _ = sleep(grace) => None,
-                signal = requests.recv() => Some(signal.unwrap_or(SignalType::Kill)),
-            }
-        };
-
-        // Keep the original handles through escalation: a child may exit and
-        // stop being tracked while its descendants still hold its output pipes
-        let mut force = children;
-
-        if let Some(repeated) = repeated {
-            let running = self.children();
-
-            // Once every child from this shutdown has exited, this is a new
-            // shutdown request rather than an escalation of this one
-            if !force
-                .iter()
-                .any(|child| running.iter().any(|other| other.same_child(child)))
-            {
-                for child in &force {
-                    child.stop_output();
-                }
-
-                return Some(repeated);
-            }
-
-            debug!(
-                signal = ?repeated,
-                "Received another signal during shutdown; force killing children"
-            );
-
-            // The repeated signal applies to the entire set, including
-            // children that were tracked after this shutdown began
-            for child in running {
-                if !force.iter().any(|other| other.same_child(&child)) {
-                    force.push(child);
-                }
-            }
-        }
-
-        self.kill_children(&force).await;
-
-        for child in &force {
-            child.stop_output();
+        if let Some(round) = self.round {
+            round.run().await;
         }
 
         waiting.join_all().await;
-
-        None
     }
+}
 
-    async fn kill_children(&self, children: &[SharedChild]) {
-        debug!(
-            pids = ?children.iter().map(SharedChild::id).collect::<Vec<_>>(),
-            "Wait threshold exhausted, killing {} running child processes",
-            children.len()
-        );
+struct ActiveRound {
+    set: ProcessSet,
+    round: Arc<Round>,
+    signal: SignalType,
+    grace: Duration,
+}
 
-        let mut killing = JoinSet::new();
+impl ActiveRound {
+    async fn run(self) {
+        let _guard = RoundGuard {
+            set: &self.set.inner,
+            round: &self.round,
+        };
 
-        for child in children.iter().cloned() {
-            killing.spawn(async move {
-                let pid = child.id();
+        let mut waiting = JoinSet::new();
 
-                debug!(pid, "Killing child process");
-
-                if let Err(error) = child.kill_with_signal(SignalType::Kill).await {
-                    warn!(
-                        pid,
-                        error = error.to_string(),
-                        "Failed to kill child process"
-                    );
-                }
-
-                child
-            });
+        for tracked in self.round.children.iter().cloned() {
+            waiting.spawn(wait_and_remove(tracked));
         }
 
-        // Only remove the children that belonged to this shutdown request,
-        // as others may have been tracked while it waited
-        for child in killing.join_all().await {
-            self.inner.remove(&child);
+        let timed_out = if matches!(self.signal, SignalType::Kill) {
+            true
+        } else if self.grace.is_zero() {
+            // Wait indefinitely for the children to exit, without force
+            // killing, unless another request does
+            tokio::select! {
+                _ = self.round.superseded.notified() => {},
+                _ = async { while waiting.join_next().await.is_some() {} } => {},
+            }
+
+            false
+        } else {
+            tokio::select! {
+                _ = self.round.superseded.notified() => false,
+                _ = sleep(self.grace) => true,
+            }
+        };
+
+        // Children that already exited are only stopped from holding up their
+        // output readers, which their descendants may still be keeping open
+        if timed_out {
+            debug!(
+                pids = ?self.round.children.iter().map(|tracked| tracked.child.id()).collect::<Vec<_>>(),
+                "Wait threshold exhausted, killing {} running child processes",
+                self.round.children.len()
+            );
+
+            for tracked in &self.round.children {
+                kill(&tracked.child);
+            }
+        }
+
+        waiting.join_all().await;
+    }
+}
+
+// Clears the set's shutdown when the round ends or is cancelled, unless a
+// newer one has replaced it
+struct RoundGuard<'a> {
+    set: &'a SetInner,
+    round: &'a Arc<Round>,
+}
+
+impl Drop for RoundGuard<'_> {
+    fn drop(&mut self) {
+        let mut state = self.set.state.lock().unwrap();
+
+        if state
+            .shutdown
+            .as_ref()
+            .is_some_and(|current| Arc::ptr_eq(current, self.round))
+        {
+            state.shutdown = None;
         }
     }
 }
 
+impl Round {
+    // Whether any child of this shutdown is still tracked, which it stops
+    // being once it has exited
+    fn has_running(&self) -> bool {
+        self.children
+            .iter()
+            .any(|tracked| tracked.set.tracks(&tracked.child))
+    }
+}
+
 impl SetInner {
+    fn tracks(&self, child: &SharedChild) -> bool {
+        self.state
+            .lock()
+            .unwrap()
+            .children
+            .iter()
+            .any(|tracked| tracked.same_child(child))
+    }
+
     /// Stop tracking this exact child, if it's still tracked. Another child
     /// that was given the same pid since is left alone.
     pub(crate) fn remove(&self, child: &SharedChild) {
         let removed = {
             let mut state = self.state.lock().unwrap();
 
-            match state.children.get(&child.id()) {
-                Some(tracked) if tracked.same_child(child) => state.children.remove(&child.id()),
-                _ => None,
-            }
+            state
+                .children
+                .iter()
+                .position(|tracked| tracked.same_child(child))
+                .map(|index| state.children.remove(index))
         };
 
         if removed.is_some() {
@@ -425,22 +519,14 @@ impl fmt::Debug for ProcessSet {
     }
 }
 
-// Marks the shutdown as finished when it ends, or is cancelled
-struct ShutdownGuard<'a> {
-    inner: &'a SetInner,
-    requests: mpsc::UnboundedSender<SignalType>,
+async fn wait_and_remove(tracked: Tracked) {
+    let _ = tracked.child.wait().await;
+
+    tracked.set.remove(&tracked.child);
 }
 
-impl Drop for ShutdownGuard<'_> {
-    fn drop(&mut self) {
-        let mut state = self.inner.state.lock().unwrap();
-
-        if state
-            .shutdown
-            .as_ref()
-            .is_some_and(|current| current.same_channel(&self.requests))
-        {
-            state.shutdown = None;
-        }
+fn kill(child: &SharedChild) {
+    if let Err(error) = child.send_signal(SignalType::Kill) {
+        warn!(pid = child.id(), %error, "Failed to kill child process");
     }
 }
