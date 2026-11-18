@@ -13,10 +13,12 @@ mod exec_stream;
 mod exec_stream_capture;
 mod helpers;
 mod output;
+mod output_cache;
 mod process_error;
 mod process_registry;
 mod shared_child;
 mod signal;
+mod signal_listener;
 
 pub use arg::*;
 pub use command::*;
@@ -28,4 +30,5 @@ pub use process_error::*;
 pub use process_registry::*;
 pub use shared_child::*;
 pub use signal::*;
+pub use signal_listener::*;
 pub use starbase_shell::{BoxedShell, ShellType};

@@ -1,6 +1,8 @@
 use crate::output::Output;
+use crate::output_cache::OutputCache;
 use crate::shared_child::*;
 use crate::signal::*;
+use crate::signal_listener::SignalListener;
 use core::time::Duration;
 use rustc_hash::FxHashMap;
 use std::sync::{Arc, OnceLock};
@@ -21,6 +23,7 @@ pub type RunningProcessesMap = Arc<RwLock<FxHashMap<u32, SharedChild>>>;
 /// runs. A process-wide singleton is available via [`Self::instance`].
 pub struct ProcessRegistry {
     /// The output cache, keyed by [`Command::get_cache_key`](crate::Command::get_cache_key).
+    /// Every registry shares the one process-wide cache.
     pub cache: Arc<scc::HashCache<String, Output>>,
 
     /// Milliseconds to wait for running processes to shut down gracefully
@@ -33,7 +36,7 @@ pub struct ProcessRegistry {
     cleanup_sender: UnboundedSender<SharedChild>,
     cleanup_handle: JoinHandle<()>,
     signal_sender: Sender<SignalType>,
-    signal_wait_handle: JoinHandle<()>,
+    signal_forward_handle: JoinHandle<()>,
     signal_shutdown_handle: JoinHandle<()>,
 }
 
@@ -61,8 +64,11 @@ impl ProcessRegistry {
             cleanup_cancelled_processes(cleanup_receiver, processes_cleanup).await;
         });
 
-        let signal_wait_handle = tokio::spawn(async move {
-            wait_for_signal(sender_bg).await;
+        // Subscribe before spawning, so no signal is missed in between
+        let os_signals = SignalListener::subscribe();
+
+        let signal_forward_handle = tokio::spawn(async move {
+            forward_signals(os_signals, sender_bg).await;
         });
 
         let signal_shutdown_handle = tokio::spawn(async move {
@@ -70,12 +76,12 @@ impl ProcessRegistry {
         });
 
         Self {
-            cache: Arc::new(scc::HashCache::new()),
+            cache: Arc::clone(&OutputCache::instance().entries),
             running: processes,
             cleanup_sender,
             signal_sender: sender,
             cleanup_handle,
-            signal_wait_handle,
+            signal_forward_handle,
             signal_shutdown_handle,
             threshold,
         }
@@ -93,17 +99,6 @@ impl ProcessRegistry {
     /// threshold if it doesn't exist yet.
     pub fn instance() -> Arc<ProcessRegistry> {
         Arc::clone(INSTANCE.get_or_init(|| Arc::new(ProcessRegistry::default())))
-    }
-
-    pub(crate) async fn get_cached_output(&self, key: &str) -> miette::Result<Option<Output>> {
-        Ok(self.cache.read_async(key, |_, output| output.clone()).await)
-    }
-
-    pub(crate) async fn cache_output(&self, key: String, output: Output) {
-        // Another identical command may have completed while this one ran.
-        // Keeping the first result is sufficient because both have the same
-        // cache identity.
-        let _ = self.cache.put_async(key, output).await;
     }
 
     /// Wrap a spawned child and register it as running, so it's tracked
@@ -189,8 +184,24 @@ impl Drop for ProcessRegistry {
         }
 
         self.cleanup_handle.abort();
-        self.signal_wait_handle.abort();
+        self.signal_forward_handle.abort();
         self.signal_shutdown_handle.abort();
+    }
+}
+
+/// Pass each OS signal from the [`SignalListener`] on to this registry's
+/// subscribers and shutdown handling. Runs until they are all dropped.
+async fn forward_signals(mut receiver: Receiver<SignalType>, sender: Sender<SignalType>) {
+    loop {
+        match receiver.recv().await {
+            Ok(signal) => {
+                if sender.send(signal).is_err() {
+                    break;
+                }
+            }
+            Err(broadcast::error::RecvError::Lagged(_)) => continue,
+            Err(broadcast::error::RecvError::Closed) => break,
+        }
     }
 }
 

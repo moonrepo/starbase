@@ -1,5 +1,6 @@
 use crate::command::Command;
 use crate::output::Output;
+use crate::output_cache::OutputCache;
 use crate::process_error::ProcessError;
 use crate::process_registry::ProcessRegistry;
 use bytes::Bytes;
@@ -78,14 +79,15 @@ impl<R: Reporter> Command<R> {
         }
 
         let key = self.get_output_cache_key("capture");
+        let cache = OutputCache::instance();
 
-        if let Some(output) = registry.get_cached_output(&key).await? {
+        if let Some(output) = cache.get(&key).await {
             return self.handle_cached_output(output);
         }
 
         let output = self.internal_exec_capture_output(&registry).await?;
 
-        registry.cache_output(key, output.clone()).await;
+        cache.put(key, output.clone()).await;
 
         Ok(output)
     }
