@@ -81,6 +81,13 @@ pub struct Command<R: Reporter> {
     /// See [`Self::get_cache_key`] for what counts as identical.
     pub cache: bool,
 
+    /// Run the child in a process group (Unix) or job object (Windows) of
+    /// its own, so that shutdowns and kills reach every process it starts.
+    /// On by default. See [`ProcessSet::spawn_contained`]. On Unix, a child
+    /// that inherits stdin is never contained, as it would be stopped when
+    /// it reads from the terminal.
+    pub contain_tree: bool,
+
     /// Continuously write to stdin and read from stdout
     pub continuous_pipe: bool,
 
@@ -131,6 +138,7 @@ impl<R: Reporter> Command<R> {
         Command {
             args: VecDeque::new(),
             cache: false,
+            contain_tree: true,
             continuous_pipe: false,
             cwd: None,
             debug: CommandDebug::default(),
@@ -611,6 +619,13 @@ impl<R: Reporter> Command<R> {
         self
     }
 
+    /// Set whether to run the child in a process group or job object of its
+    /// own. See [`Self::contain_tree`].
+    pub fn set_contain_tree(&mut self, state: bool) -> &mut Self {
+        self.contain_tree = state;
+        self
+    }
+
     /// Attach a console to write output to.
     pub fn set_console(&mut self, console: Console<R>) -> &mut Self {
         self.console = Some(console);
@@ -675,6 +690,14 @@ impl<R: Reporter> Command<R> {
         self
     }
 
+    /// Return true if the child should run in a process group or job object
+    /// of its own. See [`Self::contain_tree`].
+    pub fn should_contain_tree(&self) -> bool {
+        let inherits_stdin = !self.should_pass_stdin() && self.stdin == StdinMode::Inherit;
+
+        self.contain_tree && !(cfg!(unix) && inherits_stdin)
+    }
+
     /// Return true if output caching is enabled and not suppressed by a
     /// test or daemon environment.
     pub fn should_cache_output(&self) -> bool {
@@ -697,6 +720,7 @@ impl<R: Reporter> Command<R> {
         Command {
             args: self.args,
             cache: self.cache,
+            contain_tree: self.contain_tree,
             continuous_pipe: self.continuous_pipe,
             cwd: self.cwd,
             debug: self.debug,

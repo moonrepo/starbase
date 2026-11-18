@@ -4,6 +4,7 @@ use crate::exe::Executable;
 use crate::helpers::format_command_line;
 use crate::output::Output;
 use crate::process_error::ProcessError;
+use crate::process_set::ProcessSet;
 use crate::shared_child::SharedChild;
 use miette::IntoDiagnostic;
 use rustc_hash::FxHashMap;
@@ -106,6 +107,20 @@ impl<R: Reporter> Command<R> {
     /// [`Self::create_sync_command`] for details.
     pub fn create_async_command(&self) -> miette::Result<TokioCommand> {
         Ok(TokioCommand::from(self.create_sync_command()?))
+    }
+
+    // Spawn into `set`, in a process group or job object of its own unless
+    // that's turned off
+    pub(crate) fn spawn_child(
+        &self,
+        set: &ProcessSet,
+        command: TokioCommand,
+    ) -> io::Result<SharedChild> {
+        if self.should_contain_tree() {
+            set.spawn_contained(command)
+        } else {
+            set.spawn(command)
+        }
     }
 
     pub(crate) fn handle_nonzero_status(

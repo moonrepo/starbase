@@ -2,6 +2,7 @@ use crate::shared_child::SharedChild;
 use crate::signal::SignalType;
 use crate::signal_listener;
 use parking_lot::Mutex;
+use process_wrap::tokio::{ChildWrapper, CommandWrap};
 use std::fmt;
 use std::io;
 use std::mem;
@@ -136,8 +137,37 @@ impl ProcessSet {
     /// handle owns the child: dropping it while the child still runs kills
     /// the child, and dropping it after the child exits stops tracking it.
     /// The set stays alive while the handle does.
-    pub fn spawn(&self, command: &mut TokioCommand) -> io::Result<SharedChild> {
-        let owner = SharedChild::new_owned(command.spawn()?, Arc::clone(&self.inner));
+    pub fn spawn(&self, mut command: TokioCommand) -> io::Result<SharedChild> {
+        self.track(Box::new(command.spawn()?), false)
+    }
+
+    /// Like [`Self::spawn`], but the child and every process it starts run
+    /// in a process group (Unix) or job object (Windows) of their own.
+    /// Signals and kills then reach that whole tree, including after the
+    /// child itself has exited, while it's still tracked. The terminal no
+    /// longer signals it directly, so the [`SignalListener`] forwards each
+    /// signal instead. Processes the child leaves behind when it exits on
+    /// its own keep running.
+    ///
+    /// On Unix, a child outside the terminal's foreground process group is
+    /// stopped when it reads from the terminal, so don't contain a child
+    /// that inherits stdin.
+    ///
+    /// [`SignalListener`]: crate::SignalListener
+    pub fn spawn_contained(&self, command: TokioCommand) -> io::Result<SharedChild> {
+        let mut wrap = CommandWrap::from(command);
+
+        #[cfg(unix)]
+        wrap.wrap(process_wrap::tokio::ProcessGroup::leader());
+
+        #[cfg(windows)]
+        wrap.wrap(process_wrap::tokio::JobObject);
+
+        self.track(wrap.spawn()?, true)
+    }
+
+    fn track(&self, child: Box<dyn ChildWrapper>, contained: bool) -> io::Result<SharedChild> {
+        let owner = SharedChild::new_owned(child, contained, Arc::clone(&self.inner));
 
         self.inner.state.lock().children.push(owner.clone());
 
@@ -174,13 +204,14 @@ impl ProcessSet {
     /// it force killed have exited. Use [`Self::wait_idle`] to wait for the
     /// children themselves.
     pub async fn shutdown(&self, signal: SignalType) {
-        self.begin_shutdown(signal).finish().await;
+        self.begin_shutdown(signal, false).finish().await;
     }
 
     /// Signal the children, or force kill them for a repeated request, and
     /// return the rest of the shutdown to await. Nothing here waits, so the
-    /// signal listener can do this before it tells subscribers.
-    pub(crate) fn begin_shutdown(&self, signal: SignalType) -> Shutdown {
+    /// signal listener can do this before it tells subscribers. `from_os`
+    /// is set for a signal the OS sent us.
+    pub(crate) fn begin_shutdown(&self, signal: SignalType, from_os: bool) -> Shutdown {
         let _starting = self.inner.starting.lock();
         let sets = self.subtree();
         let mut killed = vec![];
@@ -254,7 +285,17 @@ impl ProcessSet {
             // treat a second interrupt as a request to quit at once
             let first = child.join_shutdown();
 
-            if (first || matches!(signal, SignalType::Kill))
+            // Neither is an uncontained child, which shares our process
+            // group, for the signals a terminal sends that whole group
+            let delivered = from_os
+                && cfg!(unix)
+                && !child.is_contained()
+                && matches!(
+                    signal,
+                    SignalType::Hangup | SignalType::Interrupt | SignalType::Quit
+                );
+
+            if ((first && !delivered) || matches!(signal, SignalType::Kill))
                 && let Err(error) = child.send_signal(signal)
             {
                 warn!(

@@ -28,12 +28,12 @@ impl<R: Reporter> Command<R> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let shared_child = set
-            .spawn(&mut command)
-            .map_err(|error| ProcessError::Capture {
-                bin: self.get_bin_name(),
-                error: Box::new(error),
-            })?;
+        let shared_child =
+            self.spawn_child(set, command)
+                .map_err(|error| ProcessError::Capture {
+                    bin: self.get_bin_name(),
+                    error: Box::new(error),
+                })?;
 
         self.pre_log_command(&shared_child);
 
@@ -105,12 +105,12 @@ impl<R: Reporter> Command<R> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let shared_child = set
-            .spawn(&mut command)
-            .map_err(|error| ProcessError::Capture {
-                bin: self.get_bin_name(),
-                error: Box::new(error),
-            })?;
+        let shared_child =
+            self.spawn_child(&set, command)
+                .map_err(|error| ProcessError::Capture {
+                    bin: self.get_bin_name(),
+                    error: Box::new(error),
+                })?;
         let stdin = shared_child.take_stdin().await;
         let stdout = shared_child.take_stdout().await;
         let stderr = shared_child.take_stderr().await;

@@ -3,6 +3,7 @@ use crate::process_set::SetInner;
 use crate::signal::*;
 use bytes::Bytes;
 use parking_lot::Mutex;
+use process_wrap::tokio::ChildWrapper;
 use std::future::{Future, poll_fn};
 use std::io;
 use std::pin::pin;
@@ -51,15 +52,18 @@ impl ChildExit {
 ///
 /// Only the original handle returned by
 /// [`ProcessSet::spawn`](crate::ProcessSet::spawn) acts on drop; clones
-/// never do. Dropping it kills the child if it's still running, stops
-/// output readers on its clones, and stops tracking the child in its set.
-/// Call [`Self::stop_cleanup`] first to leave the child running and its
-/// output readers alone.
+/// never do. Dropping it kills the child if it's still running (its whole
+/// tree when contained), stops output readers on its clones, and stops
+/// tracking the child in its set. Call [`Self::stop_cleanup`] first to
+/// leave the child running and its output readers alone.
 pub struct SharedChild {
-    inner: Arc<Mutex<Child>>,
+    inner: Arc<Mutex<Process>>,
     signal: Arc<OnceLock<SignalType>>,
     pid: u32,
     waiter: Arc<AsyncMutex<()>>,
+
+    // Whether the child runs in a process group or job object of its own
+    contained: bool,
 
     output_stop: watch::Sender<bool>,
     exited: watch::Sender<bool>,
@@ -77,10 +81,15 @@ pub struct SharedChild {
 impl SharedChild {
     /// Wrap a spawned child so it can be shared across tasks.
     pub fn new(child: Child) -> Self {
+        Self::wrap(Box::new(child), false)
+    }
+
+    fn wrap(child: Box<dyn ChildWrapper>, contained: bool) -> Self {
         Self {
             pid: child.id().unwrap(),
-            inner: Arc::new(Mutex::new(child)),
+            inner: Arc::new(Mutex::new(Process(child))),
             signal: Arc::new(OnceLock::new()),
+            contained,
             waiter: Arc::new(AsyncMutex::new(())),
             output_stop: watch::channel(false).0,
             exited: watch::channel(false).0,
@@ -92,8 +101,12 @@ impl SharedChild {
 
     /// Wrap a spawned child as the owner tracked by `set`. Dropping it kills
     /// the child if it's still running, and stops tracking it either way.
-    pub(crate) fn new_owned(child: Child, set: Arc<SetInner>) -> Self {
-        let mut shared_child = Self::new(child);
+    pub(crate) fn new_owned(
+        child: Box<dyn ChildWrapper>,
+        contained: bool,
+        set: Arc<SetInner>,
+    ) -> Self {
+        let mut shared_child = Self::wrap(child, contained);
         shared_child.set = Some(set);
         shared_child
     }
@@ -101,6 +114,13 @@ impl SharedChild {
     /// Return the child's process id.
     pub fn id(&self) -> u32 {
         self.pid
+    }
+
+    /// Return whether the child runs in a process group (Unix) or job
+    /// object (Windows) of its own, so that signals reach its whole tree.
+    /// See [`ProcessSet::spawn_contained`](crate::ProcessSet::spawn_contained).
+    pub fn is_contained(&self) -> bool {
+        self.contained
     }
 
     // Unlike comparing pids, this can't be fooled by the OS giving a new
@@ -124,7 +144,7 @@ impl SharedChild {
     // isn't running.
     pub(crate) async fn wait_after_kill(&self) {
         loop {
-            let status = self.try_wait_locked(&mut self.inner.lock());
+            let status = self.try_wait_locked(self.inner.lock().child());
 
             if !matches!(status, Ok(None)) {
                 return;
@@ -140,7 +160,7 @@ impl SharedChild {
     /// as end of input. That is usually what you want once all input has
     /// been written.
     pub async fn take_stdin(&self) -> Option<ChildStdin> {
-        self.inner.lock().stdin.take()
+        self.inner.lock().child().stdin.take()
     }
 
     /// Take the child's stdout pipe, if it was piped and not already taken.
@@ -150,14 +170,14 @@ impl SharedChild {
     /// `SIGPIPE` on its next write, truncating its output partway through.
     /// [`Self::wait_with_output`] returns empty bytes for a pipe taken here.
     pub async fn take_stdout(&self) -> Option<ChildStdout> {
-        self.inner.lock().stdout.take()
+        self.inner.lock().child().stdout.take()
     }
 
     /// Take the child's stderr pipe, if it was piped and not already taken.
     ///
     /// The same `SIGPIPE` caveat as [`Self::take_stdout`] applies.
     pub async fn take_stderr(&self) -> Option<ChildStderr> {
-        self.inner.lock().stderr.take()
+        self.inner.lock().child().stderr.take()
     }
 
     /// Force kill the child immediately (`SIGKILL` on Unix, terminate on
@@ -169,15 +189,17 @@ impl SharedChild {
 
     /// Send `signal` to the child and wait for it to exit. On Windows, the
     /// signal is remembered because its exit status does not carry it.
-    /// An already reaped child is not signalled and retains its exit status.
-    /// `Kill` also stops capture readers, including after the child was reaped.
+    /// An already reaped child retains its exit status, and isn't
+    /// signalled, unless it's contained, when the processes it left behind
+    /// still are. `Kill` also stops capture readers, including after the
+    /// child was reaped.
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
         let completed = {
             // Reaping and signal delivery use the same lock. Until reaped,
             // the child retains its PID/handle even if it has already exited.
-            let mut child = self.inner.lock();
+            let mut process = self.inner.lock();
 
-            self.send_signal_locked(&mut child, signal)?
+            self.send_signal_locked(&mut process, signal)?
                 .map(|status| convert_exit_status(status, None))
         };
 
@@ -191,9 +213,9 @@ impl SharedChild {
     /// Send a signal without waiting for the child. This is used by
     /// synchronous cleanup paths, such as an owner being dropped.
     pub fn send_signal(&self, signal: SignalType) -> io::Result<()> {
-        let mut child = self.inner.lock();
+        let mut process = self.inner.lock();
 
-        self.send_signal_locked(&mut child, signal)?;
+        self.send_signal_locked(&mut process, signal)?;
 
         Ok(())
     }
@@ -203,50 +225,30 @@ impl SharedChild {
     /// already reaped, so callers can preserve the real result.
     fn send_signal_locked(
         &self,
-        child: &mut Child,
+        process: &mut Process,
         signal: SignalType,
     ) -> io::Result<Option<ExitStatus>> {
-        if let Some(status) = self.try_wait_locked(child)? {
-            if matches!(signal, SignalType::Kill) {
-                self.stop_output();
+        let status = self.try_wait_locked(process.child())?;
+
+        if status.is_none() {
+            process.signal(signal, self.contained)?;
+
+            // `CTRL-C` cannot be delivered to an individual Windows process, so
+            // do not report it as an interrupt when the process exits normally.
+            if cfg!(unix) || !matches!(signal, SignalType::Interrupt) {
+                self.signal.get_or_init(|| signal);
             }
-
-            return Ok(Some(status));
-        }
-
-        let Some(pid) = child.id() else {
-            return Ok(None);
-        };
-
-        #[cfg(unix)]
-        kill(pid, signal)?;
-
-        #[cfg(windows)]
-        {
-            // Borrow the live handle only while the lock prevents reaping
-            // from closing it; never retain a raw handle across waits.
-            let handle = child
-                .raw_handle()
-                .ok_or_else(|| io::Error::other("Child process handle is unavailable"))?;
-
-            kill(pid, RawHandle(handle), signal)?;
-        }
-
-        // `CTRL-C` cannot be delivered to an individual Windows process, so
-        // do not report it as an interrupt when the process exits normally.
-        #[cfg(not(windows))]
-        self.signal.get_or_init(|| signal);
-
-        #[cfg(windows)]
-        if !matches!(signal, SignalType::Interrupt) {
-            self.signal.get_or_init(|| signal);
+        } else if self.contained {
+            // The processes it started may still be running, and holding
+            // its output pipes open
+            process.signal(signal, true)?;
         }
 
         if matches!(signal, SignalType::Kill) {
             self.stop_output();
         }
 
-        Ok(None)
+        Ok(status)
     }
 
     /// Reaping through `try_wait` makes tokio drop its `SIGCHLD` listener
@@ -292,8 +294,8 @@ impl SharedChild {
         let status = tokio::select! {
             biased;
             status = poll_fn(|cx| {
-                let mut child = self.inner.lock();
-                pin!(child.wait()).poll(cx)
+                let mut process = self.inner.lock();
+                pin!(process.child().wait()).poll(cx)
             }) => status?,
             // The child was reaped by a `try_wait` elsewhere, taking tokio's
             // `SIGCHLD` listener with it, so the wait above would never be
@@ -301,7 +303,7 @@ impl SharedChild {
             // before locking the child, which `try_wait_locked` holds while
             // it updates the watch.
             _ = async { let _ = exited.wait_for(|exited| *exited).await; } => {
-                self.inner.lock().try_wait()?.ok_or_else(|| {
+                self.inner.lock().child().try_wait()?.ok_or_else(|| {
                     io::Error::other("Child process was marked exited but has no status")
                 })?
             }
@@ -316,11 +318,13 @@ impl SharedChild {
     /// when the child exits. Any process that inherited the pipes holds
     /// them open, so a shell wrapper that backgrounds work keeps us here
     /// until that work finishes, and its output is captured too. To bound
-    /// the wait, make the process being signalled the one holding the
-    /// pipes (`exec` in a shell wrapper), as signalling a shell does not
-    /// reach the processes it spawned. Force-killing stops the capture readers
-    /// and returns bytes already captured, without waiting for inherited pipes.
-    /// It does not terminate descendants.
+    /// the wait, contain the child, so signals reach its whole tree, or
+    /// make the process being signalled the one holding the pipes (`exec`
+    /// in a shell wrapper), as signalling an uncontained shell does not
+    /// reach the processes it spawned. Force-killing stops the capture
+    /// readers and returns bytes already captured, without waiting for
+    /// inherited pipes. Unless the child is contained, it does not
+    /// terminate descendants.
     ///
     /// Pipes that were not requested, or that [`Self::take_stdout`] and
     /// friends already took, come back as empty bytes.
@@ -348,7 +352,9 @@ impl SharedChild {
         }
 
         let (mut stdout_pipe, mut stderr_pipe) = {
-            let mut child = self.inner.lock();
+            let mut process = self.inner.lock();
+            let child = process.child();
+
             (child.stdout.take(), child.stderr.take())
         };
 
@@ -381,6 +387,7 @@ impl Clone for SharedChild {
             inner: Arc::clone(&self.inner),
             signal: Arc::clone(&self.signal),
             pid: self.pid,
+            contained: self.contained,
             waiter: Arc::clone(&self.waiter),
             output_stop: self.output_stop.clone(),
             exited: self.exited.clone(),
@@ -396,11 +403,22 @@ impl Drop for SharedChild {
     fn drop(&mut self) {
         if let Some(set) = self.set.take() {
             // A child still running when its owner goes away was cancelled,
-            // so kill it now rather than queueing that for later.
+            // so kill it now rather than queueing that for later. Processes
+            // left behind by a child that already exited keep running.
             if self.cleanup.swap(false, Ordering::AcqRel) {
-                let mut child = self.inner.lock();
+                let mut process = self.inner.lock();
 
-                if let Err(error) = self.send_signal_locked(&mut child, SignalType::Kill) {
+                let result = match self.try_wait_locked(process.child()) {
+                    Ok(None) => self.send_signal_locked(&mut process, SignalType::Kill),
+                    Ok(Some(status)) => {
+                        self.stop_output();
+
+                        Ok(Some(status))
+                    }
+                    Err(error) => Err(error),
+                };
+
+                if let Err(error) = result {
                     warn!(
                         pid = self.pid,
                         %error,
@@ -411,6 +429,61 @@ impl Drop for SharedChild {
 
             set.remove(self);
         }
+    }
+}
+
+// The spawned child, along with the process group or job object wrapper
+// that contains its tree, if any
+struct Process(Box<dyn ChildWrapper>);
+
+impl Process {
+    // The native child, which is waited on directly. The wrappers' own waits
+    // also wait for the rest of the tree, which `SharedChild::wait` doesn't.
+    fn child(&mut self) -> &mut Child {
+        // SAFETY: The process group and job object wrappers only cache the
+        // exit status seen by their own waits, which are never called
+        unsafe { self.0.try_inner_child_mut() }.expect("Child process wrapper has no native child")
+    }
+
+    // Send `signal` to the child, or to its whole tree when contained
+    fn signal(&mut self, signal: SignalType, contained: bool) -> io::Result<()> {
+        #[cfg(unix)]
+        {
+            if contained {
+                // The whole process group has exited
+                return match self.0.signal(signal.get_code()) {
+                    Err(error) if error.raw_os_error() == Some(libc::ESRCH) => Ok(()),
+                    result => result,
+                };
+            }
+
+            if let Some(pid) = self.child().id() {
+                kill(pid, signal)?;
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            // `CTRL-C` is delivered by the console, and can't be sent to
+            // a single process or job. Everything else terminates.
+            if contained {
+                if !matches!(signal, SignalType::Interrupt) {
+                    self.0.start_kill()?;
+                }
+
+                return Ok(());
+            }
+
+            let child = self.child();
+
+            // Borrow the live handle only while the lock prevents reaping
+            // from closing it; never retain a raw handle across waits.
+            if let (Some(pid), Some(handle)) = (child.id(), child.raw_handle()) {
+                kill(pid, RawHandle(handle), signal)?;
+            }
+        }
+
+        Ok(())
     }
 }
 

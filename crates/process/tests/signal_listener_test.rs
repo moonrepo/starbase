@@ -1,64 +1,57 @@
 #![cfg(unix)]
 
 // Signals are sent to this test process itself, which shuts down every
-// process set in the same binary, so these tests live in their own binary.
+// process set in the same binary, so this is the binary's only test.
 
 use starbase_process::{ChildExit, ProcessSet, SignalListener, SignalType, kill};
 use std::time::Duration;
 use tokio::process::Command;
-use tokio::signal::unix::{SignalKind, signal};
-use tokio::time::{sleep, timeout};
+use tokio::time::timeout;
 
-mod signal_listener {
-    use super::*;
+fn sleep_command() -> Command {
+    let mut command = Command::new("sleep");
+    command.arg("30");
+    command
+}
 
-    #[tokio::test]
-    async fn broadcasts_signals_once_subscribed() {
-        let mut receiver = SignalListener::subscribe();
+#[tokio::test]
+async fn shuts_down_the_root_and_broadcasts_signals() {
+    let mut receiver = SignalListener::subscribe();
+    let set = ProcessSet::root().nested();
+    let contained = set.spawn_contained(sleep_command()).unwrap();
+    let uncontained = set.spawn(sleep_command()).unwrap();
 
-        // Handlers are installed once subscribing returns, so this signal
-        // is broadcast instead of exiting the test process
-        kill(std::process::id(), SignalType::Hangup).unwrap();
+    // Handlers are installed once subscribing returns, so this signal is
+    // broadcast instead of exiting the test process
+    kill(std::process::id(), SignalType::Hangup).unwrap();
 
-        let received = timeout(Duration::from_secs(5), receiver.recv())
-            .await
-            .expect("SIGHUP was not broadcast")
-            .unwrap();
-
-        assert!(matches!(received, SignalType::Hangup));
-    }
-
-    #[tokio::test]
-    async fn forwards_sighup_to_running_children() {
-        // Replace the default action (exit) before anything else listens
-        let _hangup = signal(SignalKind::hangup()).unwrap();
-
-        let set = ProcessSet::root().nested_with_grace(Duration::from_secs(5));
-        let mut receiver = SignalListener::subscribe();
-        let child = set.spawn(Command::new("sleep").arg("30")).unwrap();
-
-        // The root is shut down on the listener thread, so keep sending
-        // until the signal is seen, in case one is missed
-        let received = timeout(Duration::from_secs(5), async {
-            loop {
-                kill(std::process::id(), SignalType::Hangup).unwrap();
-
-                tokio::select! {
-                    result = receiver.recv() => break result.unwrap(),
-                    _ = sleep(Duration::from_millis(250)) => {},
-                }
-            }
-        })
+    let received = timeout(Duration::from_secs(5), receiver.recv())
         .await
-        .expect("SIGHUP was not broadcast");
+        .expect("SIGHUP was not broadcast")
+        .unwrap();
 
-        assert!(matches!(received, SignalType::Hangup));
-        assert_eq!(
-            timeout(Duration::from_secs(5), child.wait())
-                .await
-                .expect("child was not shutdown")
-                .unwrap(),
-            ChildExit::Terminated(SignalType::Hangup.get_code())
-        );
-    }
+    assert!(matches!(received, SignalType::Hangup));
+    assert_eq!(
+        timeout(Duration::from_secs(5), contained.wait())
+            .await
+            .expect("contained child was not shutdown")
+            .unwrap(),
+        ChildExit::Terminated(SignalType::Hangup.get_code())
+    );
+
+    // A child in our process group would have received a terminal's
+    // SIGHUP directly, so it isn't sent again. It's force killed once
+    // the root's grace period ends.
+    assert!(
+        timeout(Duration::from_millis(500), uncontained.wait())
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        timeout(Duration::from_secs(5), uncontained.wait())
+            .await
+            .expect("uncontained child was not force killed")
+            .unwrap(),
+        ChildExit::Killed
+    );
 }

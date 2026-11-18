@@ -41,7 +41,7 @@ async fn descendant(child: &SharedChild) -> Descendant {
 
 async fn assert_capture_stops(set: Option<&ProcessSet>, explicit_signal: bool) {
     let child = match set {
-        Some(set) => set.spawn(&mut shell()).unwrap(),
+        Some(set) => set.spawn(shell()).unwrap(),
         None => SharedChild::new(shell().spawn().unwrap()),
     };
     let _descendant = descendant(&child).await;
@@ -182,7 +182,7 @@ async fn blocked_capture(
         Box<impl std::future::Future<Output = std::io::Result<starbase_process::Output>>>,
     >,
 ) {
-    let child = set.spawn(&mut shell()).unwrap();
+    let child = set.spawn(shell()).unwrap();
     let descendant = descendant(&child).await;
 
     timeout(Duration::from_secs(3), child.wait())
