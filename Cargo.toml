@@ -18,6 +18,7 @@ iocraft = { version = "0.9.4", features = ["serde"] }
 # iocraft = { git = "https://github.com/ccbrown/iocraft", branch = "main" }
 libc = "0.2.191"
 miette = "7.6.0"
+parking_lot = "0.13.0"
 regex = { version = "1.13.1", default-features = false }
 relative-path = "2.0.3"
 reqwest = { version = "0.13.5", default-features = false }

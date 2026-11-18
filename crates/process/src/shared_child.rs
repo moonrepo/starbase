@@ -2,12 +2,13 @@ use crate::output::Output;
 use crate::process_set::SetInner;
 use crate::signal::*;
 use bytes::Bytes;
+use parking_lot::Mutex;
 use std::future::{Future, poll_fn};
 use std::io;
 use std::pin::pin;
 use std::process::ExitStatus;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::process::{Child, ChildStderr, ChildStdin, ChildStdout};
 use tokio::sync::{Mutex as AsyncMutex, watch};
@@ -123,7 +124,7 @@ impl SharedChild {
     // isn't running.
     pub(crate) async fn wait_after_kill(&self) {
         loop {
-            let status = self.try_wait_locked(&mut self.inner.lock().unwrap());
+            let status = self.try_wait_locked(&mut self.inner.lock());
 
             if !matches!(status, Ok(None)) {
                 return;
@@ -139,7 +140,7 @@ impl SharedChild {
     /// as end of input. That is usually what you want once all input has
     /// been written.
     pub async fn take_stdin(&self) -> Option<ChildStdin> {
-        self.inner.lock().unwrap().stdin.take()
+        self.inner.lock().stdin.take()
     }
 
     /// Take the child's stdout pipe, if it was piped and not already taken.
@@ -149,14 +150,14 @@ impl SharedChild {
     /// `SIGPIPE` on its next write, truncating its output partway through.
     /// [`Self::wait_with_output`] returns empty bytes for a pipe taken here.
     pub async fn take_stdout(&self) -> Option<ChildStdout> {
-        self.inner.lock().unwrap().stdout.take()
+        self.inner.lock().stdout.take()
     }
 
     /// Take the child's stderr pipe, if it was piped and not already taken.
     ///
     /// The same `SIGPIPE` caveat as [`Self::take_stdout`] applies.
     pub async fn take_stderr(&self) -> Option<ChildStderr> {
-        self.inner.lock().unwrap().stderr.take()
+        self.inner.lock().stderr.take()
     }
 
     /// Force kill the child immediately (`SIGKILL` on Unix, terminate on
@@ -174,7 +175,7 @@ impl SharedChild {
         let completed = {
             // Reaping and signal delivery use the same lock. Until reaped,
             // the child retains its PID/handle even if it has already exited.
-            let mut child = self.inner.lock().unwrap();
+            let mut child = self.inner.lock();
 
             self.send_signal_locked(&mut child, signal)?
                 .map(|status| convert_exit_status(status, None))
@@ -190,7 +191,7 @@ impl SharedChild {
     /// Send a signal without waiting for the child. This is used by
     /// synchronous cleanup paths, such as an owner being dropped.
     pub fn send_signal(&self, signal: SignalType) -> io::Result<()> {
-        let mut child = self.inner.lock().unwrap();
+        let mut child = self.inner.lock();
 
         self.send_signal_locked(&mut child, signal)?;
 
@@ -291,7 +292,7 @@ impl SharedChild {
         let status = tokio::select! {
             biased;
             status = poll_fn(|cx| {
-                let mut child = self.inner.lock().unwrap();
+                let mut child = self.inner.lock();
                 pin!(child.wait()).poll(cx)
             }) => status?,
             // The child was reaped by a `try_wait` elsewhere, taking tokio's
@@ -300,7 +301,7 @@ impl SharedChild {
             // before locking the child, which `try_wait_locked` holds while
             // it updates the watch.
             _ = async { let _ = exited.wait_for(|exited| *exited).await; } => {
-                self.inner.lock().unwrap().try_wait()?.ok_or_else(|| {
+                self.inner.lock().try_wait()?.ok_or_else(|| {
                     io::Error::other("Child process was marked exited but has no status")
                 })?
             }
@@ -347,7 +348,7 @@ impl SharedChild {
         }
 
         let (mut stdout_pipe, mut stderr_pipe) = {
-            let mut child = self.inner.lock().unwrap();
+            let mut child = self.inner.lock();
             (child.stdout.take(), child.stderr.take())
         };
 
@@ -395,10 +396,9 @@ impl Drop for SharedChild {
     fn drop(&mut self) {
         if let Some(set) = self.set.take() {
             // A child still running when its owner goes away was cancelled,
-            // so kill it now rather than queueing that for later. A poisoned
-            // lock must not panic again while unwinding.
+            // so kill it now rather than queueing that for later.
             if self.cleanup.swap(false, Ordering::AcqRel) {
-                let mut child = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
+                let mut child = self.inner.lock();
 
                 if let Err(error) = self.send_signal_locked(&mut child, SignalType::Kill) {
                     warn!(

@@ -1,10 +1,11 @@
 use crate::shared_child::SharedChild;
 use crate::signal::SignalType;
 use crate::signal_listener;
+use parking_lot::Mutex;
 use std::fmt;
 use std::io;
 use std::mem;
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, Weak};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 use tokio::process::Command as TokioCommand;
 use tokio::sync::Notify;
@@ -90,7 +91,7 @@ impl ProcessSet {
     /// every child. Sets nested afterwards inherit it. A zero duration
     /// waits indefinitely instead of force killing.
     pub fn configure_root(grace: Duration) {
-        *lock(&Self::root().inner.grace) = grace;
+        *Self::root().inner.grace.lock() = grace;
     }
 
     /// Create a set nested under this one, with the same grace period. It's
@@ -105,7 +106,7 @@ impl ProcessSet {
     /// instead of force killing.
     pub fn nested_with_grace(&self, grace: Duration) -> ProcessSet {
         let set = Self::create(grace, Arc::clone(&self.inner.idle));
-        let mut state = lock(&self.inner.state);
+        let mut state = self.inner.state.lock();
 
         state.nested.retain(|nested| nested.strong_count() > 0);
         state.nested.push(Arc::downgrade(&set.inner));
@@ -128,7 +129,7 @@ impl ProcessSet {
     /// signals them, before they're force killed. Zero waits indefinitely
     /// instead.
     pub fn grace(&self) -> Duration {
-        *lock(&self.inner.grace)
+        *self.inner.grace.lock()
     }
 
     /// Spawn the command and track the child in this set. The returned
@@ -138,14 +139,16 @@ impl ProcessSet {
     pub fn spawn(&self, command: &mut TokioCommand) -> io::Result<SharedChild> {
         let owner = SharedChild::new_owned(command.spawn()?, Arc::clone(&self.inner));
 
-        lock(&self.inner.state).children.push(owner.clone());
+        self.inner.state.lock().children.push(owner.clone());
 
         Ok(owner)
     }
 
     /// Look up a child tracked in this set by pid. Nested sets aren't searched.
     pub fn get(&self, pid: u32) -> Option<SharedChild> {
-        lock(&self.inner.state)
+        self.inner
+            .state
+            .lock()
             .children
             .iter()
             .rev()
@@ -178,12 +181,12 @@ impl ProcessSet {
     /// return the rest of the shutdown to await. Nothing here waits, so the
     /// signal listener can do this before it tells subscribers.
     pub(crate) fn begin_shutdown(&self, signal: SignalType) -> Shutdown {
-        let _starting = lock(&self.inner.starting);
+        let _starting = self.inner.starting.lock();
         let sets = self.subtree();
         let mut killed = vec![];
 
         for (index, set) in sets.iter().enumerate() {
-            let unstopped = mem::take(&mut lock(&set.inner.state).unstopped);
+            let unstopped = mem::take(&mut set.inner.state.lock().unstopped);
 
             for child in unstopped {
                 child.stop_output();
@@ -267,7 +270,7 @@ impl ProcessSet {
             superseded: Notify::new(),
         });
 
-        lock(&self.inner.state).shutdown = Some(Arc::clone(&round));
+        self.inner.state.lock().shutdown = Some(Arc::clone(&round));
 
         Shutdown {
             killed,
@@ -303,7 +306,7 @@ impl ProcessSet {
             if self
                 .subtree()
                 .iter()
-                .all(|set| lock(&set.inner.state).children.is_empty())
+                .all(|set| set.inner.state.lock().children.is_empty())
             {
                 return;
             }
@@ -313,11 +316,11 @@ impl ProcessSet {
     }
 
     fn current_shutdown(&self) -> Option<Arc<Round>> {
-        lock(&self.inner.state).shutdown.clone()
+        self.inner.state.lock().shutdown.clone()
     }
 
     fn clear_shutdown(&self, round: &Arc<Round>) {
-        let mut state = lock(&self.inner.state);
+        let mut state = self.inner.state.lock();
 
         if state
             .shutdown
@@ -354,7 +357,7 @@ impl ProcessSet {
     }
 
     fn nested_sets(&self) -> Vec<ProcessSet> {
-        let mut state = lock(&self.inner.state);
+        let mut state = self.inner.state.lock();
 
         state.nested.retain(|nested| nested.strong_count() > 0);
         state
@@ -385,7 +388,7 @@ impl ProcessSet {
         self.subtree()
             .into_iter()
             .flat_map(|set| {
-                let children = lock(&set.inner.state).children.clone();
+                let children = set.inner.state.lock().children.clone();
 
                 children.into_iter().map(move |child| Tracked {
                     set: Arc::clone(&set.inner),
@@ -464,7 +467,7 @@ impl ActiveRound {
             // With no limit on the grace period, readers that descendants
             // keep open stay running until another request stops them
             End::Exited => {
-                lock(&self.set.inner.state).unstopped.extend(
+                self.set.inner.state.lock().unstopped.extend(
                     self.round
                         .children
                         .iter()
@@ -528,7 +531,8 @@ impl Round {
 
 impl SetInner {
     fn tracks(&self, child: &SharedChild) -> bool {
-        lock(&self.state)
+        self.state
+            .lock()
             .children
             .iter()
             .any(|tracked| tracked.same_child(child))
@@ -538,7 +542,7 @@ impl SetInner {
     /// that was given the same pid since is left alone.
     pub(crate) fn remove(&self, child: &SharedChild) {
         let removed = {
-            let mut state = lock(&self.state);
+            let mut state = self.state.lock();
 
             state
                 .children
@@ -557,15 +561,9 @@ impl fmt::Debug for ProcessSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ProcessSet")
             .field("grace", &self.grace())
-            .field("children", &lock(&self.inner.state).children.len())
+            .field("children", &self.inner.state.lock().children.len())
             .finish()
     }
-}
-
-// Nothing here can panic while holding a lock, but this also runs in
-// destructors, where a poisoned lock must not panic again
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 async fn wait_and_remove(tracked: Tracked) {

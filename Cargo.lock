@@ -3307,6 +3307,7 @@ dependencies = [
  "bytes",
  "libc",
  "miette",
+ "parking_lot 0.13.0",
  "rustc-hash",
  "scc",
  "serde",

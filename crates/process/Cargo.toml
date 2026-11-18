@@ -13,6 +13,7 @@ starbase_shell = { version = "0.14.4", path = "../shell" }
 starbase_styles = { version = "0.6.10", path = "../styles" }
 bytes = { workspace = true }
 miette = { workspace = true }
+parking_lot = { workspace = true }
 rustc-hash = { workspace = true }
 scc = { workspace = true }
 serde = { workspace = true }
