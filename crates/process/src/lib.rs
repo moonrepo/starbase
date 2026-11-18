@@ -1,13 +1,15 @@
 //! Utilities for building, executing, and managing child processes:
 //! shell-aware command construction, buffered and streamed execution
-//! with optional output caching, signal handling, and sets for
-//! tracking running processes and shutting them down as a group.
+//! (async or blocking) with optional output caching, signal handling,
+//! and sets for tracking running processes and shutting them down as a
+//! group.
 
 mod arg;
 mod command;
 mod env;
 mod exe;
 mod exec;
+mod exec_blocking;
 mod exec_capture;
 mod exec_stream;
 mod exec_stream_capture;
