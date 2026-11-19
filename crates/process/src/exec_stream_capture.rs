@@ -78,6 +78,7 @@ impl<R: Reporter> Command<R> {
 
                 Ok::<_, miette::Report>(Output {
                     exit,
+                    pid: shared_child.id(),
                     stdout: Bytes::from(captured_stdout),
                     stderr: Bytes::from(captured_stderr),
                 })

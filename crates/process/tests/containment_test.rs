@@ -1,7 +1,7 @@
 #![cfg(unix)]
 
 use starbase_console::{Console, EmptyReporter};
-use starbase_process::{ChildExit, Command, ProcessSet, SharedChild, SignalType};
+use starbase_process::{ChildExit, Command, ProcessSet, SharedChild, SignalListener, SignalType};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -50,6 +50,8 @@ async fn spawn_shell(set: &ProcessSet, script: &str) -> (SharedChild, Descendant
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
+    SignalListener::start();
+
     let child = set.spawn_contained(command).unwrap();
 
     let mut pid = String::new();
@@ -66,6 +68,8 @@ async fn spawn_shell(set: &ProcessSet, script: &str) -> (SharedChild, Descendant
 
 #[tokio::test]
 async fn contained_children_lead_their_own_process_group() {
+    SignalListener::start();
+
     let set = ProcessSet::root().nested();
     let contained = set.spawn_contained(sleep_command()).unwrap();
     let uncontained = set.spawn(sleep_command()).unwrap();
@@ -162,11 +166,14 @@ async fn signals_reach_processes_left_behind_by_an_exited_child() {
 }
 
 #[tokio::test]
-async fn commands_contain_their_tree_by_default() {
+async fn commands_contain_their_tree_when_turned_on() {
+    SignalListener::start();
+
     let mut command = Command::<EmptyReporter>::new("sh");
     command
         .no_shell()
         .args(["-c", "echo $$; ps -o pgid= -p $$"])
+        .set_contain_tree(true)
         .set_console(Console::new_testing());
 
     let output = command.exec_capture_output().await.unwrap();
@@ -189,6 +196,8 @@ async fn commands_contain_their_tree_by_default() {
 async fn streamed_commands_are_contained_unless_on_a_terminal() {
     use std::io::IsTerminal;
 
+    SignalListener::start();
+
     let marker = std::env::temp_dir().join(format!(
         "starbase-containment-stream-{}",
         std::process::id()
@@ -201,6 +210,7 @@ async fn streamed_commands_are_contained_unless_on_a_terminal() {
             "-c",
             &format!("echo $$ $(ps -o pgid= -p $$) > '{}'", marker.display()),
         ])
+        .set_contain_tree(true)
         .set_console(Console::new_testing());
 
     command.exec_stream_output().await.unwrap();

@@ -36,6 +36,10 @@ pub struct Output {
     /// How the process exited.
     pub exit: ChildExit,
 
+    /// The process id of the child that ran. For output reused from the
+    /// cache, it's the child of the run that produced it.
+    pub pid: u32,
+
     /// The captured stderr, empty if not captured.
     pub stderr: Bytes,
 

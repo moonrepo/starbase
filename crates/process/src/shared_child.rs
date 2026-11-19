@@ -380,6 +380,7 @@ impl SharedChild {
 
         Ok(Output {
             exit,
+            pid: self.pid,
             stdout: Bytes::from(stdout),
             stderr: Bytes::from(stderr),
         })

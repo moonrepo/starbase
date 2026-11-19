@@ -108,6 +108,44 @@ mod exec_capture_output {
     }
 }
 
+mod pids {
+    use super::*;
+
+    // `$$` is the shell, which is the child itself
+    fn assert_pid(output: &starbase_process::Output) {
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            output.pid.to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn outputs_include_the_child_pid() {
+        assert_pid(
+            &create_command("printf $$")
+                .exec_capture_output()
+                .await
+                .unwrap(),
+        );
+
+        assert_pid(
+            &create_command("printf $$")
+                .exec_stream_and_capture_output()
+                .await
+                .unwrap(),
+        );
+
+        let mut command = create_command("printf $$");
+        command.set_continuous_pipe(true);
+
+        assert_pid(&command.exec_capture_output().await.unwrap());
+
+        let output = create_command("true").exec_stream_output().await.unwrap();
+
+        assert!(output.pid > 0);
+    }
+}
+
 mod exec_capture_continuous_output {
     use super::*;
 

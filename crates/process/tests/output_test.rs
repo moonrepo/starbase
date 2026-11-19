@@ -4,6 +4,7 @@ fn create_output(exit: starbase_process::ChildExit) -> starbase_process::Output 
 
     starbase_process::Output {
         exit,
+        pid: 1,
         stdout: Bytes::new(),
         stderr: Bytes::new(),
     }

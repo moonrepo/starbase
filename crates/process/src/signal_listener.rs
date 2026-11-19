@@ -12,9 +12,11 @@ static STARTED: Once = Once::new();
 /// Listens for OS termination signals on behalf of the whole process
 /// (`SIGHUP`, `SIGINT`, `SIGQUIT`, and `SIGTERM` on Unix; `CTRL-C`,
 /// `CTRL-BREAK`, `CTRL-CLOSE`, and `CTRL-SHUTDOWN` on Windows), shuts down
-/// [`ProcessSet::root`] when one arrives, and then broadcasts it. It runs
-/// on a thread of its own, so it keeps listening after the runtime that
-/// started it shuts down.
+/// [`ProcessSet::root`] when one arrives, and then broadcasts it. It's off
+/// until started with [`Self::start`] or [`Self::subscribe`], and those
+/// signals keep their default action of exiting the process until then.
+/// Once started, it runs on a thread of its own, so it keeps listening
+/// after the runtime that started it shuts down.
 ///
 /// On Unix, children that aren't contained (see
 /// [`ProcessSet::spawn_contained`]) share our process group, so a
@@ -29,16 +31,25 @@ static STARTED: Once = Once::new();
 pub struct SignalListener;
 
 impl SignalListener {
-    /// Subscribe to OS termination signals, starting the listener if needed.
-    /// Once this returns, those signals are broadcast instead of taking
-    /// their default action of exiting the process. On Windows, the OS still
-    /// ends the process a few seconds after the console closes or the system
-    /// shuts down. If the listener can't start, a warning is logged and
-    /// signals keep their default action.
+    /// Start the listener, if it isn't already. Once this returns, OS
+    /// termination signals shut down [`ProcessSet::root`] and are broadcast,
+    /// instead of taking their default action of exiting the process. On
+    /// Windows, the OS still ends the process a few seconds after the
+    /// console closes or the system shuts down. If the listener can't
+    /// start, a warning is logged and signals keep their default action.
+    ///
+    /// Containing children requires this, see
+    /// [`ProcessSet::spawn_contained`].
+    pub fn start() {
+        start_listening();
+    }
+
+    /// Subscribe to OS termination signals, starting the listener if needed
+    /// (see [`Self::start`]).
     pub fn subscribe() -> Receiver<SignalType> {
         let receiver = SENDER.subscribe();
 
-        start();
+        start_listening();
 
         receiver
     }
@@ -50,7 +61,11 @@ impl SignalListener {
     }
 }
 
-pub(crate) fn start() {
+pub(crate) fn is_started() -> bool {
+    STARTED.is_completed()
+}
+
+fn start_listening() {
     STARTED.call_once(|| {
         let (ready_sender, ready_receiver) = mpsc::channel();
 
