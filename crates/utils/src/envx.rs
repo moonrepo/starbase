@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -10,7 +11,7 @@ fn has_env_var(key: &str) -> bool {
     }
 }
 
-fn has_proc_config(path: &str, value: &str) -> bool {
+fn has_proc_config(path: &Path, value: &str) -> bool {
     match fs::read_to_string(path) {
         Ok(contents) => contents.to_lowercase().contains(value),
         Err(_) => false,
@@ -33,7 +34,20 @@ pub fn is_docker() -> bool {
             return true;
         }
 
-        has_proc_config("/proc/self/cgroup", "docker")
+        has_proc_config(Path::new("/proc/self/cgroup"), "docker")
+    })
+}
+
+/// Return true if we're in a Podman container.
+pub fn is_podman() -> bool {
+    static PODMAN_CACHE: OnceLock<bool> = OnceLock::new();
+
+    *PODMAN_CACHE.get_or_init(|| {
+        if env::var("container").is_ok_and(|value| value == "podman") {
+            return true;
+        }
+
+        PathBuf::from("/run/.containerenv").exists()
     })
 }
 
@@ -46,11 +60,11 @@ pub fn is_wsl() -> bool {
             return false;
         }
 
-        if has_proc_config("/proc/sys/kernel/osrelease", "microsoft") {
+        if has_proc_config(Path::new("/proc/sys/kernel/osrelease"), "microsoft") {
             return true;
         }
 
-        has_proc_config("/proc/version", "microsoft")
+        has_proc_config(Path::new("/proc/version"), "microsoft")
     })
 }
 
