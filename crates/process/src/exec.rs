@@ -110,14 +110,15 @@ impl<R: Reporter> Command<R> {
         Ok(TokioCommand::from(self.create_sync_command()?))
     }
 
-    // Spawn into `set`, in a process group or job object of its own unless
-    // that's turned off
+    // Spawn into `set`, in a process group or job object of its own when
+    // `contain` is set
     pub(crate) fn spawn_child(
         &self,
         set: &ProcessSet,
         command: TokioCommand,
+        contain: bool,
     ) -> io::Result<SharedChild> {
-        if self.should_contain_tree() {
+        if contain {
             set.spawn_contained(command)
         } else {
             set.spawn(command)

@@ -221,6 +221,25 @@ mod shared_child {
     }
 
     #[tokio::test]
+    async fn wraps_a_child_that_was_already_waited_on() {
+        let mut child = Command::new("sh").args(["-c", "exit 3"]).spawn().unwrap();
+        child.wait().await.unwrap();
+
+        let child = SharedChild::new(child);
+
+        assert_eq!(child.id(), 0);
+        assert!(child.send_signal(SignalType::Terminate).is_ok());
+
+        for exit in [child.wait().await.unwrap(), child.kill().await.unwrap()] {
+            let ChildExit::Completed(status) = exit else {
+                panic!("expected Completed, got {exit:?}");
+            };
+
+            assert_eq!(status.code(), Some(3));
+        }
+    }
+
+    #[tokio::test]
     async fn clones_share_the_same_child() {
         let child = spawn_sleep();
         let clone = child.clone();
