@@ -1,4 +1,5 @@
 use crate::command::Command;
+use crate::exec::with_timeout;
 use crate::output::Output;
 use crate::output_cache::OutputCache;
 use crate::process_error::ProcessError;
@@ -108,7 +109,13 @@ impl<R: Reporter> Command<R> {
         let set = self.get_process_set();
 
         if !self.should_cache_output() {
-            return self.internal_exec_stream_and_capture_output(&set).await;
+            let result = with_timeout(
+                self.timeout,
+                self.internal_exec_stream_and_capture_output(&set),
+            )
+            .await;
+
+            return self.check_timeout(result);
         }
 
         let key = self.get_output_cache_key("stream-capture");
@@ -118,7 +125,12 @@ impl<R: Reporter> Command<R> {
             return Ok(output);
         }
 
-        let output = self.internal_exec_stream_and_capture_output(&set).await?;
+        let result = with_timeout(
+            self.timeout,
+            self.internal_exec_stream_and_capture_output(&set),
+        )
+        .await;
+        let output = self.check_timeout(result)?;
 
         cache.put(key, output.clone()).await;
 

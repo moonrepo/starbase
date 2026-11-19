@@ -5,7 +5,7 @@ use starbase_console::Reporter;
 use std::future::Future;
 use std::panic::resume_unwind;
 use std::thread;
-use tokio::runtime::{Builder, Handle};
+use tokio::runtime::{Builder, Handle, RuntimeFlavor};
 
 /// Blocking variants of the exec methods, for sync code. Each one runs
 /// the async method to completion on a tokio runtime of its own, so the
@@ -46,11 +46,21 @@ where
             .block_on(future)
     };
 
+    let Ok(handle) = Handle::try_current() else {
+        return run();
+    };
+
     // A thread that's driving a runtime can't block on another one, so
     // inside a runtime context the exec runs on a thread of its own
-    if Handle::try_current().is_ok() {
+    let scoped = || {
         thread::scope(|scope| scope.spawn(run).join()).unwrap_or_else(|panic| resume_unwind(panic))
+    };
+
+    // Let a multi-thread runtime hand this worker's other tasks to another
+    // worker while it blocks
+    if handle.runtime_flavor() == RuntimeFlavor::MultiThread {
+        tokio::task::block_in_place(scoped)
     } else {
-        run()
+        scoped()
     }
 }

@@ -1,4 +1,5 @@
 use crate::command::Command;
+use crate::exec::with_timeout;
 use crate::output::Output;
 use crate::output_cache::OutputCache;
 use crate::process_error::ProcessError;
@@ -73,7 +74,9 @@ impl<R: Reporter> Command<R> {
         let set = self.get_process_set();
 
         if !self.should_cache_output() {
-            return self.internal_exec_capture_output(&set).await;
+            let result = with_timeout(self.timeout, self.internal_exec_capture_output(&set)).await;
+
+            return self.check_timeout(result);
         }
 
         let key = self.get_output_cache_key("capture");
@@ -83,7 +86,8 @@ impl<R: Reporter> Command<R> {
             return self.handle_cached_output(output);
         }
 
-        let output = self.internal_exec_capture_output(&set).await?;
+        let result = with_timeout(self.timeout, self.internal_exec_capture_output(&set)).await;
+        let output = self.check_timeout(result)?;
 
         cache.put(key, output.clone()).await;
 
@@ -96,6 +100,13 @@ impl<R: Reporter> Command<R> {
     /// [`Self::continuous_pipe`] is enabled. Force-killing stops capture
     /// readers and may truncate unread output.
     pub async fn exec_capture_continuous_output(&mut self) -> miette::Result<Output> {
+        let result =
+            with_timeout(self.timeout, self.internal_exec_capture_continuous_output()).await;
+
+        self.check_timeout(result)
+    }
+
+    async fn internal_exec_capture_continuous_output(&mut self) -> miette::Result<Output> {
         let set = self.get_process_set();
         let instant = Instant::now();
         let mut command = self.create_async_command()?;

@@ -91,6 +91,15 @@ async fn runs_inside_a_current_thread_runtime() {
     assert_eq!(output.stdout.as_ref(), b"out");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn runs_on_a_multi_thread_runtime_worker() {
+    let output = create_command("printf 'out'")
+        .exec_capture_output_blocking()
+        .unwrap();
+
+    assert_eq!(output.stdout.as_ref(), b"out");
+}
+
 // Like a sync WASM host function, which runs on a blocking thread
 #[test]
 fn runs_on_a_blocking_thread_of_a_runtime() {
