@@ -62,10 +62,20 @@ impl Output {
         }
     }
 
+    /// Return the captured stdout as a string, with invalid UTF-8 replaced.
+    pub fn stdout(&self) -> String {
+        output_to_string(&self.stdout)
+    }
+
     /// Return the captured stdout as a string, with invalid UTF-8 replaced
     /// and surrounding whitespace trimmed.
     pub fn stdout_trimmed(&self) -> String {
         output_to_trimmed_string(&self.stdout)
+    }
+
+    /// Return the captured stderr as a string, with invalid UTF-8 replaced.
+    pub fn stderr(&self) -> String {
+        output_to_string(&self.stderr)
     }
 
     /// Return the captured stderr as a string, with invalid UTF-8 replaced
@@ -90,12 +100,12 @@ impl Output {
             stderr: if self.stderr.is_empty() {
                 None
             } else {
-                Some(output_to_trimmed_string(&self.stderr))
+                Some(self.stderr_trimmed())
             },
             stdout: if self.stdout.is_empty() {
                 None
             } else {
-                Some(output_to_trimmed_string(&self.stdout))
+                Some(self.stdout_trimmed())
             },
         }
     }
@@ -121,10 +131,10 @@ impl Output {
             return ProcessError::ExitNonZero { bin, status, code };
         }
 
-        let mut message = output_to_trimmed_string(&self.stderr);
+        let mut message = self.stderr_trimmed();
 
         if message.is_empty() {
-            message = output_to_trimmed_string(&self.stdout);
+            message = self.stdout_trimmed();
         }
 
         // Make error message nicer to look at
