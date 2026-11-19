@@ -74,6 +74,7 @@ pub struct CommandDebug {
 /// `Command` with shell wrapping, environment variable behaviors,
 /// buffered input, output caching, and console integration.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct Command<R: Reporter> {
     /// Arguments to pass to the executable.
     pub args: VecDeque<Arg>,
@@ -85,11 +86,15 @@ pub struct Command<R: Reporter> {
 
     /// Run the child in a process group (Unix) or job object (Windows) of
     /// its own, so that shutdowns and kills reach every process it starts.
-    /// On by default. See [`ProcessSet::spawn_contained`]. On Unix, a child
-    /// that inherits stdin is never contained, as it would be stopped when
-    /// it reads from the terminal. Neither is one that
+    /// Off by default. This requires the [`SignalListener`], and spawning
+    /// panics if it hasn't been started. See [`ProcessSet::spawn_contained`].
+    ///
+    /// On Unix, a child that inherits stdin is never contained, as it would
+    /// be stopped when it reads from the terminal. Neither is one that
     /// [`Self::exec_stream_output`] streams to a terminal, as it would be in
     /// a background process group, where tools hide progress output.
+    ///
+    /// [`SignalListener`]: crate::SignalListener
     pub contain_tree: bool,
 
     /// Continuously write to stdin and read from stdout
@@ -149,7 +154,7 @@ impl<R: Reporter> Command<R> {
         Command {
             args: VecDeque::new(),
             cache: false,
-            contain_tree: true,
+            contain_tree: false,
             continuous_pipe: false,
             cwd: None,
             debug: CommandDebug::default(),

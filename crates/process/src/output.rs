@@ -36,6 +36,10 @@ pub struct Output {
     /// How the process exited.
     pub exit: ChildExit,
 
+    /// The process id of the child that ran. For output reused from the
+    /// cache, it's the child of the run that produced it.
+    pub pid: u32,
+
     /// The captured stderr, empty if not captured.
     pub stderr: Bytes,
 
@@ -56,6 +60,18 @@ impl Output {
             ChildExit::Completed(status) => Some(status),
             _ => None,
         }
+    }
+
+    /// Return the captured stdout as a string, with invalid UTF-8 replaced
+    /// and surrounding whitespace trimmed.
+    pub fn stdout_trimmed(&self) -> String {
+        output_to_trimmed_string(&self.stdout)
+    }
+
+    /// Return the captured stderr as a string, with invalid UTF-8 replaced
+    /// and surrounding whitespace trimmed.
+    pub fn stderr_trimmed(&self) -> String {
+        output_to_trimmed_string(&self.stderr)
     }
 
     /// Return true if the process exited with a zero status.

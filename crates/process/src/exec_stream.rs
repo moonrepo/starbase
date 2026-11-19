@@ -56,6 +56,8 @@ impl<R: Reporter> Command<R> {
 
         self.post_log_command(&shared_child, instant);
 
+        let pid = shared_child.id();
+
         // Stop tracking the child, which also kills it if it is still running
         drop(shared_child);
 
@@ -64,6 +66,7 @@ impl<R: Reporter> Command<R> {
         let exit = result?;
         let output = Output {
             exit,
+            pid,
             stderr: Bytes::new(),
             stdout: Bytes::new(),
         };

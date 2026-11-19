@@ -379,19 +379,20 @@ mod flags {
     }
 
     #[test]
-    fn contains_the_tree_unless_turned_off() {
+    fn contains_the_tree_only_when_turned_on() {
         let mut command = Command::new("git");
 
-        assert!(command.should_contain_tree());
-
-        command.set_contain_tree(false);
-
         assert!(!command.should_contain_tree());
+
+        command.set_contain_tree(true);
+
+        assert!(command.should_contain_tree());
     }
 
     #[test]
     fn contains_the_tree_when_stdin_is_inherited_only_on_windows() {
         let mut command = Command::new("git");
+        command.set_contain_tree(true);
         command.set_stdin(StdinMode::Inherit);
 
         assert_eq!(command.should_contain_tree(), cfg!(windows));
@@ -718,7 +719,7 @@ mod console {
         let mut command = Command::new("git");
         command.arg("status").env("KEY", "value").cwd("/tmp");
         command.set_process_set(starbase_process::ProcessSet::root().nested());
-        command.set_contain_tree(false);
+        command.set_contain_tree(true);
 
         let mut console: Console<OtherReporter> = Console::new_testing();
         console.set_reporter(OtherReporter);
@@ -730,6 +731,6 @@ mod console {
         assert_eq!(converted.cwd, Some(OsString::from("/tmp")));
         assert!(converted.console.is_some());
         assert!(converted.process_set.is_some());
-        assert!(!converted.contain_tree);
+        assert!(converted.contain_tree);
     }
 }

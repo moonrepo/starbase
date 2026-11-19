@@ -1,6 +1,6 @@
 use crate::shared_child::SharedChild;
 use crate::signal::SignalType;
-use crate::signal_listener;
+use crate::signal_listener::SignalListener;
 use parking_lot::Mutex;
 use process_wrap::tokio::{ChildWrapper, CommandWrap};
 use std::fmt;
@@ -17,10 +17,12 @@ use tracing::{debug, warn};
 static ROOT: OnceLock<ProcessSet> = OnceLock::new();
 
 /// A set of running child processes, owned by the code that starts them.
-/// Sets nest under one process-wide [`root`](Self::root). An OS
-/// termination signal shuts the root down along with every nested set,
-/// and a nested set can also be shut down on its own. Clones share the
-/// same set.
+/// Sets nest under one process-wide [`root`](Self::root). Once the
+/// [`SignalListener`] is started, an OS termination signal shuts the root
+/// down along with every nested set. A nested set can also be shut down on
+/// its own. Clones share the same set.
+///
+/// [`SignalListener`]: crate::SignalListener
 #[derive(Clone)]
 pub struct ProcessSet {
     inner: Arc<SetInner>,
@@ -71,17 +73,15 @@ struct Tracked {
 }
 
 impl ProcessSet {
-    /// Return the process-wide root set. OS termination signals shut it
-    /// down, along with every set nested under it. Its grace period is 2
-    /// seconds unless changed with [`Self::configure_root`].
+    /// Return the process-wide root set. Once the [`SignalListener`] is
+    /// started, OS termination signals shut it down, along with every set
+    /// nested under it. Its grace period is 2 seconds unless changed with
+    /// [`Self::configure_root`].
+    ///
+    /// [`SignalListener`]: crate::SignalListener
     pub fn root() -> ProcessSet {
-        ROOT.get_or_init(|| {
-            // Children tracked here must be shut down on an OS signal
-            signal_listener::start();
-
-            Self::create(Duration::from_secs(2), Arc::new(Notify::new()))
-        })
-        .clone()
+        ROOT.get_or_init(|| Self::create(Duration::from_secs(2), Arc::new(Notify::new())))
+            .clone()
     }
 
     pub(crate) fn try_root() -> Option<ProcessSet> {
@@ -153,8 +153,20 @@ impl ProcessSet {
     /// stopped when it reads from the terminal, so don't contain a child
     /// that inherits stdin.
     ///
+    /// # Panics
+    ///
+    /// If the [`SignalListener`] hasn't been started. Without it, a
+    /// terminal's `CTRL-C` would end this process but never reach the
+    /// child, which would keep running.
+    ///
     /// [`SignalListener`]: crate::SignalListener
     pub fn spawn_contained(&self, command: TokioCommand) -> io::Result<SharedChild> {
+        assert!(
+            SignalListener::is_started(),
+            "Containing a child process requires the signal listener, so call \
+             `SignalListener::start` first"
+        );
+
         let mut wrap = CommandWrap::from(command);
 
         #[cfg(unix)]

@@ -4,7 +4,7 @@
 // moonrepo/starbase#213.)
 
 use starbase_console::{Console, EmptyReporter};
-use starbase_process::{ChildExit, Command, ProcessError, ProcessSet, SignalType};
+use starbase_process::{ChildExit, Command, ProcessError, ProcessSet, SignalListener, SignalType};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -134,9 +134,12 @@ async fn a_timeout_kills_the_child() {
 
 #[test]
 fn a_timeout_kills_the_whole_tree() {
+    SignalListener::start();
+
     let marker = temp_path("tree");
     let mut command = create_helper("tree");
     command.env(MARKER_ENV, &marker);
+    command.set_contain_tree(true);
     command.set_timeout(Duration::from_secs(3));
 
     assert_timed_out(command.exec_capture_output_blocking().unwrap_err());

@@ -198,6 +198,7 @@ impl<R: Reporter> Command<R> {
 
             Ok(Output {
                 exit,
+                pid: shared_child.id(),
                 stdout: Bytes::from(stdout_handle.await.into_diagnostic()?),
                 stderr: Bytes::from(stderr_handle.await.into_diagnostic()?),
             })

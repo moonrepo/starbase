@@ -4,6 +4,7 @@ fn create_output(exit: starbase_process::ChildExit) -> starbase_process::Output 
 
     starbase_process::Output {
         exit,
+        pid: 1,
         stdout: Bytes::new(),
         stderr: Bytes::new(),
     }
@@ -51,6 +52,16 @@ mod statuses {
 
         assert!(!output.success());
         assert_eq!(output.code(), Some(2));
+    }
+
+    #[test]
+    fn trims_captured_streams() {
+        let mut output = create_output(ChildExit::Killed);
+        output.stdout = bytes::Bytes::from_static(b"  out\xff\n");
+        output.stderr = bytes::Bytes::from_static(b"\terr\n");
+
+        assert_eq!(output.stdout_trimmed(), "out\u{fffd}");
+        assert_eq!(output.stderr_trimmed(), "err");
     }
 
     #[test]
