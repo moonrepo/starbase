@@ -4,7 +4,7 @@
 // moonrepo/starbase#213.)
 
 use starbase_console::{Console, EmptyReporter};
-use starbase_process::{Command, ProcessError};
+use starbase_process::{ChildExit, Command, ProcessError, ProcessSet, SignalType};
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -81,6 +81,33 @@ fn process_helper() {
         }
         _ => {}
     }
+}
+
+#[tokio::test]
+async fn interrupting_a_child_returns_on_every_platform() {
+    let mut command = tokio::process::Command::new(std::env::current_exe().unwrap());
+    command
+        .args(["--exact", "process_helper", "--nocapture"])
+        .env(HELPER_ENV, "sleep");
+
+    let child = ProcessSet::root().nested().spawn(command).unwrap();
+    let exit = tokio::time::timeout(
+        Duration::from_secs(10),
+        child.kill_with_signal(SignalType::Interrupt),
+    )
+    .await
+    .expect("interrupt did not end the child")
+    .unwrap();
+
+    // Windows can't send `CTRL-C` to a single process, so it force kills
+    assert_eq!(
+        exit,
+        if cfg!(windows) {
+            ChildExit::Killed
+        } else {
+            ChildExit::Interrupted
+        }
+    );
 }
 
 #[tokio::test]

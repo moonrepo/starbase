@@ -184,3 +184,36 @@ async fn commands_contain_their_tree_by_default() {
 
     assert_eq!(lines[1], unsafe { libc::getpgrp() }.to_string());
 }
+
+#[tokio::test]
+async fn streamed_commands_are_contained_unless_on_a_terminal() {
+    use std::io::IsTerminal;
+
+    let marker = std::env::temp_dir().join(format!(
+        "starbase-containment-stream-{}",
+        std::process::id()
+    ));
+
+    let mut command = Command::<EmptyReporter>::new("sh");
+    command
+        .no_shell()
+        .args([
+            "-c",
+            &format!("echo $$ $(ps -o pgid= -p $$) > '{}'", marker.display()),
+        ])
+        .set_console(Console::new_testing());
+
+    command.exec_stream_output().await.unwrap();
+
+    let ids = std::fs::read_to_string(&marker).unwrap();
+    let ids = ids.split_whitespace().collect::<Vec<_>>();
+
+    // Whether this runs on a terminal depends on how the tests were started
+    if std::io::stdout().is_terminal() || std::io::stderr().is_terminal() {
+        assert_eq!(ids[1], unsafe { libc::getpgrp() }.to_string());
+    } else {
+        assert_eq!(ids[0], ids[1]);
+    }
+
+    std::fs::remove_file(marker).unwrap();
+}

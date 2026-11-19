@@ -124,6 +124,19 @@ mod exec_capture_continuous_output {
     }
 
     #[tokio::test]
+    async fn keeps_input_for_another_run() {
+        let mut command = create_command("cat");
+        command.set_continuous_pipe(true);
+        command.input(["one\n"]);
+
+        for _ in 0..2 {
+            let output = command.exec_capture_output().await.unwrap();
+
+            assert_eq!(output.stdout.as_ref(), b"one\n");
+        }
+    }
+
+    #[tokio::test]
     async fn preserves_non_utf8_bytes_and_line_endings() {
         let mut command = create_command(r"printf 'one\r\ntwo\xff\n'; printf 'err\r\n\xff' 1>&2");
         command.set_continuous_pipe(true);
@@ -492,6 +505,16 @@ mod exec_stream_and_capture_output {
     }
 
     #[tokio::test]
+    async fn keeps_lines_ending_in_carriage_returns() {
+        let output = create_command(r"printf 'one\r\r\ntwo\r'")
+            .exec_stream_and_capture_output()
+            .await
+            .unwrap();
+
+        assert_eq!(output.stdout.as_ref(), b"one\r\ntwo");
+    }
+
+    #[tokio::test]
     async fn keeps_crlf_line_endings() {
         let output = create_command(r"printf 'one\r\ntwo\r\n'")
             .exec_stream_and_capture_output()
@@ -576,6 +599,70 @@ mod caching {
                 .downcast_ref::<ProcessError>(),
             Some(ProcessError::ExitNonZeroWithOutput { .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn cached_nonzero_streamed_output_respects_error_policy() {
+        let mut allowed = create_command("exit 4");
+        allowed.set_cache(true).set_error_on_nonzero(false);
+
+        let output = allowed.exec_stream_and_capture_output().await.unwrap();
+        assert_eq!(output.code(), Some(4));
+
+        let mut required = create_command("exit 4");
+        required.set_cache(true);
+
+        assert!(matches!(
+            required
+                .exec_stream_and_capture_output()
+                .await
+                .unwrap_err()
+                .downcast_ref::<ProcessError>(),
+            Some(ProcessError::ExitNonZeroWithOutput { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn does_not_cache_runs_ended_by_a_signal() {
+        let marker =
+            std::env::temp_dir().join(format!("starbase-cache-signal-{}", std::process::id()));
+        let _ = std::fs::remove_file(&marker);
+
+        // The first run waits to be killed, and a second run prints instead
+        let script = format!(
+            "if [ -f '{0}' ]; then printf second; else touch '{0}'; exec sleep 30; fi",
+            marker.display()
+        );
+        let set = ProcessSet::root().nested();
+
+        let mut first = create_command(&script);
+        first
+            .set_cache(true)
+            .set_error_on_nonzero(false)
+            .set_process_set(set.clone());
+
+        let run = tokio::spawn(async move { first.exec_capture_output().await });
+
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !marker.exists() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("first run did not start");
+
+        set.kill_all();
+
+        assert_eq!(run.await.unwrap().unwrap().exit, ChildExit::Killed);
+
+        let mut second = create_command(&script);
+        second.set_cache(true).set_error_on_nonzero(false);
+
+        let output = second.exec_capture_output().await.unwrap();
+
+        assert_eq!(output.stdout.as_ref(), b"second");
+
+        std::fs::remove_file(marker).unwrap();
     }
 
     #[tokio::test]

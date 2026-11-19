@@ -79,14 +79,16 @@ pub struct SharedChild {
 }
 
 impl SharedChild {
-    /// Wrap a spawned child so it can be shared across tasks.
+    /// Wrap a spawned child so it can be shared across tasks. A child that
+    /// was already waited on has no pid, so [`Self::id`] returns 0, but its
+    /// exit status is retained: waits return it, and signals are skipped.
     pub fn new(child: Child) -> Self {
         Self::wrap(Box::new(child), false)
     }
 
     fn wrap(child: Box<dyn ChildWrapper>, contained: bool) -> Self {
         Self {
-            pid: child.id().unwrap(),
+            pid: child.id().unwrap_or_default(),
             inner: Arc::new(Mutex::new(Process(child))),
             signal: Arc::new(OnceLock::new()),
             contained,
@@ -111,7 +113,8 @@ impl SharedChild {
         shared_child
     }
 
-    /// Return the child's process id.
+    /// Return the child's process id, or 0 if it was already waited on
+    /// before being wrapped.
     pub fn id(&self) -> u32 {
         self.pid
     }
@@ -192,8 +195,17 @@ impl SharedChild {
     /// An already reaped child retains its exit status, and isn't
     /// signalled, unless it's contained, when the processes it left behind
     /// still are. `Kill` also stops capture readers, including after the
-    /// child was reaped.
+    /// child was reaped. On Windows, `Interrupt` force kills instead, as
+    /// `CTRL-C` can't be sent to a single process.
     pub async fn kill_with_signal(&self, signal: SignalType) -> io::Result<ChildExit> {
+        // Nothing would be sent, so the wait below would only end if the
+        // child exited on its own
+        #[cfg(windows)]
+        let signal = match signal {
+            SignalType::Interrupt => SignalType::Kill,
+            other => other,
+        };
+
         let completed = {
             // Reaping and signal delivery use the same lock. Until reaped,
             // the child retains its PID/handle even if it has already exited.

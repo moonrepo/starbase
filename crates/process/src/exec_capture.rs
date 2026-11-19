@@ -29,12 +29,12 @@ impl<R: Reporter> Command<R> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let shared_child =
-            self.spawn_child(set, command)
-                .map_err(|error| ProcessError::Capture {
-                    bin: self.get_bin_name(),
-                    error: Box::new(error),
-                })?;
+        let shared_child = self
+            .spawn_child(set, command, self.should_contain_tree())
+            .map_err(|error| ProcessError::Capture {
+                bin: self.get_bin_name(),
+                error: Box::new(error),
+            })?;
 
         self.pre_log_command(&shared_child);
 
@@ -89,7 +89,10 @@ impl<R: Reporter> Command<R> {
         let result = with_timeout(self.timeout, self.internal_exec_capture_output(&set)).await;
         let output = self.check_timeout(result)?;
 
-        cache.put(key, output.clone()).await;
+        // A run ended by a signal, such as a shutdown, may be cut short
+        if output.exit.signal().is_none() {
+            cache.put(key, output.clone()).await;
+        }
 
         Ok(output)
     }
@@ -116,19 +119,19 @@ impl<R: Reporter> Command<R> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
-        let shared_child =
-            self.spawn_child(&set, command)
-                .map_err(|error| ProcessError::Capture {
-                    bin: self.get_bin_name(),
-                    error: Box::new(error),
-                })?;
+        let shared_child = self
+            .spawn_child(&set, command, self.should_contain_tree())
+            .map_err(|error| ProcessError::Capture {
+                bin: self.get_bin_name(),
+                error: Box::new(error),
+            })?;
         let stdin = shared_child.take_stdin().await;
         let stdout = shared_child.take_stdout().await;
         let stderr = shared_child.take_stderr().await;
 
         self.pre_log_command(&shared_child);
 
-        let items = std::mem::take(&mut self.input);
+        let items = self.input.clone();
         let bin_name = self.get_bin_name();
 
         let stdin_child = shared_child.clone();

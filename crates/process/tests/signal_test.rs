@@ -31,6 +31,17 @@ mod kill {
         assert!(!child.wait().await.unwrap().success());
     }
 
+    #[test]
+    fn rejects_pids_that_target_process_groups() {
+        // 0 is our own process group, and u32::MAX would become -1, which
+        // is every process we can signal
+        for pid in [0, i32::MAX as u32 + 1, u32::MAX] {
+            let error = kill(pid, SignalType::Terminate).unwrap_err();
+
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+        }
+    }
+
     #[tokio::test]
     async fn missing_processes_are_not_an_error() {
         // The process may have exited on its own before we signal it,

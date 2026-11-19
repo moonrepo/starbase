@@ -30,12 +30,12 @@ impl<R: Reporter> Command<R> {
             .stderr(Stdio::piped())
             .stdout(Stdio::piped());
 
-        let shared_child =
-            self.spawn_child(set, command)
-                .map_err(|error| ProcessError::StreamCapture {
-                    bin: self.get_bin_name(),
-                    error: Box::new(error),
-                })?;
+        let shared_child = self
+            .spawn_child(set, command, self.should_contain_tree())
+            .map_err(|error| ProcessError::StreamCapture {
+                bin: self.get_bin_name(),
+                error: Box::new(error),
+            })?;
 
         self.pre_log_command(&shared_child);
 
@@ -122,7 +122,7 @@ impl<R: Reporter> Command<R> {
         let cache = OutputCache::instance();
 
         if let Some(output) = cache.get(&key).await {
-            return Ok(output);
+            return self.handle_cached_output(output);
         }
 
         let result = with_timeout(
@@ -132,7 +132,10 @@ impl<R: Reporter> Command<R> {
         .await;
         let output = self.check_timeout(result)?;
 
-        cache.put(key, output.clone()).await;
+        // A run ended by a signal, such as a shutdown, may be cut short
+        if output.exit.signal().is_none() {
+            cache.put(key, output.clone()).await;
+        }
 
         Ok(output)
     }
@@ -233,6 +236,13 @@ fn collapse_redraw_frames(data: Vec<u8>) -> Vec<u8> {
             [content @ .., b'\n'] => (content, b"\n"),
             _ => (line, b""),
         };
+
+        // Trailing carriage returns don't overwrite anything
+        let end = content
+            .iter()
+            .rposition(|byte| *byte != b'\r')
+            .map_or(0, |index| index + 1);
+        let content = &content[..end];
 
         let frame = match content.iter().rposition(|byte| *byte == b'\r') {
             Some(index) => &content[index + 1..],

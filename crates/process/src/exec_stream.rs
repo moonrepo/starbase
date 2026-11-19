@@ -4,6 +4,7 @@ use crate::output::Output;
 use crate::process_error::ProcessError;
 use bytes::Bytes;
 use starbase_console::Reporter;
+use std::io::{self, IsTerminal};
 use std::process::Stdio;
 use std::time::Instant;
 
@@ -29,12 +30,16 @@ impl<R: Reporter> Command<R> {
             self.stdin.to_stdio()
         });
 
-        let shared_child =
-            self.spawn_child(&set, command)
-                .map_err(|error| ProcessError::Stream {
-                    bin: self.get_bin_name(),
-                    error: Box::new(error),
-                })?;
+        // On a terminal, a contained child would be in a background process
+        // group, where tools hide progress and reading the terminal stops it
+        let on_terminal = cfg!(unix) && (io::stdout().is_terminal() || io::stderr().is_terminal());
+
+        let shared_child = self
+            .spawn_child(&set, command, self.should_contain_tree() && !on_terminal)
+            .map_err(|error| ProcessError::Stream {
+                bin: self.get_bin_name(),
+                error: Box::new(error),
+            })?;
 
         self.pre_log_command(&shared_child);
 

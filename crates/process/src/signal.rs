@@ -95,9 +95,21 @@ mod unix {
     }
 
     /// Send a signal to a process by pid. A process that no longer exists
-    /// is treated as already dead, not as an error.
+    /// is treated as already dead, not as an error. Pid 0, and pids too
+    /// large for the OS, are rejected, as `kill` treats them as process
+    /// groups (0 is our own, and -1 is every process we can signal).
     pub fn kill(pid: u32, signal: SignalType) -> io::Result<()> {
-        let result = unsafe { libc::kill(pid as i32, signal.get_code()) };
+        let pid = match i32::try_from(pid) {
+            Ok(pid) if pid > 0 => pid,
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("Invalid process id {pid}"),
+                ));
+            }
+        };
+
+        let result = unsafe { libc::kill(pid, signal.get_code()) };
 
         if result != 0 {
             let error = io::Error::last_os_error();
