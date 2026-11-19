@@ -14,6 +14,7 @@ use std::ffi::{OsStr, OsString};
 use std::hash::Hasher;
 use std::process::Stdio;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 /// How to connect the child process's stdin, when there's no buffered
 /// [`Command::input`] to write.
@@ -128,6 +129,13 @@ pub struct Command<R: Reporter> {
     /// How to connect stdin when there's no [`Self::input`] to write
     pub stdin: StdinMode,
 
+    /// Stop waiting for the child after this long, kill it (its whole tree
+    /// when contained), and fail with [`ProcessError::Timeout`]. Applies to
+    /// every exec method, but not to output returned from the cache.
+    ///
+    /// [`ProcessError::Timeout`]: crate::ProcessError::Timeout
+    pub timeout: Option<Duration>,
+
     /// Console to write output to
     pub console: Option<Console<R>>,
 }
@@ -155,6 +163,7 @@ impl<R: Reporter> Command<R> {
             process_set: None,
             shell: Some(get_default_shell()),
             stdin: StdinMode::default(),
+            timeout: None,
             console: None,
         }
     }
@@ -654,6 +663,13 @@ impl<R: Reporter> Command<R> {
         self
     }
 
+    /// Set how long to wait for the child before killing it. See
+    /// [`Self::timeout`].
+    pub fn set_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
     /// Set the prefix to prepend to all log lines.
     pub fn set_prefix(&mut self, prefix: &str) -> &mut Self {
         self.prefix = Some(prefix.to_owned());
@@ -734,6 +750,7 @@ impl<R: Reporter> Command<R> {
             process_set: self.process_set,
             shell: self.shell,
             stdin: self.stdin,
+            timeout: self.timeout,
             console: Some(console),
         }
     }

@@ -1,5 +1,6 @@
 use miette::Diagnostic;
 use starbase_styles::{Style, Stylize};
+use std::time::Duration;
 use thiserror::Error;
 
 /// Errors that can occur while spawning, running, or communicating with a
@@ -84,6 +85,20 @@ pub enum ProcessError {
         #[source]
         /// The underlying I/O error.
         error: Box<std::io::Error>,
+    },
+
+    /// The process didn't exit within
+    /// [`Command::timeout`](crate::Command::timeout), so it was killed.
+    #[diagnostic(code(process::timeout))]
+    #[error(
+        "Process {} timed out after {timeout:?}.",
+        .bin.style(Style::Shell),
+    )]
+    Timeout {
+        /// The binary name that was executed.
+        bin: String,
+        /// How long the process was given.
+        timeout: Duration,
     },
 
     /// Failed to write buffered input to the process's stdin.

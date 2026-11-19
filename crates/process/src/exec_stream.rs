@@ -1,4 +1,5 @@
 use crate::command::Command;
+use crate::exec::with_timeout;
 use crate::output::Output;
 use crate::process_error::ProcessError;
 use bytes::Bytes;
@@ -11,6 +12,12 @@ impl<R: Reporter> Command<R> {
     /// streams directly to the terminal, and wait for it to exit. Nothing
     /// is captured; the returned [`Output`] always has empty streams.
     pub async fn exec_stream_output(&mut self) -> miette::Result<Output> {
+        let result = with_timeout(self.timeout, self.internal_exec_stream_output()).await;
+
+        self.check_timeout(result)
+    }
+
+    async fn internal_exec_stream_output(&mut self) -> miette::Result<Output> {
         let set = self.get_process_set();
         let instant = Instant::now();
         let should_pass_stdin = self.should_pass_stdin();

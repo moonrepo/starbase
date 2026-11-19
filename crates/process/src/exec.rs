@@ -13,10 +13,11 @@ use starbase_shell::join_exe_args;
 use starbase_styles::color;
 use std::env;
 use std::ffi::{OsStr, OsString};
+use std::future::Future;
 use std::io;
 use std::path::PathBuf;
 use std::process::Command as StdCommand;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command as TokioCommand;
 use tracing::{debug, enabled};
@@ -121,6 +122,20 @@ impl<R: Reporter> Command<R> {
         } else {
             set.spawn(command)
         }
+    }
+
+    // Fail with a timeout error if `with_timeout` gave up on the exec
+    pub(crate) fn check_timeout(
+        &self,
+        result: Option<miette::Result<Output>>,
+    ) -> miette::Result<Output> {
+        result.unwrap_or_else(|| {
+            Err(ProcessError::Timeout {
+                bin: self.get_bin_name(),
+                timeout: self.timeout.unwrap_or_default(),
+            }
+            .into())
+        })
     }
 
     pub(crate) fn handle_nonzero_status(
@@ -259,5 +274,17 @@ impl<R: Reporter> Command<R> {
         drop(stdin);
 
         Ok(())
+    }
+}
+
+// Run an exec, giving up once `timeout` passes. Dropping the exec drops the
+// child's owner, which kills the child, along with its tree when contained.
+pub(crate) async fn with_timeout<F: Future>(
+    timeout: Option<Duration>,
+    exec: F,
+) -> Option<F::Output> {
+    match timeout {
+        Some(timeout) => tokio::time::timeout(timeout, exec).await.ok(),
+        None => Some(exec.await),
     }
 }
