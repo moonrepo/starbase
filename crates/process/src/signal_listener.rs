@@ -44,6 +44,13 @@ impl SignalListener {
         start_listening();
     }
 
+    /// Return whether the listener has been started. Code that doesn't own
+    /// the app, such as a library, can use this to contain children only
+    /// when the app opted in to signals, rather than panic.
+    pub fn is_started() -> bool {
+        STARTED.is_completed()
+    }
+
     /// Subscribe to OS termination signals, starting the listener if needed
     /// (see [`Self::start`]).
     pub fn subscribe() -> Receiver<SignalType> {
@@ -59,10 +66,6 @@ impl SignalListener {
     pub fn received() -> Option<SignalType> {
         RECEIVED.get().copied()
     }
-}
-
-pub(crate) fn is_started() -> bool {
-    STARTED.is_completed()
 }
 
 fn start_listening() {

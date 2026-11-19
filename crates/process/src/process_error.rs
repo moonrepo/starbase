@@ -6,6 +6,7 @@ use thiserror::Error;
 /// Errors that can occur while spawning, running, or communicating with a
 /// child process.
 #[derive(Error, Debug, Diagnostic)]
+#[non_exhaustive]
 pub enum ProcessError {
     /// Failed to spawn the process, or to read its captured output.
     #[diagnostic(code(process::capture::failed))]

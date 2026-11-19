@@ -1,6 +1,6 @@
 use crate::shared_child::SharedChild;
 use crate::signal::SignalType;
-use crate::signal_listener;
+use crate::signal_listener::SignalListener;
 use parking_lot::Mutex;
 use process_wrap::tokio::{ChildWrapper, CommandWrap};
 use std::fmt;
@@ -162,7 +162,7 @@ impl ProcessSet {
     /// [`SignalListener`]: crate::SignalListener
     pub fn spawn_contained(&self, command: TokioCommand) -> io::Result<SharedChild> {
         assert!(
-            signal_listener::is_started(),
+            SignalListener::is_started(),
             "Containing a child process requires the signal listener, so call \
              `SignalListener::start` first"
         );

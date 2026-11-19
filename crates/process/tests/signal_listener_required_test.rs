@@ -2,7 +2,7 @@
 // it as a process that never opted in to signals would.
 
 use starbase_console::{Console, EmptyReporter};
-use starbase_process::{Command, ProcessSet};
+use starbase_process::{Command, ProcessSet, SignalListener};
 
 fn create_command() -> Command<EmptyReporter> {
     let mut command = Command::new(std::env::current_exe().unwrap());
@@ -19,6 +19,7 @@ async fn commands_run_without_signals_by_default() {
 
     assert!(output.success());
     assert!(output.pid > 0);
+    assert!(!SignalListener::is_started());
 }
 
 #[test]

@@ -74,6 +74,7 @@ pub struct CommandDebug {
 /// `Command` with shell wrapping, environment variable behaviors,
 /// buffered input, output caching, and console integration.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct Command<R: Reporter> {
     /// Arguments to pass to the executable.
     pub args: VecDeque<Arg>,

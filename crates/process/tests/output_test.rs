@@ -55,6 +55,16 @@ mod statuses {
     }
 
     #[test]
+    fn trims_captured_streams() {
+        let mut output = create_output(ChildExit::Killed);
+        output.stdout = bytes::Bytes::from_static(b"  out\xff\n");
+        output.stderr = bytes::Bytes::from_static(b"\terr\n");
+
+        assert_eq!(output.stdout_trimmed(), "out\u{fffd}");
+        assert_eq!(output.stderr_trimmed(), "err");
+    }
+
+    #[test]
     fn signal_exits_are_failures_without_codes() {
         for exit in [
             ChildExit::Interrupted,

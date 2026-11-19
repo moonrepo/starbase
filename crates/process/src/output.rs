@@ -62,6 +62,18 @@ impl Output {
         }
     }
 
+    /// Return the captured stdout as a string, with invalid UTF-8 replaced
+    /// and surrounding whitespace trimmed.
+    pub fn stdout_trimmed(&self) -> String {
+        output_to_trimmed_string(&self.stdout)
+    }
+
+    /// Return the captured stderr as a string, with invalid UTF-8 replaced
+    /// and surrounding whitespace trimmed.
+    pub fn stderr_trimmed(&self) -> String {
+        output_to_trimmed_string(&self.stderr)
+    }
+
     /// Return true if the process exited with a zero status.
     pub fn success(&self) -> bool {
         self.status().is_some_and(|status| status.success())

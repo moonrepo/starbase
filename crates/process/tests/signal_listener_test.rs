@@ -17,6 +17,8 @@ fn sleep_command() -> Command {
 #[tokio::test]
 async fn shuts_down_the_root_and_broadcasts_signals() {
     let mut receiver = SignalListener::subscribe();
+
+    assert!(SignalListener::is_started());
     let set = ProcessSet::root().nested();
     let contained = set.spawn_contained(sleep_command()).unwrap();
     let uncontained = set.spawn(sleep_command()).unwrap();
