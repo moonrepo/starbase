@@ -138,3 +138,102 @@ fn detects_a_shell_from_os() {
 
     assert!(ShellType::os_variants().contains(&ShellType::detect_with_fallback()));
 }
+
+mod resolve_shell_program {
+    use starbase_sandbox::create_empty_sandbox;
+    use starbase_shell::{
+        ShellType, find_executable_in_path, find_shell_path, resolve_shell_program,
+    };
+    use std::env::{self, consts::EXE_SUFFIX};
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    fn create_exe(dir: &Path, name: &str, contents: &str) -> PathBuf {
+        let path = dir.join(format!("{name}{EXE_SUFFIX}"));
+
+        fs::create_dir_all(dir).unwrap();
+        fs::write(&path, contents).unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        path
+    }
+
+    #[test]
+    fn finds_the_first_match() {
+        let sandbox = create_empty_sandbox();
+        let a = sandbox.path().join("a");
+        let b = sandbox.path().join("b");
+        let c = sandbox.path().join("c");
+
+        fs::create_dir_all(&a).unwrap();
+        let expected = create_exe(&b, "tool", "");
+        create_exe(&c, "tool", "");
+
+        let path = env::join_paths([a, b, c]).unwrap();
+
+        assert_eq!(find_executable_in_path("tool", &path), Some(expected));
+    }
+
+    #[test]
+    fn returns_none_when_missing() {
+        let sandbox = create_empty_sandbox();
+        let path = env::join_paths([sandbox.path()]).unwrap();
+
+        assert_eq!(find_executable_in_path("tool", &path), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn skips_files_that_arent_executable() {
+        let sandbox = create_empty_sandbox();
+        let a = sandbox.path().join("a");
+        let b = sandbox.path().join("b");
+
+        fs::create_dir_all(&a).unwrap();
+        fs::write(a.join("tool"), "").unwrap();
+        let expected = create_exe(&b, "tool", "");
+
+        let path = env::join_paths([a, b]).unwrap();
+
+        assert_eq!(find_executable_in_path("tool", &path), Some(expected));
+    }
+
+    #[test]
+    fn falls_back_to_the_name_when_not_found() {
+        assert_eq!(
+            resolve_shell_program("starbase-missing-shell"),
+            "starbase-missing-shell"
+        );
+    }
+
+    // A `bash` within a directory that's prepended to the command's own `PATH`,
+    // like `node_modules/.bin`, must not replace the shell that wraps the command.
+    #[cfg(unix)]
+    #[test]
+    fn wrapped_command_isnt_replaced_by_a_shell_on_its_own_path() {
+        if find_shell_path(ShellType::Bash).is_none() {
+            return;
+        }
+
+        let sandbox = create_empty_sandbox();
+        let bin_dir = sandbox.path().join("node_modules/.bin");
+        create_exe(&bin_dir, "bash", "#!/bin/sh\necho hijacked\n");
+
+        let mut command = ShellType::Bash.build().create_wrapped_command("echo real");
+        let mut paths = vec![bin_dir];
+        paths.extend(env::split_paths(&env::var_os("PATH").unwrap()));
+        command.env("PATH", env::join_paths(paths).unwrap());
+
+        assert!(Path::new(command.get_program()).is_absolute());
+
+        let output = command.output().unwrap();
+
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "real\n");
+    }
+}

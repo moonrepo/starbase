@@ -75,7 +75,7 @@ fn base64_encode<T: AsRef<OsStr>>(decoded: T) -> String {
 /// between Rust's Windows argument quoting (MSVCRT-style `\"`) and PowerShell's
 /// own parser (`""` / backtick).
 pub(crate) fn build_encoded_command(program: impl AsRef<str>, script: OsString) -> Command {
-    let mut command = Command::new(program.as_ref());
+    let mut command = Command::new(super::resolve_shell_program(program.as_ref()));
     command.args(["-NoLogo", "-NoProfile", "-EncodedCommand"]);
     command.arg(base64_encode(script));
     command
@@ -352,7 +352,10 @@ mod tests {
     #[test]
     fn creates_wrapped_command() {
         let command = PowerShell.create_wrapped_command_with("echo hello".into());
-        assert_eq!(command.get_program(), "powershell");
+        assert_eq!(
+            Path::new(command.get_program()).file_stem().unwrap(),
+            "powershell"
+        );
 
         let args: Vec<_> = command.get_args().collect();
         assert_eq!(&args[..3], &["-NoLogo", "-NoProfile", "-EncodedCommand"]);
@@ -365,7 +368,10 @@ mod tests {
         // bypasses PowerShell's command-line parser entirely, so a leading
         // quote is just data.
         let command = PowerShell.create_wrapped_command_with("'echo' hello".into());
-        assert_eq!(command.get_program(), "powershell");
+        assert_eq!(
+            Path::new(command.get_program()).file_stem().unwrap(),
+            "powershell"
+        );
 
         let args: Vec<_> = command.get_args().collect();
         assert_eq!(&args[..3], &["-NoLogo", "-NoProfile", "-EncodedCommand"]);

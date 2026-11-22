@@ -29,12 +29,26 @@ pub use zsh::*;
 use crate::helpers::get_env_var_regex;
 use crate::hooks::*;
 use crate::quoter::*;
+use crate::shell::find_executable_in_path;
 use crate::shell_error::ShellError;
 use shell_quote::Quotable;
+use std::env;
 use std::ffi::OsString;
 use std::fmt::{Debug, Display};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+/// Resolve the program of a shell to an absolute path, using the current process's
+/// `PATH`. When a command's own `PATH` is modified, a bare program name is resolved
+/// through that `PATH` instead, where a binary of the same name, like a `bash` in
+/// `node_modules/.bin`, would replace the shell. Falls back to the name when the
+/// shell can't be found.
+pub fn resolve_shell_program(name: &str) -> OsString {
+    env::var_os("PATH")
+        .and_then(|path| find_executable_in_path(name, &path))
+        .map(OsString::from)
+        .unwrap_or_else(|| OsString::from(name))
+}
 
 pub trait Shell: Debug + Display + Send + Sync {
     /// Create a quoter for the provided string.
@@ -46,8 +60,9 @@ pub trait Shell: Debug + Display + Send + Sync {
     }
 
     /// Create a command that wraps the provided value in the current shell.
+    /// The shell is resolved with [`resolve_shell_program`].
     fn create_wrapped_command_with(&self, line: OsString) -> Command {
-        let mut command = Command::new(self.to_string());
+        let mut command = Command::new(resolve_shell_program(&self.to_string()));
         // This is pretty much the same for all shells except pwsh.
         // bash -c "command", nu -c "command", etc...
         command.arg("-c");

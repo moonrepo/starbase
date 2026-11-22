@@ -41,7 +41,13 @@ mod create_sync_command {
 
         let sync = command.create_sync_command().unwrap();
 
-        assert_eq!(get_program(&sync), OsString::from("bash"));
+        // The shell is resolved to an absolute path when it's on `PATH`
+        assert_eq!(
+            std::path::Path::new(&get_program(&sync))
+                .file_stem()
+                .unwrap(),
+            "bash"
+        );
         assert_eq!(get_args(&sync), ["-c", "git commit -m"]);
     }
 
