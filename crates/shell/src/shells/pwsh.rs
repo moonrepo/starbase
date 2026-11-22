@@ -225,7 +225,13 @@ mod tests {
             shell.create_wrapped_command("echo hello"),
             shell.create_wrapped_command_with("echo hello".into()),
         ] {
-            assert_eq!(command.get_program(), "pwsh");
+            // Resolved to an absolute path when `pwsh` is on `PATH`
+            assert_eq!(
+                std::path::Path::new(command.get_program())
+                    .file_stem()
+                    .unwrap(),
+                "pwsh"
+            );
 
             let args: Vec<_> = command.get_args().collect();
             assert_eq!(&args[..3], &["-NoLogo", "-NoProfile", "-EncodedCommand"]);

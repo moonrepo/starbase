@@ -1,6 +1,7 @@
 use crate::shell::os::is_executable;
 use crate::{shell_error::ShellError, shells::*};
-use std::path::Path;
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::{env, fmt};
 use tracing::{debug, instrument};
@@ -211,26 +212,39 @@ pub fn parse_shell_from_file_path<P: AsRef<Path>>(path: P) -> Option<ShellType> 
     ShellType::from_str(name.strip_prefix('-').unwrap_or(name)).ok()
 }
 
-pub fn find_shell_on_path(shell: ShellType) -> bool {
+/// Find the absolute path of an executable (without an extension) within
+/// the provided `PATH` value. Relative directories are skipped, as they
+/// resolve differently depending on the working directory.
+pub fn find_executable_in_path(name: &str, path: &OsStr) -> Option<PathBuf> {
     #[cfg(windows)]
-    let file = format!("{}.exe", shell);
+    let file = format!("{name}.exe");
 
     #[cfg(unix)]
-    let file = shell.to_string();
+    let file = name.to_owned();
 
-    let Some(path) = env::var_os("PATH") else {
-        return false;
-    };
+    for dir in env::split_paths(path) {
+        if !dir.is_absolute() {
+            continue;
+        }
 
-    for dir in env::split_paths(&path) {
-        let shell_path = dir.join(&file);
+        let exe_path = dir.join(&file);
 
-        if shell_path.exists() && shell_path.is_file() && is_executable(&shell_path) {
-            return true;
+        if exe_path.is_file() && is_executable(&exe_path) {
+            return Some(exe_path);
         }
     }
 
-    false
+    None
+}
+
+/// Find the absolute path of the shell's executable on the current
+/// process's `PATH`.
+pub fn find_shell_path(shell: ShellType) -> Option<PathBuf> {
+    find_executable_in_path(&shell.to_string(), &env::var_os("PATH")?)
+}
+
+pub fn find_shell_on_path(shell: ShellType) -> bool {
+    find_shell_path(shell).is_some()
 }
 
 #[cfg(unix)]
