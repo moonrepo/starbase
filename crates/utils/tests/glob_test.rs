@@ -806,6 +806,54 @@ mod walk_fast {
             ]
         );
     }
+
+    // Escaped with `escape`, like a project directory joined into a glob
+    #[test]
+    fn matches_escaped_literal_segments() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("packages/[lib]/src/a.ts", "");
+        sandbox.create_file("packages/[lib]/dist/b.js", "");
+        sandbox.create_file("packages/(old)/src/c.ts", "");
+        sandbox.create_file("packages/l/src/d.ts", "");
+
+        let lib = escape("packages/[lib]");
+        let old = escape("packages/(old)");
+
+        let paths = walk_fast_with_options(
+            sandbox.path(),
+            [
+                format!("{lib}/**/*"),
+                format!("!{lib}/dist/**"),
+                format!("{old}/src/*.ts"),
+            ]
+            .iter(),
+            GlobWalkOptions::default().files(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            sorted(&sandbox, paths),
+            ["packages/(old)/src/c.ts", "packages/[lib]/src/a.ts"]
+        );
+    }
+
+    // `:` is not a valid file name character on Windows
+    #[cfg(unix)]
+    #[test]
+    fn matches_escaped_colon_segments() {
+        let sandbox = create_empty_sandbox();
+        sandbox.create_file("packages/x:y/dist/a.txt", "");
+        sandbox.create_file("packages/xy/dist/b.txt", "");
+
+        let paths = walk_fast_with_options(
+            sandbox.path(),
+            [format!("{}/dist/**/*", escape("packages/x:y"))].iter(),
+            GlobWalkOptions::default().files(),
+        )
+        .unwrap();
+
+        assert_eq!(sorted(&sandbox, paths), ["packages/x:y/dist/a.txt"]);
+    }
 }
 
 mod partition_patterns {
@@ -1050,5 +1098,93 @@ mod partition_patterns {
                 ("/root/other".into(), vec!["**/*.txt".into()]),
             ])
         );
+    }
+
+    #[test]
+    fn unescapes_literal_segments() {
+        let map = partition_patterns(
+            "/root",
+            [
+                "packages/\\(old\\)/dist/**/*",
+                "packages/\\[lib\\]/src/*.ts",
+            ],
+        );
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([
+                ("/root/packages/(old)/dist".into(), vec!["**/*".into()]),
+                ("/root/packages/[lib]/src".into(), vec!["*.ts".into()]),
+            ])
+        );
+    }
+
+    // `x:` is a drive prefix on Windows
+    #[cfg(unix)]
+    #[test]
+    fn unescapes_literal_colon_segments() {
+        let map = partition_patterns("/root", ["packages/x\\:y/dist/**/*"]);
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([("/root/packages/x:y/dist".into(), vec!["**/*".into()])])
+        );
+    }
+
+    #[test]
+    fn unescapes_literal_segments_of_negations() {
+        let map = partition_patterns(
+            "/root",
+            ["packages/\\[lib\\]/**/*", "!packages/\\[lib\\]/dist/**"],
+        );
+
+        assert_eq!(
+            map,
+            BTreeMap::from_iter([(
+                "/root/packages/[lib]".into(),
+                vec!["**/*".into(), "!dist/**".into()]
+            )])
+        );
+    }
+}
+
+mod unescape {
+    use super::*;
+    use std::borrow::Cow;
+
+    #[test]
+    fn returns_borrowed_without_backslashes() {
+        assert!(matches!(unescape("packages/lib"), Cow::Borrowed(_)));
+    }
+
+    #[test]
+    fn removes_backslashes_before_meta_characters() {
+        assert_eq!(unescape("x\\:y"), "x:y");
+        assert_eq!(unescape("\\[lib\\]"), "[lib]");
+        assert_eq!(unescape("\\(old\\)"), "(old)");
+    }
+
+    #[test]
+    fn keeps_other_backslashes() {
+        assert_eq!(unescape("a\\b"), "a\\b");
+        assert_eq!(unescape("trailing\\"), "trailing\\");
+    }
+
+    #[test]
+    fn reverses_escape() {
+        let value = "(a)[b]{c},d:e$f?g*h<i>";
+
+        assert_eq!(unescape(&escape(value)), value);
+    }
+}
+
+mod escape {
+    use super::*;
+
+    #[test]
+    fn escapes_meta_characters() {
+        assert_eq!(escape("packages/x:y"), "packages/x\\:y");
+        assert_eq!(escape("packages/[lib]"), "packages/\\[lib\\]");
+        assert_eq!(escape("packages/lib"), "packages/lib");
     }
 }

@@ -1,4 +1,5 @@
 use crate::fs;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
 use std::fmt::Debug;
@@ -16,7 +17,7 @@ use wax::{
 #[cfg(feature = "glob-cache")]
 pub use crate::glob_cache::GlobCache;
 pub use crate::glob_error::GlobError;
-pub use wax::{self, Glob};
+pub use wax::{self, Glob, escape};
 
 static GLOBAL_NEGATIONS: LazyLock<RwLock<Vec<&'static str>>> =
     LazyLock::new(|| RwLock::new(vec!["**/.{git,svn}/**", "**/.DS_Store", "node_modules/**"]));
@@ -313,6 +314,31 @@ pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
     }
 
     false
+}
+
+/// Unescape meta characters that were escaped with [`escape`], like `\:` and
+/// `\[`, so that a literal glob segment can be used as a file system path.
+/// A backslash that doesn't escape a meta character is kept as-is.
+pub fn unescape(value: &str) -> Cow<'_, str> {
+    if !value.contains('\\') {
+        return Cow::Borrowed(value);
+    }
+
+    let mut unescaped = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '\\'
+            && let Some(next) = chars.peek()
+            && wax::is_meta_character(*next)
+        {
+            continue;
+        }
+
+        unescaped.push(ch);
+    }
+
+    Cow::Owned(unescaped)
 }
 
 /// Return true if the pattern contains a `...` parent traversal segment.
@@ -935,7 +961,9 @@ where
                 glob_parts.push(part);
                 found = true;
             } else {
-                dir = dir.join(part);
+                // Literal segments may contain escaped meta characters,
+                // like `x\:y`, which must be unescaped for the file system
+                dir = dir.join(unescape(part).as_ref());
 
                 if mergeable && partitions.contains_key(&dir) {
                     found = true;
@@ -1004,7 +1032,11 @@ fn relativize_negation(base_dir: &Path, bucket_dir: &Path, negation: &str) -> Op
             }
             // Consume a literal or wildcard segment that matches this bucket
             // segment and keep descending.
-            Some(neg_part) if neg_part == bucket_part || segment_matches(neg_part, bucket_part) => {
+            Some(neg_part)
+                if neg_part == bucket_part
+                    || (!is_glob(neg_part) && unescape(neg_part) == bucket_part)
+                    || segment_matches(neg_part, bucket_part) =>
+            {
                 continue;
             }
             // The negation diverges from this bucket's path, so it can't match
