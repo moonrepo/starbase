@@ -807,7 +807,7 @@ mod walk_fast {
         );
     }
 
-    // Escaped with `wax::escape`, like a project directory joined into a glob
+    // Escaped with `escape`, like a project directory joined into a glob
     #[test]
     fn matches_escaped_literal_segments() {
         let sandbox = create_empty_sandbox();
@@ -816,8 +816,8 @@ mod walk_fast {
         sandbox.create_file("packages/(old)/src/c.ts", "");
         sandbox.create_file("packages/l/src/d.ts", "");
 
-        let lib = wax::escape("packages/[lib]");
-        let old = wax::escape("packages/(old)");
+        let lib = escape("packages/[lib]");
+        let old = escape("packages/(old)");
 
         let paths = walk_fast_with_options(
             sandbox.path(),
@@ -847,7 +847,7 @@ mod walk_fast {
 
         let paths = walk_fast_with_options(
             sandbox.path(),
-            [format!("{}/dist/**/*", wax::escape("packages/x:y"))].iter(),
+            [format!("{}/dist/**/*", escape("packages/x:y"))].iter(),
             GlobWalkOptions::default().files(),
         )
         .unwrap();
@@ -1171,9 +1171,20 @@ mod unescape {
     }
 
     #[test]
-    fn reverses_wax_escape() {
+    fn reverses_escape() {
         let value = "(a)[b]{c},d:e$f?g*h<i>";
 
-        assert_eq!(unescape(&wax::escape(value)), value);
+        assert_eq!(unescape(&escape(value)), value);
+    }
+}
+
+mod escape {
+    use super::*;
+
+    #[test]
+    fn escapes_meta_characters() {
+        assert_eq!(escape("packages/x:y"), "packages/x\\:y");
+        assert_eq!(escape("packages/[lib]"), "packages/\\[lib\\]");
+        assert_eq!(escape("packages/lib"), "packages/lib");
     }
 }

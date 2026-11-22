@@ -17,7 +17,7 @@ use wax::{
 #[cfg(feature = "glob-cache")]
 pub use crate::glob_cache::GlobCache;
 pub use crate::glob_error::GlobError;
-pub use wax::{self, Glob};
+pub use wax::{self, Glob, escape};
 
 static GLOBAL_NEGATIONS: LazyLock<RwLock<Vec<&'static str>>> =
     LazyLock::new(|| RwLock::new(vec!["**/.{git,svn}/**", "**/.DS_Store", "node_modules/**"]));
@@ -316,7 +316,7 @@ pub fn is_glob<T: AsRef<str> + Debug>(value: T) -> bool {
     false
 }
 
-/// Unescape meta characters that were escaped with [`wax::escape`], like `\:` and
+/// Unescape meta characters that were escaped with [`escape`], like `\:` and
 /// `\[`, so that a literal glob segment can be used as a file system path.
 /// A backslash that doesn't escape a meta character is kept as-is.
 pub fn unescape(value: &str) -> Cow<'_, str> {
