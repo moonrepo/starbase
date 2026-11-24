@@ -140,9 +140,11 @@ fn detects_a_shell_from_os() {
 }
 
 mod resolve_shell_program {
+    use serial_test::serial;
     use starbase_sandbox::create_empty_sandbox;
     use starbase_shell::{
-        ShellType, find_executable_in_path, find_shell_path, resolve_shell_program,
+        ShellType, find_executable_in_path, find_shell_in_path, find_shell_path,
+        resolve_shell_program, set_skipped_shell_dirs,
     };
     use std::env::{self, consts::EXE_SUFFIX};
     use std::fs;
@@ -202,6 +204,102 @@ mod resolve_shell_program {
         let path = env::join_paths([a, b]).unwrap();
 
         assert_eq!(find_executable_in_path("tool", &path), Some(expected));
+    }
+
+    fn find_shell_with_skipped_dirs(dirs: &[&Path], path: &std::ffi::OsStr) -> Option<PathBuf> {
+        set_skipped_shell_dirs(dirs);
+        let found = find_shell_in_path("tool", path);
+        set_skipped_shell_dirs(Vec::<PathBuf>::new());
+        found
+    }
+
+    // Like a dependency's `bash` in a workspace's `node_modules/.bin`,
+    // which a package manager added to `PATH` before running a program
+    #[test]
+    #[serial]
+    fn skips_dirs_within_skipped_dirs() {
+        let sandbox = create_empty_sandbox();
+        let workspace = sandbox.path().join("workspace");
+        let bin_dir = workspace.join("node_modules/.bin");
+        let sys_dir = sandbox.path().join("sys");
+
+        let skipped = create_exe(&bin_dir, "tool", "");
+        let expected = create_exe(&sys_dir, "tool", "");
+
+        let path = env::join_paths([&bin_dir, &sys_dir]).unwrap();
+
+        assert_eq!(
+            find_shell_with_skipped_dirs(&[&workspace], &path),
+            Some(expected)
+        );
+
+        // Only when locating a shell
+        assert_eq!(find_executable_in_path("tool", &path), Some(skipped));
+    }
+
+    #[test]
+    #[serial]
+    fn falls_back_to_skipped_dirs() {
+        let sandbox = create_empty_sandbox();
+        let workspace = sandbox.path().join("workspace");
+        let bin_dir = workspace.join("node_modules/.bin");
+        let sys_dir = sandbox.path().join("sys");
+
+        fs::create_dir_all(&sys_dir).unwrap();
+        let expected = create_exe(&bin_dir, "tool", "");
+
+        let path = env::join_paths([&bin_dir, &sys_dir]).unwrap();
+
+        assert_eq!(
+            find_shell_with_skipped_dirs(&[&workspace], &path),
+            Some(expected)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn skips_the_real_path_of_skipped_dirs() {
+        let sandbox = create_empty_sandbox();
+        let workspace = sandbox.path().join("workspace");
+        let link = sandbox.path().join("link");
+        let sys_dir = sandbox.path().join("sys");
+
+        create_exe(&workspace.join("node_modules/.bin"), "tool", "");
+        let expected = create_exe(&sys_dir, "tool", "");
+        std::os::unix::fs::symlink(&workspace, &link).unwrap();
+
+        let path = env::join_paths([
+            workspace.canonicalize().unwrap().join("node_modules/.bin"),
+            sys_dir,
+        ])
+        .unwrap();
+
+        assert_eq!(
+            find_shell_with_skipped_dirs(&[&link], &path),
+            Some(expected)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial]
+    fn skips_path_dirs_through_a_symlink() {
+        let sandbox = create_empty_sandbox();
+        let workspace = sandbox.path().join("workspace");
+        let link = sandbox.path().join("link");
+        let sys_dir = sandbox.path().join("sys");
+
+        create_exe(&workspace.join("node_modules/.bin"), "tool", "");
+        let expected = create_exe(&sys_dir, "tool", "");
+        std::os::unix::fs::symlink(&workspace, &link).unwrap();
+
+        let path = env::join_paths([link.join("node_modules/.bin"), sys_dir]).unwrap();
+
+        assert_eq!(
+            find_shell_with_skipped_dirs(&[&workspace.canonicalize().unwrap()], &path),
+            Some(expected)
+        );
     }
 
     #[test]

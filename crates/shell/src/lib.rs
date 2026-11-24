@@ -9,6 +9,8 @@ mod shells;
 pub use hooks::*;
 pub use joiner::*;
 pub use quoter::*;
-pub use shell::{ShellType, find_executable_in_path, find_shell_path};
+pub use shell::{
+    ShellType, find_executable_in_path, find_shell_in_path, find_shell_path, set_skipped_shell_dirs,
+};
 pub use shell_error::ShellError;
 pub use shells::*;
