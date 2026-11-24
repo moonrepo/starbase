@@ -3,12 +3,8 @@ use crate::{shell_error::ShellError, shells::*};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::RwLock;
 use std::{env, fmt};
 use tracing::{debug, instrument};
-
-/// Directories that are skipped when locating a shell on `PATH`.
-static SKIPPED_SHELL_DIRS: RwLock<Vec<PathBuf>> = RwLock::new(Vec::new());
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ShellType {
@@ -216,51 +212,7 @@ pub fn parse_shell_from_file_path<P: AsRef<Path>>(path: P) -> Option<ShellType> 
     ShellType::from_str(name.strip_prefix('-').unwrap_or(name)).ok()
 }
 
-/// Set directories to skip when locating a shell on `PATH`, replacing any set
-/// previously. A directory within them is only searched when the shell can't be
-/// found anywhere else. For example, a workspace root, so that a dependency's
-/// binary in its `node_modules/.bin`, with the same name as a shell like `bash`,
-/// isn't found before the shell, when a package manager added it to `PATH`.
-pub fn set_skipped_shell_dirs<I, P>(dirs: I)
-where
-    I: IntoIterator<Item = P>,
-    P: AsRef<Path>,
-{
-    let mut list = vec![];
-
-    for dir in dirs {
-        let dir = dir.as_ref();
-
-        // Also skip the real path, as `PATH` may contain either
-        if let Ok(real_dir) = dir.canonicalize()
-            && real_dir != dir
-        {
-            list.push(real_dir);
-        }
-
-        list.push(dir.to_path_buf());
-    }
-
-    *SKIPPED_SHELL_DIRS
-        .write()
-        .unwrap_or_else(|error| error.into_inner()) = list;
-}
-
-fn is_skipped_dir(dir: &Path, skipped_dirs: &[PathBuf]) -> bool {
-    if skipped_dirs.is_empty() {
-        return false;
-    }
-
-    let is_within = |dir: &Path| skipped_dirs.iter().any(|skipped| dir.starts_with(skipped));
-
-    // Also compare the real path, as either may be through a symlink
-    is_within(dir)
-        || dir
-            .canonicalize()
-            .is_ok_and(|real_dir| is_within(&real_dir))
-}
-
-fn find_executable(name: &str, path: &OsStr, skipped_dirs: &[PathBuf]) -> Option<PathBuf> {
+fn find_executable(name: &str, path: &OsStr, skip_node_modules: bool) -> Option<PathBuf> {
     #[cfg(windows)]
     let file = format!("{name}.exe");
 
@@ -268,7 +220,7 @@ fn find_executable(name: &str, path: &OsStr, skipped_dirs: &[PathBuf]) -> Option
     let file = name.to_owned();
 
     for dir in env::split_paths(path) {
-        if !dir.is_absolute() || is_skipped_dir(&dir, skipped_dirs) {
+        if !dir.is_absolute() || skip_node_modules && is_within_node_modules(&dir) {
             continue;
         }
 
@@ -282,29 +234,25 @@ fn find_executable(name: &str, path: &OsStr, skipped_dirs: &[PathBuf]) -> Option
     None
 }
 
+fn is_within_node_modules(dir: &Path) -> bool {
+    dir.components()
+        .any(|component| component.as_os_str() == "node_modules")
+}
+
 /// Find the absolute path of an executable (without an extension) within
 /// the provided `PATH` value. Relative directories are skipped, as they
 /// resolve differently depending on the working directory.
 pub fn find_executable_in_path(name: &str, path: &OsStr) -> Option<PathBuf> {
-    find_executable(name, path, &[])
+    find_executable(name, path, false)
 }
 
 /// Find the absolute path of a shell's executable (without an extension) within
 /// the provided `PATH` value, like [`find_executable_in_path`], but directories
-/// set with [`set_skipped_shell_dirs`] are only searched when the shell can't be
-/// found anywhere else.
+/// within `node_modules` are skipped. A package manager adds `node_modules/.bin`
+/// to `PATH` when running a script, where a dependency's binary with the same
+/// name as a shell, like `bash`, would otherwise be found before the shell.
 pub fn find_shell_in_path(name: &str, path: &OsStr) -> Option<PathBuf> {
-    let skipped_dirs = SKIPPED_SHELL_DIRS
-        .read()
-        .unwrap_or_else(|error| error.into_inner());
-
-    if !skipped_dirs.is_empty()
-        && let Some(exe_path) = find_executable(name, path, &skipped_dirs)
-    {
-        return Some(exe_path);
-    }
-
-    find_executable(name, path, &[])
+    find_executable(name, path, true)
 }
 
 /// Find the absolute path of the shell's executable on the current

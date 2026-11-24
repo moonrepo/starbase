@@ -41,9 +41,9 @@ use std::process::Command;
 /// Resolve the program of a shell to an absolute path, using the current process's
 /// `PATH`. When a command's own `PATH` is modified, a bare program name is resolved
 /// through that `PATH` instead, where a binary of the same name, like a `bash` in
-/// `node_modules/.bin`, would replace the shell. Directories set with
-/// [`set_skipped_shell_dirs`](crate::set_skipped_shell_dirs) are searched last.
-/// Falls back to the name when the shell can't be found.
+/// `node_modules/.bin`, would replace the shell. Directories within `node_modules`
+/// are skipped, see [`find_shell_in_path`]. Falls back to the name when the shell
+/// can't be found.
 pub fn resolve_shell_program(name: &str) -> OsString {
     env::var_os("PATH")
         .and_then(|path| find_shell_in_path(name, &path))
