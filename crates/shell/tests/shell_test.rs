@@ -142,7 +142,8 @@ fn detects_a_shell_from_os() {
 mod resolve_shell_program {
     use starbase_sandbox::create_empty_sandbox;
     use starbase_shell::{
-        ShellType, find_executable_in_path, find_shell_path, resolve_shell_program,
+        ShellType, find_executable_in_path, find_shell_in_path, find_shell_path,
+        resolve_shell_program,
     };
     use std::env::{self, consts::EXE_SUFFIX};
     use std::fs;
@@ -202,6 +203,39 @@ mod resolve_shell_program {
         let path = env::join_paths([a, b]).unwrap();
 
         assert_eq!(find_executable_in_path("tool", &path), Some(expected));
+    }
+
+    // Like a dependency's `bash` in a project's `node_modules/.bin`,
+    // which a package manager adds to `PATH` when running a script
+    #[test]
+    fn skips_dirs_within_node_modules() {
+        let sandbox = create_empty_sandbox();
+        let root_bin = sandbox.path().join("node_modules/.bin");
+        let pkg_bin = sandbox.path().join("packages/a/node_modules/pkg/bin");
+        let sys_dir = sandbox.path().join("sys");
+
+        let skipped = create_exe(&root_bin, "tool", "");
+        create_exe(&pkg_bin, "tool", "");
+        let expected = create_exe(&sys_dir, "tool", "");
+
+        let path = env::join_paths([&root_bin, &pkg_bin, &sys_dir]).unwrap();
+
+        assert_eq!(find_shell_in_path("tool", &path), Some(expected));
+
+        // Only when locating a shell
+        assert_eq!(find_executable_in_path("tool", &path), Some(skipped));
+    }
+
+    #[test]
+    fn never_finds_a_shell_within_node_modules() {
+        let sandbox = create_empty_sandbox();
+        let bin_dir = sandbox.path().join("node_modules/.bin");
+
+        create_exe(&bin_dir, "tool", "");
+
+        let path = env::join_paths([&bin_dir]).unwrap();
+
+        assert_eq!(find_shell_in_path("tool", &path), None);
     }
 
     #[test]

@@ -212,10 +212,7 @@ pub fn parse_shell_from_file_path<P: AsRef<Path>>(path: P) -> Option<ShellType> 
     ShellType::from_str(name.strip_prefix('-').unwrap_or(name)).ok()
 }
 
-/// Find the absolute path of an executable (without an extension) within
-/// the provided `PATH` value. Relative directories are skipped, as they
-/// resolve differently depending on the working directory.
-pub fn find_executable_in_path(name: &str, path: &OsStr) -> Option<PathBuf> {
+fn find_executable(name: &str, path: &OsStr, skip_node_modules: bool) -> Option<PathBuf> {
     #[cfg(windows)]
     let file = format!("{name}.exe");
 
@@ -223,7 +220,7 @@ pub fn find_executable_in_path(name: &str, path: &OsStr) -> Option<PathBuf> {
     let file = name.to_owned();
 
     for dir in env::split_paths(path) {
-        if !dir.is_absolute() {
+        if !dir.is_absolute() || skip_node_modules && is_within_node_modules(&dir) {
             continue;
         }
 
@@ -237,10 +234,31 @@ pub fn find_executable_in_path(name: &str, path: &OsStr) -> Option<PathBuf> {
     None
 }
 
+fn is_within_node_modules(dir: &Path) -> bool {
+    dir.components()
+        .any(|component| component.as_os_str() == "node_modules")
+}
+
+/// Find the absolute path of an executable (without an extension) within
+/// the provided `PATH` value. Relative directories are skipped, as they
+/// resolve differently depending on the working directory.
+pub fn find_executable_in_path(name: &str, path: &OsStr) -> Option<PathBuf> {
+    find_executable(name, path, false)
+}
+
+/// Find the absolute path of a shell's executable (without an extension) within
+/// the provided `PATH` value, like [`find_executable_in_path`], but directories
+/// within `node_modules` are skipped. A package manager adds `node_modules/.bin`
+/// to `PATH` when running a script, where a dependency's binary with the same
+/// name as a shell, like `bash`, would otherwise be found before the shell.
+pub fn find_shell_in_path(name: &str, path: &OsStr) -> Option<PathBuf> {
+    find_executable(name, path, true)
+}
+
 /// Find the absolute path of the shell's executable on the current
-/// process's `PATH`.
+/// process's `PATH`, with [`find_shell_in_path`].
 pub fn find_shell_path(shell: ShellType) -> Option<PathBuf> {
-    find_executable_in_path(&shell.to_string(), &env::var_os("PATH")?)
+    find_shell_in_path(&shell.to_string(), &env::var_os("PATH")?)
 }
 
 pub fn find_shell_on_path(shell: ShellType) -> bool {
