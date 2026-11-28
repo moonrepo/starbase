@@ -95,11 +95,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
         with:
-          # Requires wasi_ext unstable
-          channel: nightly-2025-08-07
           targets: wasm32-wasip1
       - name: Build WASI
         run:
-          cargo +nightly-2025-08-07 build --target wasm32-wasip1 -p starbase_archive -p
+          cargo build --target wasm32-wasip1 -p starbase_archive -p
           starbase_events -p starbase -p starbase_macros -p starbase_styles -p starbase_utils -p
           starbase_id
