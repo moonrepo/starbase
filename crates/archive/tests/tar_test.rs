@@ -19,8 +19,8 @@ fn create_malicious_tar_common<W: std::io::Write>(
 ) {
     // The builder writes paths verbatim, including malicious
     // ones like ../../leak.txt (for testing zip slip attacks)
-    let mut builder = jdx_tar::Builder::new(archive_writer);
-    let mut header = jdx_tar::Header::new_gnu(jdx_tar::EntryType::File);
+    let mut builder = moonrepo_tar::Builder::new(archive_writer);
+    let mut header = moonrepo_tar::Header::new_gnu(moonrepo_tar::EntryType::File);
     header.set_mode(0o644);
     header.set_size(entry_content.len() as u64);
 
@@ -30,7 +30,7 @@ fn create_malicious_tar_common<W: std::io::Write>(
     builder.finish().unwrap();
 }
 
-// Writes raw tar blocks, for archives that `jdx_tar::Builder` won't
+// Writes raw tar blocks, for archives that `moonrepo_tar::Builder` won't
 // write, like the variants produced by other tools.
 mod raw {
     // POSIX ustar

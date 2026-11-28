@@ -2,7 +2,7 @@ use crate::archive::{ArchivePacker, ArchiveUnpacker};
 use crate::archive_error::ArchiveError;
 use crate::codecs::Finish;
 use crate::helpers::{escapes_via_symlink, strip_path_prefix};
-use jdx_tar::{
+use moonrepo_tar::{
     Archive as TarArchive, Builder as TarBuilder, Entry as TarEntry, EntryType, EntryUnpacker,
     Header as TarHeader, UnpackOptions,
 };
@@ -166,7 +166,7 @@ impl<W: Write + Finish> ArchivePacker for TarPacker<W> {
 /// TarUnpacker::new(dir, Zstd::new(fs::open_file(path)?)); // .tar.zst
 /// ```
 pub struct TarUnpacker<R: Read> {
-    // A `jdx_tar` archive is not `Send`, so it's created when unpacking.
+    // A `moonrepo_tar` archive is not `Send`, so it's created when unpacking.
     reader: R,
     output_dir: PathBuf,
 }
@@ -219,7 +219,7 @@ fn safe_entry_path(path: &Path) -> Option<PathBuf> {
     Some(clean_path)
 }
 
-// Whether `jdx_tar` can extract the entry at its own path. It rejects
+// Whether `moonrepo_tar` can extract the entry at its own path. It rejects
 // absolute paths and parent directory components, instead of resolving
 // them like `safe_entry_path` does.
 fn is_plain_path(path: &Path) -> bool {
@@ -227,7 +227,7 @@ fn is_plain_path(path: &Path) -> bool {
         .all(|part| matches!(part, Component::Normal(_) | Component::CurDir))
 }
 
-// Extract an entry at its resolved path, which `jdx_tar` cannot do. Only
+// Extract an entry at its resolved path, which `moonrepo_tar` cannot do. Only
 // directories and files are supported, since link targets can't be
 // resolved soundly relative to such a path. Returns `false` if skipped.
 fn unpack_resolved_entry<R: Read>(entry: &mut TarEntry<R>, output_path: &Path) -> io::Result<bool> {
@@ -280,7 +280,7 @@ impl<R: Read> ArchiveUnpacker for TarUnpacker<R> {
             error: Box::new(error),
         };
 
-        // `jdx_tar` refuses to extract into a symlink, which the output
+        // `moonrepo_tar` refuses to extract into a symlink, which the output
         // directory may be, so extract into its real path instead.
         let root = std::fs::canonicalize(&self.output_dir).map_err(unpack_error)?;
 
